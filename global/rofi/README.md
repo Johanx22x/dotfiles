@@ -9,5 +9,5 @@ customized them to my own preferences. Any issues or bugs related to the Rofi co
 be reported to adi1090x's repository.
 
 Note: keep in mind that if you use my Sway config you must add certain things to your PATH, I invite 
-you to review [global/zshrc](https://github.com/Johanx22x/dotfiles/global/zshrc) and 
-[global /bin](https://github.com/Johanx22x/dotfiles/global/bin)
+you to review [global/zshrc](https://github.com/Johanx22x/dotfiles/tree/master/global/zshrc) and 
+[global /bin](https://github.com/Johanx22x/dotfiles/tree/master/global/bin)
