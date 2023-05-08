@@ -1,0 +1,88 @@
+{
+    "position": "top", 
+    "height": 30,
+    "modules-left": ["sway/workspaces"],
+    "modules-right": ["network", "pulseaudio", "clock", "custom/power"],
+    "modules-center": ["custom/schedule", "custom/logo", "custom/music"],
+    // Modules configuration
+	"sway/workspaces": {
+		"disable-scroll": true,
+		"all-outputs": true,
+		"format": "{icon}",
+	 	"persistent_workspaces": {
+	 		"1": [],
+	 		"2": [],
+	 		"3": [],
+	 		"4": [],
+	 		"5": [],
+	 		"6": [],
+	},
+         	"format-icons": {
+             		"1": "",
+             		"2": "",
+             		"3": "",
+             		"4": "",
+             		"5": "ﭮ",
+             		"6": "",
+         }
+     },
+     "custom/schedule": {
+        "exec": "/home/johan/Tools/schedule-manager -cn -d",
+        "format": "{}  ",
+        "on-click": "/home/johan/Tools/schedule-options"
+     },
+     "custom/logo": {
+         "format": " ",
+         "on-click": "/home/johan/Tools/arch-menu"
+     },
+     "custom/music": {
+        "exec": "/usr/bin/python3 /home/johan/Tools/media-player.py --player spotify",
+        "format": "  {}",
+        "return-type": "json",
+        "on-click": "playerctl play-pause",
+        "on-scroll-up": "playerctl next",
+        "on-scroll-down": "playerctl previous"
+     },
+	"custom/power": {
+		"format": "",
+		"on-click": "/home/johan/Tools/power-options"
+	},
+	"clock": {
+		"format": " {:%a %d %H:%M}",
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
+        "format-alt": "{:%Y-%m-%d}"
+	},
+	"battery": {
+        	"states": {
+            		"warning": 30,
+            		"critical": 15,
+        	},
+        	"format": "{icon} {capacity}%",
+        	"format-charging": " {capacity}%",
+        	"format-plugged": " {capacity}%",
+        	"format-alt": "{time} {icon}",
+        	"format-full": "  {capacity}%",
+        	"format-icons": [" ", " ", " ", " "]
+	},
+	"network": {
+        	"format-wifi": "  {essid}",
+        	"format-ethernet": "{ifname}: {ipaddr}/{cidr} ",
+        	"format-linked": "{ifname} (No IP) ",
+        	"format-disconnected": "睊 Disconnected",
+        	"format-alt": "{ifname}: {ipaddr}/{cidr}"
+	},
+	"pulseaudio": {
+		"format": "{icon}  {volume}%",
+        	"format-muted": "  Muted",
+        "format-icons": {
+            "headphone": "",
+            "hands-free": "",
+            "headset": "",
+            "phone": "",
+            "portable": "",
+            "car": "",
+            "default": ["", "", ""]
+        },
+        "on-click": "amixer set Master toggle"
+    }
+}
