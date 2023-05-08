@@ -16,6 +16,9 @@ editor, and other tools that I use on a daily basis.
 ## [Tokyo Night](./tokyo-night/README.md)
 ![Tokyo Night screenshot](./tokyo-night/img/clean.png)
 
+## [Everforest](./everforest/README.md)
+![Everforest screenshot](./everforest/img/clean.png)
+
 ---
 
 ## My PC
