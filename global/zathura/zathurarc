@@ -8,4 +8,10 @@ set recolor			        "true"
 set adjust-open			    "width"
 set statusbar-h-padding		10
 set statusbar-v-padding		10
-include catppuccin
+
+
+# Uncomment the theme you want to use
+
+# include catppuccin
+# include tokyo-night
+include everforest
