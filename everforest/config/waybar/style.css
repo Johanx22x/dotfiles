@@ -36,7 +36,7 @@ window > box {
 #workspaces button:hover {
 	background-color: #7dcfff;
 	color: #24283b;
-	border-radius: 5px;
+	border-radius: 35px;
 }
 
 #custom-date, 
