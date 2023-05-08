@@ -1,8 +1,12 @@
+# Monitor setup
+set $output-primary HDMI-A-1
+output $output-primary pos 0 0 res 1920x1080@75hz
+
 # autostart
-# nothing to see here
+exec mako
 
 # style
-font 			            pango:monospace 16px 
+font 			            pango:mononoki Nerd Font 14px 
 default_border 		        pixel 	2
 titlebar_border_thickness 	2
 gaps 			            top	2
@@ -22,22 +26,28 @@ client.urgent           #A4B9EF     #575268     #EBDDAA     #DADAE8     #EBDDAA
 # for_window 	[workspace="2"] 	    layout 	tabbed
 # for_window 	[workspace="3"] 	    layout 	tabbed
 for_window 	[app_id="cava"] 	    floating 	    enable, resize set height 525 px,  resize set width 750 px,     move position 1135 490
-# for_window  [class="Spotify"]       floating        enable, resize set height 650 px,  resize set width 1050 px,    move position 15   15 
-# for_window 	[app_id="python3"] 	    floating 	    enable
 for_window 	[app_id="mpv"]		    inhibit_idle	fullscreen
-# for_window	[app_id="imv"]	        floating        enable, resize set height 720 px,  resize set width 1280 px,    move position 150  150
+for_window 	[app_id="imv"]		    inhibit_idle	fullscreen
 
 # workspace assignments
-assign 		[class="Spotify"] 		    5
-assign      [app_id="discord"]          4
-assign      [app_id="cava"]             3
+assign 		[class="Spotify"] 		    6
+assign      [app_id="discord"]          5
+assign      [app_id="cava"]             4
+assign      [app_id="nemo"]             4
+assign      [app_id="firefox"]          1
 
-## touchpad settings
+# touchpad settings
 input "1739:30143:DLLC6B2:00_06CB:75BF_Touchpad" {
 	dwt enabled
 	tap enabled
 	natural_scroll enabled
 	middle_emulation enabled
+}
+
+# Keyboard layout settings
+input type:keyboard {
+    xkb_layout us,latam
+    xkb_options grp:rctrl_toggle
 }
 
 # keybindings
@@ -61,7 +71,7 @@ set     $menu   swaymsg exec "~/.config/rofi/scripts/launcher_t7"
 set     $power  swaymsg exec "~/.config/rofi/scripts/powermenu_t3"
 
 ## Output configuration
-output     *   bg      /home/johan/Pictures/Wallpapers/evening-sky.jpg stretch
+output     *   bg      ~/Pictures/Wallpapers/pastel-dreams.jpg stretch
 
 # Behavior
 focus_follows_mouse 	yes
@@ -74,31 +84,30 @@ focus_follows_mouse 	yes
 
 # key bindings
 # start a terminal
-bindsym 	$mod+Return 	exec 	$term
+bindsym 	$mod+Return 	    exec 	$term
 
 # kill focused window
-bindsym 	$mod+w 		    kill
+bindsym 	$mod+w 		        kill
 
 # start your launcher
 bindsym 	$mod+m  	        exec 	$menu
-bindsym     $mod+Shift+m        exec    /home/johan/bin/online-search.sh
+# bindsym     $mod+Shift+m        exec    ~/bin/online-search.sh
 bindsym     $mod+p              exec    $power
 
 # dismiss notifications
-bindsym 	Control+space 	exec 	makoctl dismiss
+bindsym 	Control+space 	    exec 	makoctl dismiss
 
 # screenshot with grim and swappy
-bindsym 	print               exec /home/johan/bin/screenshot.sh
-bindsym 	Shift+print         exec /home/johan/bin/partial-screenshot.sh
+bindsym 	$mod+Shift+s        exec ~/bin/screenshot.sh
 
 # floating window controls (also works for non-floating windows)
 floating_modifier 		$mod 	normal
 
 # reload the configuration file
-bindsym 	$mod+r 		reload
+bindsym 	$mod+r 		        reload
 
 # restart sway
-bindsym 	$mod+Shift+r 	exec 	swaymsg exit
+bindsym 	$mod+Shift+r 	    exec 	swaymsg exit
 
 # Moving around:
 # Move your focus around
@@ -208,4 +217,4 @@ bar {
     }
 }
 
-include /etc/sway/config.d/*
+include @sysconfdir@/sway/config.d/*
