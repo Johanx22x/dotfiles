@@ -1,5 +1,5 @@
 {
-	"layer": "top",
+	"position": "top",
 	"modules-left": ["custom/launcher","cpu","memory","custom/media"],
 	"modules-center": ["sway/workspaces"],
 	"modules-right": ["network", "pulseaudio","clock","custom/layout","custom/power"],
@@ -16,13 +16,10 @@
 	 		"5": [],
 	 		"6": [],
 	},
-         	"format-icons": {
-             		"1": "一",
-             		"2": "二",
-             		"3": "三",
-             		"4": "四",
-             		"5": "五",
-             		"6": "六",
+        "format-icons": {
+            "default": "",
+            "urgent": "",
+            "focused": "",
          }
      },
 	"network": {
