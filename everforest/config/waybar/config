@@ -29,7 +29,7 @@
     },
     "memory": {
         "interval": 1,
-        "format": " {}%",
+        "format": "  {}%",
         "max-length": 10
     },
     "temperature": {
@@ -67,7 +67,7 @@
     "custom/layout": {
         "exec": "$HOME/bin/layout",
         "interval": 1,
-        "format": " {}",
+        "format": "  {}",
         "max-length": 10
     },
     "battery": {
@@ -89,7 +89,7 @@
         ]
     },
     "network": {
-        "format-wifi": "  {essid}",
+        "format-wifi": "   {essid}",
         "format-ethernet": "{ifname}: {ipaddr}/{cidr} 󰊗",
         "format-linked": "{ifname} (No IP) 󰊗",
         "format-disconnected": "⚠  Disconnected",
