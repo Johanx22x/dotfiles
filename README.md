@@ -15,3 +15,13 @@ editor, and other tools that I use on a daily basis.
 
 ## [Tokyo Night](./tokyo-night/README.md)
 ![Tokyo Night screenshot](./tokyo-night/img/clean.png)
+
+---
+
+## My PC
+
+<!-- ![PC Image](./img/pc.png) -->
+
+- CPU: INTEL CORE i5 13600K
+- GPU: NVIDIA RTX 3060 12GB
+- RAM: 16 GB
