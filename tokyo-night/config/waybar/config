@@ -1,0 +1,104 @@
+{
+    "position": "top", 
+    "height": 30,
+    /* "modules-left": ["sway/workspaces", "cpu", "memory"], */
+    "modules-left": ["sway/workspaces"],
+    "modules-center": ["custom/media"],
+    "modules-right": ["network", "pulseaudio", "custom/layout", "clock"], 
+    "sway/workspaces": {
+        "disable-scroll": true,
+        "all-outputs": true,
+        "format": "{icon}",
+	 	"persistent_workspaces": {
+	 		"1": [],
+	 		"2": [],
+	 		"3": [],
+	 		"4": [],
+	 		"5": [],
+	},
+        "format-icons": {
+            "1": "一",
+            "2": "二",
+            "3": "三",
+            "4": "四",
+            "5": "五",
+            "6": "六",
+            "7": "七",
+            "8": "八",
+            "9": "九",
+            "10": "十"
+        }
+    },
+    "cpu": {
+        "interval": 1,
+        "format": " {}%",
+        "max-length": 10
+    },
+    "memory": {
+        "interval": 1,
+        "format": " {}%",
+        "max-length": 10
+    },
+    "custom/media": {
+        "format": "{icon} {}",
+        "return-type": "json",
+        "format-icons": {
+            "spotify": " ",
+            "default": " "
+        },
+        "max-length": 30,
+        "exec": "/usr/bin/python $HOME/bin/media-player.py 2> /dev/null",
+        "on-click": "playerctl play-pause",
+        "on-scroll-up": "playerctl next",
+        "on-scroll-down": "playerctl previous"
+    },
+    "clock": {
+        "format": "  {:%H:%M   %d/%m/%Y}",
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    },
+    "custom/layout": {
+        "exec": "$HOME/bin/layout",
+        "interval": 1,
+        "format": " {}",
+        "max-length": 10
+    },
+    "battery": {
+        "bat": "BAT1",
+        "design-capacity": true,
+        "states": {
+            "warning": 30,
+            "critical": 15
+        },
+        "format-discharging": "{icon}  {capacity}%",
+        "format": " {capacity}%",
+        "format-alt": "{time} {icon}",
+        "format-icons": [
+            "", 
+            "",
+            "",
+            "",
+            ""
+        ]
+    },
+    "network": {
+        "format-wifi": "  {essid}",
+        "format-ethernet": "{ifname}: {ipaddr}/{cidr} 󰊗",
+        "format-linked": "{ifname} (No IP) 󰊗",
+        "format-disconnected": "⚠  Disconnected",
+        "format-alt": "{ifname}: {ipaddr}/{cidr}"
+    },
+    "pulseaudio": {
+        "format": "{icon}  {volume}%",
+        "format-muted": " Muted",
+        "format-icons": {
+            "headphone": "",
+            "hands-free": "󰂑",
+            "headset": "󰂑",
+            "phone": "",
+            "portable": "",
+            "car": "",
+            "default": ["", "", ""]
+        },
+        "on-click": "pavucontrol"
+    }
+}
