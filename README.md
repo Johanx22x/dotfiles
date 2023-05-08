@@ -13,5 +13,5 @@ editor, and other tools that I use on a daily basis.
 ![Catppuccin screenshot](./catppuccin/img/clean.png)
 
 
-<!-- ## [Tokyo Night](./tokyo-night/README.md) -->
-<!-- ![Tokyo Night screenshot](./tokyo-night/img/clean.png) -->
+## [Tokyo Night](./tokyo-night/README.md)
+![Tokyo Night screenshot](./tokyo-night/img/clean.png)
