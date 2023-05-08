@@ -1,4 +1,8 @@
-# Rofi config
+<p align="center">
+    <h1 align="center">Rofi Config</h1>
+</p>
+
+![Rofi screenshot](./rofi.png)
 
 To use my Rofi configuration, please visit [adi1090x/rofi](https://github.com/adi1090x/rofi) and 
 follow the installation instructions there. Once you have installed Rofi and cloned my dotfiles, 
