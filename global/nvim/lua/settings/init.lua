@@ -7,9 +7,8 @@
 ╚═════╝░╚══════╝░░░╚═╝░░░░░░╚═╝░░░╚═╝╚═╝░░╚══╝░╚═════╝░╚═════╝░
 ]]--
 
+-- Settings
 vim.cmd [[
-    colorscheme catppuccin
-
     set nowrap
     set tabstop=4
     set shiftwidth=4
@@ -17,11 +16,21 @@ vim.cmd [[
     syntax on
 ]]
 
---[[
-        Transparency option
+-- Colorscheme
+vim.cmd [[
+    colorscheme tokyonight
+]]
 
-hi Normal ctermbg=NONE guibg=NONE
-]]--
+-- Transparent background
+vim.cmd [[
+    highlight Normal guibg=NONE ctermbg=NONE
+]]
+
+-- transparent background for nvimTree
+vim.cmd [[
+    highlight nvimTreeNormal guibg=NONE ctermbg=NONE
+    highlight NormalNC guibg=NONE ctermbg=NONE
+]]
 
 -- Spell check 
 vim.cmd [[
