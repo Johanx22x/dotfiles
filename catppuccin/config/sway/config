@@ -98,7 +98,7 @@ bindsym     $mod+p              exec    $power
 bindsym 	Control+space 	    exec 	makoctl dismiss
 
 # screenshot with grim and swappy
-bindsym 	$mod+Shift+s        exec ~/bin/screenshot.sh
+bindsym 	print               exec    ~/bin/screenshot
 
 # floating window controls (also works for non-floating windows)
 floating_modifier 		$mod 	normal
