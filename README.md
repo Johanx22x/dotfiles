@@ -7,11 +7,12 @@ that I use to customize my development environment.
 These dotfiles include settings for my shell, text 
 editor, and other tools that I use on a daily basis.
 
---
+---
 
 <details>
     <summary>🌸 Wayland</summary>
     <p>
+
 ## [Catppuccin - Sway](./wayland/catppuccin/README.md)
 ![Catppuccin screenshot](./wayland/catppuccin/img/clean.png)
 
@@ -27,12 +28,13 @@ editor, and other tools that I use on a daily basis.
 <details>
     <summary>🍁 Xorg</summary>
     <p>
+
 ## [Techno City - Awesome](./xorg/techno-city/README.md)
 ![techno-city screenshot](./xorg/techno-city/img/clean.png)
     <p>
 </details>
 
---
+---
 
 ## Usage
 
