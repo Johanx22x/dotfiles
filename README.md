@@ -7,24 +7,35 @@ that I use to customize my development environment.
 These dotfiles include settings for my shell, text 
 editor, and other tools that I use on a daily basis.
 
----
+--
 
-## [Catppuccin](./catppuccin/README.md)
-![Catppuccin screenshot](./catppuccin/img/clean.png)
+<details>
+    <summary>🌸 Wayland</summary>
+    <p>
+## [Catppuccin - Sway](./wayland/catppuccin/README.md)
+![Catppuccin screenshot](./wayland/catppuccin/img/clean.png)
 
 
-## [Tokyo Night](./tokyo-night/README.md)
-![Tokyo Night screenshot](./tokyo-night/img/clean.png)
+## [Tokyo Night - Sway](./wayland/tokyo-night/README.md)
+![Tokyo Night screenshot](./wayland/tokyo-night/img/clean.png)
 
-## [Everforest](./everforest/README.md)
-![Everforest screenshot](./everforest/img/clean.png)
+## [Everforest - Sway](./wayland/everforest/README.md)
+![Everforest screenshot](./wayland/everforest/img/clean.png)
+    </p>
+</details>
 
----
+<details>
+    <summary>🍁 Xorg</summary>
+    <p>
+## [Techno City - Awesome](./xorg/techno-city/README.md)
+![techno-city screenshot](./xorg/techno-city/img/clean.png)
+    <p>
+</details>
 
-## My PC
+--
 
-<!-- ![PC Image](./img/pc.png) -->
+## Usage
 
-- CPU: INTEL CORE i5 13600K
-- GPU: NVIDIA RTX 3060 12GB
-- RAM: 16 GB
+Each desktop config has their own files, settings and `README.md`, nevertheless
+there is a folder `global` that contains scripts and utils that I use in some
+configs.
