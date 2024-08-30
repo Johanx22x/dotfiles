@@ -1,0 +1,4 @@
+#!/bin/bash
+
+xrandr --output DP-2 --mode 2560x1440 --rate 165.00 --primary --pos 1920x0
+xrandr --output HDMI-1 --mode 1920x1080 --rate 74.97 --left-of DP-2

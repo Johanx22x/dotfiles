@@ -1,0 +1,21 @@
+#!/bin/python
+import os 
+import time
+
+
+def get_current_date_time():
+    """ This function returns the a string whit the format:
+    yyyymmdd_hhmmss
+    """
+    return time.strftime("%Y%m%d_%Hh%Mm%Ss", time.localtime())
+
+
+def main():
+    path = "/tmp/notes"
+    if not os.path.exists(path):
+        os.makedirs(path)
+    os.system("nvim " + path + "/" + get_current_date_time() + "_temp.md")
+
+
+if __name__ == "__main__":
+    main()

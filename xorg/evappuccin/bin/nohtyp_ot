@@ -1,0 +1,6 @@
+#!/usr/bin/python
+import sys 
+import os
+
+with open(sys.argv[1][::-1], "w") as f: 
+    f.write(''.join([line[::-1]+"\n" for line in open(sys.argv[1]).read().split('\n')][::-1]))

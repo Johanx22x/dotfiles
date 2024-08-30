@@ -1,0 +1,3 @@
+#!/bin/sh
+
+imv -f Pictures/ascii.gif

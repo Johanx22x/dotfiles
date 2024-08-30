@@ -1,0 +1,59 @@
+#      ██╗ ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗██╗  ██╗██████╗ ██████╗ ██╗  ██╗
+#      ██║██╔═══██╗██║  ██║██╔══██╗████╗  ██║╚██╗██╔╝╚════██╗╚════██╗╚██╗██╔╝
+#      ██║██║   ██║███████║███████║██╔██╗ ██║ ╚███╔╝  █████╔╝ █████╔╝ ╚███╔╝ 
+# ██   ██║██║   ██║██╔══██║██╔══██║██║╚██╗██║ ██╔██╗ ██╔═══╝ ██╔═══╝  ██╔██╗ 
+# ╚█████╔╝╚██████╔╝██║  ██║██║  ██║██║ ╚████║██╔╝ ██╗███████╗███████╗██╔╝ ██╗
+#  ╚════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝
+#
+# ███████╗███████╗██╗  ██╗     ██████╗ ██████╗ ███╗   ██╗███████╗██╗ ██████╗ 
+# ╚══███╔╝██╔════╝██║  ██║    ██╔════╝██╔═══██╗████╗  ██║██╔════╝██║██╔════╝ 
+#   ███╔╝ ███████╗███████║    ██║     ██║   ██║██╔██╗ ██║█████╗  ██║██║  ███╗
+#  ███╔╝  ╚════██║██╔══██║    ██║     ██║   ██║██║╚██╗██║██╔══╝  ██║██║   ██║
+# ███████╗███████║██║  ██║    ╚██████╗╚██████╔╝██║ ╚████║██║     ██║╚██████╔╝
+# ╚══════╝╚══════╝╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝     ╚═╝ ╚═════╝ 
+
+# If not running interactively, don't do anything
+[[ $- != *i* ]] && return
+
+# env vars
+HISTFILE=~/.histfile
+HISTSIZE=1000
+SAVEHIST=1000
+PS1='[\u@\h \W]\$ '
+
+# Launch Starship
+eval "$(starship init zsh)"
+
+# Load wal scheme color
+cat ~/.cache/wal/sequences
+
+# Exports
+export PATH="$PATH:$HOME/.dotnet/tools"
+export PATH="$PATH:$HOME/bin"
+export EDITOR='nvim'
+export VISUAL='nvim'
+export TERM='alacritty'
+export QT_IM_MODULE=fcitx
+export XMODIFIERS=@im=fcitx
+export GTK_IM_MODULE=fcitx
+export PATH="$PATH:/opt/cuda/bin"
+export PATH=$PATH:/home/johan/.spicetify
+
+# Aliases
+alias neo='neofetch --source $(random-ascii)'
+alias vi='nvim'
+alias vim='nvim'
+alias grep='rg'
+alias tree='tree -C'
+alias ls='exa --icons'
+alias la='exa --icons --color-scale -a'
+alias ll='exa --icons --color-scale -l'
+alias lla='exa --icons --color-scale -la'
+alias cat='bat --paging=never --plain'
+alias lf='lfub'
+
+# Source zsh-autocomplete
+source ~/.config/zsh/zsh-autocomplete/zsh-autocomplete.plugin.zsh
+
+# Run neofetch
+neo

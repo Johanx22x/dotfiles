@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# echo "[es] - spanish"
+# echo "[en] - english"
+
+#echo -n "Enter the language: "
+
+language=$(echo -e "English\nSpanish\nJapanese" | wofi --dmenu --prompt "Select language" -L 5)
+
+if [ "$language" = "Spanish" ]; then
+    setxkbmap latam &
+elif [ "$language" = "English" ]; then
+    setxkbmap us &
+elif [ "$language" = "Japanese" ]; then
+    setxkbmap jp &
+fi

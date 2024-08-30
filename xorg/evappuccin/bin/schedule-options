@@ -1,0 +1,18 @@
+#!/bin/sh
+
+option=$(echo -e "Open Course Link\nOpen Course Folder\nOpen Course PDF\nChange Current Course" | wofi -d -p "Schedule options" -L 6)
+
+case $option in
+    "Open Course Link")
+        schedule-manager -cl
+        ;;
+    "Open Course Folder")
+        schedule-manager -oc
+        ;;
+    "Open Course PDF")
+        schedule-manager -sPdf
+        ;;
+    "Change Current Course")
+        schedule-change-course-options
+        ;;
+esac

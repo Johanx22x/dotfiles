@@ -1,0 +1,5 @@
+#!/bin/python
+import random
+import os
+
+print("/home/johan/.config/ascii" + "/" + random.choice(os.listdir("/home/johan/.config/ascii")))

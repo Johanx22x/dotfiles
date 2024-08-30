@@ -1,0 +1,7 @@
+#!/bin/sh
+
+option=$(schedule-manager -sc | wofi -d -p "Select a course")
+
+if [ -n "$option" ]; then
+    schedule-manager -cc "$option"
+fi

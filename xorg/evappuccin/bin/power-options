@@ -1,0 +1,15 @@
+#!/bin/sh
+
+option=$(echo -e "Power off\nRestart\nLock" | wofi -d -p "Power options" -L 5)
+
+case $option in
+    "Power off")
+        systemctl poweroff
+        ;;
+    "Restart")
+        systemctl reboot
+        ;;
+    "Lock")
+        swaylock -f -c 000000
+        ;;
+esac

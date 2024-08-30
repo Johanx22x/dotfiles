@@ -1,0 +1,3 @@
+#!/bin/bash
+FILENAME="figure-`ls -1 ~/university/current-course/images/ | wc -l | add`.png"
+grim -g "$(slurp)" ~/university/current-course/images/$FILENAME

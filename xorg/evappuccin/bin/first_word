@@ -1,0 +1,14 @@
+#!/bin/python
+import os 
+
+
+""" This program will take a string from a pipe and return the first word in the string. """
+def main():
+    args = os.read(0, 1000)
+    args = args.decode("utf-8")
+    args = args.split()
+    os.write(1, (args[0]+"\n").encode("utf-8"))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# Select your keyboard name, using swaymsg -t get_inputs
+swaymsg -t get_inputs | jq -r '.[] | select(.name=="Razer Razer Huntsman Mini Keyboard") | .xkb_active_layout_name' | tail -n 1 | first_word

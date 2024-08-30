@@ -1,0 +1,3 @@
+#!/bin/sh
+
+bat ~/BACKUP/TODO.txt
