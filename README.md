@@ -31,7 +31,10 @@ editor, and other tools that I use on a daily basis.
 
 ## [Techno City - Awesome](./xorg/techno-city/README.md)
 ![techno-city screenshot](./xorg/techno-city/img/clean.png)
-    <p>
+
+## [Evappuccin - i3](./xorg/evappuccin/README.md)
+![Evappuccin screenshot](./xorg/evappuccin/img/clean.png)
+    </p>
 </details>
 
 ---
