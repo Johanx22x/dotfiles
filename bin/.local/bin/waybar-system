@@ -1,0 +1,330 @@
+#!/usr/bin/env python3
+"""Modulo unificado de waybar: CPU + RAM + GPU en una sola pastilla.
+
+Imprime JSON con markup Pango, de modo que cada segmento lleve su
+propio color dentro del mismo modulo.
+
+Los tres colores de los segmentos los genera matugen desde el wallpaper
+(~/.config/waybar/colors.json); los de Tokyo Night que hay mas abajo son
+el respaldo. Los grises de texto y los avisos si son fijos.
+
+Uso de CPU: se calcula por diferencia contra la lectura anterior de
+/proc/stat, guardada en cache. Asi no hay que dormir el proceso para
+tomar dos muestras, y waybar no se bloquea en cada refresco.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+# ---- Acentos (los pisa el wallpaper, ver cargar_paleta) ----
+# Valores de respaldo: Tokyo Night, los tonos de los que parte matugen.
+C_CPU = "#bb9af7"   # magenta
+C_RAM = "#9ece6a"   # green
+C_GPU = "#7aa2f7"   # blue
+
+# ---- Fijos ----
+C_SEP = "#565f89"   # comment -- fg_gutter (#3b4261) queda invisible
+                    # contra el fondo del grupo de modulos
+# Avisos: NO siguen al wallpaper a proposito. Ambar y rojo significan
+# siempre lo mismo, y si el wallpaper fuera rojo el "critico" se
+# perderia entre los demas segmentos.
+C_WARN = "#e0af68"  # yellow
+C_CRIT = "#f7768e"  # red
+C_TXT = "#c0caf5"   # fg
+# Texto secundario del tooltip. Se usa fg_dark y no comment (#565f89):
+# sobre el fondo del tooltip aquel queda demasiado oscuro para leerse.
+C_DIM = "#a9b1d6"   # fg_dark
+# Solo para el guion de "GPU no disponible" en la barra, donde si
+# conviene que pase desapercibido.
+C_MUTED = "#565f89"  # comment
+
+CACHE = os.path.expanduser("~/.cache/waybar-system-cpu")
+PALETA = os.path.expanduser("~/.config/waybar/colors.json")
+UMBRAL_ALTO = 85    # % a partir del cual el segmento se pinta de alerta
+
+_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def cargar_paleta():
+    """Pisa C_CPU/C_RAM/C_GPU con la paleta del wallpaper actual.
+
+    La escribe matugen (plantilla waybar-colors.json). Cualquier fallo
+    -- que no exista todavia, o que se este leyendo justo mientras
+    matugen lo reescribe -- deja los valores de Tokyo Night: el modulo
+    nunca se queda sin color.
+    """
+    global C_CPU, C_RAM, C_GPU
+    try:
+        with open(PALETA) as f:
+            datos = json.load(f)
+    except (OSError, ValueError):
+        return
+
+    def leer(clave, respaldo):
+        valor = datos.get(clave)
+        # Se valida el hex porque va directo a un atributo de markup
+        # Pango: uno invalido deja el modulo entero en blanco.
+        if isinstance(valor, str) and _HEX.match(valor):
+            return valor
+        return respaldo
+
+    C_CPU = leer("cpu", C_CPU)
+    C_RAM = leer("ram", C_RAM)
+    C_GPU = leer("gpu", C_GPU)
+
+
+def leer_cpu_totales():
+    """Devuelve (total, ocioso) acumulados desde el arranque."""
+    with open("/proc/stat") as f:
+        campos = [int(v) for v in f.readline().split()[1:]]
+    ocioso = campos[3] + campos[4]          # idle + iowait
+    return sum(campos), ocioso
+
+
+def uso_cpu():
+    """% de CPU desde la lectura anterior. Sin cache, muestrea 0.15s."""
+    total, ocioso = leer_cpu_totales()
+
+    previo = None
+    try:
+        with open(CACHE) as f:
+            p_total, p_ocioso, p_ts = (float(v) for v in f.read().split())
+        # Cache vieja (waybar reiniciado, suspension): no sirve
+        if time.time() - p_ts < 60:
+            previo = (p_total, p_ocioso)
+    except (OSError, ValueError):
+        pass
+
+    if previo is None:
+        time.sleep(0.15)
+        p_total, p_ocioso = total, ocioso
+        total, ocioso = leer_cpu_totales()
+    else:
+        p_total, p_ocioso = previo
+
+    try:
+        with open(CACHE, "w") as f:
+            f.write(f"{total} {ocioso} {time.time()}")
+    except OSError:
+        pass
+
+    d_total = total - p_total
+    d_ocioso = ocioso - p_ocioso
+    if d_total <= 0:
+        return 0.0
+    return max(0.0, min(100.0, 100.0 * (d_total - d_ocioso) / d_total))
+
+
+def info_cpu():
+    """Modelo abreviado y numero de hilos."""
+    modelo, hilos = "CPU", 0
+    try:
+        with open("/proc/cpuinfo") as f:
+            for linea in f:
+                if linea.startswith("model name") and modelo == "CPU":
+                    modelo = linea.split(":", 1)[1].strip()
+                elif linea.startswith("processor"):
+                    hilos += 1
+    except OSError:
+        pass
+
+    # "13th Gen Intel(R) Core(TM) i5-13600K" -> "Intel Core i5-13600K"
+    for basura in ("(R)", "(TM)", "(tm)", "CPU"):
+        modelo = modelo.replace(basura, "")
+    modelo = re.sub(r"\d+th Gen\s*", "", modelo)
+    modelo = re.sub(r"\s+@.*$", "", modelo)
+    return re.sub(r"\s{2,}", " ", modelo).strip(), hilos
+
+
+def freq_cpu():
+    """(GHz actual promedio, GHz maximo). None si no hay cpufreq."""
+    base = "/sys/devices/system/cpu"
+    try:
+        actuales = []
+        for entrada in os.listdir(base):
+            ruta = f"{base}/{entrada}/cpufreq/scaling_cur_freq"
+            if entrada.startswith("cpu") and entrada[3:].isdigit():
+                try:
+                    with open(ruta) as f:
+                        actuales.append(int(f.read()))
+                except OSError:
+                    pass
+        if not actuales:
+            return None
+        with open(f"{base}/cpu0/cpufreq/scaling_max_freq") as f:
+            maxima = int(f.read())
+        # Los valores vienen en kHz
+        return sum(actuales) / len(actuales) / 1e6, maxima / 1e6
+    except OSError:
+        return None
+
+
+def temp_cpu():
+    """Temperatura del paquete en °C, o None."""
+    import glob
+    for ruta in glob.glob("/sys/devices/platform/coretemp.0/hwmon/hwmon*/temp1_input"):
+        try:
+            with open(ruta) as f:
+                return int(f.read()) / 1000
+        except OSError:
+            continue
+    return None
+
+
+def uso_ram():
+    """Devuelve (porcentaje, usados_gib, totales_gib)."""
+    datos = {}
+    with open("/proc/meminfo") as f:
+        for linea in f:
+            clave, _, resto = linea.partition(":")
+            datos[clave] = int(resto.split()[0])  # kB
+
+    total = datos["MemTotal"]
+    disponible = datos.get("MemAvailable", datos["MemFree"])
+    usada = total - disponible
+    return 100.0 * usada / total, usada / 1048576, total / 1048576
+
+
+def datos_gpu():
+    """Consulta nvidia-smi. Devuelve None si no esta disponible."""
+    try:
+        salida = subprocess.run(
+            ["nvidia-smi",
+             "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=2.5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    if salida.returncode != 0 or not salida.stdout.strip():
+        return None
+
+    try:
+        nombre, uso, vram_u, vram_t, temp = (
+            c.strip() for c in salida.stdout.strip().split("\n")[0].split(",")
+        )
+        return {
+            "nombre": nombre,
+            "uso": float(uso),
+            "vram_usada": float(vram_u) / 1024,   # GiB
+            "vram_total": float(vram_t) / 1024,
+            "temp": float(temp),
+        }
+    except (ValueError, IndexError):
+        return None
+
+
+def color_por_carga(valor, base):
+    """El color base salvo que el valor este alto."""
+    if valor >= 95:
+        return C_CRIT
+    if valor >= UMBRAL_ALTO:
+        return C_WARN
+    return base
+
+
+def escapar(texto):
+    """Escapa lo que Pango interpreta como markup.
+
+    El nombre del modelo viene del kernel y podria traer '&' o '<'.
+    Sin esto, un solo caracter asi deja el tooltip en blanco.
+    """
+    return (texto.replace("&", "&amp;")
+                 .replace("<", "&lt;")
+                 .replace(">", "&gt;"))
+
+
+def seg(icono, texto, color):
+    return f"<span color='{color}'>{icono}  {texto}</span>"
+
+
+def main():
+    cargar_paleta()
+
+    cpu = uso_cpu()
+    ram_pct, ram_usada, ram_total = uso_ram()
+    gpu = datos_gpu()
+
+    separador = f"<span color='{C_SEP}'> │ </span>"
+
+    partes = [
+        seg("󰻠", f"{cpu:.0f}%", color_por_carga(cpu, C_CPU)),
+        seg("󰍛", f"{ram_pct:.0f}%", color_por_carga(ram_pct, C_RAM)),
+    ]
+    if gpu:
+        partes.append(seg("󰢮", f"{gpu['uso']:.0f}%",
+                          color_por_carga(gpu["uso"], C_GPU)))
+    else:
+        # Sin GPU legible se marca en gris en vez de desaparecer,
+        # para que el ancho del modulo no baile.
+        partes.append(seg("󰢮", "—", C_MUTED))
+
+    # ---- Tooltip ----
+    modelo, hilos = info_cpu()
+    freq = freq_cpu()
+    temp = temp_cpu()
+
+    def dato(etiqueta, valor):
+        return (f"<span color='{C_DIM}'>{etiqueta}  </span>"
+                f"<span color='{C_TXT}'>{valor}</span>")
+
+    lineas = [
+        f"<span color='{C_CPU}'><b>󰻠  CPU</b></span>   "
+        f"<span color='{C_TXT}'><b>{cpu:.1f}%</b></span>",
+        f"<span color='{C_DIM}'>{escapar(modelo)}  ·  {hilos} threads</span>",
+    ]
+
+    detalle = []
+    if freq:
+        detalle.append(dato("clock", f"{freq[0]:.2f} / {freq[1]:.2f} GHz"))
+    if temp is not None:
+        color_t = C_CRIT if temp >= 85 else (C_WARN if temp >= 75 else C_TXT)
+        detalle.append(f"<span color='{C_DIM}'>temp  </span>"
+                       f"<span color='{color_t}'>{temp:.0f}°C</span>")
+    if detalle:
+        lineas.append("    ".join(detalle))
+
+    lineas += [
+        "",
+        f"<span color='{C_RAM}'><b>󰍛  RAM</b></span>   "
+        f"<span color='{C_TXT}'><b>{ram_pct:.0f}%</b></span>",
+        dato("used", f"{ram_usada:.1f} / {ram_total:.1f} GiB"),
+    ]
+
+    if gpu:
+        color_tg = (C_CRIT if gpu["temp"] >= 85
+                    else (C_WARN if gpu["temp"] >= 75 else C_TXT))
+        lineas += [
+            "",
+            f"<span color='{C_GPU}'><b>󰢮  GPU</b></span>   "
+            f"<span color='{C_TXT}'><b>{gpu['uso']:.0f}%</b></span>",
+            f"<span color='{C_DIM}'>{escapar(gpu['nombre'])}</span>",
+            dato("VRAM", f"{gpu['vram_usada']:.1f} / {gpu['vram_total']:.1f} GiB")
+            + f"    <span color='{C_DIM}'>temp  </span>"
+              f"<span color='{color_tg}'>{gpu['temp']:.0f}°C</span>",
+        ]
+    else:
+        lineas += ["", f"<span color='{C_DIM}'>󰢮  GPU unavailable</span>"]
+
+    # Clase CSS para que el modulo entero reaccione si algo se dispara
+    pico = max([cpu, ram_pct] + ([gpu["uso"]] if gpu else []))
+    clase = "critical" if pico >= 95 else ("warning" if pico >= UMBRAL_ALTO else "")
+
+    print(json.dumps({
+        "text": separador.join(partes),
+        "tooltip": "\n".join(lineas),
+        "class": clase,
+    }, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:  # nunca dejar el modulo en blanco
+        print(json.dumps({"text": "󰋔  error", "tooltip": str(e), "class": "critical"}))
+        sys.exit(0)

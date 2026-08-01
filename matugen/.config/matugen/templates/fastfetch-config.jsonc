@@ -1,0 +1,80 @@
+// GENERADO POR MATUGEN - no editar a mano.
+// Plantilla: ~/.config/matugen/templates/fastfetch-config.jsonc
+// Wallpaper: {{image}}
+//
+// fastfetch no soporta "include" (igual que dunst), asi que se
+// regenera el archivo entero. Para cambiar modulos, iconos o el logo
+// edita la PLANTILLA, no este archivo.
+//
+// Tema: port de "remfetch" de Chick2D/neofetch-themes.
+// Requiere Nerd Font (JetBrainsMono Nerd Font).
+{
+    "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+
+    "logo": {
+        // OJO: kitty-direct exige PNG. kitty solo decodifica PNG o RGB
+        // crudo; un JPEG o GIF se descarta en silencio, sin error y sin
+        // imagen. Para otros formatos usa "kitty" (lo convierte con
+        // imagemagick), a costa de algo mas de arranque.
+        "type": "kitty-direct",
+        // Glob, no un archivo: si expande a varios, fastfetch elige uno
+        // AL AZAR en cada ejecucion. Es nativo, no hace falta script.
+        // Suelta mas PNG en logos/ y entran solos a la rotacion.
+        "source": "/home/johan/.config/fastfetch/logos/*.png",
+        // La caja es fija (26x15), asi que el texto ocupa siempre 16
+        // filas pase lo que pase. Pero preserveAspectRatio encaja DENTRO
+        // de la caja: una imagen mas apaisada se vera mas pequena y
+        // dejara hueco. Para un encuadre uniforme, usa imagenes de ratio
+        // parecido al de rei.png (462x586 = 0.79, vertical).
+        "width": 26,
+        "height": 15,
+        "preserveAspectRatio": true,
+        "padding": { "top": 1, "right": 3 }
+    },
+
+    "display": {
+        "separator": " ",
+        "color": {
+            // Acentos del wallpaper, mismos roles que kitty y waybar:
+            // primary para el titulo, tertiary para las claves.
+            "title": "{{colors.primary.default.hex}}",
+            "keys": "{{colors.tertiary.default.hex}}",
+            // Los VALORES no se derivan: son el texto que hay que leer.
+            // Fijos al foreground de kitty.conf para no depender de que
+            // tan claro salga el acento del wallpaper de turno.
+            "output": "#c0caf5"
+        }
+    },
+
+    "modules": [
+        "title",
+        { "type": "separator",    "string": "─" },
+        { "type": "os",           "key": " " },
+        { "type": "kernel",       "key": " ", "format": "{release}" },
+        { "type": "shell",        "key": " " },
+        { "type": "terminal",     "key": " " },
+        { "type": "terminalfont", "key": " " },
+        //  = glifo "linux-hyprland" de Nerd Fonts. El tema original
+        // traia un "squared plus" (U+229E) generico, no un logo.
+        { "type": "wm",           "key": " " },
+        { "type": "theme",        "key": " " },
+        // "13th Gen Intel(R) Core(TM) i5-13600K" son 36 caracteres de
+        // los que solo importan 9. fastfetch no tiene search/replace en
+        // sus format strings, pero si un sandbox Lua: los datos del
+        // modulo llegan como tabla en el primer vararg (claves camelCase,
+        // ver con  format = 'lua:return json_encode({...})' ).
+        // Si algun dia montas un AMD el patron no casa y cae al nombre
+        // completo, sin romperse.
+        { "type": "cpu",          "key": " ",
+          "format": "lua:local c=... local v=c.vendor:gsub('^Genuine',''):gsub('^Authentic','') return v .. ' ' .. (c.name:gsub('^.*Core%(TM%)%s*','')) .. ' (' .. c.coreTypes .. ') @ ' .. c.freqMax" },
+        // Solo la dedicada: la UHD 770 no tiene monitores conectados y no
+        // pinta nada. La linea que deja libre la ocupa el disco.
+        { "type": "gpu",          "key": "󰢮 ", "format": "{name}", "hideType": "integrated" },
+        { "type": "memory",       "key": "󰍛 ", "format": "{used} / {total}" },
+        // Solo "/" (como disk_show=('/') de remfetch). Sin filtrar salen
+        // tambien /mnt/datos y se pasaria de las 16 filas del logo.
+        { "type": "disk",         "key": " ", "folders": "/" },
+        "break",
+        { "type": "colors", "symbol": "block", "block": { "width": 2 } }
+    ]
+}

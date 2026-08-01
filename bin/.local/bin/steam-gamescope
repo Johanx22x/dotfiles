@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# =============================================================
+#  steam-gamescope — Steam entero dentro de gamescope, modo consola
+#
+#  Arranca Steam en Big Picture dentro de un gamescope a pantalla
+#  completa. Todos los juegos que lances heredan un monitor virtual
+#  unico de 2560x1440@165, asi que ninguno puede confundirse con tu
+#  setup de dos pantallas (una vertical). No hacen falta opciones de
+#  lanzamiento en ningun juego.
+#
+#  Aqui SI se usa -e / --steam: ese flag existe justo para cuando
+#  gamescope ES el compositor de la sesion de Steam. Es lo que da el
+#  overlay (Shift+Tab) y Steam Input funcionando bien.
+#
+#  Variables:
+#    SG_W / SG_H      Resolucion de salida        (def. 2560x1440)
+#    SG_HZ            Refresco                    (def. 165)
+#    SG_VRR=1         Adaptive sync / FreeSync
+#    SG_HUD=1         Overlay de FPS (mangoapp)
+#    SG_DESKTOP=1     Steam normal en vez de Big Picture
+# =============================================================
+set -uo pipefail
+
+W="${SG_W:-2560}"
+H="${SG_H:-1440}"
+HZ="${SG_HZ:-165}"
+
+command -v gamescope >/dev/null || { echo "gamescope no esta instalado" >&2; exit 1; }
+command -v steam     >/dev/null || { echo "steam no esta instalado" >&2; exit 1; }
+
+# -------------------------------------------------------------
+# Steam solo admite una instancia. Si ya hay una abierta en el
+# escritorio, la nueva se limita a hablar con ella y salir, y te
+# quedas con un gamescope vacio. Hay que cerrarla antes.
+# -------------------------------------------------------------
+if pgrep -x steam >/dev/null 2>&1; then
+    echo "Steam ya esta abierto en el escritorio. Cerrandolo..."
+    steam -shutdown >/dev/null 2>&1
+    for i in {1..30}; do
+        pgrep -x steam >/dev/null 2>&1 || break
+        sleep 1
+    done
+    if pgrep -x steam >/dev/null 2>&1; then
+        echo "No se ha cerrado solo. Cierralo a mano y vuelve a lanzarme." >&2
+        exit 1
+    fi
+    echo "Cerrado."
+fi
+
+# -------------------------------------------------------------
+# Entorno para TODOS los juegos de la sesion
+# -------------------------------------------------------------
+# Cache de shaders persistente: menos tirones la segunda partida.
+export __GL_SHADER_DISK_CACHE=1
+export __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1
+export __GL_SHADER_DISK_CACHE_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/nv"
+mkdir -p "$__GL_SHADER_DISK_CACHE_PATH"
+
+# DLSS / Reflex / Frame Generation en la 5070, via dxvk-nvapi.
+export PROTON_ENABLE_NVAPI=1
+# Ray tracing en juegos DX12.
+export VKD3D_CONFIG="${VKD3D_CONFIG:-dxr11,dxr}"
+
+# NO exportar SDL_VIDEODRIVER ni QT_QPA_PLATFORM: rompen juegos con SDL2
+# antiguo. Que caigan a XWayland dentro de gamescope es lo correcto.
+
+# -------------------------------------------------------------
+# gamescope
+# -------------------------------------------------------------
+args=(
+    -W "$W" -H "$H"
+    -r "$HZ"
+    -f                  # pantalla completa
+    -e                  # integracion con Steam: overlay y Steam Input
+    --expose-wayland    # deja que los juegos nativos usen Wayland directo
+)
+
+[[ ${SG_VRR:-0} == 1 ]] && args+=( --adaptive-sync )
+[[ ${SG_HUD:-0} == 1 ]] && args+=( --mangoapp )
+
+if [[ ${SG_DESKTOP:-0} == 1 ]]; then
+    steam_args=( steam )
+else
+    steam_args=( steam -gamepadui )   # Big Picture
+fi
+
+echo "Lanzando Steam en gamescope ${W}x${H}@${HZ}..."
+echo "La ventana puede tardar 10-15 segundos en aparecer. Es normal."
+exec gamescope "${args[@]}" -- "${steam_args[@]}"

@@ -1,0 +1,6 @@
+/* GENERADO POR MATUGEN - no editar a mano.
+   Plantilla: ~/.config/matugen/templates/wofi-colors.css
+   Wallpaper: {{image}} */
+
+@define-color accent  {{colors.primary.default.hex}};
+@define-color accent2 {{colors.tertiary.default.hex}};

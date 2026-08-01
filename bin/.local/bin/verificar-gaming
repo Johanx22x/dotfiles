@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Comprobacion del estado del setup de gaming. No modifica nada.
+# Relanzalo con sudo si quieres que inspeccione los UKIs.
+ok()   { printf '  \033[1;32m OK \033[0m %s\n' "$*"; }
+bad()  { printf '  \033[1;31mFALLA\033[0m %s\n' "$*"; }
+warn() { printf '  \033[1;33m ??? \033[0m %s\n' "$*"; }
+hdr()  { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
+
+# Con sudo, $HOME es /root y USER es root. Resolvemos el usuario real para que
+# las comprobaciones de sesion (Hyprland, Vulkan, rutas del home) miren donde toca.
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+REAL_UID=$(id -u "$REAL_USER")
+
+# Ejecuta un comando como el usuario real, con el entorno de su sesion Wayland.
+asuser() {
+    local his
+    his=$(ls -t "/run/user/$REAL_UID/hypr" 2>/dev/null | head -1)
+    if [[ $EUID -eq 0 ]]; then
+        runuser -u "$REAL_USER" -- env \
+            XDG_RUNTIME_DIR="/run/user/$REAL_UID" \
+            WAYLAND_DISPLAY="wayland-1" \
+            HYPRLAND_INSTANCE_SIGNATURE="$his" \
+            "$@" 2>/dev/null
+    else
+        "$@" 2>/dev/null
+    fi
+}
+
+hdr "Repositorios y paquetes"
+grep -q '^\[multilib\]' /etc/pacman.conf && ok "multilib habilitado" || bad "multilib DESHABILITADO"
+for p in steam lib32-nvidia-utils lib32-mesa lib32-vulkan-icd-loader \
+         gamescope gamemode lib32-gamemode mangohud lib32-mangohud vulkan-tools; do
+    pacman -Qq "$p" &>/dev/null && ok "$p" || bad "falta $p"
+done
+pacman -Qq vulkan-intel &>/dev/null && warn "vulkan-intel instalado: algun juego puede elegir la iGPU" \
+    || ok "sin driver Vulkan de Intel"
+
+hdr "Driver NVIDIA"
+nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null | sed 's/^/   /'
+[[ -f /etc/modprobe.d/nvidia-gaming.conf ]] && ok "modprobe.d configurado" || bad "falta /etc/modprobe.d/nvidia-gaming.conf"
+[[ -e /dev/ntsync ]] && ok "/dev/ntsync presente (Proton usa ntsync)" || bad "/dev/ntsync ausente"
+
+hdr "Initramfs (UKI)"
+grep -q 'nvidia_drm' /etc/mkinitcpio.conf && ok "nvidia declarado en mkinitcpio.conf" \
+    || warn "nvidia no esta en MODULES (el hook 'kms' suele meterlo igualmente)"
+# NO comparar fechas: los UKIs se construyen de forma reproducible y su mtime se
+# fija a SOURCE_DATE_EPOCH, no a la hora real. Siempre parecen viejos aunque
+# acabes de regenerarlos. Hay que mirar el contenido.
+for uki in /boot/EFI/Linux/arch-linux.efi /boot/EFI/Linux/arch-linux-lts.efi; do
+    n=$(basename "$uki")
+    if [[ $EUID -ne 0 ]]; then
+        warn "$n: relanza con sudo para inspeccionarlo"
+    elif [[ ! -f $uki ]]; then
+        bad "$n no existe"
+    else
+        contenido=$(lsinitcpio "$uki" 2>/dev/null)
+        if [[ -z $contenido ]]; then
+            warn "$n: lsinitcpio no sabe leer este UKI, no puedo comprobar el contenido"
+        elif grep -qE 'nvidia[-_]drm\.ko' <<<"$contenido"; then
+            ok "$n contiene los modulos NVIDIA"
+        else
+            bad "$n sin modulos nvidia: revisa MODULES y lanza 'sudo mkinitcpio -P'"
+        fi
+    fi
+done
+
+hdr "Arranque"
+printf '   kernel en uso: %s\n' "$(uname -r)"
+if [[ $(uname -r) == *lts* ]]; then
+    warn "estas en el LTS; el mainline es Boot0002 en el BootOrder"
+else
+    ok "kernel mainline"
+fi
+efibootmgr 2>/dev/null | grep -E '^BootOrder|Arch Linux' | sed 's/^/   /'
+echo "   NOTA: el kernel por defecto se elige con efibootmgr, NO con GRUB."
+echo "         La cmdline vive en /etc/kernel/cmdline (regenera UKIs al tocarla)."
+
+hdr "Vulkan"
+if command -v vulkaninfo >/dev/null; then
+    devs=$(asuser vulkaninfo --summary | grep -c 'deviceName')
+    asuser vulkaninfo --summary | grep -E 'deviceName|driverName' | sed 's/^/   /'
+    (( devs == 1 )) && ok "un unico dispositivo Vulkan" || warn "$devs dispositivos Vulkan"
+else
+    bad "vulkan-tools no instalado"
+fi
+
+hdr "Hyprland"
+errs=$(asuser hyprctl configerrors | tr -d '[:space:]')
+[[ -z $errs ]] && ok "config sin errores" || bad "errores: $errs"
+printf '   direct_scanout: %s\n' "$(asuser hyprctl getoption render:direct_scanout | head -1)"
+printf '   vrr:            %s\n' "$(asuser hyprctl getoption misc:vrr | head -1)"
+[[ -f $REAL_HOME/.config/hypr/gaming.lua ]] && ok "gaming.lua presente" || bad "falta gaming.lua"
+
+hdr "Lanzador"
+[[ -x $REAL_HOME/.local/bin/gs ]] && ok "gs ejecutable" || bad "falta ~/.local/bin/gs"
+command -v gamemoderun >/dev/null && ok "gamemoderun en el PATH" || bad "gamemoderun no encontrado"
+
+hdr "Discos y bibliotecas"
+for LIB in /mnt/juegos/SteamLibrary "$REAL_HOME/Games/SteamLibrary"; do
+    if [[ -d $LIB ]]; then
+        lsattr -d "$LIB" 2>/dev/null | grep -q C && ok "$LIB con nodatacow (+C)" \
+            || warn "$LIB sin +C: se fragmentara con las actualizaciones"
+    else
+        warn "$LIB no existe"
+    fi
+done
+findmnt -o TARGET,SOURCE,FSTYPE /mnt/datos 2>/dev/null | tail -1 | sed 's/^/   /'
+findmnt -o TARGET,SOURCE,FSTYPE /mnt/juegos 2>/dev/null | tail -1 | sed 's/^/   /'
+if [[ -f $REAL_HOME/.steam/steam/steamapps/libraryfolders.vdf ]]; then
+    ok "bibliotecas registradas en Steam:"
+    grep -oE '"path"[[:space:]]+"[^"]+"' "$REAL_HOME/.steam/steam/steamapps/libraryfolders.vdf" \
+        | sed 's/.*"\(\/[^"]*\)"/      \1/'
+else
+    warn "Steam no se ha abierto todavia"
+fi
+echo

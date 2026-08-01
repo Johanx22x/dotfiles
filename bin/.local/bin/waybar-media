@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""Modulo de reproduccion para waybar, en reemplazo del modulo nativo "mpris".
+
+POR QUE ESTE SCRIPT Y NO EL MODULO NATIVO
+-----------------------------------------
+El modulo "mpris" de waybar 0.15.0 corrompe memoria y tumba la barra entera
+cuando Brave (o cualquier Chromium) empieza a reproducir. El coredump lo
+muestra sin ambiguedad: Brave emite PropertiesChanged, libplayerctl lo
+reenvia, y el handler de waybar termina llamando a un Glib::Dispatcher cuyo
+puntero interno ya esta pisado con basura ASCII:
+
+    Glib::DispatchNotifier::send_notification (this=0x3fe0303030303030)
+      <- playerctl_player_properties_changed_callback (playerctl-player.c:187)
+
+Como libplayerctl corre DENTRO del proceso de waybar, ese fallo se lleva la
+barra completa (reloj, bandeja, workspaces, todo). Aqui playerctl corre como
+proceso aparte: si se cae, waybar solo pierde este modulo y lo relanza segun
+"restart-interval". El bug de arriba deja de poder matar la barra.
+
+Salida: una linea JSON por cada cambio, leida en streaming por waybar.
+Paleta: Tokyo Night, igual que waybar-system.
+"""
+
+import json
+import subprocess
+import sys
+
+# ---- Tokyo Night ----
+C_ARTISTA = "#565f89"   # comment -- secundario en el tooltip
+C_TXT = "#c0caf5"       # fg
+C_DIM = "#a9b1d6"       # fg_dark
+
+# Largo maximo del texto en la barra (equivale a "dynamic-len" del modulo nativo)
+LARGO_MAX = 40
+
+# Separador entre titulo y artista dentro de la barra
+SEP = "  ·  "
+
+# Iconos por reproductor. La clave se compara contra {{playerName}}, que
+# playerctl ya entrega sin el sufijo de instancia (brave.instance3631 -> brave).
+ICONOS = {
+    "brave": "󰊯",
+    "chromium": "󰊯",
+    "chrome": "󰊯",
+    "firefox": "󰈹",
+    "spotify": "",
+    "vlc": "󰕼",
+    "mpv": "",
+}
+ICONO_DEFECTO = "󰝚"
+ICONO_PAUSA = "󰏤"
+
+
+def escapar(texto):
+    """Escapa lo que Pango interpreta como markup.
+
+    Los titulos vienen de paginas web arbitrarias: un solo '&' sin escapar
+    deja el modulo en blanco. Mismo criterio que en waybar-system.
+    """
+    return (texto.replace("&", "&amp;")
+                 .replace("<", "&lt;")
+                 .replace(">", "&gt;"))
+
+
+def recortar(texto, limite):
+    if len(texto) <= limite:
+        return texto
+    return texto[:max(1, limite - 1)].rstrip() + "…"
+
+
+def texto_barra(titulo, artista):
+    """Titulo y artista recortados a LARGO_MAX.
+
+    Reproduce el comportamiento de "dynamic-order": si no entran los dos,
+    se sacrifica el artista antes que el titulo.
+    """
+    if not titulo and not artista:
+        return ""
+    if not titulo:
+        return recortar(artista, LARGO_MAX)
+    if artista and len(titulo) + len(SEP) + len(artista) <= LARGO_MAX:
+        return titulo + SEP + artista
+    return recortar(titulo, LARGO_MAX)
+
+
+def emitir(payload):
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
+
+
+def vacio():
+    """Sin reproductor: texto vacio hace que waybar oculte el modulo."""
+    emitir({"text": "", "tooltip": "", "class": "parado"})
+
+
+def procesar(linea):
+    campos = linea.split("\x1f")
+    if len(campos) != 5 or not linea.strip("\x1f").strip():
+        vacio()
+        return
+
+    player, estado, titulo, artista, album = (c.strip() for c in campos)
+
+    if estado not in ("Playing", "Paused"):
+        vacio()
+        return
+
+    cuerpo = texto_barra(titulo, artista)
+    if not cuerpo:
+        vacio()
+        return
+
+    icono = ICONOS.get(player.lower(), ICONO_DEFECTO)
+    cuerpo = escapar(cuerpo)
+
+    if estado == "Paused":
+        texto = f"{ICONO_PAUSA} <i>{cuerpo}</i>"
+        clase = "paused"
+    else:
+        texto = f"{icono} {cuerpo}"
+        clase = "playing"
+
+    lineas = [f"<span color='{C_TXT}'><b>{escapar(titulo)}</b></span>"]
+    if artista:
+        lineas.append(f"<span color='{C_DIM}'>{escapar(artista)}</span>")
+    if album:
+        lineas.append(f"<span color='{C_ARTISTA}'>{escapar(album)}</span>")
+    lineas.append(f"<span color='{C_ARTISTA}'>{escapar(player)}</span>")
+
+    emitir({"text": texto, "tooltip": "\n".join(lineas), "class": clase})
+
+
+def main():
+    # \x1f (unit separator) como delimitador: no aparece en titulos reales,
+    # asi que no hace falta adivinar donde corta un campo.
+    cmd = [
+        "playerctl", "--follow", "--format",
+        "{{playerName}}\x1f{{status}}\x1f{{title}}\x1f{{artist}}\x1f{{album}}",
+        "metadata",
+    ]
+
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                text=True, bufsize=1)
+    except OSError as e:
+        emitir({"text": "󰋔", "tooltip": f"playerctl no disponible: {e}",
+                "class": "critical"})
+        # Sin salir con error: waybar lo reintenta segun restart-interval
+        return
+
+    # Estado inicial: si playerctl tarda en emitir, el modulo arranca oculto
+    # en vez de quedarse con el texto del arranque anterior.
+    vacio()
+
+    try:
+        for linea in proc.stdout:
+            procesar(linea.rstrip("\n"))
+    except Exception:
+        pass
+    finally:
+        proc.terminate()
+
+    # playerctl termino (no hay reproductores, o murio): dejamos el modulo
+    # limpio y salimos para que waybar relance el script.
+    vacio()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:  # nunca dejar el modulo colgado con texto viejo
+        emitir({"text": "󰋔", "tooltip": str(e), "class": "critical"})
+        sys.exit(0)

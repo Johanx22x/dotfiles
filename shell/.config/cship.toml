@@ -1,0 +1,59 @@
+# ~/.config/cship.toml
+#
+# Preset "Hero / Recommended" de https://cship.dev/showcase.html
+# Copiado tal cual: paleta Catppuccin Mocha y layout de dos filas.
+#
+# La fila 1 es $starship_prompt, que se renderiza con el preset
+# catppuccin-powerline desde ~/.config/starship-cship.toml (via STARSHIP_CONFIG
+# en el statusLine de ~/.claude/settings.json), NO con tu ~/.config/starship.toml.
+# Asi la status line lleva Catppuccin y tu prompt de shell sigue con matugen.
+
+[cship]
+lines = [
+  "$starship_prompt",
+  "$cship.model $cship.effort $cship.cost $cship.context_bar $cship.usage_limits $cship.peak_usage",
+]
+
+[cship.model]
+symbol = " "
+style  = "bold cyan"
+
+[cship.effort]
+symbol      = "⚡ "
+style       = "fg:#7dcfff"
+high_style  = "fg:#e0af68"
+xhigh_style = "bold fg:#e0af68"
+max_style   = "bold fg:#f7768e"
+
+[cship.context_bar]
+symbol             = " "
+filled_char        = "●"
+empty_char         = "○"
+format             = "[$symbol$value]($style)"
+width              = 10
+style              = "fg:#7dcfff"
+warn_threshold     = 40.0
+warn_style         = "fg:#e0af68"
+critical_threshold = 70.0
+critical_style     = "bold fg:#f7768e"
+
+[cship.cost]
+symbol             = "💰 "
+style              = "fg:#a9b1d6"
+warn_threshold     = 10
+warn_style         = "fg:#e0af68"
+critical_threshold = 50
+critical_style     = "bold fg:#f7768e"
+
+[cship.usage_limits]
+five_hour_format   = " 5h {pct}% ({reset})"
+seven_day_format   = " 7d {pct}% ({reset})"
+separator          = " "
+warn_threshold     = 50.0
+warn_style         = "fg:#e0af68"
+critical_threshold = 80.0
+critical_style     = "bold fg:#f7768e"
+
+[cship.peak_usage]
+symbol = "⏰ "
+style  = "fg:#e0af68"

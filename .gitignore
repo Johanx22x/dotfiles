@@ -1,0 +1,45 @@
+# ---------------------------------------------------------------------------
+# Salidas de matugen
+#
+# Estos ficheros los REGENERA matugen a partir del wallpaper actual, asi que
+# cambian cada vez que cambias de fondo. Lo que se versiona son las plantillas
+# (matugen/.config/matugen/templates/), no el resultado.
+#
+# Si aparecen aqui como "modificados" despues de un `stow`, es lo esperado:
+# stow enlaza el directorio entero y matugen escribe dentro.
+# ---------------------------------------------------------------------------
+waybar/.config/waybar/colors.css
+waybar/.config/waybar/colors.json
+kitty/.config/kitty/colors.conf
+hypr/.config/hypr/colors.lua
+wofi/.config/wofi/colors.css
+qt/.config/qt6ct/colors/matugen.conf
+gtk/.config/gtk-3.0/gtk.css
+gtk/.config/gtk-4.0/gtk.css
+
+# dunst y fastfetch se generan ENTEROS desde plantilla: no tienen paquete stow
+# propio. Ver matugen/.config/matugen/config.toml.
+
+# ---------------------------------------------------------------------------
+# Estado en tiempo de ejecucion
+# ---------------------------------------------------------------------------
+openrgb/.config/OpenRGB/logs/
+openrgb/.config/OpenRGB/plugins/
+
+# ---------------------------------------------------------------------------
+# Binarios: nada compilado en el repo
+# ---------------------------------------------------------------------------
+bin/.local/bin/cship
+bin/.local/bin/claude
+
+# ---------------------------------------------------------------------------
+# Basura general
+# ---------------------------------------------------------------------------
+*.bak
+*.old
+*~
+.cache/
+
+# Enlaces que crea `systemctl --user enable`. Se regeneran, no se versionan:
+# lo hace instalar.sh.
+systemd/.config/systemd/user/*.target.wants/

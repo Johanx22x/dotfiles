@@ -1,0 +1,37 @@
+# -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+# WOFI - comportamiento
+# El aspecto va en style.css. Estas opciones son las que
+# hyprland.lua no pasa por CLI (solo pasa --show drun).
+# -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+# Tamano de la ventana. Acepta px o porcentaje.
+width=600
+height=420
+
+# Texto de la barra de busqueda cuando esta vacia
+prompt=Buscar
+
+# Busqueda insensible a mayusculas y difusa (no exige coincidencia exacta)
+insensitive=true
+matching=fuzzy
+
+# Iconos de las aplicaciones
+allow_images=true
+image_size=28
+
+# Oculta la barra de scroll (el estilo la asume oculta)
+hide_scroll=true
+
+# Ejecuta la app en cuanto solo queda un resultado? No: molesta al escribir.
+# insensitive a esto, dejalo en false salvo que quieras lanzar sin Enter.
+# auto_select=false
+
+# Terminal para las apps que declaran Terminal=true en su .desktop
+term=kitty
+
+# Oculta las "acciones" extra de los .desktop (Abrir ventana nueva, etc.)
+# Ponlo en false si las quieres ver.
+no_actions=true
+
+# La capa del compositor. overlay = siempre por encima, incluso de waybar.
+layer=overlay

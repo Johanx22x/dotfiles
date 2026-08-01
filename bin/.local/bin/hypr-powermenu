@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#
+# hypr-powermenu — menu de energia para Hyprland via wofi.
+#
+# Se invoca desde hyprland.lua con SUPER + SHIFT + ESCAPE.
+# "Cancelar" va primero a proposito: wofi preselecciona la primera
+# entrada, asi que un Enter accidental no hace nada.
+
+set -euo pipefail
+
+# Cancelar va sin icono a proposito: al no llevar glifo queda
+# visualmente separado de las tres acciones reales, que si lo llevan.
+# La sangria de tres espacios lo mantiene alineado con las demas.
+#
+# Los tres iconos son de la familia Material Design de Nerd Fonts
+# (rango U+F01xx-U+F1Axx), no del rango Font Awesome legacy (U+F0xx).
+# Dos motivos: dentro de la misma familia comparten grosor y ancho,
+# y el rango legacy colisiona con la "Font Awesome 7 Free" que tienes
+# instalada como fallback en wofi/style.css, que puede acabar
+# dibujando el glifo con otro estilo.
+CANCELAR="   Cancel"
+SALIR="󰍃  Log out"            # nf-md-logout   U+F0343
+REINICIAR="󰜉  Restart"         # nf-md-restart  U+F0709
+APAGAR="󰐥  Shut down"         # nf-md-power    U+F0425
+
+# --cache-file=/dev/null es imprescindible: sin esto wofi recuerda lo
+# mas usado y lo sube al principio de la lista, con lo que "Apagar"
+# acabaria preseleccionado y perderiamos toda la proteccion.
+eleccion=$(printf '%s\n' "$CANCELAR" "$SALIR" "$REINICIAR" "$APAGAR" \
+    | wofi --dmenu \
+           --cache-file=/dev/null \
+           --prompt "Power" \
+           --width 320 \
+           --height 250 \
+           --lines 4 \
+           --hide-scroll \
+           --insensitive \
+    ) || exit 0   # ESC o wofi cerrado: salimos sin hacer nada
+
+case "$eleccion" in
+    "$SALIR")
+        # hyprctl evalua Lua en Hyprland 0.5x, por eso la forma hl.dsp.exit().
+        # loginctl queda de red de seguridad por si el dispatcher falla.
+        hyprctl dispatch 'hl.dsp.exit()' || loginctl terminate-user "$USER"
+        ;;
+    "$REINICIAR")
+        systemctl reboot
+        ;;
+    "$APAGAR")
+        systemctl poweroff
+        ;;
+    *)
+        # "Cancelar" o seleccion vacia: no hacemos nada.
+        exit 0
+        ;;
+esac

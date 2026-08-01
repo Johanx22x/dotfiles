@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# =============================================================
+#  gs — lanzador de juegos para Steam en Hyprland / Wayland
+#
+#  Uso en Steam:  Propiedades del juego -> Opciones de lanzamiento:
+#
+#      /home/johan/.local/bin/gs -- %command%
+#
+#  Mete el juego dentro de gamescope, que le presenta UN solo
+#  "monitor" virtual de 2560x1440@165. El juego no ve tu setup
+#  de dos pantallas (una vertical), asi que ya no puede
+#  equivocarse con la resolucion ni abrirse en ventanita.
+#
+#  Variables de entorno para ajustar por juego (se ponen DELANTE
+#  en las opciones de lanzamiento, ej:  GS_W=1920 GS_H=1080 gs -- %command%)
+#
+#    GS_OUT_W / GS_OUT_H  Resolucion de salida real   (def. 2560x1440)
+#    GS_HZ                Refresco / tope de FPS      (def. 165)
+#    GS_W / GS_H          Resolucion interna de render; si es menor que
+#                         la de salida, gamescope escala con FSR.
+#                         Ej: GS_W=1920 GS_H=1080 -> renderiza a 1080p
+#                         y escala a 1440p. Buen truco para juegos pesados.
+#    GS_FSR               Filtro de escalado: fsr | nis | linear | nearest
+#    GS_HUD=1             Overlay de FPS (MangoHud dentro de gamescope)
+#    GS_VRR=1             Activa adaptive sync / FreeSync
+#    GS_GRAB=1            Fuerza el modo raton relativo permanente. Solo si el
+#                         raton se te escapa al otro monitor. Provoca que el
+#                         cursor parezca trabado durante la carga del juego.
+#    GS_GAMEMODE=0        Desactiva gamemoderun
+#    GS_OFF=1             Salta gamescope por completo (juego nativo Wayland)
+# =============================================================
+set -euo pipefail
+
+# Steam pasa "gs -- <comando>"; nos comemos el -- inicial.
+[[ ${1:-} == "--" ]] && shift
+
+if [[ $# -eq 0 || ${1:-} == "--help" || ${1:-} == "-h" ]]; then
+    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+fi
+
+# ---- Ajustes de NVIDIA / Proton comunes a todos los juegos ----
+# Cache de shaders persistente: menos tirones la 2a vez que juegas.
+export __GL_SHADER_DISK_CACHE=1
+export __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1
+export __GL_SHADER_DISK_CACHE_PATH="${XDG_CACHE_HOME:-$HOME/.cache}/nv"
+mkdir -p "$__GL_SHADER_DISK_CACHE_PATH"
+
+# DLSS / Reflex / Frame Generation en la 5070 via dxvk-nvapi.
+export PROTON_ENABLE_NVAPI=1
+# Ray tracing en juegos DX12.
+export VKD3D_CONFIG="${VKD3D_CONFIG:-dxr11,dxr}"
+
+# ---- Salida sin gamescope (juegos nativos que ya van bien) ----
+if [[ ${GS_OFF:-0} == 1 ]]; then
+    if [[ ${GS_GAMEMODE:-1} == 1 ]] && command -v gamemoderun >/dev/null; then
+        exec gamemoderun "$@"
+    fi
+    exec "$@"
+fi
+
+if ! command -v gamescope >/dev/null; then
+    echo "gs: gamescope no esta instalado, lanzando el juego tal cual" >&2
+    exec "$@"
+fi
+
+# Si Steam ya corre dentro de una sesion de gamescope (steam-gamescope), meter
+# otro gamescope por juego lo anida sobre si mismo: peor rendimiento, input
+# raro y el overlay roto. En ese caso no hacemos nada y dejamos pasar el juego.
+if [[ -n ${GAMESCOPE_WAYLAND_DISPLAY:-} ]]; then
+    echo "gs: ya estamos dentro de gamescope, no anido otro" >&2
+    if [[ ${GS_GAMEMODE:-1} == 1 ]] && command -v gamemoderun >/dev/null; then
+        exec gamemoderun "$@"
+    fi
+    exec "$@"
+fi
+
+# ---- Construccion de la linea de gamescope ----
+OUT_W="${GS_OUT_W:-2560}"
+OUT_H="${GS_OUT_H:-1440}"
+HZ="${GS_HZ:-165}"
+
+args=(
+    -W "$OUT_W" -H "$OUT_H"   # resolucion del monitor virtual = salida real
+    -r "$HZ"                  # refresco (tambien actua de tope de FPS)
+    -f                        # arranca en pantalla completa. SIEMPRE.
+)
+
+# OJO con -e / --steam: NO lo pongas por defecto. En una sesion anidada dentro
+# de Hyprland hace que gamescope no cree ventana ninguna: el juego arranca,
+# renderiza y suena, pero no se ve nada. Ese flag es para cuando gamescope ES
+# el compositor de la sesion (modo Steam Deck), no para lanzar juegos sueltos.
+[[ ${GS_STEAM:-0} == 1 ]] && args+=( -e )
+
+# Render interno mas bajo + escalado FSR
+if [[ -n ${GS_W:-} && -n ${GS_H:-} ]]; then
+    args+=( -w "$GS_W" -h "$GS_H" -F "${GS_FSR:-fsr}" )
+fi
+
+# Deja que los juegos nativos hablen Wayland directo en vez de pasar por
+# XWayland dentro de gamescope.
+args+=( --expose-wayland )
+
+[[ ${GS_VRR:-0}  == 1 ]] && args+=( --adaptive-sync )
+# --force-grab-cursor NO va por defecto. Fuerza el modo raton relativo de forma
+# permanente, en vez de dejar que gamescope alterne segun el juego dibuje cursor
+# o no. Con el activado, durante la carga y la intro el raton esta capturado
+# pero nada lo dibuja: parece trabado hasta que sale el menu del juego.
+# Actívalo solo si en algun juego el raton se te escapa al monitor vertical.
+[[ ${GS_GRAB:-0} == 1 ]] && args+=( --force-grab-cursor )
+[[ ${GS_HUD:-0}  == 1 ]] && args+=( --mangoapp )
+
+# ---- gamemode ----
+# gamemoderun va FUERA, envolviendo a gamescope. Si se pone por dentro acaba
+# dentro del contenedor de pressure-vessel, donde no encuentra libgamemode.so
+# y falla en silencio ("gamemodeauto: dlopen failed" en el log de Steam).
+# Como gamescope es un proceso del host y los cambios de gamemode son de
+# sistema (governor de CPU, prioridades), el efecto sobre el juego es el mismo.
+outer=()
+if [[ ${GS_GAMEMODE:-1} == 1 ]] && command -v gamemoderun >/dev/null; then
+    outer+=( gamemoderun )
+fi
+
+exec "${outer[@]}" gamescope "${args[@]}" -- "$@"

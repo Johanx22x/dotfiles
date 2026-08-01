@@ -1,0 +1,16 @@
+# mkinitcpio preset para 'linux'
+#
+# Generado al migrar el arranque a GRUB. Antes esto producia un UKI en
+# /boot/EFI/Linux/ (default_uki); ahora produce vmlinuz + initramfs en
+# /boot, que es lo que GRUB sabe arrancar y -- lo importante -- lo que
+# queda DENTRO de los snapshots de btrfs, porque /boot ya no es la ESP.
+
+ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="/boot/vmlinuz-linux"
+
+PRESETS=('default' 'fallback')
+
+default_image="/boot/initramfs-linux.img"
+
+fallback_image="/boot/initramfs-linux-fallback.img"
+fallback_options="-S autodetect"

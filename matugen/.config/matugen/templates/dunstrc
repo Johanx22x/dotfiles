@@ -1,0 +1,119 @@
+# GENERADO POR MATUGEN - no editar a mano.
+# Edita la plantilla: ~/.config/matugen/templates/dunstrc
+# y luego corre: wallpaper-switch reapply
+#
+# Wallpaper actual: {{image}}
+#
+# Basado en /etc/dunst/dunstrc. dunst no soporta "include", por eso
+# se regenera el archivo entero en vez de solo los colores.
+# Referencia: man 5 dunst
+
+[global]
+    # ---- Posicion ----
+    # follow = mouse hace que las notificaciones salgan en el monitor
+    # donde este el cursor; util con dos pantallas.
+    follow = mouse
+    width = (300, 450)
+    height = (0, 300)
+    origin = top-right
+    # OJO: el offset es relativo al AREA UTILIZABLE, no al borde de la
+    # pantalla. Esa area ya empieza debajo de la zona exclusiva de waybar
+    # (20 de margen + 44 de alto = 64), asi que para alinear la esquina
+    # superior con la de las ventanas basta con gaps_out en ambos ejes.
+    offset = (20, 20)
+    scale = 0
+    notification_limit = 20
+
+    # ---- Apariencia ----
+    # Mismo redondeo y borde que las ventanas en hyprland.lua
+    corner_radius = 10
+    corners = all
+    frame_width = 2
+    frame_color = "{{colors.primary.default.hex}}"
+    separator_height = 2
+    separator_color = frame
+    gap_size = 6
+    padding = 12
+    horizontal_padding = 14
+    text_icon_padding = 8
+    # 15% de transparencia = 0.85 de opacidad, el estandar "glass"
+    # del setup. El desenfoque lo pone la layer_rule blur-dunst.
+    transparency = 15
+
+    progress_bar = true
+    progress_bar_height = 10
+    progress_bar_frame_width = 1
+    progress_bar_min_width = 150
+    progress_bar_max_width = 400
+    progress_bar_corner_radius = 5
+
+    # ---- Texto ----
+    font = JetBrainsMono Nerd Font 10
+    line_height = 0
+    markup = full
+    format = "<b>%s</b>\n%b"
+    alignment = left
+    vertical_alignment = center
+    ellipsize = middle
+    ignore_newline = no
+    show_age_threshold = 60
+
+    # ---- Iconos ----
+    enable_recursive_icon_lookup = true
+    icon_theme = Adwaita
+    icon_position = left
+    min_icon_size = 32
+    max_icon_size = 96
+    icon_corner_radius = 6
+
+    # ---- Comportamiento ----
+    indicate_hidden = yes
+    sort = yes
+    stack_duplicates = true
+    hide_duplicate_count = false
+    show_indicators = no
+    sticky_history = yes
+    history_length = 20
+
+    browser = /usr/bin/xdg-open
+    always_run_script = true
+    title = Dunst
+    class = Dunst
+    ignore_dbusclose = false
+
+    # Wayland nativo, sin XWayland
+    force_xwayland = false
+
+    # ---- Mouse ----
+    mouse_left_click = close_current
+    mouse_middle_click = do_action, close_current
+    mouse_right_click = close_all
+
+[experimental]
+    per_monitor_dpi = false
+    # Pausa el cierre automatico mientras el cursor esta encima
+    pause_on_mouse_over = true
+
+# Paleta alineada con waybar: base #1a1b26, texto #c0caf5
+[urgency_low]
+    background = "#1a1b26"
+    foreground = "#7f88a8"
+    frame_color = "{{colors.primary.default.hex}}"
+    timeout = 8
+    default_icon = dialog-information
+
+[urgency_normal]
+    background = "#1a1b26"
+    foreground = "#c0caf5"
+    frame_color = "{{colors.primary.default.hex}}"
+    timeout = 10
+    override_pause_level = 30
+    default_icon = dialog-information
+
+[urgency_critical]
+    background = "#1a1b26"
+    foreground = "#c0caf5"
+    frame_color = "#f7768e"
+    timeout = 0
+    override_pause_level = 60
+    default_icon = dialog-warning

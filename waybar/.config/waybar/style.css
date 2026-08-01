@@ -1,0 +1,301 @@
+/* -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+   WAYBAR - estilos
+
+   Paleta base: Tokyo Night.
+   @accent y @accent2 los genera matugen desde el wallpaper actual.
+   El resto de la paleta es fija para garantizar contraste sin
+   importar que imagen toque.
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- */
+
+/* Tiene que ir antes que cualquier otra regla (requisito de GTK CSS) */
+@import url("colors.css");
+
+/* 0.85 es el estandar "glass" de este setup: mismo valor en waybar,
+   wofi y dunst. El desenfoque lo aplica Hyprland via layer_rule. */
+@define-color base      rgba(26, 27, 38, 0.85);
+@define-color surface   rgba(41, 46, 66, 0.55);
+@define-color text      #c0caf5;
+@define-color subtext   #565f89;
+@define-color warning   #e0af68;
+@define-color critical  #f7768e;
+
+* {
+  font-family: "JetBrainsMono Nerd Font", "Font Awesome 7 Free", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  /* Quita el borde punteado del foco y los paddings implicitos de GTK */
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+}
+
+/* ---------------- La barra ---------------- */
+/* Flotante: los 20px de separacion con el borde de la pantalla los define
+   config.jsonc (margin-*), aqui solo se dibuja la superficie redondeada.
+   Fuera del radio la capa queda transparente, por eso las esquinas se ven
+   recortadas y no como un rectangulo con marco negro. */
+window#waybar {
+  /* Semitransparente: el blur real lo pone Hyprland via layer_rule */
+  background-color: @base;
+  color: @text;
+  /* Mismo rounding que las ventanas en hyprland.lua */
+  border-radius: 10px;
+  /* Sin borde: los bloques de modulos ya delimitan la barra */
+  border: none;
+  transition: background-color 0.3s ease;
+}
+
+/* ---------------- Grupos de modulos ----------------
+   Cada bloque lleva su propio fondo para que la barra se lea como
+   piezas solidas y no como texto suelto sobre el fondo. */
+.modules-left,
+.modules-right {
+  background-color: @surface;
+  border-radius: 9px;
+  margin: 6px;
+  padding: 0px 2px;
+}
+
+.modules-center {
+  background-color: rgba(41, 46, 66, 0.35);
+  border-radius: 9px;
+  margin: 6px;
+  padding: 0px 6px;
+}
+
+/* Cuando hay una ventana en pantalla completa, la barra se difumina */
+window#waybar.hidden {
+  opacity: 0.2;
+}
+
+tooltip {
+  background-color: @base;
+  border: 1px solid @accent;
+  border-radius: 10px;
+}
+
+tooltip label {
+  color: @text;
+  padding: 4px;
+}
+
+/* ---------------- Iconos descentrados ----------------
+   Los glifos Nerd Font pintan mas ancho de lo que miden: su caja de
+   avance es una celda monoespaciada (11px a font-size 14) pero el dibujo
+   arranca pegado al borde izquierdo y se sale por la derecha. GTK reserva
+   el espacio por la caja, no por el dibujo, asi que con padding simetrico
+   el icono queda corrido a la derecha y sobra hueco a la izquierda.
+
+   Afecta solo a los modulos que son unicamente un icono: en los que
+   llevan texto detras (volumen, red, reloj...) el ultimo caracter es una
+   letra normal y el borde derecho sale bien.
+
+   Se corrige restando medio desbordamiento a la izquierda y sumandolo a
+   la derecha, con lo que el hueco visible queda igual por ambos lados.
+   Medido con Pango a los tamanos reales de este CSS: 4px de desborde a
+   14px y 6px a 16px. Para recalcular si cambias de fuente o de tamano:
+   comparar layout.get_extents() ink vs logical.
+
+   No se cambio la fuente por la variante "Mono" (que ya viene con los
+   iconos ajustados a la celda) porque encoge todos los glifos un 25%,
+   ni por "Propo" porque le da a cada icono un ancho distinto y los
+   modulos que cambian de icono (volumen, red) saltarian de tamano. */
+
+/* ---------------- Boton de energia ---------------- */
+/* Azul oficial de Arch (#1793D1), fijo: es la marca, no debe seguir a
+   @accent ni cambiar con el wallpaper.
+   Un punto mas de font-size porque el logo tiene mucho detalle fino y a
+   14px se empasta. */
+#custom-arch {
+  color: #1793d1;
+  font-size: 16px;
+  /* 14px a cada lado, corregido por los 6px de desborde a font-size 16 */
+  padding: 0px 17px 0px 11px;
+  margin: 5px 0px;
+  background-color: transparent;
+}
+
+#custom-arch:hover {
+  background-color: alpha(#1793d1, 0.18);
+  border-radius: 7px;
+}
+
+/* ---------------- Workspaces ---------------- */
+/* El fondo ya lo pone .modules-left */
+#workspaces {
+  background-color: transparent;
+  padding: 0px;
+}
+
+#workspaces button {
+  color: @subtext;
+  padding: 0px 12px;
+  margin: 4px 2px;
+  border-radius: 7px;
+  background-color: transparent;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#workspaces button:hover {
+  color: @text;
+  background-color: alpha(@accent, 0.15);
+  /* Sin box-shadow: GTK lo dibuja como borde duro */
+  text-shadow: none;
+}
+
+#workspaces button.active {
+  color: #1a1b26;
+  background-color: @accent;
+  padding: 0px 18px;
+  font-weight: 700;
+}
+
+#workspaces button.urgent {
+  color: #1a1b26;
+  background-color: @critical;
+}
+
+#workspaces button.empty {
+  color: rgba(86, 95, 137, 0.55);
+}
+
+/* ---------------- Ventana activa ---------------- */
+#window {
+  color: @text;
+  font-weight: 600;
+  padding: 0px 10px;
+}
+
+/* Sin ventana enfocada: se atenua */
+window#waybar.empty #window {
+  color: @subtext;
+  font-weight: 400;
+}
+
+#submap {
+  color: #1a1b26;
+  background-color: @warning;
+  border-radius: 8px;
+  padding: 0px 10px;
+  margin: 4px;
+}
+
+/* ---------------- Modulos ----------------
+   Estilo base compartido. #custom-media vive en el grupo izquierdo
+   junto a los workspaces; el resto va a la derecha. */
+#custom-media,
+#pulseaudio,
+#network,
+#custom-system,
+#custom-gs,
+#tray,
+#clock {
+  padding: 0px 12px;
+  margin: 5px 0px;
+  color: @text;
+  background-color: transparent;
+}
+
+/* Separador sutil a la izquierda de cada modulo.
+   En #custom-media hace de division contra los workspaces.
+   #pulseaudio queda fuera: es el primero del grupo derecho y la linea
+   caeria justo sobre la esquina redondeada del bloque. */
+#custom-media,
+#network,
+#custom-system,
+#custom-gs {
+  /* Mismo tono que los separadores internos de #custom-system (#565f89),
+     para que todas las divisiones de la barra se lean igual.
+     El valor anterior era #c0caf5 al 10%: practicamente invisible. */
+  border-left: 1px solid alpha(#565f89, 0.8);
+}
+
+#custom-media {
+  color: @accent2;
+}
+
+/* Las clases las pone el script: "playing", "paused" o "parado". */
+#custom-media.paused {
+  color: @subtext;
+}
+
+#pulseaudio {
+  color: @accent;
+}
+
+#pulseaudio.muted {
+  color: @subtext;
+}
+
+/* Arriba de 100% se avisa en ambar: hay ganancia por software */
+#pulseaudio.overamplified {
+  color: @warning;
+}
+
+#network {
+  color: @accent2;
+}
+
+#network.disconnected,
+#network.disabled {
+  color: @critical;
+}
+
+/* Modulo compuesto: los colores de cada segmento (CPU/RAM/GPU) los
+   pone el propio script con markup Pango, no se definen aqui.
+   Solo se le da un poco mas de aire lateral por ser tres datos. */
+#custom-system {
+  padding: 0px 14px;
+}
+
+/* El script marca "warning"/"critical" cuando algo pasa de 85%/95%.
+   Se tine el fondo, no el texto: los segmentos ya tienen su color. */
+#custom-system.warning {
+  background-color: alpha(#e0af68, 0.15);
+  border-radius: 7px;
+}
+
+#custom-system.critical {
+  background-color: alpha(#f7768e, 0.18);
+  border-radius: 7px;
+}
+
+/* Boton de copiar las opciones de lanzamiento de gamescope.
+   Verde y no @accent para que no se confunda con los modulos
+   informativos: este es el unico de la barra que es una accion.
+   @accent3 es ese verde armonizado con el wallpaper, asi que sigue
+   leyendose como verde pero pertenece a la paleta actual. */
+#custom-gs {
+  color: @accent3;
+  /* 12px a cada lado, corregido por los 4px de desborde */
+  padding: 0px 14px 0px 10px;
+}
+
+#custom-gs:hover {
+  background-color: alpha(@accent3, 0.15);
+  border-radius: 7px;
+}
+
+#tray {
+  padding: 0px 8px;
+}
+
+#tray > .passive {
+  -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+  -gtk-icon-effect: highlight;
+}
+
+/* ---------------- Reloj ---------------- */
+#clock {
+  color: #1a1b26;
+  background-color: @accent;
+  font-weight: 700;
+  border-radius: 7px;
+  /* Separado del borde para no encimarse con la esquina del grupo */
+  margin: 4px 3px 4px 4px;
+  padding: 0px 16px;
+  border-left: none;
+}

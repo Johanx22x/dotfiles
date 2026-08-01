@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# =============================================================
+#  capturadora-audio — mute y volumen del audio de la capturadora
+#
+#  El audio de la capturadora no pasa por mpv (va por un loopback de
+#  PipeWire, para no meter latencia de sincronizacion A/V). Por eso la
+#  tecla m de mpv no hace nada: hay que actuar sobre el flujo del
+#  loopback, que el script `capturadora` etiqueta como
+#  media.name=capturadora-audio.
+#
+#  Uso:  capturadora-audio [toggle|up|down|estado]
+# =============================================================
+set -uo pipefail
+
+accion="${1:-toggle}"
+ETIQUETA=capturadora-audio
+
+leer() {
+    pactl -f json list sink-inputs 2>/dev/null | python3 -c "
+import json,sys
+try: datos = json.load(sys.stdin)
+except Exception: sys.exit(1)
+for si in datos:
+    if si.get('properties', {}).get('media.name') == '$ETIQUETA':
+        vol = si.get('volume', {})
+        pct = next(iter(vol.values()), {}).get('value_percent', '?') if vol else '?'
+        print(si['index'], 'si' if si.get('mute') else 'no', pct)
+        break
+"
+}
+
+datos=$(leer)
+if [ -z "$datos" ]; then
+    notify-send -u critical "Capturadora" "No hay audio activo.\n¿Esta abierta la capturadora?" 2>/dev/null
+    echo "No encuentro el flujo '$ETIQUETA'. ¿Esta corriendo 'capturadora'?" >&2
+    exit 1
+fi
+read -r idx silenciado volumen <<<"$datos"
+
+case "$accion" in
+    toggle) pactl set-sink-input-mute   "$idx" toggle ;;
+    up)     pactl set-sink-input-volume "$idx" +5%    ;;
+    down)   pactl set-sink-input-volume "$idx" -5%    ;;
+    estado) ;;
+    *) echo "Uso: $0 [toggle|up|down|estado]" >&2; exit 1 ;;
+esac
+
+# Releer para notificar el estado ya aplicado, no el anterior.
+read -r idx silenciado volumen <<<"$(leer)"
+if [ "$silenciado" = si ]; then
+    notify-send -t 1200 -h string:x-dunst-stack-tag:capturadora \
+        "Capturadora" "Silenciada" 2>/dev/null
+    echo "silenciada"
+else
+    notify-send -t 1200 -h string:x-dunst-stack-tag:capturadora \
+        "Capturadora" "Volumen $volumen" 2>/dev/null
+    echo "volumen $volumen"
+fi

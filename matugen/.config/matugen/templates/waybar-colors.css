@@ -1,0 +1,11 @@
+/* GENERADO POR MATUGEN - no editar a mano.
+   Fuente: plantilla en ~/.config/matugen/templates/waybar-colors.css
+   Wallpaper actual: {{image}} */
+
+@define-color accent  {{colors.primary.default.hex}};
+@define-color accent2 {{colors.tertiary.default.hex}};
+
+/* Verde de "accion" (boton de gamescope). Es el verde de Tokyo Night
+   armonizado hacia el wallpaper, el mismo que usa el segmento de RAM
+   en colors.json. Ver [config.custom_colors] en config.toml. */
+@define-color accent3 {{colors.ram.default.hex}};

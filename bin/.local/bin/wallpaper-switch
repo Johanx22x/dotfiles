@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# wallpaper-switch - cambia el wallpaper y regenera la paleta de acentos
+#
+#   wallpaper-switch next     siguiente de la coleccion (orden alfabetico)
+#   wallpaper-switch prev     anterior
+#   wallpaper-switch random   uno al azar (distinto del actual)
+#   wallpaper-switch set RUTA uno especifico
+#   wallpaper-switch reapply  vuelve a aplicar el actual (util tras editar plantillas)
+#
+# La coleccion vive en ~/Pictures/wallpapers
+
+set -uo pipefail
+
+WALLPAPER_DIR="${WALLPAPER_DIR:-$HOME/Pictures/wallpapers}"
+STATE_FILE="$HOME/.cache/wallpaper-current"
+MODE="${1:-next}"
+
+# ---- Transicion ----
+# Tipos: none simple fade left right top bottom wipe wave grow center any outer random
+# Se pueden sobreescribir por entorno, ej:
+#   TRANSITION_TYPE=wave wallpaper-switch next
+TRANSITION_TYPE="${TRANSITION_TYPE:-fade}"
+TRANSITION_DURATION="${TRANSITION_DURATION:-1.4}"
+
+# Solo aplica a 'fade': curva que controla la aceleracion de la
+# disolvencia. Esta arranca y termina suave (ease-in-out).
+# Para una disolvencia lineal usa 0.0,0.0,1.0,1.0
+TRANSITION_BEZIER="${TRANSITION_BEZIER:-.42,0,.58,1}"
+
+mkdir -p "$(dirname "$STATE_FILE")"
+
+die() { echo "wallpaper-switch: $*" >&2; exit 1; }
+
+# ---------------------------------------------------------------
+# 1. Reunir la coleccion
+# ---------------------------------------------------------------
+mapfile -t WALLPAPERS < <(
+    find -L "$WALLPAPER_DIR" -maxdepth 2 -type f \
+        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+           -o -iname '*.webp' -o -iname '*.bmp' \) | sort
+)
+
+(( ${#WALLPAPERS[@]} == 0 )) && die "no hay imagenes en $WALLPAPER_DIR"
+
+CURRENT=""
+[[ -r "$STATE_FILE" ]] && CURRENT="$(<"$STATE_FILE")"
+
+# Indice del actual dentro de la coleccion (-1 si no esta)
+INDEX=-1
+for i in "${!WALLPAPERS[@]}"; do
+    [[ "${WALLPAPERS[$i]}" == "$CURRENT" ]] && { INDEX=$i; break; }
+done
+
+# ---------------------------------------------------------------
+# 2. Elegir el siguiente
+# ---------------------------------------------------------------
+TOTAL=${#WALLPAPERS[@]}
+case "$MODE" in
+    next)   TARGET="${WALLPAPERS[$(( (INDEX + 1) % TOTAL ))]}" ;;
+    prev)   TARGET="${WALLPAPERS[$(( (INDEX - 1 + TOTAL) % TOTAL ))]}" ;;
+    random)
+        if (( TOTAL == 1 )); then
+            TARGET="${WALLPAPERS[0]}"
+        else
+            # Repite hasta sacar uno distinto al actual
+            while :; do
+                PICK=$(( RANDOM % TOTAL ))
+                [[ "${WALLPAPERS[$PICK]}" != "$CURRENT" ]] && break
+            done
+            TARGET="${WALLPAPERS[$PICK]}"
+        fi
+        ;;
+    set)
+        TARGET="${2:-}"
+        [[ -f "$TARGET" ]] || die "no existe el archivo: ${TARGET:-<vacio>}"
+        TARGET="$(realpath "$TARGET")"
+        ;;
+    reapply)
+        [[ -f "$CURRENT" ]] || die "no hay wallpaper actual que reaplicar"
+        TARGET="$CURRENT"
+        ;;
+    *) die "modo desconocido '$MODE' (usa next|prev|random|set|reapply)" ;;
+esac
+
+# ---------------------------------------------------------------
+# 3. Entorno grafico
+# ---------------------------------------------------------------
+# Bajo systemd --user estas variables pueden no estar. Sin ellas ni
+# awww ni hyprctl encuentran el compositor.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
+    WAYLAND_DISPLAY="$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-[0-9]*' \
+        -printf '%f\n' 2>/dev/null | sort | head -1)"
+    export WAYLAND_DISPLAY
+fi
+
+if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" && -d "$XDG_RUNTIME_DIR/hypr" ]]; then
+    HYPRLAND_INSTANCE_SIGNATURE="$(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -1)"
+    export HYPRLAND_INSTANCE_SIGNATURE
+fi
+
+# ---------------------------------------------------------------
+# 4. Poner el wallpaper
+# ---------------------------------------------------------------
+# El demonio tarda un momento en levantar la primera vez.
+if ! awww query >/dev/null 2>&1; then
+    awww-daemon >/dev/null 2>&1 &
+    for _ in {1..20}; do
+        awww query >/dev/null 2>&1 && break
+        sleep 0.15
+    done
+fi
+
+# 165 fps = el refresco real de ambos monitores. Con menos la
+# transicion se ve entrecortada aunque el efecto sea el correcto.
+awww img "$TARGET" \
+    --transition-type "$TRANSITION_TYPE" \
+    --transition-duration "$TRANSITION_DURATION" \
+    --transition-bezier "$TRANSITION_BEZIER" \
+    --transition-fps 165 \
+    || die "awww no pudo aplicar el wallpaper"
+
+echo "$TARGET" > "$STATE_FILE"
+
+# ---------------------------------------------------------------
+# 5. Regenerar la paleta
+# ---------------------------------------------------------------
+# --prefer es obligatorio: sin terminal interactiva matugen no sabe
+# cual color elegir cuando la imagen tiene varios candidatos.
+# saturation da acentos con mas caracter que darkness/lightness.
+matugen image "$TARGET" --mode dark --prefer saturation --quiet \
+    || die "matugen fallo"
+
+# ---------------------------------------------------------------
+# 6. Aplicar el borde de Hyprland en vivo
+# ---------------------------------------------------------------
+# matugen ya escribio colors.lua (que se lee al arrancar), pero para
+# que el cambio se vea ahora mismo hay que empujarlo al compositor.
+#
+# OJO: "hyprctl keyword" NO sirve con config en Lua -- responde
+# "keyword can't work with non-legacy parsers". Hay que usar
+# "hyprctl eval", que ejecuta codigo Lua contra la config viva.
+COLORS_LUA="$HOME/.config/hypr/colors.lua"
+if [[ -r "$COLORS_LUA" ]] && command -v hyprctl >/dev/null; then
+    ACCENT=$(grep -oP 'accent\s*=\s*"\K[0-9a-fA-F]{6}'  "$COLORS_LUA" | head -1)
+    ACCENT2=$(grep -oP 'accent2\s*=\s*"\K[0-9a-fA-F]{6}' "$COLORS_LUA" | head -1)
+    if [[ -n "$ACCENT" && -n "$ACCENT2" ]]; then
+        hyprctl eval "hl.config({ general = { col = { active_border = {\
+ colors = {\"rgba(${ACCENT}ee)\", \"rgba(${ACCENT2}ee)\"}, angle = 45 } } } })" \
+            >/dev/null
+    fi
+fi
+
+echo "wallpaper: $(basename "$TARGET")"

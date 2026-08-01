@@ -1,0 +1,100 @@
+/* -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+   WOFI - estilos
+
+   Paleta base: Tokyo Night, igual que waybar y dunst.
+   @accent y @accent2 los genera matugen desde el wallpaper.
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- */
+
+/* Tiene que ir antes que cualquier otra regla (requisito de GTK CSS).
+   OJO: ruta ABSOLUTA. wofi carga el CSS de forma que no resuelve rutas
+   relativas en @import; con "colors.css" a secas, @accent queda sin
+   definir y GTK descarta en silencio cada regla que lo use. */
+@import url("file:///home/johan/.config/wofi/colors.css");
+
+/* Mismo 0.85 que waybar y dunst (ver layer_rule blur-wofi) */
+@define-color base      rgba(26, 27, 38, 0.85);
+@define-color surface   rgba(41, 46, 66, 0.55);
+@define-color text      #c0caf5;
+@define-color subtext   #565f89;
+
+/* ---------------- La ventana ----------------
+   Mismo rounding (10px) y border_size (2px) que las ventanas
+   en hyprland.lua, para que el lanzador se lea como una ventana mas. */
+window {
+  background-color: @base;
+  color: @text;
+  border: 2px solid alpha(@accent, 0.28);
+  border-radius: 10px;
+  font-family: "JetBrainsMono Nerd Font", "Font Awesome 7 Free", sans-serif;
+  font-size: 14px;
+}
+
+#outer-box {
+  padding: 10px;
+}
+
+/* ---------------- Barra de busqueda ---------------- */
+#input {
+  background-color: @surface;
+  color: @text;
+  border: 2px solid transparent;
+  border-radius: 9px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  /* Quita el icono de lupa que GTK mete por defecto */
+  box-shadow: none;
+}
+
+#input:focus {
+  border-color: @accent;
+}
+
+/* El texto del placeholder ("prompt" en config) mas apagado */
+#input image {
+  color: @subtext;
+}
+
+/* ---------------- Lista de resultados ---------------- */
+#scroll {
+  /* El scrollbar se oculta desde config (hide_scroll=true) */
+  margin: 0px;
+}
+
+#inner-box {
+  background-color: transparent;
+}
+
+#entry {
+  background-color: transparent;
+  border-radius: 9px;
+  padding: 8px 10px;
+  margin: 2px 0px;
+}
+
+/* Fila bajo el cursor: un realce sutil, sin llegar al de seleccion */
+#entry:hover {
+  background-color: rgba(41, 46, 66, 0.45);
+}
+
+/* Fila seleccionada: mismo gradiente que el borde de la ventana
+   activa en Hyprland (angle = 45), con los acentos del wallpaper. */
+#entry:selected {
+  background: linear-gradient(45deg, @accent, @accent2);
+  /* Texto oscuro porque el fondo pasa a ser claro y saturado */
+  color: #1a1b26;
+}
+
+#entry:selected #text {
+  color: #1a1b26;
+  font-weight: 700;
+}
+
+#text {
+  color: @text;
+  margin: 0px 6px;
+}
+
+/* Icono de cada app */
+#img {
+  margin-right: 8px;
+}

@@ -1,0 +1,272 @@
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+// WAYBAR - configuracion para Hyprland
+// Docs: https://github.com/Alexays/Waybar/wiki/Configuration
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+// Una sola barra, en el monitor principal. El vertical (Gigabyte GS27FA)
+// queda libre a proposito.
+//
+// El monitor se identifica por descripcion (marca modelo serie), NO por el
+// nombre del conector (DP-4, HDMI-A-3...): esos nombres los asigna el kernel y
+// cambian al cambiar de kernel. Con "DP-4" la barra seguia corriendo pero no
+// se dibujaba en ninguna pantalla. Misma razon que en ~/.config/hypr/hyprland.lua.
+// Para ver las descripciones: hyprctl monitors all -j | grep description
+[
+  // =====================================================
+  // BARRA PRINCIPAL - ASR PG32QF2B (2560x1440 horizontal)
+  // =====================================================
+  {
+    "name": "principal",
+    "output": ["ASR PG32QF2B G5VL0A003533"],
+    "layer": "top",
+    "position": "top",
+    "height": 44,
+    // spacing 0: la separacion entre modulos la dan el padding y los
+    // separadores del CSS, asi los grupos se ven como bloques solidos.
+    "spacing": 0,
+
+    // Barra flotante: mismo gap que las ventanas (gaps_out = 20 en hyprland.lua).
+    // margin-bottom queda en 0 a proposito: la zona exclusiva termina justo
+    // debajo de la barra y Hyprland ya separa las ventanas otros 20px por su cuenta.
+    "margin-top": 20,
+    "margin-left": 20,
+    "margin-right": 20,
+    "margin-bottom": 0,
+
+    "modules-left": [
+      "custom/arch",
+      "hyprland/workspaces",
+      "custom/media",
+      "hyprland/submap"
+    ],
+    "modules-center": ["hyprland/window"],
+    "modules-right": [
+      "pulseaudio",
+      "network",
+      "custom/system",
+      "custom/gs",
+      "tray",
+      "clock"
+    ],
+
+    // ---------------- Boton de energia ----------------
+    // Primer elemento de la barra: abre el mismo menu de wofi que
+    // SUPER + SHIFT + ESCAPE (ver ~/.local/bin/hypr-powermenu).
+    //
+    // El glifo es nf-linux-archlinux (U+F303), de la familia "Font Logos"
+    // de Nerd Fonts. Lo aporta la JetBrainsMono Nerd Font, que va primera
+    // en la lista de fuentes del CSS, asi que gana ella y no la
+    // "Font Awesome 7 Free" del fallback.
+    "custom/arch": {
+      "format": "",
+      "tooltip-format": "Menu de energia",
+      "on-click": "/home/johan/.local/bin/hypr-powermenu"
+    },
+
+    // ---------------- Workspaces ----------------
+    "hyprland/workspaces": {
+      "format": "{icon}",
+      "on-click": "activate",
+      // Scroll sobre los workspaces para cambiar entre ellos
+      "on-scroll-up": "hyprctl dispatch workspace e+1",
+      "on-scroll-down": "hyprctl dispatch workspace e-1",
+      "format-icons": {
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4",
+        "5": "5",
+        "6": "6",
+        "7": "7",
+        "8": "8",
+        "9": "9",
+        "10": "10",
+        "urgent": "",
+        "default": ""
+      }
+    },
+
+    "hyprland/submap": {
+      "format": "󰌌 {}",
+      "tooltip": false
+    },
+
+    // ---------------- Ventana activa ----------------
+    "hyprland/window": {
+      "format": "{title}",
+      "max-length": 70,
+      "separate-outputs": true,
+      "rewrite": {
+        "(.*) — Mozilla Firefox": "󰈹  $1",
+        "(.*) - Chromium": "  $1",
+        "(.*) - Visual Studio Code": "󰨞  $1",
+        "(.*)kitty": "  terminal",
+        "^$": "󰇄  escritorio"
+      }
+    },
+
+    // ---------------- Reproductor ----------------
+    // Script propio en vez del modulo nativo "mpris": ese modulo tiene un
+    // bug de corrupcion de memoria en waybar 0.15.0 que MATA la barra entera
+    // cuando Brave empieza a reproducir (libplayerctl corre dentro del
+    // proceso de waybar, asi que su segfault se lleva todo). El detalle del
+    // coredump esta al inicio de ~/.local/bin/waybar-media.
+    //
+    // Aqui playerctl corre como proceso aparte y waybar solo lee su stdout:
+    // si se cae, se pierde este modulo y nada mas, y "restart-interval" lo
+    // levanta de nuevo.
+    //
+    // Para volver al modulo nativo (si upstream lo arregla): pon "mpris" en
+    // modules-left y renombra "mpris-disabled" a "mpris" aqui abajo.
+    "custom/media": {
+      "exec": "/home/johan/.local/bin/waybar-media",
+      "return-type": "json",
+      // Sin "interval": el script es de larga duracion y emite una linea
+      // JSON por cada cambio (playerctl --follow). restart-interval solo
+      // actua si el script termina.
+      "restart-interval": 2,
+      // Sin escape para que el markup Pango del script se interprete
+      // (cursiva en pausa, colores del tooltip). El script ya escapa los
+      // titulos, que vienen de paginas web arbitrarias.
+      "escape": false,
+      "on-click": "playerctl play-pause",
+      "on-click-middle": "playerctl previous",
+      "on-click-right": "playerctl next",
+      "on-scroll-up": "playerctl next",
+      "on-scroll-down": "playerctl previous"
+    },
+
+    "mpris-disabled": {
+      "format": "{player_icon} {dynamic}",
+      "format-paused": "{status_icon} <i>{dynamic}</i>",
+      "dynamic-len": 40,
+      "dynamic-order": ["title", "artist"],
+      "player-icons": {
+        "default": "▶",
+        "firefox": "󰈹",
+        "spotify": ""
+      },
+      "status-icons": { "paused": "󰏤" },
+      "on-click-middle": "playerctl previous",
+      "on-click-right": "playerctl next"
+    },
+
+    // ---------------- Audio ----------------
+    "pulseaudio": {
+      "format": "{icon}  {volume}%",
+      "format-muted": "󰝟  mudo",
+      "format-bluetooth": "{icon} 󰂯 {volume}%",
+      "format-source": "  {volume}%",
+      "format-source-muted": "",
+      "format-icons": {
+        "headphone": "󰋋",
+        "headset": "󰋎",
+        "speaker": "󰓃",
+        "default": ["󰕿", "󰖀", "󰕾"]
+      },
+      "tooltip-format": "{desc} — {volume}%",
+      "scroll-step": 5,
+      // Permite sobreamplificar hasta 150%. Arriba de 100% se aplica
+      // ganancia por software: puede distorsionar segun la fuente.
+      "max-volume": 150,
+      "states": { "overamplified": 101 },
+      "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+      "on-click-right": "pavucontrol"
+    },
+
+    // ---------------- Red ----------------
+    // Tienes ethernet (enp5s0) y wifi (wlo1); waybar elige la activa.
+    "network": {
+      "format-wifi": "󰤨  {essid}",
+      "format-ethernet": "󰈁  {ifname}",
+      "format-linked": "󰈁  sin IP",
+      "format-disconnected": "󰤭  offline",
+      "tooltip-format-wifi": "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}\n󰇚 {bandwidthDownBits}  󰕒 {bandwidthUpBits}",
+      "tooltip-format-ethernet": "{ifname}\n{ipaddr}/{cidr}\n󰇚 {bandwidthDownBits}  󰕒 {bandwidthUpBits}",
+      "tooltip-format-disconnected": "Sin conexion",
+      "interval": 3,
+      "on-click": "nm-connection-editor"
+    },
+
+    // ---------------- Bluetooth ----------------
+    // DESACTIVADO: blueman-applet ya publica un icono en la bandeja y
+    // salian dos. No se puede quitar el de blueman (su plugin StatusIcon
+    // es dependencia forzada de ShowConnected), asi que se quita este.
+    // Para volver a usarlo: agrega "bluetooth" a modules-right y renombra
+    // "bluetooth-disabled" a "bluetooth" aqui abajo.
+    "bluetooth-disabled": {
+      "format": "󰂯",
+      "format-disabled": "",
+      "format-off": "󰂲",
+      "format-connected": "󰂱 {num_connections}",
+      "tooltip-format": "{controller_alias}\n{status}",
+      "tooltip-format-connected": "{device_enumerate}",
+      "tooltip-format-enumerate-connected": "{device_alias}",
+      "on-click": "blueman-manager"
+    },
+
+    // ---------------- Sistema (CPU + RAM + GPU) ----------------
+    // Un solo modulo con los tres. El script imprime JSON con markup
+    // Pango para colorear cada segmento por separado dentro de la
+    // misma pastilla. Ver ~/.local/bin/waybar-system
+    "custom/system": {
+      "exec": "/home/johan/.local/bin/waybar-system",
+      "return-type": "json",
+      "interval": 3,
+      // Sin escape para que el markup Pango del script se interprete
+      "escape": false,
+      "on-click": "kitty -e btop"
+    },
+
+    // ---------------- Opciones de lanzamiento de Steam ----------------
+    // Boton de un solo uso: copia al portapapeles la linea que hay que
+    // pegar en Steam > Propiedades del juego > Opciones de lanzamiento
+    // para que arranque dentro de gamescope (ver ~/.local/bin/gs).
+    // Hay que ponerla a mano en CADA juego nuevo, de ahi el boton.
+    //
+    // Sin "exec": un modulo custom con solo "format" dibuja texto fijo y
+    // sirve nada mas para el on-click.
+    //
+    // wl-copy se queda corriendo en segundo plano como dueno del
+    // portapapeles (en Wayland el contenido lo sirve el proceso que copio,
+    // no el compositor). No hay gestor de portapapeles instalado, asi que
+    // si se mata ese proceso se pierde lo copiado.
+    "custom/gs": {
+      "format": "󰊴",
+      "tooltip-format": "Copiar opciones de lanzamiento (gamescope)\n<tt>/home/johan/.local/bin/gs -- %command%</tt>",
+      // -t 2000: dunst deja las notificaciones normales 10 segundos y para
+      // un simple "listo, copiado" estorba. Se acota aqui y no en dunstrc
+      // para no cambiarselo a todo lo demas.
+      "on-click": "wl-copy -- '/home/johan/.local/bin/gs -- %command%' && notify-send -t 2000 -a Waybar -i input-gaming 'Copiado al portapapeles' 'Pegalo en Steam: Propiedades > Opciones de lanzamiento'"
+    },
+
+    // Evita que se apague la pantalla (util viendo video)
+    "tray": {
+      "icon-size": 16,
+      "spacing": 10
+    },
+
+    // ---------------- Reloj ----------------
+    "clock": {
+      "format": "󰥔  {:%H:%M}",
+      "format-alt": "󰃭  {:%a %d %b %Y}",
+      "tooltip-format": "<tt><small>{calendar}</small></tt>",
+      "calendar": {
+        "mode": "month",
+        "weeks-pos": "right",
+        "format": {
+          "months": "<span color='#c0caf5'><b>{}</b></span>",
+          "days": "<span color='#a9b1d6'>{}</span>",
+          "weeks": "<span color='#9ece6a'><b>S{}</b></span>",
+          "weekdays": "<span color='#7aa2f7'><b>{}</b></span>",
+          "today": "<span color='#7dcfff'><b><u>{}</u></b></span>"
+        }
+      },
+      "actions": {
+        "on-click-right": "mode",
+        "on-scroll-up": "shift_up",
+        "on-scroll-down": "shift_down"
+      }
+    }
+  }
+]

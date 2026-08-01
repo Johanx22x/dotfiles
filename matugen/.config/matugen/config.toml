@@ -1,0 +1,152 @@
+# matugen - genera la paleta de acentos desde el wallpaper actual
+#
+# Lo dispara ~/.local/bin/wallpaper-switch. Solo se derivan ACENTOS:
+# los fondos y el color de texto quedan fijos en cada app para
+# garantizar contraste sin importar que wallpaper toque.
+#
+# Sintaxis de plantillas: {{colors.<rol>.default.hex}}
+# Roles utiles: primary, secondary, tertiary, source_color, error, outline
+
+[config]
+
+# ---- Colores semanticos armonizados ----
+# Hay elementos que NO pueden usar primary/tertiary sin perder su
+# significado: los tres segmentos de #custom-system tienen que
+# distinguirse entre si de un vistazo, y el boton de gamescope tiene
+# que leerse como "accion" y no como un dato mas.
+#
+# Con "blend = true" matugen toma el tono original de Tokyo Night y lo
+# rota hacia el color del wallpaper (harmonize de Material You): sigue
+# siendo morado / verde / azul, pero de la familia de la imagen. Asi la
+# relacion entre los tres se conserva con cualquier wallpaper, cosa que
+# no pasaria asignandoles roles del esquema (con una imagen verde,
+# primary y el verde de RAM saldrian casi identicos).
+#
+# NO se armonizan warning (#e0af68) ni critical (#f7768e): son avisos y
+# tienen que verse igual siempre, aunque el wallpaper sea rojo.
+[config.custom_colors]
+cpu = { color = "#bb9af7", blend = true }   # magenta TN
+ram = { color = "#9ece6a", blend = true }   # green TN -- tambien el boton gs
+gpu = { color = "#7aa2f7", blend = true }   # blue TN
+
+# ---- Waybar ----
+# Solo define @accent, @accent2 y @accent3; style.css lo importa y
+# conserva sus propios @base/@text fijos.
+[templates.waybar]
+input_path = '/home/johan/.config/matugen/templates/waybar-colors.css'
+output_path = '/home/johan/.config/waybar/colors.css'
+post_hook = 'pkill -SIGUSR2 waybar || true'
+
+# ---- Waybar: modulo de sistema ----
+# #custom-system colorea cada segmento con markup Pango desde Python, no
+# con CSS, asi que necesita la paleta en un formato que pueda leer.
+# Sin post_hook: el script corre cada 3s (interval en config.jsonc) y
+# recoge el archivo nuevo solo.
+[templates.waybar_system]
+input_path = '/home/johan/.config/matugen/templates/waybar-colors.json'
+output_path = '/home/johan/.config/waybar/colors.json'
+
+# ---- Kitty ----
+# Fondo, texto y los 16 ANSI siguen viniendo de kitty.conf.
+# Aqui solo cursor, seleccion, pestanas y enlaces.
+[templates.kitty]
+input_path = '/home/johan/.config/matugen/templates/kitty-colors.conf'
+output_path = '/home/johan/.config/kitty/colors.conf'
+post_hook = 'pkill -SIGUSR1 -x kitty || true'
+
+# ---- Hyprland ----
+# Tabla Lua que hyprland.lua lee al arrancar. El cambio en vivo lo
+# hace wallpaper-switch con hyprctl, sin recargar toda la config.
+[templates.hyprland]
+input_path = '/home/johan/.config/matugen/templates/hypr-colors.lua'
+output_path = '/home/johan/.config/hypr/colors.lua'
+
+# ---- Dunst ----
+# dunst no soporta "include", asi que se regenera el archivo completo.
+# Para cambiar cualquier ajuste edita la PLANTILLA, no el dunstrc.
+[templates.dunst]
+input_path = '/home/johan/.config/matugen/templates/dunstrc'
+output_path = '/home/johan/.config/dunst/dunstrc'
+post_hook = 'dunstctl reload || true'
+
+# ---- Wofi ----
+# Mismo esquema que waybar: solo los acentos. Sin post_hook porque
+# wofi no es un demonio; lee el CSS cada vez que se lanza.
+[templates.wofi]
+input_path = '/home/johan/.config/matugen/templates/wofi-colors.css'
+output_path = '/home/johan/.config/wofi/colors.css'
+
+# ---- Apps Qt6 no-KDE (qBittorrent) ----
+# Solo la PALETA. La config de qt6ct (que estilo, que iconos) es un
+# archivo estatico aparte, ~/.config/qt6ct/qt6ct.conf, precisamente
+# para que la GUI de qt6ct pueda escribirlo sin que matugen se lo pise
+# en el siguiente cambio de wallpaper.
+#
+# Sin post_hook: qt6ct vigila el archivo y las apps abiertas recogen la
+# paleta nueva solas.
+[templates.qt6ct]
+input_path = '/home/johan/.config/matugen/templates/qt6ct-colors.conf'
+output_path = '/home/johan/.config/qt6ct/colors/matugen.conf'
+
+# ---- Apps KDE (Dolphin) ----
+#
+# AVISO: HOY ESTO NO TINE DOLPHIN. Se deja generado porque no cuesta
+# nada y se activa solo el dia que se instale el tema de plataforma de
+# KDE, pero que nadie cuente con ello mientras tanto.
+#
+# Comprobado a base de poner un rojo imposible (255,0,0) en
+# [Colors:Window] y mirar los pixeles de la ventana: 0% de rojo.
+# Dolphin ignora, en este orden, TODO lo siguiente:
+#   - los [Colors:*] de este kdeglobals
+#   - un .colors propio en ~/.local/share/color-schemes/
+#   - la variable KDE_COLOR_SCHEME_PATH
+#   - [UiSettings] ColorScheme=Matugen
+#   - la paleta de qt6ct (que si funciona en otras apps Qt6)
+#
+# El motivo: KF6 (libKF6ColorScheme) escucha
+# QStyleHints::colorSchemeChanged, ve que el portal XDG pide modo
+# oscuro y aplica su BreezeDark interno POR ENCIMA de lo que haya
+# puesto el tema de plataforma. Lo unico que devuelve el mando a
+# kdeglobals es plasma-integration, que arrastra xdg-desktop-portal-kde
+# -- un segundo portal compitiendo con el de Hyprland, con riesgo para
+# la captura de pantalla y la grabacion. No compensa por un gestor de
+# archivos, asi que Dolphin se queda en gris Breeze.
+#
+# El post_hook es la senal clasica de KDE para releer ajustes globales.
+# Va con "|| true" como el resto: si dbus no responde, el cambio de
+# wallpaper no se aborta.
+[templates.kdeglobals]
+input_path = '/home/johan/.config/matugen/templates/kdeglobals'
+output_path = '/home/johan/.config/kdeglobals'
+post_hook = '''dbus-send --session --type=signal /KGlobalSettings org.kde.KGlobalSettings.notifyChange int32:2 int32:0 || true'''
+
+# ---- Apps GTK ----
+# Una sola plantilla escrita en dos sitios: los nombres de color de
+# GTK3 y GTK4 son distintos y no chocan. Ver la cabecera de la
+# plantilla para el porque.
+#
+# Sin post_hook a proposito: GTK no recarga el CSS de usuario en
+# caliente y no hay senal que mandarle. Las apps cogen la paleta nueva
+# al abrirse, igual que wofi y fastfetch.
+[templates.gtk3]
+input_path = '/home/johan/.config/matugen/templates/gtk-colors.css'
+output_path = '/home/johan/.config/gtk-3.0/gtk.css'
+
+[templates.gtk4]
+input_path = '/home/johan/.config/matugen/templates/gtk-colors.css'
+output_path = '/home/johan/.config/gtk-4.0/gtk.css'
+
+# ---- Fastfetch ----
+# Mismo caso que dunst: fastfetch no soporta "include", asi que la
+# plantilla ES la config entera. Para tocar modulos, iconos o el logo
+# edita templates/fastfetch-config.jsonc, no ~/.config/fastfetch.
+#
+# Solo se derivan titulo (primary) y claves (tertiary). Los VALORES
+# quedan en el foreground de kitty.conf: son el texto que hay que leer
+# y no pueden depender de lo claro que salga el acento del wallpaper.
+#
+# Sin post_hook: fastfetch no es un demonio, relee la config en cada
+# ejecucion (igual que wofi).
+[templates.fastfetch]
+input_path = '/home/johan/.config/matugen/templates/fastfetch-config.jsonc'
+output_path = '/home/johan/.config/fastfetch/config.jsonc'
