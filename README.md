@@ -1,24 +1,30 @@
-# dotfiles
+<p align="center">
+    <h1 align="center">dotfiles</h1>
+</p>
 
-Configuración de Arch Linux + Hyprland con paleta Material You generada desde
-el wallpaper.
-
-| | |
-|---|---|
-| Compositor | Hyprland 0.56, config en **Lua** (`hyprland.lua`, no `hyprland.conf`) |
-| Barra | Waybar |
-| Terminal | kitty + zsh + starship |
-| Lanzador | wofi |
-| Notificaciones | dunst |
-| Color | matugen — Material You desde el fondo de pantalla |
-| Arranque | GRUB + snapshots btrfs (snapper) |
-
-La base de color es fija (Tokyo Night) y matugen solo aporta los **acentos**,
-para que el contraste no dependa de qué fondo tengas puesto.
+<p align="center">
+    Arch Linux + Hyprland, with a Material You accent palette generated from the wallpaper.
+</p>
 
 ---
 
-## Instalación
+| | |
+|---|---|
+| Compositor | Hyprland 0.56, configured in **Lua** (`hyprland.lua`, not `hyprland.conf`) |
+| Bar | Waybar |
+| Terminal | kitty + zsh + starship |
+| Launcher | wofi |
+| Notifications | dunst |
+| File managers | ranger (terminal) · Nautilus (GUI) |
+| Color | matugen — Material You, extracted from the wallpaper |
+| Boot | GRUB + btrfs snapshots (snapper) |
+
+The base palette is fixed (Tokyo Night) and matugen only supplies the
+**accents**, so contrast never depends on which wallpaper happens to be set.
+
+---
+
+## Install
 
 ```sh
 git clone https://github.com/Johanx22x/dotfiles.git ~/dotfiles
@@ -26,106 +32,140 @@ cd ~/dotfiles
 ./instalar.sh
 ```
 
-El script es idempotente y va preguntando antes de cada bloque. Si prefieres ir
-a mano, los pasos están abajo.
-
-### A mano
+The script is idempotent and prompts before each block, so you can use it to
+apply only part of it. To do it by hand:
 
 ```sh
-# 1. Paquetes
+# 1. Packages
 sudo pacman -S --needed stow - < paquetes/pacman.txt
 
-# 2. yay (si no lo tienes) y los de AUR
+# 2. yay (if you don't have it) and the AUR packages
 sudo pacman -S --needed git base-devel
 git clone https://aur.archlinux.org/yay.git /tmp/yay && (cd /tmp/yay && makepkg -si)
 yay -S --needed - < paquetes/aur.txt
 
-# 3. Enlazar la configuración
+# 3. Symlink the configuration
 cd ~/dotfiles
-stow zsh hypr waybar kitty wofi matugen shell qt gtk media kde openrgb systemd bin
+stow --no-folding zsh hypr waybar kitty wofi matugen shell qt gtk \
+                  media kde openrgb systemd bin ranger
 
-# 4. Neovim (repo aparte)
+# 4. Neovim (separate repo)
 git clone https://github.com/Johanx22x/nvim.git ~/.config/nvim
 
-# 5. Generar la paleta — sin esto faltan colores y varias apps salen en gris
-mkdir -p ~/Pictures/wallpapers   # y mete alguna imagen dentro
+# 5. Generate the palette — without this several apps come up grey
+mkdir -p ~/Pictures/wallpapers   # drop an image in there
 ~/.local/bin/wallpaper-switch random
 ```
 
+`--no-folding` matters: it links file by file instead of linking whole
+directories. That keeps `~/.config/hypr` a real directory, so matugen can write
+`colors.lua` into it without the generated file landing inside the repo.
+
 ---
 
-## Estructura
+## Layout
 
-Cada directorio de primer nivel es un **paquete de stow**: replica dentro la
-ruta que tendrá relativa a `$HOME`. Así `stow hypr` crea
-`~/.config/hypr -> ~/dotfiles/hypr/.config/hypr`.
+Every top-level directory is a **stow package** and mirrors the path it will
+have relative to `$HOME`. So `stow hypr` creates
+`~/.config/hypr/hyprland.lua -> ~/dotfiles/hypr/.config/hypr/hyprland.lua`.
 
 ```
 zsh/        .zshrc
-hypr/       .config/hypr/            Hyprland (Lua) + hyprpaper
-waybar/     .config/waybar/          barra
+hypr/       .config/hypr/            Hyprland (Lua) + gaming profile
+waybar/     .config/waybar/          bar
 kitty/      .config/kitty/           terminal
-wofi/       .config/wofi/            lanzador
-matugen/    .config/matugen/         config + plantillas de color
+wofi/       .config/wofi/            launcher
+matugen/    .config/matugen/         config + color templates
 shell/      .config/                 btop, starship, cship
-qt/         .config/                 qt6ct, QtProject
+qt/         .config/qt6ct/           Qt platform theme
 gtk/        .config/                 gtk-3.0, gtk-4.0
 media/      .config/                 mpv, haruna
-kde/        .config/                 dolphinrc, gwenviewrc, kiorc, trashrc
-openrgb/    .config/OpenRGB/         iluminación
-systemd/    .config/systemd/user/    timer de rotación de wallpaper
-bin/        .local/bin/              scripts propios
-paquetes/   listas de pacman y AUR
-sistema/    copias de /etc — referencia, NO se enlazan
+ranger/     .config/ranger/          terminal file manager
+kde/        .config/                 gwenviewrc, kiorc, trashrc
+openrgb/    .config/OpenRGB/         lighting
+systemd/    .config/systemd/user/    wallpaper rotation timer
+bin/        .local/bin/              own scripts
+paquetes/   pacman and AUR package lists
+sistema/    copies of /etc — reference only, NOT symlinked
 ```
 
-## Qué NO está en el repo, y por qué
+## Theming, and where it stops working
 
-**Los colores generados.** matugen reescribe once ficheros cada vez que cambias
-de fondo. El repo guarda las **plantillas**; el resultado está en `.gitignore`.
-Tras clonar hay que ejecutar `wallpaper-switch` una vez o varias apps saldrán
-en gris.
+matugen renders eleven files from the templates in
+`matugen/.config/matugen/templates/`. GTK, Qt (through qt6ct), kitty, Waybar,
+wofi, dunst, fastfetch and ranger all pick up the accent.
 
-**`dunstrc` y `fastfetch/config.jsonc`** se generan *enteros* desde plantilla,
-no solo sus colores. Por eso no tienen paquete stow propio.
+**KF6 apps are the exception, and it can't be fixed from here.**
+`libKF6ColorScheme` listens on `QStyleHints::colorSchemeChanged`, sees the XDG
+portal asking for dark mode, and applies its own internal BreezeDark *on top of*
+whatever the platform theme set. Verified by putting an impossible red (255,0,0)
+in `[Colors:Window]` and counting pixels: 0% red. That defeats, in order, the
+`[Colors:*]` sections of `kdeglobals`, a custom `.colors` file in
+`~/.local/share/color-schemes/`, `KDE_COLOR_SCHEME_PATH`,
+`[UiSettings] ColorScheme=`, and the qt6ct palette.
 
-**Neovim.** Ya vive en [su propio repo](https://github.com/Johanx22x/nvim).
-Meterlo aquí lo convertiría en submódulo y complicaría el clonado.
+The only thing that hands control back is `plasma-integration`, which drags in
+`xdg-desktop-portal-kde` — a second portal competing with Hyprland's, putting
+screen capture and recording at risk. Not worth it for a file manager. The fix
+was to change the app instead: **Dolphin out, Nautilus in** (GTK4, themed by the
+GTK template). Gwenview is the last KF6 app left and stays Breeze grey.
 
-**Los wallpapers** (47 MB, 9 imágenes). No son configuración y git no lleva bien
-los binarios grandes.
+Qt6 apps that aren't KDE apps do get themed, through qt6ct.
 
-**`cship`** es un binario compilado de 4 MB. Su configuración sí está, en
+**ranger** is a different case: it's curses, so it doesn't understand hex, only
+indices into the 256-color palette. matugen writes just the accent as decimal
+RGB and the colorscheme converts it to an index in Python at startup. Everything
+else — background, text, directories, permissions — stays on the 16 ANSI colors
+kitty already defines, so ranger inherits Tokyo Night for free.
+
+## What is *not* in the repo, and why
+
+**The generated colors.** matugen rewrites eleven files every time the wallpaper
+changes. The repo tracks the **templates**; the output is in `.gitignore`. After
+cloning you have to run `wallpaper-switch` once or several apps will be grey.
+
+**`dunstrc` and `fastfetch/config.jsonc`** are generated *whole* from a
+template, not just their colors. That's why they have no stow package of their
+own.
+
+**Neovim.** It lives in [its own repo](https://github.com/Johanx22x/nvim).
+Vendoring it here would make it a submodule and complicate cloning.
+
+**The wallpapers** (47 MB, 9 images). Not configuration, and git handles large
+binaries poorly.
+
+**`cship`** is a 4 MB compiled binary. Its configuration *is* here, under
 `shell/`.
 
-**Todo lo que no es rice**: Brave, Discord, Firefox, GIMP, Steam,
-`github-copilot` (este último **contiene credenciales**).
+**Anything that isn't rice**: Brave, Discord, Firefox, GIMP, Steam, and
+`github-copilot` — that last one **holds credentials**.
 
-## `/etc` — se aplica a mano
+## `/etc` — applied by hand
 
-`sistema/` son copias de referencia. **No las enlaces**: root no debería leer su
-configuración desde un directorio en el que el usuario puede escribir.
+`sistema/` holds reference copies. **Don't symlink them**: root shouldn't read
+its configuration from a directory the user can write to.
 
-| Fichero | Destino | Ojo con |
+| File | Goes to | Watch out |
 |---|---|---|
-| `mkinitcpio.conf` | `/etc/mkinitcpio.conf` | sin hook `kms`; `MODULES=(nvidia …)` para KMS temprano |
-| `linux.preset`, `linux-lts.preset` | `/etc/mkinitcpio.d/` | imagen clásica, no UKI |
-| `default-grub` | `/etc/default/grub` | `GRUB_TOP_LEVEL` fija `vmlinuz-linux` como predeterminado |
-| `fstab` | `/etc/fstab` | **los UUID son de esta máquina**; regenéralos |
+| `mkinitcpio.conf` | `/etc/mkinitcpio.conf` | no `kms` hook; `MODULES=(nvidia …)` for early KMS |
+| `linux.preset`, `linux-lts.preset` | `/etc/mkinitcpio.d/` | classic image, not a UKI |
+| `default-grub` | `/etc/default/grub` | `GRUB_TOP_LEVEL` pins `vmlinuz-linux` as the default entry |
+| `fstab` | `/etc/fstab` | **the UUIDs belong to this machine** — regenerate them |
 | `reflector.conf` | `/etc/xdg/reflector/` | mirrors |
 
-Después: `sudo mkinitcpio -P && sudo grub-mkconfig -o /boot/grub/grub.cfg`.
+Then: `sudo mkinitcpio -P && sudo grub-mkconfig -o /boot/grub/grub.cfg`.
 
-Detalle no obvio: **`/boot` es un directorio dentro del subvolumen `@`**, no la
-ESP — la ESP se monta en `/efi`. Eso mete kernel e initramfs dentro de los
-snapshots, que es lo que hace que un rollback devuelva un sistema coherente.
+One non-obvious detail: **`/boot` is a directory inside the `@` subvolume**, not
+the ESP — the ESP is mounted at `/efi`. That's what puts the kernel and
+initramfs inside the snapshots, which is what makes a rollback produce a
+coherent system.
 
-## Si tu usuario no se llama `johan`
+## If your user isn't named `johan`
 
-Hay **38 rutas absolutas `/home/johan`** repartidas por 7 ficheros, sobre todo
-en `matugen/config.toml` (22, una por `output_path`) y en los módulos
-`custom/` de Waybar. matugen no expande `~` en `output_path`, así que ahí la
-ruta absoluta es obligatoria.
+There are **38 absolute `/home/johan` paths** across 7 files, mostly in
+`matugen/config.toml` (22 of them, one per `output_path`) and in Waybar's
+`custom/` modules. matugen doesn't expand `~` in `output_path`, so the absolute
+path is mandatory there.
 
 ```sh
 grep -rl /home/johan ~/dotfiles | xargs sed -i "s|/home/johan|$HOME|g"
@@ -133,8 +173,9 @@ grep -rl /home/johan ~/dotfiles | xargs sed -i "s|/home/johan|$HOME|g"
 
 ## Hardware
 
-Está afinado para: i5-13600K, RTX 5070 (Blackwell, `nvidia-open-dkms`), 32 GB.
-Dos monitores en la 5070 — DP-4 a 2560x1440@165 y HDMI-A-3 en vertical.
+Tuned for an i5-13600K, an RTX 5070 (Blackwell, needs `nvidia-open-dkms`) and
+32 GB of RAM. Two monitors on the 5070 — DP-4 at 2560x1440@165 and HDMI-A-3
+rotated vertical.
 
-Los monitores se referencian **por descripción EDID**, no por nombre de puerto.
-En otra máquina hay que ajustar el bloque de monitores de `hyprland.lua`.
+Monitors are matched **by EDID description**, not by port name. On another
+machine you'll need to adjust that block in `hyprland.lua`.
