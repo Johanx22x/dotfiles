@@ -98,11 +98,21 @@ frame > border {
   border-color: @borders;
 }
 
+/* OJO con "background-image: none": no sobra. Adwaita pinta la cabecera
+   con un degradado, y en CSS la imagen de fondo va POR ENCIMA del color,
+   asi que sin anularla el background-color de aqui no se ve. El detalle
+   es que Adwaita SI quita el degradado en :backdrop -- de ahi el sintoma
+   que despista: la barra salia bien cuando la ventana NO tenia el foco y
+   se volvia gris al enfocarla. Es el mismo motivo por el que la regla de
+   los botones, mas abajo, tambien lo lleva. */
 headerbar,
+headerbar:backdrop,
 .titlebar,
+.titlebar:backdrop,
 notebook > header,
 notebook > header > tabs > tab:checked {
   background-color: @theme_bg_color;
+  background-image: none;
   color: @theme_fg_color;
   border-color: @borders;
 }
@@ -218,4 +228,24 @@ scrollbar slider {
 
 scrollbar slider:hover {
   background-color: @theme_selected_bg_color;
+}
+
+
+/* Selector de archivos: el dialogo de "Guardar como" del portal XDG.
+   xdg-desktop-portal-gtk es GTK3, asi que lo viste aqui, pero el mismo
+   hueco lo tenia cualquier GtkFileChooser.
+
+   La franja de la ruta (las migas: johan / Pictures / wallpapers) se
+   quedaba en el #2d2d2d de Adwaita mientras el resto del dialogo ya era
+   Tokyo Night. El nodo se llama #pathbarbox y se localizo pintando
+   candidatos de colores imposibles y mirando cual salia en esa franja;
+   box.horizontal tambien la cubria, pero se llevaba por delante las
+   filas de la barra lateral y la cabecera de columnas.
+
+   Va con :backdrop explicito porque Adwaita define los dos estados por
+   separado, y sin nombrarlo el color solo cambiaba en uno de ellos. */
+filechooser #pathbarbox,
+filechooser #pathbarbox:backdrop {
+  background-color: @theme_bg_color;
+  border-color: @borders;
 }
