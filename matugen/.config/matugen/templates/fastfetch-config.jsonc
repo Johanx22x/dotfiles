@@ -73,7 +73,11 @@
         { "type": "memory",       "key": "󰍛 ", "format": "{used} / {total}" },
         // Solo "/" (como disk_show=('/') de remfetch). Sin filtrar salen
         // tambien /mnt/datos y se pasaria de las 16 filas del logo.
-        { "type": "disk",         "key": " ", "folders": "/" },
+        // Con "format" explicito para quitar el "- btrfs" que fastfetch
+        // pone al final por defecto: el sistema de archivos no cambia
+        // nunca y solo alarga la fila.
+        { "type": "disk",         "key": " ", "folders": "/",
+          "format": "{size-used} / {size-total} ({size-percentage})" },
         "break",
         { "type": "colors", "symbol": "block", "block": { "width": 2 } }
     ]

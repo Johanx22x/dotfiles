@@ -67,7 +67,16 @@ hl.monitor({
 
 -- Set programs that you use
 local terminal    = "kitty"
-local fileManager = "dolphin"
+
+-- Nautilus en vez de Dolphin. El motivo es el color: Dolphin ignoraba la
+-- paleta del wallpaper hiciera lo que hiciera (la nota larga estaba en
+-- matugen/config.toml), porque KF6 le imponia su BreezeDark interno.
+-- Nautilus es GTK4/libadwaita y lee ~/.config/gtk-4.0/gtk.css, que ya lo
+-- genera matugen, asi que entra en el sistema de acentos sin trabajo extra.
+--
+-- El otro gestor es ranger, que vive en la terminal y se lanza escribiendo
+-- "ranger". No tiene bind a proposito: cuando lo quieres ya estas en kitty.
+local fileManager = "nautilus"
 local menu        = "wofi --show drun"
 
 -- Menu de energia con confirmacion (SUPER + SHIFT + ESCAPE).
@@ -126,6 +135,12 @@ hl.on("hyprland.start", function ()
     -- Demonio de wallpapers + restaura el ultimo usado
     hl.exec_cmd("awww-daemon")
     hl.exec_cmd(wallpaperSwitch .. " reapply")
+
+    -- Notificacion con caratula al cambiar de pista en el navegador
+    -- (YouTube, YouTube Music). Va despues de dunst a proposito: si el
+    -- demonio de notificaciones no esta levantado, la primera pista se
+    -- pierde. Ver ~/.local/bin/mpris-notify.
+    hl.exec_cmd("mpris-notify")
 
     -- En Wayland el portapapeles no se guarda en ningun sitio central: lo
     -- posee la aplicacion de origen. Al cerrarla, lo copiado se pierde.
@@ -629,9 +644,66 @@ hl.window_rule({
 -- ("org.kde.*") y las dos cosas no siempre coinciden. Haruna es el
 -- ejemplo: su .desktop declara StartupWMClass=haruna, pero la ventana
 -- se registra como "org.kde.haruna".
+
+-- Nautilus, el gestor de archivos grafico (SUPER + E).
+--
+-- La transparencia es la unica parte del look que NO sale de GTK:
+-- libadwaita pinta su fondo opaco y no hay forma de pedirle un alpha
+-- desde el CSS de usuario, asi que la pone el compositor. El blur no
+-- hace falta declararlo -- decoration.blur ya esta activo globalmente y
+-- Hyprland lo aplica detras de cualquier ventana translucida, igual que
+-- con kitty.
+--
+-- OJO: opacity afecta a la ventana ENTERA, texto e iconos incluidos.
+-- 0.82 es el punto donde se ve el cristal sin que los nombres de
+-- archivo se peleen con el wallpaper. Si bajas mas, el texto de las
+-- etiquetas empieza a perder contraste sobre imagenes con detalle
+-- claro; el blur ya viene con brightness 0.8 para compensar, pero
+-- tiene un limite.
+--
+-- Y OJO tambien con la SINTAXIS, que aqui no es la que uno esperaria de
+-- una config en Lua: opacity es un campo de TEXTO con la gramatica de
+-- hyprlang -- "activa inactiva pantalla_completa", los dos ultimos
+-- opcionales. No existe ningun campo opacity_inactive, ni se acepta un
+-- numero suelto para cada estado, ni una tabla { active =, inactive = }:
+-- las tres formas las rechaza el parser con "field 'opacity': string
+-- type requires a string".
+--
+-- Peor aun: `hyprctl reload` responde "ok" igualmente y la regla se
+-- queda sin aplicar en silencio. El error solo sale por
+-- `hyprctl configerrors` y en el banner rojo de la esquina. Si tocas
+-- esto, comprueba con configerrors, no con el codigo de salida.
 hl.window_rule({
-    name  = "float-dolphin",
-    match = { class = "^org\\.kde\\.dolphin$" },
+    name  = "float-nautilus",
+    match = { class = "^org\\.gnome\\.Nautilus$" },
+
+    float  = true,
+    size   = "1400 850",
+    center = true,
+
+    opacity = "0.82 0.74",
+})
+
+-- Loupe (imagenes) y Celluloid (video) sustituyeron a gwenview y haruna.
+-- El motivo fue el mismo que echo a Dolphin: los dos enlazaban
+-- libKF6ColorScheme, que le impone BreezeDark a la app por encima del
+-- tema de plataforma, asi que se quedaban en gris mientras el resto del
+-- escritorio seguia al wallpaper. (El comentario que habia aqui decia
+-- que Haruna cogia el tema de qt6ct; era falso, y se comprobo con
+-- `ldd $(which haruna) | grep KF6ColorScheme`.)
+--
+-- Los dos son GTK4/libadwaita, o sea que leen ~/.config/gtk-4.0/gtk.css
+-- igual que Nautilus y no necesitan ni una plantilla nueva.
+--
+-- SIN opacity, a diferencia de Nautilus, y es deliberado: opacity en
+-- Hyprland afecta a la ventana entera, contenido incluido. En un visor
+-- de fotos y en un reproductor eso significa mezclar el wallpaper con
+-- la imagen que estas mirando -- adios a los negros y a cualquier
+-- juicio de color. El cristal se queda para el chrome, no para el
+-- contenido.
+hl.window_rule({
+    name  = "float-loupe",
+    match = { class = "^org\\.gnome\\.Loupe$" },
 
     float  = true,
     size   = "1400 850",
@@ -639,22 +711,34 @@ hl.window_rule({
 })
 
 hl.window_rule({
-    name  = "float-gwenview",
-    match = { class = "^org\\.kde\\.gwenview$" },
-
-    float  = true,
-    size   = "1400 850",
-    center = true,
-})
-
--- Haruna es el reproductor de video por defecto (Qt6 sobre mpv, Wayland
--- nativo, coge el tema de qt6ct).
-hl.window_rule({
-    name  = "float-haruna",
-    match = { class = "^org\\.kde\\.haruna$" },
+    name  = "float-celluloid",
+    match = { class = "^io\\.github\\.celluloid_player\\.Celluloid$" },
 
     float  = true,
     size   = "1280 720",   -- 16:9, para que no salga con letterbox de origen
+    center = true,
+})
+
+-- zathura, el lector de PDF.
+--
+-- "size" fijo con proporcion A4 vertical (850/1180 = 0.72, A4 es 0.707).
+-- Medido: zathura NO pide un tamano acorde al documento. Con un A4
+-- vertical (ratio 0.71) abre a 1252x952 y con uno apaisado (1.41) a
+-- 804x617 -- las dos ventanas salen a ratio ~1.30, sin relacion con la
+-- pagina. Asi que si no se le fija medida, sale una ventana apaisada
+-- para un documento vertical y sobra fondo a los lados.
+--
+-- Hyprland tampoco puede medir el contenido: solo ve lo que la ventana
+-- pide. Para que se ajuste de verdad haria falta leer las dimensiones
+-- con pdfinfo antes de abrir y redimensionar despues.
+--
+-- 1180 de alto cabe en DP-3 (1440) dejando sitio a waybar.
+hl.window_rule({
+    name  = "float-zathura",
+    match = { class = "^org\\.pwmt\\.zathura$" },
+
+    float  = true,
+    size   = "850 1180",
     center = true,
 })
 

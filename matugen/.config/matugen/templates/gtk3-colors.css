@@ -1,96 +1,23 @@
 /* GENERADO POR MATUGEN - no editar a mano.
-   Plantilla: ~/.config/matugen/templates/gtk-colors.css
+   Plantilla: ~/.config/matugen/templates/gtk3-colors.css
    Wallpaper: {{image}}
 
-   Un solo archivo para GTK3 y GTK4. Se escribe en los dos sitios
-   (~/.config/gtk-3.0/gtk.css y ~/.config/gtk-4.0/gtk.css) porque los
-   nombres de color son DISTINTOS en cada toolkit y no hay solape:
-   cada uno resuelve los suyos e ignora los del otro. Duplicar la
-   plantilla solo daria dos archivos que se desincronizan.
+   SOLO GTK3 / Adwaita. La app que importa aqui es GIMP.
+
+   Este archivo va aparte del de GTK4 a proposito. Las reglas del final
+   son un parche para Adwaita GTK3, que cablea sus colores en vez de
+   pasar por @define-color; pero sus selectores (button, popover, entry,
+   listbox row...) tambien existen en GTK4, y cuando los dos toolkits
+   compartian archivo esas reglas le pintaban cajas y bordes a las
+   ventanas libadwaita. Ver la cabecera de gtk4-colors.css.
 
    Misma regla que el resto (ver config.toml): fondos y texto fijos de
    Tokyo Night, y de matugen solo el acento -- que en GTK es la
    seleccion, el foco, los interruptores y las barras de progreso.
 
-   NOTA sobre GTK3: aqui la cobertura es PARCIAL y depende del widget.
-   Adwaita GTK3 cablea algunos colores en su propio CSS en vez de pasar
-   por @define-color, asi que puede quedar algun gris suelto. En GTK4 /
-   libadwaita el mecanismo si esta soportado oficialmente y cubre todo.
-   La app GTK3 que importa aqui es GIMP. */
-
-
-/* ==================================================================
-   GTK 4 / libadwaita
-   ================================================================== */
-
-/* ---- Superficies ---- */
-@define-color window_bg_color   #1a1b26;
-@define-color window_fg_color   #c0caf5;
-
-/* La vista (listas, areas de contenido) va un punto mas oscura que la
-   ventana, igual que en kdeglobals: despega el contenido del chrome. */
-@define-color view_bg_color     #15161e;
-@define-color view_fg_color     #c0caf5;
-
-@define-color headerbar_bg_color        #1a1b26;
-@define-color headerbar_fg_color        #c0caf5;
-@define-color headerbar_border_color    #414868;
-@define-color headerbar_backdrop_color  #15161e;
-@define-color headerbar_shade_color     rgba(0, 0, 0, 0.36);
-
-@define-color sidebar_bg_color        #15161e;
-@define-color sidebar_fg_color        #c0caf5;
-@define-color sidebar_backdrop_color  #15161e;
-@define-color sidebar_shade_color     rgba(0, 0, 0, 0.36);
-
-@define-color card_bg_color     #292e42;
-@define-color card_fg_color     #c0caf5;
-@define-color card_shade_color  rgba(0, 0, 0, 0.36);
-
-@define-color dialog_bg_color   #1a1b26;
-@define-color dialog_fg_color   #c0caf5;
-
-@define-color popover_bg_color  #292e42;
-@define-color popover_fg_color  #c0caf5;
-
-@define-color thumbnail_bg_color #292e42;
-@define-color thumbnail_fg_color #c0caf5;
-
-@define-color shade_color   rgba(0, 0, 0, 0.36);
-@define-color scrim_color   rgba(0, 0, 0, 0.5);
-@define-color borders       #414868;
-
-/* ---- Acento: lo unico que sigue al wallpaper ----
-   accent_color   = para TEXTO e iconos sobre el fondo de la ventana.
-   accent_bg_color = para RELLENOS (interruptor activo, seleccion).
-   accent_fg_color = el texto que va ENCIMA de accent_bg_color.
-
-   Se usa on_primary para el fg y no un blanco fijo: matugen lo calcula
-   con contraste garantizado contra primary, asi que el texto sobre un
-   boton acentuado se lee con cualquier wallpaper -- tambien cuando el
-   acento sale claro y un blanco desapareceria. */
-@define-color accent_color     {{colors.primary.default.hex}};
-@define-color accent_bg_color  {{colors.primary.default.hex}};
-@define-color accent_fg_color  {{colors.on_primary.default.hex}};
-
-/* ---- Semanticos: NO se armonizan ----
-   Igual que warning/critical en waybar (ver config.toml): un aviso
-   tiene que verse igual siempre, aunque el wallpaper sea rojo. */
-@define-color destructive_color     #f7768e;
-@define-color destructive_bg_color  #f7768e;
-@define-color destructive_fg_color  #1a1b26;
-
-@define-color success_color     #9ece6a;
-@define-color success_bg_color  #9ece6a;
-@define-color success_fg_color  #1a1b26;
-
-@define-color warning_color     #e0af68;
-@define-color warning_bg_color  #e0af68;
-@define-color warning_fg_color  #1a1b26;
-
-@define-color error_color       #f7768e;
-@define-color error_bg_color    #f7768e;
-@define-color error_fg_color    #1a1b26;
+   La cobertura es PARCIAL y depende del widget: se cubren las
+   superficies grandes, que es donde se nota el gris. Si aparece algun
+   widget suelto sin tenir, se anade su selector abajo. */
 
 
 /* ==================================================================

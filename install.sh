@@ -8,7 +8,7 @@
 set -euo pipefail
 
 DOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PAQUETES=(zsh hypr waybar kitty wofi matugen shell qt gtk media kde openrgb systemd bin)
+PAQUETES=(zsh hypr waybar kitty wofi matugen shell qt gtk media openrgb systemd bin ranger icons xdg)
 
 azul()  { printf '\033[1;34m%s\033[0m\n' "$*"; }
 verde() { printf '\033[1;32m%s\033[0m\n' "$*"; }
@@ -24,7 +24,41 @@ preguntar() {
 [[ $EUID -eq 0 ]] && { rojo "No lo lances como root. Pide sudo cuando lo necesita."; exit 1; }
 
 # ---------------------------------------------------------------------------
-azul "== 1/5  Paquetes de los repos oficiales =="
+# Se hace ANTES de enlazar: si se enlaza primero, la reescritura tendria que
+# seguir los enlaces y es facil dejar la mitad de los ficheros a medias.
+azul "== 1/6  Rutas absolutas =="
+ORIGINAL="/home/johan"
+if [[ "$HOME" == "$ORIGINAL" ]]; then
+  echo "   el home coincide, no hay nada que reescribir"
+else
+  # matugen NO expande ~ en output_path, asi que la ruta absoluta ahi es
+  # obligatoria; lo mismo en los modulos custom/ de waybar y en algun script.
+  # Por eso el repo lleva rutas fijas y hay que adaptarlas al clonar.
+  # Se excluye este propio script: reescribir su ORIGINAL dejaria la
+  # comprobacion de arriba comparando el home nuevo consigo mismo.
+  buscar() { grep -rl "$ORIGINAL" "$DOT" --exclude-dir=.git --exclude=install.sh --exclude=README.md 2>/dev/null || true; }
+  mapfile -t CONRUTA < <(buscar)
+  if (( ${#CONRUTA[@]} == 0 )); then
+    echo "   ya estaban reescritas"
+  else
+    echo "   ${#CONRUTA[@]} ficheros apuntan a $ORIGINAL y se reescribiran a $HOME:"
+    printf '     %s\n' "${CONRUTA[@]#$DOT/}"
+    if preguntar "Reescribirlas?"; then
+      sed -i "s|$ORIGINAL|$HOME|g" "${CONRUTA[@]}"
+      # Comprobacion, que un sed silencioso a medias es peor que no hacerlo
+      resto=$(buscar | wc -l)
+      if (( resto )); then
+        rojo "   quedan $resto ficheros sin reescribir"; exit 1
+      fi
+      verde "   hecho — apareceran como cambios en git, es lo esperado"
+    else
+      rojo "   sin esto matugen escribira en $ORIGINAL y nada se coloreara"
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+azul "== 2/6  Paquetes de los repos oficiales =="
 echo "   $(wc -l < "$DOT/paquetes/pacman.txt") paquetes en paquetes/pacman.txt"
 if preguntar "Instalarlos (mas stow)?"; then
   sudo pacman -S --needed --noconfirm stow
@@ -34,7 +68,7 @@ if preguntar "Instalarlos (mas stow)?"; then
 fi
 
 # ---------------------------------------------------------------------------
-azul "== 2/5  Paquetes de AUR =="
+azul "== 3/6  Paquetes de AUR =="
 if preguntar "Instalar yay y los de paquetes/aur.txt?"; then
   if ! command -v yay >/dev/null; then
     sudo pacman -S --needed --noconfirm git base-devel
@@ -49,7 +83,7 @@ if preguntar "Instalar yay y los de paquetes/aur.txt?"; then
 fi
 
 # ---------------------------------------------------------------------------
-azul "== 3/5  Enlazar la configuracion (stow) =="
+azul "== 4/6  Enlazar la configuracion (stow) =="
 echo "   paquetes: ${PAQUETES[*]}"
 if preguntar "Enlazar?"; then
   command -v stow >/dev/null || { rojo "   falta stow"; exit 1; }
@@ -71,7 +105,7 @@ if preguntar "Enlazar?"; then
 fi
 
 # ---------------------------------------------------------------------------
-azul "== 4/5  Neovim (repo aparte) =="
+azul "== 5/6  Neovim (repo aparte) =="
 if [[ -e "$HOME/.config/nvim" ]]; then
   echo "   ~/.config/nvim ya existe, no lo toco"
 elif preguntar "Clonar Johanx22x/nvim en ~/.config/nvim?"; then
@@ -80,7 +114,7 @@ elif preguntar "Clonar Johanx22x/nvim en ~/.config/nvim?"; then
 fi
 
 # ---------------------------------------------------------------------------
-azul "== 5/5  Generar la paleta de color =="
+azul "== 6/6  Generar la paleta de color =="
 echo "   Sin esto faltan colors.css, colors.lua, gtk.css... y varias apps"
 echo "   salen en gris. Necesita al menos una imagen en ~/Pictures/wallpapers."
 if preguntar "Generarla ahora?"; then

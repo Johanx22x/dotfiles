@@ -60,10 +60,44 @@
 
     # ---- Iconos ----
     enable_recursive_icon_lookup = true
-    icon_theme = Adwaita
+    # Dos temas, y el orden importa. Adwaita moderno solo trae variantes
+    # "-symbolic.svg": nombres clasicos como dialog-information NO
+    # resuelven, asi que los default_icon de las secciones de urgencia
+    # de mas abajo no pintaban nada y las notificaciones sin icono
+    # propio salian peladas. AdwaitaLegacy (paquete
+    # adwaita-icon-theme-legacy) conserva los PNG de toda la vida.
+    #
+    # Comprobado con: find /usr/share/icons/Adwaita -name 'dialog-information.*'
+    # que no devuelve nada, y lo mismo en AdwaitaLegacy que si.
+    #
+    # Y breeze-dark el tercero por una razon muy concreta, ligada a los
+    # min/max de abajo: dunst DESCARTA el icono del tema si este no lo
+    # ofrece al tamano pedido, no coge el mas grande que tenga. Con
+    # min_icon_size = 72, AdwaitaLegacy (que se queda en 48 px) dejaba
+    # de servir y las notificaciones sin icono propio volvian a salir
+    # peladas. breeze-dark trae SVG, que se rinden a cualquier tamano, y
+    # ademas en tono claro, que es lo que se ve sobre el fondo oscuro.
+    #
+    # Si algun dia subes min_icon_size, comprueba esto con:
+    #   dunstify -a prueba "Sin icono" "deberia salir el default_icon"
+    icon_theme = "Adwaita, AdwaitaLegacy, breeze-dark"
     icon_position = left
-    min_icon_size = 32
-    max_icon_size = 96
+    # Los dos al MISMO valor a proposito: asi todos los iconos salen
+    # exactamente igual de grandes. dunst amplia lo que baja de
+    # min_icon_size y reduce lo que pasa de max_icon_size, asi que
+    # igualarlos deja una unica medida posible y las notificaciones no
+    # bailan de tamano segun la resolucion que traiga cada app.
+    #
+    # 72 y no 96: el tope anterior hacia que el icono pesara mas que el
+    # texto. Con recursive_icon_lookup activo, dunst elige del tema
+    # Adwaita el tamano mas cercano antes de escalar, asi que los iconos
+    # del sistema no se ven blandos.
+    #
+    # Las imagenes que no son cuadradas conservan su proporcion: las
+    # caratulas de mpris-notify son miniaturas 16:9, y se ajustan a 72
+    # de ancho.
+    min_icon_size = 72
+    max_icon_size = 72
     icon_corner_radius = 6
 
     # ---- Comportamiento ----
@@ -117,3 +151,28 @@
     timeout = 0
     override_pause_level = 60
     default_icon = dialog-warning
+
+# ---- Claude Code ----
+# Claude Code no habla con el servidor de notificaciones por su cuenta:
+# se lo pide a la terminal (kitty, secuencia OSC 99), y kitty firma la
+# notificacion como suya. De ahi que salga el logo de kitty aunque el
+# aviso sea de Claude.
+#
+# No se puede arreglar desde Claude Code ni desde kitty, asi que se
+# corrige al recibirla. Los dos criterios juntos hacen falta: filtrar
+# solo por appname repintaria CUALQUIER aviso lanzado desde kitty
+# (btop, un script propio, lo que sea).
+#
+# El icono no viene con el paquete -- Claude Code se instala como un
+# binario suelto, sin recursos -- asi que se guarda en el repo, en el
+# paquete stow "icons". Salio de https://claude.ai/images/claude_app_icon.png
+# Se guarda a su resolucion original (338 px): el tamano en pantalla lo
+# fijan min_icon_size / max_icon_size de [global], iguales entre si, no
+# el archivo. Una regla de dunst no puede sobrescribir esos dos -- no
+# estan entre las opciones que admite, ver la lista en
+# /etc/dunst/dunstrc -- pero al ser el mismo tamano para todos, tampoco
+# hace falta.
+[claude-code]
+    appname = "kitty"
+    summary = "Claude Code"
+    new_icon = /home/johan/.local/share/icons/claude.png

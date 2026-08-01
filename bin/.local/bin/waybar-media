@@ -100,6 +100,16 @@ def procesar(linea):
 
     player, estado, titulo, artista, album = (c.strip() for c in campos)
 
+    # YouTube Music publica el artista como "Fulano - Topic": son los canales
+    # que YouTube genera solo para la musica. En una barra donde el espacio se
+    # cuenta en caracteres (LARGO_MAX), ocho de ellos para no decir nada es
+    # justo lo que hace que se recorte el nombre real.
+    # Se quita aqui, antes de texto_barra() y del tooltip, para que las dos
+    # cosas queden igual. ~/.local/bin/mpris-notify hace lo mismo con las
+    # notificaciones.
+    if artista.endswith(" - Topic"):
+        artista = artista[: -len(" - Topic")]
+
     if estado not in ("Playing", "Paused"):
         vacio()
         return

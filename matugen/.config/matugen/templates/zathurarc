@@ -1,0 +1,61 @@
+# GENERADO POR MATUGEN - no editar a mano.
+# Plantilla: ~/.config/matugen/templates/zathurarc
+# Wallpaper: {{image}}
+#
+# El fichero se genera ENTERO, como dunstrc y fastfetch: zathura no admite
+# incluir otro archivo desde zathurarc, asi que no se puede separar "config"
+# de "colores" en dos ficheros. Por eso zathura no tiene paquete de stow.
+#
+# Base Tokyo Night fija, acento de matugen. Mismos roles que el resto:
+# primary para lo activo, tertiary para lo secundario.
+
+# ---- Documento ----
+# recolor invierte el blanco del PDF a oscuro. recolor-keephue mantiene el
+# color de las figuras y las fotos en vez de convertirlo todo a dos tonos.
+set recolor                   true
+set recolor-keephue           true
+set recolor-lightcolor        "#1a1b26"
+set recolor-darkcolor         "#c0caf5"
+
+# Ctrl+R alterna recolor. Al desactivarlo el PDF se ve como lo hizo su autor,
+# que hace falta cuando el documento lleva firmas, sellos o graficos en color.
+
+# ---- Marco ----
+set default-bg                "#1a1b26"
+set default-fg                "#c0caf5"
+set statusbar-bg              "#15161e"
+set statusbar-fg              "#c0caf5"
+set inputbar-bg               "#15161e"
+set inputbar-fg               "#c0caf5"
+set completion-bg             "#292e42"
+set completion-fg             "#c0caf5"
+set completion-group-bg       "#15161e"
+set completion-group-fg       "#565f89"
+set completion-highlight-bg   "{{colors.primary.default.hex}}"
+set completion-highlight-fg   "#15161e"
+
+# ---- Busqueda ----
+# La coincidencia bajo el cursor lleva el acento; las demas, el secundario.
+#
+# El alfa va en el propio color, en rgba(). La opcion highlight-transparency
+# ya NO existe (se quito upstream) y ponerla suelta un aviso al arrancar.
+# Sin translucidez el resaltado tapa el texto que estas buscando.
+set highlight-color           "rgba({{colors.tertiary.default.red}},{{colors.tertiary.default.green}},{{colors.tertiary.default.blue}},0.4)"
+set highlight-active-color    "rgba({{colors.primary.default.red}},{{colors.primary.default.green}},{{colors.primary.default.blue}},0.55)"
+
+# ---- Avisos ----
+set notification-bg           "#15161e"
+set notification-fg           "#c0caf5"
+set notification-warning-bg   "#e0af68"
+set notification-warning-fg   "#15161e"
+set notification-error-bg     "#f7768e"
+set notification-error-fg     "#15161e"
+
+# ---- Comportamiento ----
+set window-title-basename     true
+set statusbar-home-tilde      true
+set selection-clipboard       clipboard
+set scroll-step               80
+set guioptions                ""
+set adjust-open               width
+set font                      "monospace 10"

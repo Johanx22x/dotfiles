@@ -1,0 +1,147 @@
+/* GENERADO POR MATUGEN - no editar a mano.
+   Plantilla: ~/.config/matugen/templates/gtk4-colors.css
+   Wallpaper: {{image}}
+
+   SOLO GTK4 / libadwaita. Nada de reglas CSS aqui: unicamente los
+   nombres de color que libadwaita expone oficialmente.
+
+   Antes esto y el CSS de GTK3 eran UN SOLO archivo escrito en los dos
+   sitios, con el argumento de que los nombres de color de cada toolkit
+   son distintos y no se pisan. Eso es cierto para los @define-color,
+   pero NO para las reglas: selectores como button, popover, entry o
+   listbox row existen en los dos toolkits, asi que las reglas escritas
+   para parchear Adwaita GTK3 se aplicaban tambien a libadwaita.
+
+   El sintoma era visible en Nautilus: los botones planos de la cabecera
+   salian con caja y borde, y los popover con un borde que Adwaita no
+   dibuja. Comprobado quitando el bloque de reglas del gtk.css de GTK4 y
+   volviendo a abrir la ventana: las cajas desaparecen.
+
+   Al final del archivo si hay UN bloque de reglas, pero es corto y
+   deliberado: libadwaita pinta la fila seleccionada de las listas en un
+   gris neutro, y sin el Nautilus se queda practicamente sin color del
+   wallpaper. Lo que NO se toca son bordes, fondos de boton ni popover:
+   ahi es donde estaba el problema. */
+
+
+/* ==================================================================
+   GTK 4 / libadwaita
+   ================================================================== */
+
+/* ---- Superficies ---- */
+@define-color window_bg_color   #1a1b26;
+@define-color window_fg_color   #c0caf5;
+
+/* La vista (listas, areas de contenido) va un punto mas oscura que la
+   ventana, igual que en kdeglobals: despega el contenido del chrome. */
+@define-color view_bg_color     #15161e;
+@define-color view_fg_color     #c0caf5;
+
+@define-color headerbar_bg_color        #1a1b26;
+@define-color headerbar_fg_color        #c0caf5;
+@define-color headerbar_border_color    #414868;
+@define-color headerbar_backdrop_color  #15161e;
+@define-color headerbar_shade_color     rgba(0, 0, 0, 0.36);
+
+@define-color sidebar_bg_color        #15161e;
+@define-color sidebar_fg_color        #c0caf5;
+@define-color sidebar_backdrop_color  #15161e;
+@define-color sidebar_shade_color     rgba(0, 0, 0, 0.36);
+
+@define-color card_bg_color     #292e42;
+@define-color card_fg_color     #c0caf5;
+@define-color card_shade_color  rgba(0, 0, 0, 0.36);
+
+@define-color dialog_bg_color   #1a1b26;
+@define-color dialog_fg_color   #c0caf5;
+
+@define-color popover_bg_color  #292e42;
+@define-color popover_fg_color  #c0caf5;
+
+@define-color thumbnail_bg_color #292e42;
+@define-color thumbnail_fg_color #c0caf5;
+
+@define-color shade_color   rgba(0, 0, 0, 0.36);
+@define-color scrim_color   rgba(0, 0, 0, 0.5);
+@define-color borders       #414868;
+
+/* ---- Acento: lo unico que sigue al wallpaper ----
+   accent_color   = para TEXTO e iconos sobre el fondo de la ventana.
+   accent_bg_color = para RELLENOS (interruptor activo, seleccion).
+   accent_fg_color = el texto que va ENCIMA de accent_bg_color.
+
+   Se usa on_primary para el fg y no un blanco fijo: matugen lo calcula
+   con contraste garantizado contra primary, asi que el texto sobre un
+   boton acentuado se lee con cualquier wallpaper -- tambien cuando el
+   acento sale claro y un blanco desapareceria. */
+@define-color accent_color     {{colors.primary.default.hex}};
+@define-color accent_bg_color  {{colors.primary.default.hex}};
+@define-color accent_fg_color  {{colors.on_primary.default.hex}};
+
+/* ---- Semanticos: NO se armonizan ----
+   Igual que warning/critical en waybar (ver config.toml): un aviso
+   tiene que verse igual siempre, aunque el wallpaper sea rojo. */
+@define-color destructive_color     #f7768e;
+@define-color destructive_bg_color  #f7768e;
+@define-color destructive_fg_color  #1a1b26;
+
+@define-color success_color     #9ece6a;
+@define-color success_bg_color  #9ece6a;
+@define-color success_fg_color  #1a1b26;
+
+@define-color warning_color     #e0af68;
+@define-color warning_bg_color  #e0af68;
+@define-color warning_fg_color  #1a1b26;
+
+@define-color error_color       #f7768e;
+@define-color error_bg_color    #f7768e;
+@define-color error_fg_color    #1a1b26;
+
+
+/* ==================================================================
+   GTK 4: las UNICAS reglas que se permiten aqui
+   ==================================================================
+   Regla de oro para este bloque: solo color, nunca geometria. Nada de
+   border, border-color, background-image ni padding. Las cajas que
+   salian en los botones de la cabecera de Nautilus venian justamente
+   de eso, cuando este archivo compartia reglas con el de GTK3.
+
+   Que se pinta y por que: libadwaita deja la fila seleccionada de las
+   listas en un gris neutro que no depende del acento, asi que la barra
+   lateral de Nautilus -- que es el elemento con mas presencia de la
+   ventana -- no mostraba ni rastro del wallpaper.
+
+   Va con alpha() y no con el acento solido: el acento de matugen puede
+   salir muy claro segun la imagen, y un bloque solido detras del texto
+   de la barra lateral obligaria a recalcular el color de la letra en
+   cada wallpaper. Con un tinte, el texto se queda en window_fg_color y
+   se lee siempre. */
+
+/* Los selectores son EXACTAMENTE los que usa libadwaita para esta
+   regla. No es capricho: con un "row:selected" a secas la suya gana por
+   especificidad (.navigation-sidebar row:selected) y no se ve nada.
+   Comprobado a base de poner un rojo imposible y no obtener ni un pixel
+   rojo. Si actualizas libadwaita y esto deja de pintar, saca sus reglas
+   del binario y compara:
+
+     python -c "import re,io; d=io.open('/usr/lib/libadwaita-1.so.0','rb').read();
+     print([d[m.start()-90:m.end()+180] for m in re.finditer(rb'row:selected', d)])"
+
+   Se usa la misma gramatica que ellos (color-mix + var(--accent-bg-color))
+   en vez de alpha() y @accent_bg_color: esta version de libadwaita ya
+   trabaja con variables CSS, y mezclar los dos estilos en la misma regla
+   es pedir que se rompa en la proxima actualizacion. Los @define-color de
+   arriba siguen funcionando porque libadwaita los mapea a las variables
+   por compatibilidad. */
+
+.navigation-sidebar row:selected,
+.navigation-sidebar child:selected,
+.navigation-sidebar flowboxchild:selected {
+  background-color: color-mix(in srgb, var(--accent-bg-color) 28%, transparent);
+}
+
+.navigation-sidebar row:selected:hover,
+.navigation-sidebar child:selected:hover,
+.navigation-sidebar flowboxchild:selected:hover {
+  background-color: color-mix(in srgb, var(--accent-bg-color) 38%, transparent);
+}

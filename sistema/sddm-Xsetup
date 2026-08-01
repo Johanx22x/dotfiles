@@ -1,0 +1,29 @@
+#!/bin/sh
+# Se ejecuta como root antes de arrancar el greeter de SDDM.
+#
+# El greeter corre sobre Xorg, que no sabe nada del `transform = 3` de
+# Hyprland. Sin esto el Gigabyte sale tumbado en la pantalla de login.
+#
+# Se identifica por resolucion, no por nombre: bajo el driver X de NVIDIA los
+# nombres son distintos de los de Hyprland (DP-3 / HDMI-A-1 aqui, DP-4 /
+# HDMI-0 alla) y ademas cambian entre arranques.
+
+command -v xrandr >/dev/null || exit 0
+
+# El principal es el unico de 2560x1440.
+PRINCIPAL=$(xrandr | awk '/ connected/ && /2560x1440/ {print $1; exit}')
+
+# El vertical es "el otro". Buscarlo por 1920x1080 NO vale: si Xorg arranca
+# con el monitor ya rotado, la linea dice 1080x1920 y la deteccion falla.
+VERTICAL=$(xrandr | awk -v p="$PRINCIPAL" '/ connected/ && $1 != p {print $1; exit}')
+
+[ -n "$PRINCIPAL" ] && xrandr --output "$PRINCIPAL" --primary --pos 1080x240
+
+# --rotate right = 90 grados horario. Confirmado: con la rotacion de Hyprland
+# aplicada, xrandr describe ese monitor como "right".
+#
+# Si el solapamiento de texto del tema en vertical molesta, sustituir esta
+# linea por:   xrandr --output "$VERTICAL" --off
+[ -n "$VERTICAL" ] && xrandr --output "$VERTICAL" --rotate right --pos 0x0
+
+exit 0

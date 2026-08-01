@@ -1,0 +1,14 @@
+# GENERADO POR MATUGEN - no editar a mano.
+# Plantilla: ~/.config/matugen/templates/ranger-accent
+# Wallpaper: {{image}}
+#
+# Lo lee ~/.config/ranger/colorschemes/tokyonight.py al arrancar ranger.
+#
+# En RGB DECIMAL, no en hex: ranger es curses y solo entiende indices de
+# la paleta de 256, asi que el colorscheme tiene que hacer la cuenta de
+# "que indice se parece mas a este color" y para eso necesita los tres
+# canales sueltos. Mismos roles que el resto de plantillas: accent es
+# primary y accent2 es tertiary.
+
+accent  {{colors.primary.default.red}} {{colors.primary.default.green}} {{colors.primary.default.blue}}
+accent2 {{colors.tertiary.default.red}} {{colors.tertiary.default.green}} {{colors.tertiary.default.blue}}

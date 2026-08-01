@@ -16,6 +16,7 @@ wofi/.config/wofi/colors.css
 qt/.config/qt6ct/colors/matugen.conf
 gtk/.config/gtk-3.0/gtk.css
 gtk/.config/gtk-4.0/gtk.css
+ranger/.config/ranger/accent
 
 # dunst y fastfetch se generan ENTEROS desde plantilla: no tienen paquete stow
 # propio. Ver matugen/.config/matugen/config.toml.
@@ -35,6 +36,7 @@ bin/.local/bin/claude
 # ---------------------------------------------------------------------------
 # Basura general
 # ---------------------------------------------------------------------------
+__pycache__/
 *.bak
 *.old
 *~

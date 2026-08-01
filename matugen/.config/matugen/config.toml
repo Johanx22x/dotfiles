@@ -88,52 +88,75 @@ output_path = '/home/johan/.config/wofi/colors.css'
 input_path = '/home/johan/.config/matugen/templates/qt6ct-colors.conf'
 output_path = '/home/johan/.config/qt6ct/colors/matugen.conf'
 
-# ---- Apps KDE (Dolphin) ----
+# ---- NO hay plantilla de kdeglobals: no la vuelvas a anadir ----
 #
-# AVISO: HOY ESTO NO TINE DOLPHIN. Se deja generado porque no cuesta
-# nada y se activa solo el dia que se instale el tema de plataforma de
-# KDE, pero que nadie cuente con ello mientras tanto.
+# Existio una, para Dolphin. Se comprobo a base de poner un rojo
+# imposible (255,0,0) en [Colors:Window] y contar pixeles: 0% de rojo en
+# la ventana. KF6 (libKF6ColorScheme) escucha
+# QStyleHints::colorSchemeChanged, ve que el portal XDG pide modo oscuro
+# y aplica su BreezeDark interno POR ENCIMA del tema de plataforma. Eso
+# tumbaba, en este orden: los [Colors:*] de kdeglobals, un .colors en
+# ~/.local/share/color-schemes/, KDE_COLOR_SCHEME_PATH y
+# [UiSettings] ColorScheme=. Lo unico que devolvia el mando era
+# plasma-integration, que arrastra xdg-desktop-portal-kde -- un segundo
+# portal compitiendo con el de Hyprland, con riesgo para la captura y la
+# grabacion de pantalla.
 #
-# Comprobado a base de poner un rojo imposible (255,0,0) en
-# [Colors:Window] y mirar los pixeles de la ventana: 0% de rojo.
-# Dolphin ignora, en este orden, TODO lo siguiente:
-#   - los [Colors:*] de este kdeglobals
-#   - un .colors propio en ~/.local/share/color-schemes/
-#   - la variable KDE_COLOR_SCHEME_PATH
-#   - [UiSettings] ColorScheme=Matugen
-#   - la paleta de qt6ct (que si funciona en otras apps Qt6)
+# La salida fue cambiar de app, no de portal, y acabo aplicandose tres
+# veces: Dolphin -> Nautilus, gwenview -> Loupe y Haruna -> Celluloid.
+# Los tres sustitutos son GTK4/libadwaita y se tinen con la plantilla
+# GTK de mas abajo. Ya no queda ninguna app KF6 instalada, asi que este
+# apartado es historia: sirve para que nadie repita el intento.
 #
-# El motivo: KF6 (libKF6ColorScheme) escucha
-# QStyleHints::colorSchemeChanged, ve que el portal XDG pide modo
-# oscuro y aplica su BreezeDark interno POR ENCIMA de lo que haya
-# puesto el tema de plataforma. Lo unico que devuelve el mando a
-# kdeglobals es plasma-integration, que arrastra xdg-desktop-portal-kde
-# -- un segundo portal compitiendo con el de Hyprland, con riesgo para
-# la captura de pantalla y la grabacion. No compensa por un gestor de
-# archivos, asi que Dolphin se queda en gris Breeze.
+# Para saber si una app va a caer en esto, mirale las librerias:
+#   ldd $(which la-app) | grep KF6ColorScheme
+# Si aparece, no hay tema que valga.
 #
-# El post_hook es la senal clasica de KDE para releer ajustes globales.
-# Va con "|| true" como el resto: si dbus no responde, el cambio de
-# wallpaper no se aborta.
-[templates.kdeglobals]
-input_path = '/home/johan/.config/matugen/templates/kdeglobals'
-output_path = '/home/johan/.config/kdeglobals'
-post_hook = '''dbus-send --session --type=signal /KGlobalSettings org.kde.KGlobalSettings.notifyChange int32:2 int32:0 || true'''
+# Las apps Qt6 que NO son KDE (qBittorrent) si se tinen, via qt6ct.
+
+# ---- Zathura ----
+# El lector de PDF. Se genera el zathurarc ENTERO, no solo los colores:
+# zathura no admite incluir otro fichero desde su config, asi que no se
+# puede separar. Por eso zathura no tiene paquete de stow propio.
+#
+# Sin post_hook: zathura lee la config al abrirse, no recarga en caliente.
+[templates.zathura]
+input_path = '/home/johan/.config/matugen/templates/zathurarc'
+output_path = '/home/johan/.config/zathura/zathurarc'
+
+# ---- Ranger ----
+# El gestor de archivos de terminal. Es curses: no entiende hex, solo
+# indices de la paleta de 256. Por eso aqui solo se escribe el acento en
+# RGB decimal y la conversion a indice la hace el propio colorscheme, en
+# Python, al arrancar (ver ~/.config/ranger/colorschemes/tokyonight.py).
+#
+# Todo lo demas -- fondo, texto, directorios, permisos -- se queda en los
+# 16 ANSI que ya define kitty.conf, asi que ranger hereda Tokyo Night sin
+# que matugen tenga que opinar.
+#
+# Sin post_hook: ranger no es un demonio. Lee el archivo al abrirse,
+# igual que wofi y fastfetch.
+[templates.ranger]
+input_path = '/home/johan/.config/matugen/templates/ranger-accent'
+output_path = '/home/johan/.config/ranger/accent'
 
 # ---- Apps GTK ----
-# Una sola plantilla escrita en dos sitios: los nombres de color de
-# GTK3 y GTK4 son distintos y no chocan. Ver la cabecera de la
-# plantilla para el porque.
+# DOS plantillas, no una. Los nombres de color de GTK3 y GTK4 no se
+# pisan, asi que durante un tiempo fue un solo archivo escrito en los
+# dos sitios -- pero las REGLAS CSS del parche de Adwaita GTK3 si se
+# aplicaban a GTK4, y le dibujaban cajas y bordes a los botones planos
+# de Nautilus. Cada toolkit tiene ahora lo suyo. La explicacion larga
+# esta en la cabecera de cada plantilla.
 #
 # Sin post_hook a proposito: GTK no recarga el CSS de usuario en
 # caliente y no hay senal que mandarle. Las apps cogen la paleta nueva
-# al abrirse, igual que wofi y fastfetch.
+# al abrirse, igual que wofi, ranger y fastfetch.
 [templates.gtk3]
-input_path = '/home/johan/.config/matugen/templates/gtk-colors.css'
+input_path = '/home/johan/.config/matugen/templates/gtk3-colors.css'
 output_path = '/home/johan/.config/gtk-3.0/gtk.css'
 
 [templates.gtk4]
-input_path = '/home/johan/.config/matugen/templates/gtk-colors.css'
+input_path = '/home/johan/.config/matugen/templates/gtk4-colors.css'
 output_path = '/home/johan/.config/gtk-4.0/gtk.css'
 
 # ---- Fastfetch ----
