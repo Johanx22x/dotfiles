@@ -23,8 +23,8 @@
 #                      text and menus. ~250 MB/s against ~186, which USB 3
 #                      swallows easily.
 #    CAP_FS=1          Start straight in fullscreen
-#    CAP_ALAT=20       Audio latency in ms. Defaults to 10. If you hear clicks
-#                      or dropouts, raise it to 15 or 20.
+#    CAP_ALAT=10       Audio latency in ms. Defaults to 20. Lower it if you
+#                      want tighter sync and hear no clicks or dropouts.
 #    CAP_TEAR=1        Minimum latency at the cost of tearing: mpv stops
 #                      waiting for vsync. Only useful in very twitchy games.
 #    CAP_NOAUDIO=1     No audio (if you route it elsewhere)
@@ -32,7 +32,7 @@
 set -uo pipefail
 
 FMT="${CAP_FMT:-yuyv422}"
-ALAT="${CAP_ALAT:-10}"
+ALAT="${CAP_ALAT:-20}"
 
 # -------------------------------------------------------------
 # Locate the device by NAME, not by /dev/video0.
