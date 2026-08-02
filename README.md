@@ -15,7 +15,11 @@
 </p>
 
 <p align="center">
-    <sub>Same shell, two wallpapers. Every colour above is generated from the image behind it.</sub>
+    <img src="assets/preview-media.png" alt="The island on its Media tab with cover art and transport, a notification arriving top right, and ranger, Loupe and Nautilus on the wallpaper folder" width="100%">
+</p>
+
+<p align="center">
+    <sub>The same shell on three wallpapers. Every colour above is generated from the image behind it.</sub>
 </p>
 
 ---
