@@ -50,18 +50,8 @@ jedi-language-server
 jq
 kdegraphics-thumbnailers
 kitty
-lib32-fontconfig
-lib32-gamemode
-lib32-libpulse
-lib32-libxcrypt-compat
-lib32-mangohud
-lib32-mesa
-lib32-nvidia-utils
-lib32-pipewire
-lib32-vulkan-icd-loader
 libnotify
 libpulse
-libva-nvidia-driver
 linux
 linux-firmware
 linux-headers
@@ -84,7 +74,6 @@ noto-fonts
 noto-fonts-cjk
 noto-fonts-emoji
 npm
-nvidia-open-dkms
 obs-studio
 openrgb
 otf-font-awesome
@@ -114,7 +103,6 @@ snap-pac
 snapper
 sof-firmware
 starship
-steam
 stow
 sudo
 tree

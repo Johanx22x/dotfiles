@@ -51,7 +51,11 @@ is idempotent — re-running it is safe.
 1. **Absolute paths.** If your home isn't `/home/johan`, rewrites the paths in
    the repo to match. matugen doesn't expand `~` in `output_path`, so absolute
    paths are unavoidable there; the installer handles it, you don't.
-2. **Packages** from `packages/pacman.txt`.
+2. **Packages** from `packages/pacman.txt`. Anything your repos don't have is
+   skipped and listed, rather than aborting the whole transaction — which is
+   what pacman does over a single missing name. `packages/multilib.txt` (Steam
+   and the 32-bit libraries) is offered separately, and only if you have the
+   multilib repo enabled.
 3. **AUR** — installs `yay` if missing, then `packages/aur.txt`.
 4. **Symlinks** the config with stow, and enables the user systemd units.
 5. **Neovim** — clones [its own repo](https://github.com/Johanx22x/nvim).
@@ -59,6 +63,13 @@ is idempotent — re-running it is safe.
 
 Left to do by hand afterwards: `/etc` (see below), the monitor block in
 `hyprland.lua`, and `chsh -s /usr/bin/zsh`.
+
+**The GPU driver is not part of this and never gets installed for you.** It is
+the one choice that depends on hardware the repo cannot see — and guessing
+wrong is not free: an NVIDIA DKMS module rebuilds on every kernel update, for
+a card that isn't there. Install yours before or after, whichever it is. Where
+32-bit drivers are concerned, `steam` depends on the `lib32-vulkan-driver` and
+`lib32-libgl` virtual packages, so pacman asks you to pick a provider itself.
 
 ---
 
@@ -84,7 +95,7 @@ xdg/        .config/mimeapps.list    default applications
 systemd/    .config/systemd/user/    wallpaper rotation timer
 icons/      .local/share/icons/      app icons that don't ship with their package
 bin/        .local/bin/              6 scripts + the capture-card desktop entry
-packages/   pacman and AUR package lists
+packages/   package lists: core, multilib, AUR
 system/     copies of /etc — reference only, NOT symlinked
 assets/     the screenshots at the top of this file
 ```
@@ -154,8 +165,9 @@ snapshots, which is what makes a rollback produce a coherent system.
 
 **The SDDM greeter runs on Xorg**, which knows nothing about Hyprland's
 `transform`. Without `Xsetup` the vertical monitor comes up sideways on the
-login screen. It matches outputs by resolution, not by name, because the names
-differ between Xorg and Hyprland and change between boots.
+login screen. It matches outputs by SIZE, not by name, because the names differ
+between Xorg and Hyprland and change between boots — and it leaves early unless
+at least two outputs have a mode, so a single-monitor machine is never touched.
 
 ---
 

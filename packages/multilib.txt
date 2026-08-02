@@ -1,0 +1,8 @@
+lib32-fontconfig
+lib32-gamemode
+lib32-libpulse
+lib32-libxcrypt-compat
+lib32-mangohud
+lib32-pipewire
+lib32-vulkan-icd-loader
+steam
