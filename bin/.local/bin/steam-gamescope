@@ -12,17 +12,33 @@
 #  (Shift+Tab) and Steam Input work properly.
 #
 #  Variables:
-#    SG_W / SG_H      Output resolution           (def. 2560x1440)
-#    SG_HZ            Refresh rate                (def. 165)
+#    SG_W / SG_H      Output resolution           (def. the monitor you are on)
+#    SG_HZ            Refresh rate                (def. that monitor's refresh rate)
 #    SG_VRR=1         Adaptive sync / FreeSync
 #    SG_HUD=1         FPS overlay (mangoapp)
 #    SG_DESKTOP=1     Regular Steam instead of Big Picture
 # =============================================================
 set -uo pipefail
 
-W="${SG_W:-2560}"
-H="${SG_H:-1440}"
-HZ="${SG_HZ:-165}"
+# The virtual output defaults to the monitor you are actually on, queried from
+# the compositor. It used to default to 2560x1440@165, which is this machine
+# and nothing else: on any other screen gamescope would have been handed a
+# resolution the display cannot show, and the literals are wrong in a way you
+# only find out when a game comes up letterboxed or refuses the mode.
+#
+# The fallback keeps the old numbers for the case there is no compositor to
+# ask -- running this from a TTY, or from a session that is not Hyprland.
+monitor_mode() {
+    hyprctl monitors -j 2>/dev/null \
+        | jq -r 'map(select(.focused))[0] // .[0]
+                 | "\(.width) \(.height) \(.refreshRate | round)"' 2>/dev/null
+}
+read -r DEF_W DEF_H DEF_HZ < <(monitor_mode) || true
+[[ ${DEF_W:-null} == null || -z ${DEF_W:-} ]] && { DEF_W=2560; DEF_H=1440; DEF_HZ=165; }
+
+W="${SG_W:-$DEF_W}"
+H="${SG_H:-$DEF_H}"
+HZ="${SG_HZ:-$DEF_HZ}"
 
 command -v gamescope >/dev/null || { echo "gamescope is not installed" >&2; exit 1; }
 command -v steam     >/dev/null || { echo "steam is not installed" >&2; exit 1; }
