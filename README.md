@@ -136,6 +136,8 @@ its configuration from a directory the user can write to.
 |---|---|---|
 | `mkinitcpio.conf` | `/etc/mkinitcpio.conf` | no `kms` hook; `MODULES=(nvidia …)` for early KMS |
 | `linux.preset`, `linux-lts.preset` | `/etc/mkinitcpio.d/` | classic image, not a UKI |
+| `modprobe-nvidia-gaming.conf` | `/etc/modprobe.d/nvidia-gaming.conf` | KMS, VRAM across suspend, PAT |
+| `modules-load-ntsync.conf` | `/etc/modules-load.d/ntsync.conf` | Proton needs `/dev/ntsync` |
 | `default-grub` | `/etc/default/grub` | `GRUB_TOP_LEVEL` pins `vmlinuz-linux` as the default entry |
 | `fstab` | `/etc/fstab` | **the UUIDs belong to this machine** — regenerate them |
 | `reflector.conf` | `/etc/xdg/reflector/` | mirrors |
