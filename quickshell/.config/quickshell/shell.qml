@@ -18,6 +18,7 @@ import Quickshell
 import QtQml
 import "modules"
 import "modules/bar"
+import "modules/cheatsheet"
 import "modules/notifications"
 import "modules/launcher"
 import "modules/powermenu"
@@ -74,6 +75,16 @@ ShellRoot {
         model: Quickshell.screens.filter(screen => screen.model === "PG32QF2B")
 
         PowerMenu {}
+    }
+
+    // The keybind cheatsheet, on the same screen as the bar. One monitor for
+    // the same reason as the power menu and the launcher: it takes an
+    // exclusive keyboard grab, and two of them would be two surfaces fighting
+    // over the keyboard.
+    Variants {
+        model: Quickshell.screens.filter(screen => screen.model === "PG32QF2B")
+
+        Cheatsheet {}
     }
 
     // Rounded display corners, on EVERY monitor -- they belong to the panel
