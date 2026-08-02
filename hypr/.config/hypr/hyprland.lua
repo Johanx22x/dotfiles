@@ -472,8 +472,8 @@ hl.device({
 local mainMod = "SUPER" -- Sets "Windows" key as main modifier
 
 -- Example binds, see https://wiki.hypr.land/Configuring/Basics/Binds/ for more
-hl.bind(mainMod .. " + RETURN", hl.dsp.exec_cmd(terminal))
-local closeWindowBind = hl.bind(mainMod .. " + W", hl.dsp.window.close())
+hl.bind(mainMod .. " + RETURN", hl.dsp.exec_cmd(terminal), { description = "Apps: open a terminal" })
+local closeWindowBind = hl.bind(mainMod .. " + W", hl.dsp.window.close(), { description = "Windows: close the focused window" })
 -- closeWindowBind:set_enabled(false)
 -- Power menu (log out / restart / shut down) with confirmation.
 -- This used to be SUPER + M with no protection at all and it ended the
@@ -483,55 +483,75 @@ local closeWindowBind = hl.bind(mainMod .. " + W", hl.dsp.window.close())
 --
 -- If nothing happens, the shell is not running: the menu lives inside
 -- Quickshell now, so `qs -d` has to be up for this bind to do anything.
-hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd(powerMenu))
+hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd(powerMenu), { description = "Shell: power menu" })
 
 -- SUPER + M was deliberately free for a while; now the magic special
 -- workspace lives there, after giving up S to screenshots.
 -- The island's dashboard. Same call the click on the island makes, so the
 -- key and the pointer cannot drift apart. D for dashboard; it was free.
-hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("qs ipc call island dashboard"))
+hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("qs ipc call island dashboard"), { description = "Shell: open the dashboard" })
 
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
+-- The cheatsheet: every bind that carries a description, laid out by category.
+--
+-- It reads `hyprctl binds` rather than this file, so the two cannot drift: the
+-- compositor is the one that knows what is actually bound right now. The only
+-- thing a new bind needs in order to show up is a description, in the
+-- "Category: what it does" form used throughout the section below. A bind with
+-- no description is deliberately invisible there.
+--
+-- SUPER + / because ? is the help key everywhere and / is where it lives
+-- unshifted. It was free, and it is the only bind whose job is to explain the
+-- others, so it belongs to the shell rather than to any category.
+hl.bind(mainMod .. " + slash", hl.dsp.exec_cmd("qs ipc call cheatsheet toggle"), { description = "Shell: this cheatsheet" })
+
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager), { description = "Apps: open the file manager" })
 -- Toggle floating. It used to be SUPER+V, Hyprland's example bind, but that
 -- key went to the clipboard history: V for "paste" is used far more often
 -- than floating a window. T comes from togglefloating, the real dispatcher
 -- name.
-hl.bind(mainMod .. " + T", hl.dsp.window.float({ action = "toggle" }))
+hl.bind(mainMod .. " + T", hl.dsp.window.float({ action = "toggle" }), { description = "Windows: float or tile" })
 -- Pin: the window stays visible on every workspace of ITS monitor, in the
 -- same position. SHIFT + T for continuity with the float bind above.
 -- CAREFUL: pin only acts on floating windows, so the order is SUPER+T and
 -- then SUPER+SHIFT+T. And it is per monitor: it does not cross over.
-hl.bind(mainMod .. " + SHIFT + T", hl.dsp.window.pin())
-hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd(menu))
-hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
-hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
+hl.bind(mainMod .. " + SHIFT + T", hl.dsp.window.pin(), { description = "Windows: pin a floating window to every workspace" })
+hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd(menu), { description = "Apps: open the launcher" })
+hl.bind(mainMod .. " + P", hl.dsp.window.pseudo(), { description = "Windows: pseudotile" })
+hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"), { description = "Windows: flip the split direction" })  -- dwindle only
 
 -- Move focus with mainMod + arrow keys
-hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
-hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
-hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
-hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
+hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }),  { description = "Windows: move focus left" })
+hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }), { description = "Windows: move focus right" })
+hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }),    { description = "Windows: move focus up" })
+hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }),  { description = "Windows: move focus down" })
 
 -- Switch workspaces with mainMod + [0-9]
 -- Move active window to a workspace with mainMod + SHIFT + [0-9]
+--
+-- Only the FIRST of each ten carries a description, and that is what keeps the
+-- cheatsheet readable: it lists every bind that has one, so describing all
+-- twenty would spend two thirds of a column saying the same thing ten times.
+-- The row shows SUPER + 1 and the text names the range.
 for i = 1, 10 do
     local key = i % 10 -- 10 maps to key 0
-    hl.bind(mainMod .. " + " .. key,             hl.dsp.focus({ workspace = i}))
-    hl.bind(mainMod .. " + SHIFT + " .. key,     hl.dsp.window.move({ workspace = i }))
+    local focusOpts = i == 1 and { description = "Workspaces: go to workspace 1-10" } or nil
+    local moveOpts  = i == 1 and { description = "Workspaces: send the window to workspace 1-10" } or nil
+    hl.bind(mainMod .. " + " .. key,             hl.dsp.focus({ workspace = i}), focusOpts)
+    hl.bind(mainMod .. " + SHIFT + " .. key,     hl.dsp.window.move({ workspace = i }), moveOpts)
 end
 
 -- Special workspace (scratchpad). It lived on SUPER+S, but that key was
 -- handed over entirely to screenshots, which are used far more often and
 -- where SUPER+SHIFT+S is the gesture everyone already has in their fingers.
 -- M was reserved and unused, so it moved here.
-hl.bind(mainMod .. " + M",         hl.dsp.workspace.toggle_special("magic"))
-hl.bind(mainMod .. " + SHIFT + M", hl.dsp.window.move({ workspace = "special:magic" }))
+hl.bind(mainMod .. " + M",         hl.dsp.workspace.toggle_special("magic"), { description = "Workspaces: show or hide the magic scratchpad" })
+hl.bind(mainMod .. " + SHIFT + M", hl.dsp.window.move({ workspace = "special:magic" }), { description = "Workspaces: send the window to the scratchpad" })
 
 -- Wallpapers: SUPER+SHIFT+W goes to the next one, SUPER+SHIFT+A picks at
 -- random. Each change regenerates the accent palette (the shell, kitty,
 -- window borders).
-hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd(wallpaperSwitch .. " next"))
-hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd(wallpaperSwitch .. " random"))
+hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd(wallpaperSwitch .. " next"), { description = "Look: next wallpaper" })
+hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd(wallpaperSwitch .. " random"), { description = "Look: random wallpaper" })
 
 -- Screenshots: hyprshot (a wrapper over grim/slurp that also asks hyprctl
 -- for window and monitor geometry) plus satty for annotating. The whole
@@ -550,14 +570,14 @@ hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd(wallpaperSwitch .. " random")
 local sattyPipe = "satty --filename - --copy-command wl-copy --early-exit"
     .. " --output-filename " .. os.getenv("HOME") .. "/Pictures/satty-%Y%m%d-%H%M%S.png"
 
-hl.bind(mainMod .. " + S",         hl.dsp.exec_cmd("hyprshot -m region -z --clipboard-only"))
-hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("hyprshot -m region -z --raw | " .. sattyPipe))
+hl.bind(mainMod .. " + S",         hl.dsp.exec_cmd("hyprshot -m region -z --clipboard-only"), { description = "Capture: region to the clipboard" })
+hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("hyprshot -m region -z --raw | " .. sattyPipe), { description = "Capture: region, then annotate it" })
 -- hyprshot modes combine: plain "window" and "output" open a picker to click
 -- the window or the monitor, which is pointless here. Adding "active" makes
 -- them take the focused window or the monitor under the pointer directly,
 -- with no interaction. That is also why they do not carry -z.
-hl.bind(mainMod .. " + CTRL + S",  hl.dsp.exec_cmd("hyprshot -m window -m active"))
-hl.bind(mainMod .. " + ALT + S",   hl.dsp.exec_cmd("hyprshot -m output -m active"))
+hl.bind(mainMod .. " + CTRL + S",  hl.dsp.exec_cmd("hyprshot -m window -m active"), { description = "Capture: the focused window to a file" })
+hl.bind(mainMod .. " + ALT + S",   hl.dsp.exec_cmd("hyprshot -m output -m active"), { description = "Capture: the whole monitor to a file" })
 
 -- Instant replay. The shell keeps the last 30 seconds of the main monitor in
 -- RAM at all times (see modules/recorder/ReplayState.qml), so this writes the
@@ -568,7 +588,7 @@ hl.bind(mainMod .. " + ALT + S",   hl.dsp.exec_cmd("hyprshot -m output -m active
 -- ALT + Z, with no SUPER, because it is pressed in the middle of whatever was
 -- worth keeping -- and that is also the one caveat: a global bind on a plain
 -- ALT combination takes ALT+Z away from every application that wanted it.
-hl.bind("ALT + Z", hl.dsp.exec_cmd("qs ipc call replay save"))
+hl.bind("ALT + Z", hl.dsp.exec_cmd("qs ipc call replay save"), { description = "Capture: save the last 30 seconds" })
 
 -- Clipboard history. It opens the shell's launcher straight into its
 -- clipboard picker instead of a dmenu: images are shown as images there,
@@ -577,30 +597,30 @@ hl.bind("ALT + Z", hl.dsp.exec_cmd("qs ipc call replay save"))
 --
 -- cliphist itself stays: it is the store, and the two `wl-paste --watch`
 -- processes above keep filling it. Only the picking moved.
-hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("qs ipc call launcher clipboard"))
+hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("qs ipc call launcher clipboard"), { description = "Apps: clipboard history" })
 
 -- Scroll through existing workspaces with mainMod + scroll
-hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
-hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
+hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }), { description = "Workspaces: next existing workspace" })
+hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }), { description = "Workspaces: previous existing workspace" })
 
 -- Move/resize windows with mainMod + LMB/RMB and dragging
-hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
-hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
+hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true, description = "Windows: drag to move" })
+hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Windows: drag to resize" })
 
 -- Laptop multimedia keys for volume and LCD brightness
 -- -l 1.5 allows boosting up to 150%
-hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
-hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true, repeating = true })
-hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),   { locked = true, repeating = true })
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true, description = "Media: volume up" })
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true, description = "Media: volume down" })
+hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true, repeating = true, description = "Media: mute the output" })
+hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),   { locked = true, repeating = true, description = "Media: mute the microphone" })
 hl.bind("XF86MonBrightnessUp",  hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"),                  { locked = true, repeating = true })
 hl.bind("XF86MonBrightnessDown",hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"),                  { locked = true, repeating = true })
 
 -- Requires playerctl
-hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = true })
+hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = true, description = "Media: next track" })
 hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
-hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
-hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
+hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true, description = "Media: play or pause" })
+hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true, description = "Media: previous track" })
 
 
 --------------------------------
@@ -662,7 +682,7 @@ hl.layer_rule({
     -- parameters and no xray, and the surface ends up visibly blurrier than
     -- the bar it is supposed to belong to. That is how the power menu looked
     -- before it was added to this list.
-    match = { namespace = "^quickshell-(bar|popout|notifications|powermenu|launcher)$" },
+    match = { namespace = "^quickshell-(bar|popout|notifications|powermenu|launcher|cheatsheet)$" },
 
     blur          = true,
 

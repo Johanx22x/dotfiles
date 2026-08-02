@@ -25,7 +25,7 @@
 |---|---|
 | Compositor | Hyprland, configured in **Lua** (`hyprland.lua`, not `hyprland.conf`) |
 | Terminal | kitty + zsh + starship |
-| Shell | Quickshell — bar, dynamic island, launcher, notifications, power menu |
+| Shell | Quickshell — bar, dynamic island, launcher, notifications, power menu, keybind cheatsheet |
 | Login | SDDM |
 | Files | ranger · Nautilus |
 | Images / video / PDF | Loupe · Celluloid · zathura |
@@ -71,7 +71,7 @@ have relative to `$HOME`. So `stow hypr` creates
 ```
 zsh/        .zshrc
 hypr/       .config/hypr/            hyprland.lua + gaming.lua
-quickshell/ .config/quickshell/      bar, island, launcher, notifications
+quickshell/ .config/quickshell/      bar, island, launcher, notifications, cheatsheet
 kitty/      .config/kitty/
 matugen/    .config/matugen/         config.toml + 9 color templates
 ranger/     .config/ranger/          rc.conf, scope.sh, tokyonight colorscheme

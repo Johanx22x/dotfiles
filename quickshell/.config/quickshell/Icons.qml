@@ -25,6 +25,8 @@ pragma Singleton
 import Quickshell
 
 Singleton {
+    id: root
+
     // Turns whatever an application handed us into something Image can open.
     //
     // D-Bus menus and notifications pass icon NAMES ("bluetooth-symbolic"),
@@ -181,4 +183,32 @@ Singleton {
     // ---------------- Notifications ----------------
     readonly property string bell: String.fromCodePoint(0xF09A2)         // nf-md-bell_outline
     readonly property string bellOff: String.fromCodePoint(0xF09A1)      // nf-md-bell_off_outline
+
+    // ---------------- Cheatsheet ----------------
+    // One per category heading. The names on the LEFT are the categories as
+    // they are spelled in the descriptions in hyprland.lua -- that is the join
+    // between the two files, so renaming a category there means renaming it
+    // here, and a category with no entry falls back to a neutral glyph rather
+    // than to a missing one. `palette` and `music` above already cover Look
+    // and Media, and are reused instead of duplicated.
+    readonly property string keyboard: String.fromCodePoint(0xF030C)      // nf-md-keyboard
+    readonly property string apps: String.fromCodePoint(0xF003B)          // nf-md-apps
+    readonly property string windowTiles: String.fromCodePoint(0xF169B)   // nf-md-dock_window
+    readonly property string workspaces: String.fromCodePoint(0xF0570)    // nf-md-view_grid
+    readonly property string camera: String.fromCodePoint(0xF0100)        // nf-md-camera
+    readonly property string widgets: String.fromCodePoint(0xF072C)       // nf-md-widgets
+
+    // The category glyph, by the name used in the bind descriptions.
+    function category(name: string): string {
+        switch (name) {
+        case "Apps":       return root.apps;
+        case "Windows":    return root.windowTiles;
+        case "Workspaces": return root.workspaces;
+        case "Capture":    return root.camera;
+        case "Shell":      return root.widgets;
+        case "Look":       return root.palette;
+        case "Media":      return root.music;
+        default:           return root.keyboard;
+        }
+    }
 }
