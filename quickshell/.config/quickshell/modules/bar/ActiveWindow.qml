@@ -19,9 +19,28 @@ Item {
     // focused on the other.
     required property var barScreen
 
+    // HYPRLAND.ACTIVETOPLEVEL GOES STALE WHEN FOCUS GOES NOWHERE
+    // Hyprland does announce the loss -- switching to an empty workspace
+    // emits `activewindowv2>>` with no address -- but Quickshell 0.3.0 does
+    // not clear activeToplevel on it: the property keeps pointing at the
+    // last focused window, so the module kept painting a title for a
+    // workspace with nothing on it.
+    //
+    // So focus is read off the toplevel itself. `wayland.activated` is the
+    // Wayland handle's own state and it is the only flag here that tracks
+    // reality: the IPC-side `activated` is frozen true right along with
+    // activeToplevel, and `workspace.active` is false for special
+    // workspaces -- which ARE on screen, so it would blank the title every
+    // time the magic workspace is pulled up.
+    //
+    // Compared against `false` rather than tested for truth: the Wayland
+    // handle is briefly absent while a window maps, and an unknown state
+    // should leave the module as it was instead of blinking it away.
     readonly property HyprlandToplevel toplevel: {
         const active = Hyprland.activeToplevel;
-        return active?.monitor?.name === root.barScreen.name ? active : null;
+        if (active?.monitor?.name !== root.barScreen.name)
+            return null;
+        return active.wayland?.activated === false ? null : active;
     }
 
     readonly property string appId: toplevel?.wayland?.appId ?? toplevel?.lastIpcObject?.class ?? ""
