@@ -1,0 +1,122 @@
+/* -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+   WOFI - application launcher, grid layout
+
+   A sheet of its own, chosen by ~/.local/bin/wofi-drun with --style.
+   style.css stays for the clipboard menu (SUPER + V), which is a text list
+   and must not become a grid.
+
+   The blur is applied by Hyprland through the "blur-wofi" layer_rule in
+   hyprland.lua. Only the transparency it works on goes here.
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- */
+
+/* ABSOLUTE path required: wofi does not resolve relative paths in @import
+   and would silently drop every rule using @accent. */
+@import url("file:///home/johan/.config/wofi/colors.css");
+
+@define-color text    #c0caf5;
+@define-color subtext #565f89;
+
+/* Same alpha 0.30 as the power menu. For it to apply at all, wofi-drun runs
+   wofi with XDG_CONFIG_HOME pointing at an empty directory: if GTK finds
+   ~/.config/gtk-3.0/gtk.css, its `window { background-color: ... }` rule
+   wins on priority and the background comes up opaque. */
+window {
+  background-color: rgba(26, 27, 38, 0.30);
+  color: @text;
+  border: 2px solid alpha(@accent, 0.25);
+  border-radius: 16px;
+  font-family: "JetBrainsMono Nerd Font", sans-serif;
+}
+
+/* Explicitly transparent: without this it inherits GTK's opaque background
+   and covers the rgba() of window. Same bug that left the power menu a flat
+   colour.
+
+   And ZERO padding. Measured: any padding or margin here is ADDED to the
+   width the script asks for -- with 20 px the layer came out 1040 instead of
+   1000, stuck to the right edge of the portrait monitor and left the 40 px
+   gap only on the left. The visual breathing room goes on #input and
+   #inner-box, which do not have that effect. */
+#outer-box {
+  background-color: transparent;
+  padding: 0px;
+  margin: 0px;
+}
+
+/* ---------------- Search bar ---------------- */
+#input {
+  background-color: rgba(41, 46, 66, 0.55);
+  color: @text;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 11px 15px;
+  /* The margin replaces the padding of #outer-box, see above. */
+  margin: 20px 20px 16px 20px;
+  box-shadow: none;
+}
+
+#input:focus {
+  border-color: @accent;
+}
+
+#input image {
+  color: @subtext;
+}
+
+#scroll {
+  background-color: transparent;
+  margin: 0px;
+  padding: 0px;
+}
+
+#inner-box {
+  background-color: transparent;
+  padding: 0px;
+  margin: 0px 20px 20px 20px;
+}
+
+/* ---------------- The cells ---------------- */
+#entry {
+  background-color: rgba(41, 46, 66, 0.35);
+  border: 2px solid rgba(192, 202, 245, 0.10);
+  border-radius: 16px;
+  padding: 14px 10px;
+  margin: 7px;
+  /* Removes GTK's dotted focus rectangle on the selected cell. */
+  outline: none;
+}
+
+#entry:hover {
+  background-color: rgba(41, 46, 66, 0.62);
+  border-color: alpha(@accent, 0.35);
+}
+
+#entry:selected {
+  background: linear-gradient(45deg, @accent, @accent2);
+  border-color: transparent;
+}
+
+#text {
+  color: @text;
+  font-size: 13px;
+  margin: 0px 4px;
+}
+
+/* The transparent background removes the selection highlight GTK paints on
+   the label, which is separate from the cell background. */
+#entry:selected #text {
+  color: #1a1b26;
+  font-weight: 700;
+  background-color: transparent;
+}
+
+#entry:selected #text selection {
+  background-color: transparent;
+  color: #1a1b26;
+}
+
+/* Per-application icon. It sits to the LEFT of the name: that order is fixed
+   by wofi inside the entry and cannot be changed from here. */
+#img {
+  margin-right: 10px;
+}

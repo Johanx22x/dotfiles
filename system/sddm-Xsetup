@@ -1,0 +1,31 @@
+#!/bin/sh
+# Runs as root before starting the SDDM greeter.
+#
+# The greeter runs on Xorg, which knows nothing about Hyprland's
+# `transform = 3`. Without this the Gigabyte comes up sideways on the login
+# screen.
+#
+# Outputs are matched by RESOLUTION, not by name: under the NVIDIA X driver
+# the names differ from Hyprland's (DP-3 / HDMI-A-1 here, DP-4 / HDMI-0
+# there) and they also change between boots.
+
+command -v xrandr >/dev/null || exit 0
+
+# The main one is the only 2560x1440 output.
+MAIN=$(xrandr | awk '/ connected/ && /2560x1440/ {print $1; exit}')
+
+# The portrait one is "the other". Looking for 1920x1080 does NOT work: if
+# Xorg starts with the monitor already rotated, the line reads 1080x1920 and
+# the match fails.
+VERTICAL=$(xrandr | awk -v p="$MAIN" '/ connected/ && $1 != p {print $1; exit}')
+
+[ -n "$MAIN" ] && xrandr --output "$MAIN" --primary --pos 1080x240
+
+# --rotate right = 90 degrees clockwise. Confirmed: with Hyprland's rotation
+# applied, xrandr describes that monitor as "right".
+#
+# If the theme's text overlap in portrait bothers you, replace this line with:
+#   xrandr --output "$VERTICAL" --off
+[ -n "$VERTICAL" ] && xrandr --output "$VERTICAL" --rotate right --pos 0x0
+
+exit 0

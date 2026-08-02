@@ -1,75 +1,77 @@
 #!/usr/bin/env bash
-# Replica este setup en una maquina Arch limpia.
+# Replicates this setup on a clean Arch machine.
 #
-# Idempotente: se puede volver a lanzar. Pregunta antes de cada bloque, asi que
-# se puede usar para aplicar solo una parte.
+# Idempotent: it can be re-run. It asks before each block, so it can be used
+# to apply only part of it.
 #
-# NO toca /etc: eso se hace a mano, ver sistema/README y el README principal.
+# It does NOT touch /etc: that is done by hand, see system/ and the main
+# README.
 set -euo pipefail
 
 DOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PAQUETES=(zsh hypr waybar kitty wofi matugen shell qt gtk media openrgb systemd bin ranger icons xdg)
+PACKAGES=(zsh hypr waybar kitty wofi matugen shell qt gtk media openrgb systemd bin ranger icons xdg)
 
-azul()  { printf '\033[1;34m%s\033[0m\n' "$*"; }
-verde() { printf '\033[1;32m%s\033[0m\n' "$*"; }
-rojo()  { printf '\033[1;31m%s\033[0m\n' "$*"; }
+blue()  { printf '\033[1;34m%s\033[0m\n' "$*"; }
+green() { printf '\033[1;32m%s\033[0m\n' "$*"; }
+red()   { printf '\033[1;31m%s\033[0m\n' "$*"; }
 
-preguntar() {
+ask() {
   local r
-  read -rp "$(printf '\033[1;33m%s\033[0m [s/N] ' "$1")" r
-  [[ "$r" =~ ^[sSyY]$ ]]
+  read -rp "$(printf '\033[1;33m%s\033[0m [y/N] ' "$1")" r
+  [[ "$r" =~ ^[yYsS]$ ]]
 }
 
-[[ -f /etc/arch-release ]] || { rojo "Esto es para Arch Linux."; exit 1; }
-[[ $EUID -eq 0 ]] && { rojo "No lo lances como root. Pide sudo cuando lo necesita."; exit 1; }
+[[ -f /etc/arch-release ]] || { red "This is for Arch Linux."; exit 1; }
+[[ $EUID -eq 0 ]] && { red "Do not run it as root. It asks for sudo when it needs it."; exit 1; }
 
 # ---------------------------------------------------------------------------
-# Se hace ANTES de enlazar: si se enlaza primero, la reescritura tendria que
-# seguir los enlaces y es facil dejar la mitad de los ficheros a medias.
-azul "== 1/6  Rutas absolutas =="
+# Done BEFORE linking: if you link first, the rewrite would have to follow the
+# symlinks and it is easy to leave half the files done.
+blue "== 1/6  Absolute paths =="
 ORIGINAL="/home/johan"
 if [[ "$HOME" == "$ORIGINAL" ]]; then
-  echo "   el home coincide, no hay nada que reescribir"
+  echo "   home matches, nothing to rewrite"
 else
-  # matugen NO expande ~ en output_path, asi que la ruta absoluta ahi es
-  # obligatoria; lo mismo en los modulos custom/ de waybar y en algun script.
-  # Por eso el repo lleva rutas fijas y hay que adaptarlas al clonar.
-  # Se excluye este propio script: reescribir su ORIGINAL dejaria la
-  # comprobacion de arriba comparando el home nuevo consigo mismo.
-  buscar() { grep -rl "$ORIGINAL" "$DOT" --exclude-dir=.git --exclude=install.sh --exclude=README.md 2>/dev/null || true; }
-  mapfile -t CONRUTA < <(buscar)
-  if (( ${#CONRUTA[@]} == 0 )); then
-    echo "   ya estaban reescritas"
+  # matugen does NOT expand ~ in output_path, so the absolute path is
+  # mandatory there; same in waybar's custom/ modules and in a few scripts.
+  # That is why the repo carries fixed paths and they have to be adapted on
+  # cloning.
+  # This script itself is excluded: rewriting its ORIGINAL would leave the
+  # check above comparing the new home against itself.
+  find_paths() { grep -rl "$ORIGINAL" "$DOT" --exclude-dir=.git --exclude=install.sh --exclude=README.md 2>/dev/null || true; }
+  mapfile -t WITH_PATH < <(find_paths)
+  if (( ${#WITH_PATH[@]} == 0 )); then
+    echo "   already rewritten"
   else
-    echo "   ${#CONRUTA[@]} ficheros apuntan a $ORIGINAL y se reescribiran a $HOME:"
-    printf '     %s\n' "${CONRUTA[@]#$DOT/}"
-    if preguntar "Reescribirlas?"; then
-      sed -i "s|$ORIGINAL|$HOME|g" "${CONRUTA[@]}"
-      # Comprobacion, que un sed silencioso a medias es peor que no hacerlo
-      resto=$(buscar | wc -l)
-      if (( resto )); then
-        rojo "   quedan $resto ficheros sin reescribir"; exit 1
+    echo "   ${#WITH_PATH[@]} files point at $ORIGINAL and will be rewritten to $HOME:"
+    printf '     %s\n' "${WITH_PATH[@]#$DOT/}"
+    if ask "Rewrite them?"; then
+      sed -i "s|$ORIGINAL|$HOME|g" "${WITH_PATH[@]}"
+      # Check, because a silent half-done sed is worse than not doing it
+      left=$(find_paths | wc -l)
+      if (( left )); then
+        red "   $left files were left unrewritten"; exit 1
       fi
-      verde "   hecho — apareceran como cambios en git, es lo esperado"
+      green "   done — they will show up as changes in git, which is expected"
     else
-      rojo "   sin esto matugen escribira en $ORIGINAL y nada se coloreara"
+      red "   without this matugen will write to $ORIGINAL and nothing gets coloured"
     fi
   fi
 fi
 
 # ---------------------------------------------------------------------------
-azul "== 2/6  Paquetes de los repos oficiales =="
-echo "   $(wc -l < "$DOT/paquetes/pacman.txt") paquetes en paquetes/pacman.txt"
-if preguntar "Instalarlos (mas stow)?"; then
+blue "== 2/6  Packages from the official repos =="
+echo "   $(wc -l < "$DOT/packages/pacman.txt") packages in packages/pacman.txt"
+if ask "Install them (plus stow)?"; then
   sudo pacman -S --needed --noconfirm stow
-  # --needed salta los ya instalados; el < redirige la lista a stdin
-  sudo pacman -S --needed - < "$DOT/paquetes/pacman.txt"
-  verde "   hecho"
+  # --needed skips the ones already installed; < feeds the list to stdin
+  sudo pacman -S --needed - < "$DOT/packages/pacman.txt"
+  green "   done"
 fi
 
 # ---------------------------------------------------------------------------
-azul "== 3/6  Paquetes de AUR =="
-if preguntar "Instalar yay y los de paquetes/aur.txt?"; then
+blue "== 3/6  AUR packages =="
+if ask "Install yay and the ones in packages/aur.txt?"; then
   if ! command -v yay >/dev/null; then
     sudo pacman -S --needed --noconfirm git base-devel
     tmp="$(mktemp -d)"
@@ -77,70 +79,71 @@ if preguntar "Instalar yay y los de paquetes/aur.txt?"; then
     ( cd "$tmp/yay" && makepkg -si --noconfirm )
     rm -rf "$tmp"
   fi
-  # yay se instala solo, quitarlo de la lista evita que intente reconstruirse
-  grep -v '^yay$' "$DOT/paquetes/aur.txt" | yay -S --needed -
-  verde "   hecho"
+  # yay installs itself, dropping it from the list keeps it from rebuilding
+  grep -v '^yay$' "$DOT/packages/aur.txt" | yay -S --needed -
+  green "   done"
 fi
 
 # ---------------------------------------------------------------------------
-azul "== 4/6  Enlazar la configuracion (stow) =="
-echo "   paquetes: ${PAQUETES[*]}"
-if preguntar "Enlazar?"; then
-  command -v stow >/dev/null || { rojo "   falta stow"; exit 1; }
-  # --no-folding: crea directorios reales y enlaza fichero a fichero, en vez
-  # de enlazar el directorio entero. Asi una app que escriba un fichero nuevo
-  # en ~/.config/algo no lo mete dentro del repo sin querer.
-  if ! stow --no-folding -v -t "$HOME" -d "$DOT" "${PAQUETES[@]}"; then
-    rojo "   stow encontro conflictos: ya existen esos ficheros."
-    echo  "   Revisa que son y muevelos, o relanza con --adopt para que stow"
-    echo  "   los absorba dentro del repo (OJO: eso sobrescribe lo del repo)."
+blue "== 4/6  Link the configuration (stow) =="
+echo "   packages: ${PACKAGES[*]}"
+if ask "Link them?"; then
+  command -v stow >/dev/null || { red "   stow is missing"; exit 1; }
+  # --no-folding: creates real directories and links file by file, instead of
+  # linking the whole directory. That way an app writing a new file into
+  # ~/.config/something does not drop it inside the repo by accident.
+  if ! stow --no-folding -v -t "$HOME" -d "$DOT" "${PACKAGES[@]}"; then
+    red "   stow found conflicts: those files already exist."
+    echo "   Check what they are and move them, or re-run with --adopt so stow"
+    echo "   absorbs them into the repo (CAREFUL: that overwrites the repo copy)."
     exit 1
   fi
-  # Los enlaces de *.target.wants no se versionan (apuntan a rutas absolutas
-  # del home original y colgarian con otro usuario). Se recrean aqui.
+  # The *.target.wants links are not versioned (they point at absolute paths
+  # of the original home and would dangle for another user). Recreated here.
   systemctl --user daemon-reload
   systemctl --user enable --now wallpaper-rotate.timer
   systemctl --user enable --now hyprpolkitagent.service 2>/dev/null || true
-  verde "   hecho"
+  green "   done"
 fi
 
 # ---------------------------------------------------------------------------
-azul "== 5/6  Neovim (repo aparte) =="
+blue "== 5/6  Neovim (separate repo) =="
 if [[ -e "$HOME/.config/nvim" ]]; then
-  echo "   ~/.config/nvim ya existe, no lo toco"
-elif preguntar "Clonar Johanx22x/nvim en ~/.config/nvim?"; then
+  echo "   ~/.config/nvim already exists, leaving it alone"
+elif ask "Clone Johanx22x/nvim into ~/.config/nvim?"; then
   git clone https://github.com/Johanx22x/nvim.git "$HOME/.config/nvim"
-  verde "   hecho"
+  green "   done"
 fi
 
 # ---------------------------------------------------------------------------
-azul "== 6/6  Generar la paleta de color =="
-echo "   Sin esto faltan colors.css, colors.lua, gtk.css... y varias apps"
-echo "   salen en gris. Necesita al menos una imagen en ~/Pictures/wallpapers."
-if preguntar "Generarla ahora?"; then
+blue "== 6/6  Generate the colour palette =="
+echo "   Without this, colors.css, colors.lua, gtk.css... are missing and"
+echo "   several apps come up grey. Needs at least one image in"
+echo "   ~/Pictures/wallpapers."
+if ask "Generate it now?"; then
   mkdir -p "$HOME/Pictures/wallpapers"
   if ! find -L "$HOME/Pictures/wallpapers" -maxdepth 2 -type f \
        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
        | grep -q .; then
-    rojo "   No hay imagenes en ~/Pictures/wallpapers."
-    echo  "   Mete alguna y luego: wallpaper-switch random"
+    red "   No images in ~/Pictures/wallpapers."
+    echo "   Drop one in and then run: wallpaper-switch random"
   else
     "$HOME/.local/bin/wallpaper-switch" random
-    verde "   hecho"
+    green "   done"
   fi
 fi
 
 # ---------------------------------------------------------------------------
 echo
-verde "== Listo =="
-cat <<'FIN'
+green "== Ready =="
+cat <<'END'
 
-Queda por hacer a mano:
+Left to do by hand:
 
-  1. /etc  — ver sistema/ y la tabla del README. Los UUID del fstab son de la
-             maquina original: NO lo copies tal cual.
-  2. Monitores — hyprland.lua los referencia por descripcion EDID. En otro
-             equipo hay que ajustar ese bloque.
-  3. zsh como shell por defecto, si no lo es:
+  1. /etc  — see system/ and the table in the README. The fstab UUIDs belong
+             to the original machine: do NOT copy it as is.
+  2. Monitors — hyprland.lua matches them by EDID description. On another
+             machine that block has to be adjusted.
+  3. zsh as the default shell, if it is not already:
              chsh -s /usr/bin/zsh
-FIN
+END

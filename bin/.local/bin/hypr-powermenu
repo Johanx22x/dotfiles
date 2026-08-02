@@ -1,56 +1,235 @@
 #!/usr/bin/env bash
 #
-# hypr-powermenu — menu de energia para Hyprland via wofi.
+# hypr-powermenu — power menu for Hyprland, via wofi.
 #
-# Se invoca desde hyprland.lua con SUPER + SHIFT + ESCAPE.
-# "Cancelar" va primero a proposito: wofi preselecciona la primera
-# entrada, asi que un Enter accidental no hace nada.
+# Bound to SUPER + SHIFT + ESCAPE in hyprland.lua.
+# "Cancel" comes first on purpose: wofi preselects the first entry, so an
+# accidental Enter does nothing.
 
 set -euo pipefail
 
-# Cancelar va sin icono a proposito: al no llevar glifo queda
-# visualmente separado de las tres acciones reales, que si lo llevan.
-# La sangria de tres espacios lo mantiene alineado con las demas.
+# ---------------------------------------------------------------------------
+# One instance only.
 #
-# Los tres iconos son de la familia Material Design de Nerd Fonts
-# (rango U+F01xx-U+F1Axx), no del rango Font Awesome legacy (U+F0xx).
-# Dos motivos: dentro de la misma familia comparten grosor y ancho,
-# y el rango legacy colisiona con la "Font Awesome 7 Free" que tienes
-# instalada como fallback en wofi/style.css, que puede acabar
-# dibujando el glifo con otro estilo.
-CANCELAR="   Cancel"
-SALIR="󰍃  Log out"            # nf-md-logout   U+F0343
-REINICIAR="󰜉  Restart"         # nf-md-restart  U+F0709
-APAGAR="󰐥  Shut down"         # nf-md-power    U+F0425
+# Without this, pressing the shortcut again opens a wofi on top of the
+# previous one and the layers pile up. Chosen behaviour:
+#   - if the one already open is THIS menu -> close it and do not open
+#     another, so the shortcut acts as a toggle;
+#   - if the one open is the OTHER menu -> close it and open this one.
+#
+# The marker is the stylesheet path, the only thing telling the two apart on
+# the command line (`pgrep -a wofi`).
+only_one() {   # only_one <marker>
+    pgrep -x wofi >/dev/null 2>&1 || return 0
+    local was_this=1
+    pgrep -a wofi | grep -q -- "$1" || was_this=0
+    pkill -x wofi
+    # Wait for it to release the layer, or the new one overlaps the old.
+    local i
+    for i in $(seq 40); do
+        pgrep -x wofi >/dev/null 2>&1 || break
+        sleep 0.025
+    done
+    (( was_this )) && exit 0
+    return 0
+}
 
-# --cache-file=/dev/null es imprescindible: sin esto wofi recuerda lo
-# mas usado y lo sube al principio de la lista, con lo que "Apagar"
-# acabaria preseleccionado y perderiamos toda la proteccion.
-eleccion=$(printf '%s\n' "$CANCELAR" "$SALIR" "$REINICIAR" "$APAGAR" \
-    | wofi --dmenu \
+only_one "powermenu.css"
+
+# All FOUR icons come from the Nerd Fonts Material Design family (range
+# U+F01xx-U+F1Axx), not the legacy Font Awesome range (U+F0xx). Two reasons:
+# within the same family they share weight and width, and the legacy range
+# collides with the "Font Awesome 7 Free" installed as a fallback, which can
+# end up drawing the glyph in a different style.
+#
+# Cancel is no longer icon-less: in a fullscreen grid an empty card looks out
+# of place rather than set apart. What marks it now is being first, which is
+# the real protection anyway.
+#
+# Fullscreen, four cards in a row, with the large icon above the label. The
+# line break inside an entry is done with the &#10; entity and needs
+# --allow-markup: wofi reads one entry per line of stdin, so a literal
+# newline would split the entry in two.
+#
+# The glyph size goes in the markup rather than the CSS because wofi puts
+# icon and label in the same #text widget: they cannot be separated from CSS.
+#
+# Centring the icon over the label is NOT solved by content_halign: that
+# option centres the whole label, but INSIDE a two-line label pango
+# left-justifies the lines against each other, and GTK does not expose the
+# justify through CSS (text-align is not a valid property). Result: with
+# "Shut down" the icon ended up left of the text centre.
+#
+# The fix leans on JetBrainsMono being monospaced: every label is padded to
+# the same number of characters, so all four text lines measure the same and
+# a single offset centres the icon on all four cards.
+LABEL_WIDTH=9   # "Shut down", the longest one
+
+center() {  # center <text> -> text padded to LABEL_WIDTH
+    local t="$1" gap=$(( LABEL_WIDTH - ${#1} ))
+    local left=$(( gap / 2 )) right=$(( gap - gap / 2 ))
+    printf '%*s%s%*s' "$left" '' "$t" "$right" ''
+}
+
+# ICON_INDENT is spaces at the LABEL size (not the glyph size) pushing the
+# icon to the centre of that 9-character column. The value comes from
+# MEASURING a screenshot, not from arithmetic: a Nerd Font glyph does not
+# occupy a whole number of text cells.
+#
+# Sweep over the four cards, icon-to-text offset in pixels:
+#   1 space  -> -12, -14, -14   (icon to the left)
+#   2 spaces ->  -2,  -4,  -4   <- the good one
+#   3 spaces ->  +8,  +6,  +6   (icon to the right)
+ICON_INDENT="  "
+
+icon() { printf '%s<span size="%s">%s</span>&#10;%s' \
+    "$ICON_INDENT" "48000" "$1" "$(center "$2")"; }
+
+CANCEL=$(icon   "󰁍" "Cancel")     # nf-md-arrow_left U+F004D
+LOGOUT=$(icon   "󰍃" "Log out")    # nf-md-logout     U+F0343
+RESTART=$(icon  "󰜉" "Restart")    # nf-md-restart    U+F0709
+SHUTDOWN=$(icon "󰐥" "Shut down")  # nf-md-power      U+F0425
+
+# Size of the focused monitor, in pixels.
+#
+# "100%" is not used: wofi accepts it, but if the content asks for more width
+# than the screen the content wins and the window overflows -- measured:
+# 2720 px of layer on a 2560 monitor. With explicit pixels the overflow shows
+# up in the CSS, not in the layer geometry.
+#
+# An odd transform (1, 3, 5, 7) means a rotated monitor: width and height
+# have to be swapped, because hyprctl reports the mode's, not the effective
+# ones.
+#
+# And waybar's EXCLUSIVE ZONE has to be compensated for. wofi creates a
+# layer-shell surface and centres it in the free area, not in the monitor:
+# with 64 px reserved at the top, a 1440-tall window lands at y=272 over a
+# monitor starting at 240, leaving 32 px of desktop in view.
+#
+# wofi exposes no exclusive_zone and --yoffset is ignored with centred
+# placement (measured: it did not move the layer). What does work is asking
+# for MORE height than fits: when a surface larger than the free area is
+# centred, the overflow is split and the layer rises to cover the bar. The
+# excess is clipped by the compositor.
+#
+#   height = monitor_height + 2 x max(reserved_top, reserved_bottom)
+#
+# The max covers both cases: bar on top (the current one) and bar at the
+# bottom.
+read_monitor() {
+    hyprctl monitors -j | python3 -c '
+import json, sys
+for m in json.load(sys.stdin):
+    if m["focused"]:
+        w, h, s = m["width"], m["height"], m.get("scale", 1) or 1
+        left, top, right, bottom = m.get("reserved", [0, 0, 0, 0])
+        if m["transform"] % 2:
+            w, h = h, w
+        w, h = int(w / s), int(h / s)
+        # Third value: the REAL monitor width, without the compensation. The
+        # first one sizes the layer; this one lays out the cards.
+        print(w + 2 * max(left, right), h + 2 * max(top, bottom), w)
+        break
+'
+}
+
+# XDG_CONFIG_HOME pointing at an empty directory is what makes the glass
+# possible.
+#
+# ~/.config/gtk-3.0/gtk.css (generated by matugen) carries this rule:
+#
+#     window, .background, dialog, ... { background-color: @theme_bg_color; }
+#
+# and GTK loads that sheet at USER priority, above the one wofi passes with
+# --style. Result: the window background comes up opaque and there is no
+# transparency for the compositor to blur. Verified that it CANNOT be won
+# from wofi's CSS: not with the `window` selector, not with `#window`, not
+# with `!important` -- all three give the same flat #15161e. The only way out
+# is for GTK not to find that file.
+#
+# Moving XDG_CONFIG_HOME also means wofi cannot find its own config, so
+# everything that came from there is passed explicitly below.
+ISOLATED="${XDG_RUNTIME_DIR:-/tmp}/wofi-no-gtkcss"
+mkdir -p "$ISOLATED"
+
+read -r WIDTH HEIGHT REAL_WIDTH < <(read_monitor)
+# If hyprctl does not answer (menu launched outside Hyprland), pick something
+# reasonable
+: "${WIDTH:=1920}" "${HEIGHT:=1080}" "${REAL_WIDTH:=1920}"
+
+# ---------------------------------------------------------------------------
+# Layout, per monitor
+#
+# On the portrait one (1080 wide) four cards in a row do not fit: they get
+# squeezed down to their min-width and the result is unreadable. That is why
+# the number of columns and the side margin are computed here.
+#
+# CELL is the natural width of a card plus its margin, MEASURED on a
+# screenshot: the row of four took 1455 px, i.e. 364 per card.
+CELL=364
+if (( REAL_WIDTH >= 1600 )); then
+    COLUMNS=4          # a single row
+else
+    COLUMNS=2          # 2x2 grid
+fi
+
+# The 20 px of slack are not decorative: if the usable width lands exactly on
+# the natural minimum, the row overflows to the right instead of sharing the
+# space, and ~100 px more gap appears on the left than on the right. Measured
+# with a 620 margin over 2560: 632 against 535.
+MARGIN=$(( (REAL_WIDTH - COLUMNS * CELL) / 2 - 20 ))
+(( MARGIN < 16 )) && MARGIN=16
+
+# The side margin lives in the CSS, and CSS takes no variables from the
+# command line: a copy is generated with this monitor's value. The repo file
+# is left untouched and stays editable.
+SHEET="$ISOLATED/powermenu.css"
+sed "s|margin: 0px [0-9]\+px;|margin: 0px ${MARGIN}px;|" \
+    "$HOME/.config/wofi/powermenu.css" > "$SHEET"
+
+# --cache-file=/dev/null is essential: without it wofi remembers the most
+# used entry and moves it to the top of the list, which would end up
+# preselecting "Shut down" and lose the whole protection.
+#
+# --hide-search makes it keyboard only: arrows and Enter, Esc to leave. With
+# the search hidden "Cancel" is still first and therefore preselected, which
+# is the usual safety net.
+#
+# --style points at a sheet of its own: the SUPER+SPACE launcher keeps
+# drun.css and its own look.
+#
+# No --lines on purpose: its help says "sets the height in number of lines"
+# and it really does OVERRIDE --height. With --lines 1 the layer came out
+# 757 px tall instead of the 1440 requested.
+choice=$(printf '%s\n' "$CANCEL" "$LOGOUT" "$RESTART" "$SHUTDOWN" \
+    | XDG_CONFIG_HOME="$ISOLATED" wofi --dmenu \
            --cache-file=/dev/null \
-           --prompt "Power" \
-           --width 320 \
-           --height 250 \
-           --lines 4 \
+           --style "$SHEET" \
+           --define layer=overlay \
+           --allow-markup \
+           --hide-search \
            --hide-scroll \
-           --insensitive \
-    ) || exit 0   # ESC o wofi cerrado: salimos sin hacer nada
+           --width "$WIDTH" \
+           --height "$HEIGHT" \
+           --columns "$COLUMNS" \
+           --define content_halign=center \
+           --define valign=center \
+    ) || exit 0   # Esc or wofi closed: leave without doing anything
 
-case "$eleccion" in
-    "$SALIR")
-        # hyprctl evalua Lua en Hyprland 0.5x, por eso la forma hl.dsp.exit().
-        # loginctl queda de red de seguridad por si el dispatcher falla.
+case "$choice" in
+    *"Log out"*)
+        # hyprctl evaluates Lua in Hyprland 0.5x, hence the hl.dsp.exit() form.
+        # loginctl is the safety net in case the dispatcher fails.
         hyprctl dispatch 'hl.dsp.exit()' || loginctl terminate-user "$USER"
         ;;
-    "$REINICIAR")
+    *"Restart"*)
         systemctl reboot
         ;;
-    "$APAGAR")
+    *"Shut down"*)
         systemctl poweroff
         ;;
     *)
-        # "Cancelar" o seleccion vacia: no hacemos nada.
+        # "Cancel" or an empty selection: do nothing.
         exit 0
         ;;
 esac

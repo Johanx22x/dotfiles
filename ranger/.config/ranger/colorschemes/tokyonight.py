@@ -1,17 +1,17 @@
-# Colorscheme de ranger: Tokyo Night de base + acento del wallpaper.
+# ranger colorscheme: Tokyo Night as the base + the wallpaper accent.
 #
-# NO es un colorscheme escrito de cero. Hereda del Default de ranger y
-# solo repinta tres cosas: la fila del cursor, la ruta de la barra de
-# titulo y las barras de progreso. Todo lo demas (directorios en azul,
-# ejecutables en verde, enlaces rotos en rojo, permisos, marcadores...)
-# se queda como lo definio upstream, que ya esta bien pensado.
+# This is NOT a colorscheme written from scratch. It inherits from ranger's
+# Default and only repaints three things: the cursor row, the path in the
+# title bar and the progress bars. Everything else (directories in blue,
+# executables in green, broken links in red, permissions, bookmarks...)
+# stays as upstream defined it, which is already well thought out.
 #
-# La base Tokyo Night no se declara aqui: ranger pinta con los 16 ANSI y
-# esos los define kitty.conf. Cambiar el tema de la terminal cambia
-# ranger solo. Por eso este archivo no tiene ni un hex a pelo.
+# The Tokyo Night base is not declared here: ranger paints with the 16 ANSI
+# colours and those come from kitty.conf. Changing the terminal theme changes
+# ranger on its own. That is why this file has not a single raw hex.
 #
-# El acento si viene de matugen, via ~/.config/ranger/accent, que se
-# regenera con cada cambio de wallpaper. Ranger lo recoge al abrirse.
+# The accent does come from matugen, via ~/.config/ranger/accent, which is
+# regenerated on every wallpaper change. Ranger picks it up when it opens.
 
 import os
 
@@ -19,26 +19,26 @@ from ranger.colorschemes.default import Default
 from ranger.gui.color import reverse
 
 
-# Ruta del archivo que escribe matugen (ver templates/ranger-accent).
+# Path of the file matugen writes (see templates/ranger-accent).
 ACCENT_FILE = os.path.expanduser("~/.config/ranger/accent")
 
-# Si el archivo no existe todavia -- primer arranque, o matugen fallo --
-# se cae a los ANSI de siempre en vez de dejar la interfaz sin color.
-# 6 es cyan y 3 amarillo en la paleta del terminal.
+# If the file does not exist yet -- first boot, or matugen failed -- it falls
+# back to the usual ANSI colours instead of leaving the interface colourless.
+# 6 is cyan and 3 yellow in the terminal palette.
 FALLBACK = {"accent": 6, "accent2": 3}
 
 
 def _nearest_256(red, green, blue):
-    """Indice de la paleta xterm-256 mas parecido a un RGB dado.
+    """Index of the xterm-256 palette closest to a given RGB.
 
-    Curses no acepta color de 24 bits, asi que hay que aproximar. Se
-    buscan candidatos solo entre el 16 y el 255: el cubo de 6x6x6 y la
-    rampa de 24 grises. Los indices 0-15 quedan fuera A PROPOSITO --
-    esos los redefine kitty a Tokyo Night, asi que su valor real no es
-    el que dice el estandar y compararse con ellos daria un acento que
-    no se parece al que pidio matugen.
+    Curses does not take 24-bit colour, so it has to be approximated.
+    Candidates are searched only between 16 and 255: the 6x6x6 cube and the
+    24-step greyscale ramp. Indices 0-15 are left out ON PURPOSE --
+    kitty redefines those to Tokyo Night, so their real value is not the one
+    the standard states and comparing against them would give an accent that
+    does not resemble the one matugen asked for.
     """
-    # Niveles del cubo de color: no son lineales, xterm los define asi.
+    # Colour cube levels: they are not linear, xterm defines them this way.
     levels = (0, 95, 135, 175, 215, 255)
 
     def closest_level(value):
@@ -52,8 +52,8 @@ def _nearest_256(red, green, blue):
         + (levels[b_i] - blue) ** 2
     )
 
-    # La rampa de grises suele ganar en colores muy desaturados, donde
-    # el cubo solo ofrece saltos grandes.
+    # The greyscale ramp usually wins for very desaturated colours, where
+    # the cube only offers coarse steps.
     gray_value = round((red + green + blue) / 3)
     gray_step = min(23, max(0, round((gray_value - 8) / 10)))
     gray_level = 8 + 10 * gray_step
@@ -67,13 +67,13 @@ def _nearest_256(red, green, blue):
 
 
 def _load_accents():
-    """Lee el archivo de matugen. Nunca lanza: ranger moriria al arrancar."""
+    """Read the matugen file. Never raises: ranger would die at startup."""
     accents = dict(FALLBACK)
     try:
         with open(ACCENT_FILE, encoding="utf-8") as handle:
             for line in handle:
                 parts = line.split()
-                # Saltamos comentarios y la cabecera del archivo.
+                # Skip comments and the file header.
                 if len(parts) != 4 or parts[0] not in accents:
                     continue
                 accents[parts[0]] = _nearest_256(*(int(p) for p in parts[1:]))
@@ -87,52 +87,49 @@ ACCENT = _ACCENTS["accent"]
 ACCENT2 = _ACCENTS["accent2"]
 
 
-# La clase TIENE que llamarse "Scheme". No es cosmetico.
+# The class MUST be called "Scheme". This is not cosmetic.
 #
-# Cuando el modulo no define ese nombre, ranger recorre el diccionario
-# del modulo y se queda con la PRIMERA clase que herede de ColorScheme
-# (ranger/gui/colorscheme.py). Y como aqui se importa Default para
-# heredar de el, Default entra en el diccionario antes que esta clase y
-# gana: ranger cargaba el colorscheme por defecto y el acento no
-# aparecia por ningun lado. Con el nombre "Scheme" el cargador lo coge
-# directo y se salta ese recorrido.
+# When the module does not define that name, ranger walks the module
+# dictionary and takes the FIRST class inheriting from ColorScheme
+# (ranger/gui/colorscheme.py). And since Default is imported here to inherit
+# from it, Default enters the dictionary before this class and wins: ranger
+# loaded the default colorscheme and the accent appeared nowhere. With the
+# name "Scheme" the loader picks it up directly and skips that walk.
 class Scheme(Default):
     def use(self, context):
         fg, bg, attr = Default.use(self, context)
 
-        # ---- Fila del cursor ----
-        # Default la marca con "reverse", que invierte los colores del
-        # archivo: el cursor cambia de color segun el tipo de archivo
-        # sobre el que este. Aqui se cambia por una barra de acento
-        # solida, que es lo que hace que se vea el color del wallpaper
-        # de un vistazo.
+        # ---- Cursor row ----
+        # Default marks it with "reverse", which inverts the file's colours:
+        # the cursor changes colour depending on the type of file it is on.
+        # Here it becomes a solid accent bar, which is what makes the
+        # wallpaper colour visible at a glance.
         #
-        # El texto encima va en color0 (el fondo de kitty) y no en
-        # blanco fijo: si el wallpaper da un acento claro, un blanco
-        # desapareceria. Mismo criterio que on_primary en la plantilla
-        # de GTK.
+        # The text on top goes in color0 (kitty's background) and not a fixed
+        # white: if the wallpaper yields a light accent, a white would vanish.
+        # Same criterion as on_primary in the GTK template.
         if context.in_browser and context.selected:
             attr &= ~reverse
             fg, bg = 0, ACCENT
 
-        # ---- Barra de titulo ----
-        # El nombre del final, que es el archivo sobre el que esta el
-        # cursor (titlebar.py lo anade con el contexto 'file'; los tramos
-        # de la ruta van con 'directory').
+        # ---- Title bar ----
+        # The name at the end, which is the file the cursor is on
+        # (titlebar.py adds it with the 'file' context; the path segments go
+        # with 'directory').
         #
-        # OJO: aqui NO vale usar context.directory. Ranger marca asi cada
-        # tramo de la ruta, no "el directorio actual", asi que pinta la
-        # linea entera de acento y se pierde la jerarquia en azul. Con
-        # 'file' el acento senala lo mismo que la fila del cursor, que es
-        # justo la relacion que interesa ver.
+        # CAREFUL: context.directory does NOT work here. Ranger marks every
+        # path segment that way, not "the current directory", so it paints
+        # the whole line in the accent and the blue hierarchy is lost. With
+        # 'file' the accent points at the same thing as the cursor row, which
+        # is exactly the relationship worth seeing.
         elif context.in_titlebar and context.file:
             fg = ACCENT
 
-        # ---- Pestanas ----
+        # ---- Tabs ----
         elif context.in_titlebar and context.tab and context.good:
             fg, bg = 0, ACCENT
 
-        # ---- Barra de progreso (copias, movimientos) ----
+        # ---- Progress bar (copies, moves) ----
         elif context.in_statusbar and context.loaded:
             fg, bg = 0, ACCENT2
 

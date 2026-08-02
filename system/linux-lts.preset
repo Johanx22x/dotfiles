@@ -1,0 +1,13 @@
+# mkinitcpio preset for 'linux-lts'
+#
+# No fallback on purpose: the LTS kernel already IS the plan B against
+# mainline. An emergency initramfs FOR the plan B is redundant, and it took
+# 318 MB that also land in every snapshot (because /boot lives inside @).
+# The mainline fallback is kept.
+
+ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="/boot/vmlinuz-linux-lts"
+
+PRESETS=('default')
+
+default_image="/boot/initramfs-linux-lts.img"

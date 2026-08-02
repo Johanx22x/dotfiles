@@ -1,12 +1,12 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
-# Config de starship EXCLUSIVA para la status line de Claude Code (cship).
-# Tu prompt de shell sigue usando ~/.config/starship.toml, sin tocar.
-# Generada con: starship preset catppuccin-powerline
-# Se carga vía STARSHIP_CONFIG desde el statusLine de ~/.claude/settings.json.
+# starship config EXCLUSIVE to the Claude Code status line (cship).
+# The shell prompt keeps using ~/.config/starship.toml, untouched.
+# Generated with: starship preset catppuccin-powerline
+# Loaded via STARSHIP_CONFIG from the statusLine in ~/.claude/settings.json.
 #
-# Cambios sobre el preset original: sin add_newline, sin $line_break ni
-# $character (son cosas de prompt interactivo, no de status line).
+# Changes over the original preset: no add_newline, no $line_break and no
+# $character (those belong to an interactive prompt, not a status line).
 
 add_newline = false
 

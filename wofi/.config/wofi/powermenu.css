@@ -1,0 +1,130 @@
+/* -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+   WOFI - fullscreen power menu
+
+   A sheet of its own, separate from style.css: the clipboard menu
+   (SUPER + V) is a text list and must not become a grid.
+   Chosen by ~/.local/bin/hypr-powermenu with --style.
+
+   The blur is not set here: Hyprland applies it through the "blur-wofi"
+   layer_rule in hyprland.lua. This file only provides the transparency it
+   works on.
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- */
+
+/* ABSOLUTE path required: wofi does not resolve relative paths in @import
+   and would silently drop every rule using @accent. */
+@import url("file:///home/johan/.config/wofi/colors.css");
+
+@define-color text    #c0caf5;
+@define-color subtext #565f89;
+
+/* ---------------- The canvas ----------------
+   Alpha 0.30: well above the layer_rule's ignore_alpha=0.2 (below that
+   threshold Hyprland does not blur), and low enough that the desktop shows
+   through. That is where the glass comes from: this CSS provides the
+   transparency, the compositor provides the blur.
+
+   No border and no corners: it covers the whole screen and a radius there
+   would only cut the corners, showing unblurred desktop. */
+window {
+  background-color: rgba(26, 27, 38, 0.30);
+  color: @text;
+  border: none;
+  border-radius: 0px;
+  font-family: "JetBrainsMono Nerd Font", sans-serif;
+}
+
+/* #outer-box goes to ZERO, and this is not cosmetic: measured, any padding
+   or margin here is ADDED to the size the script asks for. With 60 px of
+   side padding the layer went from 2560 to 2680 and the fourth card fell off
+   the screen.
+   Margins on #scroll and #inner-box do not have that effect. */
+#outer-box {
+  padding: 0px;
+  margin: 0px;
+  /* ESSENTIAL. Without this #outer-box inherits GTK's opaque background and
+     covers the rgba() of window: the menu comes up a flat colour with no
+     glass at all. Measured: the empty area gave min=max=23, a range of 0,
+     a solid colour with nothing behind it. */
+  background-color: transparent;
+}
+
+/* The search bar is hidden with --hide-search, but should it ever come back
+   it must not throw the grid off. */
+#input {
+  opacity: 0;
+  min-height: 0px;
+  padding: 0px;
+  margin: 0px;
+  border: none;
+}
+
+#scroll {
+  background-color: transparent;
+  margin: 0px;
+  padding: 0px;
+}
+
+/* Centring is done by valign=center and content_halign=center, which
+   hypr-powermenu passes with --define. The side margin only narrows the row
+   so the cards do not span the full width.
+   The value is REWRITTEN AT RUNTIME by hypr-powermenu, which computes it
+   from the focused monitor: 4 columns on a wide screen, 2 on a narrow one.
+   What is here is just the value for the main monitor. */
+#inner-box {
+  background-color: transparent;
+  padding: 0px;
+  margin: 0px 540px;
+}
+
+/* ---------------- The cards ----------------
+   min-width is the floor they compress to when there is no room (the
+   portrait monitor). On the main one it does not apply: there the four
+   cards share whatever width the #inner-box margin leaves.
+
+   outline: none removes the dotted focus rectangle GTK draws on the selected
+   one. That is not the selection highlight (removed further down, on #text):
+   they are two different things and both are needed. */
+#entry {
+  min-width: 150px;
+  background-color: rgba(41, 46, 66, 0.35);
+  border: 2px solid rgba(192, 202, 245, 0.10);
+  border-radius: 22px;
+  padding: 34px 0px;
+  margin: 12px;
+  outline: none;
+}
+
+#entry:hover {
+  background-color: rgba(41, 46, 66, 0.65);
+  border-color: alpha(@accent, 0.35);
+}
+
+/* The selected one uses the same 45-degree gradient as the active window
+   border in Hyprland, with the wallpaper accents. */
+#entry:selected {
+  background: linear-gradient(45deg, @accent, @accent2);
+  border-color: transparent;
+}
+
+/* The icon size is set by hypr-powermenu's pango markup, not by CSS: the
+   same #text wraps both glyph and label. This font-size is the label's. */
+#text {
+  color: @text;
+  font-size: 17px;
+  margin: 0px;
+}
+
+/* The transparent background is what removes the light blue rectangle GTK
+   paints behind the icon and the label when selected: that is the label's
+   selection highlight, not the card. Without it you see a block of a
+   different colour on top of the gradient. */
+#entry:selected #text {
+  color: #1a1b26;
+  font-weight: 700;
+  background-color: transparent;
+}
+
+#entry:selected #text selection {
+  background-color: transparent;
+  color: #1a1b26;
+}

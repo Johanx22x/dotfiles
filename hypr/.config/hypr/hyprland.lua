@@ -22,28 +22,28 @@
 
 -- See https://wiki.hypr.land/Configuring/Basics/Monitors/
 
--- Identificamos los monitores por descripcion (marca + modelo + serie), no por
--- el nombre del conector (DP-4, HDMI-A-3...). Los nombres de conector los asigna
--- el kernel y CAMBIAN al cambiar de kernel: al pasar de linux-lts a linux
--- mainline, DP-4 paso a ser DP-3 y HDMI-A-3 paso a ser HDMI-A-1, y todas las
--- reglas de abajo dejaron de aplicarse en silencio (adios 165 Hz y rotacion).
--- La descripcion viene del EDID del monitor, asi que es estable.
--- Para verlas: hyprctl monitors all -j | grep description
-MONITOR_PRINCIPAL = "desc:ASR PG32QF2B G5VL0A003533"
-MONITOR_VERTICAL  = "desc:GIGA-BYTE TECHNOLOGY CO. LTD. GS27FA 24476B001914"
+-- Monitors are matched by description (brand + model + serial), not by
+-- connector name (DP-4, HDMI-A-3...). Connector names are assigned by the
+-- kernel and they CHANGE across kernels: moving from linux-lts to mainline
+-- turned DP-4 into DP-3 and HDMI-A-3 into HDMI-A-1, and every rule below
+-- silently stopped applying (goodbye 165 Hz and rotation).
+-- The description comes from the monitor EDID, so it is stable.
+-- To list them: hyprctl monitors all -j | grep description
+MONITOR_MAIN     = "desc:ASR PG32QF2B G5VL0A003533"
+MONITOR_VERTICAL = "desc:GIGA-BYTE TECHNOLOGY CO. LTD. GS27FA 24476B001914"
 
--- Principal: ASR PG32QF2B 1440p, a la derecha.
--- Y = 240 para centrarlo verticalmente contra el monitor vertical: (1920 - 1440) / 2
+-- Main: ASR PG32QF2B 1440p, on the right.
+-- Y = 240 centers it vertically against the portrait monitor: (1920 - 1440) / 2
 hl.monitor({
-    output   = MONITOR_PRINCIPAL,
+    output   = MONITOR_MAIN,
     mode     = "2560x1440@165",
     position = "1080x240",
     scale    = 1,
 })
 
--- Secundario: Gigabyte GS27FA 1080p, rotado a vertical, a la izquierda.
--- transform = 3 -> 270 grados. Si la imagen sale al reves, cambia a 1 (90 grados).
--- Rotado ocupa 1080x1920, por eso el principal empieza en X = 1080.
+-- Secondary: Gigabyte GS27FA 1080p, rotated to portrait, on the left.
+-- transform = 3 -> 270 degrees. If the image comes up upside down, use 1 (90).
+-- Rotated it takes 1080x1920, which is why the main one starts at X = 1080.
 hl.monitor({
     output    = MONITOR_VERTICAL,
     mode      = "1920x1080@165",
@@ -52,7 +52,7 @@ hl.monitor({
     transform = 3,
 })
 
--- Fallback para cualquier monitor no listado arriba
+-- Fallback for any monitor not listed above
 hl.monitor({
     output   = "",
     mode     = "preferred",
@@ -68,35 +68,40 @@ hl.monitor({
 -- Set programs that you use
 local terminal    = "kitty"
 
--- Nautilus en vez de Dolphin. El motivo es el color: Dolphin ignoraba la
--- paleta del wallpaper hiciera lo que hiciera (la nota larga estaba en
--- matugen/config.toml), porque KF6 le imponia su BreezeDark interno.
--- Nautilus es GTK4/libadwaita y lee ~/.config/gtk-4.0/gtk.css, que ya lo
--- genera matugen, asi que entra en el sistema de acentos sin trabajo extra.
+-- Nautilus instead of Dolphin, and the reason is color: Dolphin ignored the
+-- wallpaper palette no matter what, because KF6 forced its internal
+-- BreezeDark on top of the platform theme. Nautilus is GTK4/libadwaita and
+-- reads ~/.config/gtk-4.0/gtk.css, which matugen already generates, so it
+-- joins the accent system for free.
 --
--- El otro gestor es ranger, que vive en la terminal y se lanza escribiendo
--- "ranger". No tiene bind a proposito: cuando lo quieres ya estas en kitty.
+-- The other file manager is ranger, which lives in the terminal and is
+-- started by typing "ranger". Deliberately unbound: when you want it you
+-- are already in kitty.
 local fileManager = "nautilus"
-local menu        = "wofi --show drun"
 
--- Menu de energia con confirmacion (SUPER + SHIFT + ESCAPE).
--- Ruta absoluta por coherencia con wallpaperSwitch.
+-- Grid launcher with a glass background. It is a script rather than plain
+-- "wofi --show drun" because it needs XDG_CONFIG_HOME pointing at an empty
+-- directory, or the user gtk.css forces an opaque background on it.
+local menu        = os.getenv("HOME") .. "/.local/bin/wofi-drun"
+
+-- Power menu with confirmation (SUPER + SHIFT + ESCAPE).
+-- Absolute path for consistency with wallpaperSwitch.
 local powerMenu   = os.getenv("HOME") .. "/.local/bin/hypr-powermenu"
 
 
-------------------------------
----- PALETA DEL WALLPAPER ----
-------------------------------
+-------------------------------
+---- WALLPAPER COLOR SCHEME ----
+-------------------------------
 
--- Ruta absoluta. Ya no es estrictamente necesaria (la seccion de
--- ENVIRONMENT VARIABLES agrega ~/.local/bin al PATH), pero se mantiene
--- porque el autostart corre en un momento delicado del arranque y esto
--- no puede fallar. Los scripts nuevos si pueden llamarse por nombre.
+-- Absolute path. Not strictly required any more (the ENVIRONMENT VARIABLES
+-- section adds ~/.local/bin to PATH), but kept because autostart runs at a
+-- delicate point of the boot and this must not fail. Newer scripts can be
+-- called by name.
 local wallpaperSwitch = os.getenv("HOME") .. "/.local/bin/wallpaper-switch"
 
--- colors.lua lo genera matugen cada vez que cambia el wallpaper.
--- Si no existe todavia (primer arranque, o matugen fallo) se usan
--- los colores originales, asi la config nunca se rompe.
+-- colors.lua is generated by matugen every time the wallpaper changes.
+-- If it does not exist yet (first boot, or matugen failed) the original
+-- colors are used, so the config never breaks.
 local wallColors = { accent = "33ccff", accent2 = "00ff99" }
 
 local ok, generated = pcall(dofile, os.getenv("HOME") .. "/.config/hypr/colors.lua")
@@ -121,37 +126,37 @@ end
 -- end)
 
 hl.on("hyprland.start", function ()
-    -- Sin esto los servicios de systemd --user (como wallpaper-rotate.timer)
-    -- no ven WAYLAND_DISPLAY ni la firma de Hyprland, y no pueden hablar
-    -- con el compositor. Tiene que ir primero.
+    -- Without this, systemd --user services (such as wallpaper-rotate.timer)
+    -- cannot see WAYLAND_DISPLAY or the Hyprland signature, and cannot talk
+    -- to the compositor. It has to come first.
     hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE")
 
-    -- Barra de estado. Config en ~/.config/waybar/
+    -- Status bar. Config in ~/.config/waybar/
     hl.exec_cmd("waybar")
 
-    -- Demonio de notificaciones
+    -- Notification daemon
     hl.exec_cmd("dunst")
 
-    -- Demonio de wallpapers + restaura el ultimo usado
+    -- Wallpaper daemon + restore the last one used
     hl.exec_cmd("awww-daemon")
     hl.exec_cmd(wallpaperSwitch .. " reapply")
 
-    -- Notificacion con caratula al cambiar de pista en el navegador
-    -- (YouTube, YouTube Music). Va despues de dunst a proposito: si el
-    -- demonio de notificaciones no esta levantado, la primera pista se
-    -- pierde. Ver ~/.local/bin/mpris-notify.
+    -- Notification with cover art when the browser changes track (YouTube,
+    -- YouTube Music). Deliberately after dunst: if the notification daemon
+    -- is not up yet, the first track is lost.
+    -- See ~/.local/bin/mpris-notify.
     hl.exec_cmd("mpris-notify")
 
-    -- En Wayland el portapapeles no se guarda en ningun sitio central: lo
-    -- posee la aplicacion de origen. Al cerrarla, lo copiado se pierde.
-    -- wl-clip-persist se queda con la propiedad para que sobreviva.
-    -- Solo "regular": tocar tambien la seleccion primaria pelea con el
-    -- clic central y provoca bucles de reescritura.
+    -- On Wayland the clipboard is not stored anywhere central: it is owned
+    -- by the source application. Close it and whatever you copied is gone.
+    -- wl-clip-persist takes ownership so it survives.
+    -- Only "regular": also handling the primary selection fights with
+    -- middle-click and causes rewrite loops.
     hl.exec_cmd("wl-clip-persist --clipboard regular")
 
-    -- Historial del portapapeles. Hacen falta dos vigilantes porque
-    -- wl-paste --watch filtra por tipo MIME y uno solo dejaria fuera las
-    -- imagenes (entre ellas las capturas de SUPER+S).
+    -- Clipboard history. Two watchers are needed because wl-paste --watch
+    -- filters by MIME type and a single one would leave images out
+    -- (screenshots from SUPER+S among them).
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
 end)
@@ -166,37 +171,37 @@ end)
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 
--- Sin esto las apps Qt salen con la paleta gris de fabrica: no existe
--- ningun "tema Qt del sistema" que detectar en Hyprland, hay que
--- nombrarlo. Apunta a qt6ct, cuya paleta genera matugen desde el
--- wallpaper (~/.config/qt6ct/colors/matugen.conf).
+-- Without this, Qt apps come up with the factory grey palette: there is no
+-- "system Qt theme" to detect under Hyprland, it has to be named. Points at
+-- qt6ct, whose palette matugen generates from the wallpaper
+-- (~/.config/qt6ct/colors/matugen.conf).
 --
--- OJO: es UNA sola variable para todas las versiones de Qt, y aqui
--- sirve solo a las Qt6. Una app Qt5 buscaria un plugin llamado "qt6ct"
--- en SU directorio (/usr/lib/qt/plugins/platformthemes/), no lo
--- encontraria y caeria al tema por defecto: paleta gris, y metrica de
--- fuente por defecto que le infla los tooltips y los menus.
+-- CAREFUL: it is ONE variable for every Qt version, and here it only serves
+-- Qt6. A Qt5 app would look for a plugin called "qt6ct" in ITS own directory
+-- (/usr/lib/qt/plugins/platformthemes/), fail to find it and fall back to the
+-- default theme: grey palette, plus default font metrics that bloat its
+-- tooltips and menus.
 --
--- Para arreglar una Qt5 harian falta qt5ct y un .desktop propio que le
--- sobrescriba la variable solo a ella. Comprobar antes con
--- `ldd $(which la-app) | grep libQt` de que version es.
+-- Fixing a Qt5 app would need qt5ct and a dedicated .desktop overriding the
+-- variable for that app alone. Check the version first with
+-- `ldd $(which the-app) | grep libQt`.
 hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
 
--- Hyprland arranca con un PATH minimo que no incluye ~/.local/bin, asi
--- que cualquier script propio invocado por nombre falla en silencio.
--- Se evalua al cargar la config, tomando el PATH real del compositor.
+-- Hyprland starts with a minimal PATH that does not include ~/.local/bin, so
+-- any own script invoked by name fails silently. Evaluated when the config
+-- loads, taking the compositor's real PATH.
 hl.env("PATH", os.getenv("HOME") .. "/.local/bin:" .. (os.getenv("PATH") or "/usr/local/bin:/usr/bin"))
 
--- Sin esto, el dialogo "Abrir con" de Dolphin sale vacio. KService
--- construye su arbol de aplicaciones a partir de
--- /etc/xdg/menus/$XDG_MENU_PREFIX + applications.menu. Hyprland fija
--- el prefijo a "hyprland-", pero ese fichero no lo crea nadie: el
--- applications.menu clasico lo traia Plasma, que aqui no esta.
--- archlinux-xdg-menu instala arch-applications.menu, asi que hay que
--- apuntar el prefijo ahi.
+-- Without this, the "Open with" dialog of KDE apps comes up empty. KService
+-- builds its application tree from
+-- /etc/xdg/menus/$XDG_MENU_PREFIX + applications.menu. Hyprland sets the
+-- prefix to "hyprland-", but nobody creates that file: the classic
+-- applications.menu shipped with Plasma, which is not installed here.
+-- archlinux-xdg-menu installs arch-applications.menu, so the prefix has to
+-- point there.
 --
--- OJO: al cambiar esto hay que regenerar la cache con
--- `kbuildsycoca6 --noincremental`, no basta con hyprctl reload.
+-- CAREFUL: after changing this the cache must be rebuilt with
+-- `kbuildsycoca6 --noincremental`; hyprctl reload is not enough.
 hl.env("XDG_MENU_PREFIX", "arch-")
 
 
@@ -266,40 +271,38 @@ hl.config({
             color        = 0xee1a1a1a,
         },
 
-        -- Efecto "glass": el blur lo aplica Hyprland detras de cualquier
-        -- ventana transparente (kitty va a background_opacity 0.70).
+        -- "Glass" effect: Hyprland applies the blur behind any transparent
+        -- window (kitty runs at background_opacity 0.70).
         --
-        --   size   = radio del desenfoque. Sube = mas difuso.
-        --   passes = cuantas veces se repite. Es lo que convierte un
-        --            velo tenue en cristal esmerilado de verdad.
-        --            Mas de 4 casi no se nota y cuesta GPU.
+        --   size   = blur radius. Higher = softer.
+        --   passes = how many times it repeats. This is what turns a faint
+        --            veil into actual frosted glass. Beyond 4 it is barely
+        --            noticeable and costs GPU.
         blur = {
             enabled = true,
             size    = 8,
             passes  = 3,
 
-            -- Grano sutil: rompe el "banding" (escalones de color) que
-            -- deja el blur sobre degradados del wallpaper.
+            -- Subtle grain: breaks the banding (colour stepping) that blur
+            -- leaves over wallpaper gradients.
             noise = 0.0117,
 
-            -- Oscurece y baja el contraste de lo que hay detras, para
-            -- que el texto claro de la terminal siga legible sobre
-            -- wallpapers brillantes.
+            -- Darkens and lowers the contrast of what is behind, so the
+            -- terminal's light text stays readable over bright wallpapers.
             contrast   = 0.9,
             brightness = 0.8,
 
-            -- Satura los colores del fondo desenfocado (estilo macOS).
+            -- Saturates the colours of the blurred background (macOS style).
             vibrancy          = 0.1696,
             vibrancy_darkness = 0.0,
 
-            -- Blur tambien en menus contextuales y popups.
+            -- Blur context menus and popups too.
             popups       = true,
             popups_ignorealpha = 0.2,
 
-            -- xray = true difumina solo el wallpaper, ignorando las
-            -- ventanas que haya debajo. Mas limpio y mas barato, pero
-            -- pierdes la sensacion de capas apiladas. Pruebalo si tu
-            -- GPU sufre con passes = 3.
+            -- xray = true blurs only the wallpaper, ignoring the windows
+            -- underneath. Cleaner and cheaper, but you lose the sense of
+            -- stacked layers. Try it if your GPU struggles with passes = 3.
             xray = false,
         },
     },
@@ -332,9 +335,11 @@ hl.animation({ leaf = "layersIn",      enabled = true,  speed = 4,    bezier = "
 hl.animation({ leaf = "layersOut",     enabled = true,  speed = 1.5,  bezier = "linear",       style = "fade" })
 hl.animation({ leaf = "fadeLayersIn",  enabled = true,  speed = 1.79, bezier = "almostLinear" })
 hl.animation({ leaf = "fadeLayersOut", enabled = true,  speed = 1.39, bezier = "almostLinear" })
-hl.animation({ leaf = "workspaces",    enabled = true,  speed = 1.94, bezier = "almostLinear", style = "fade" })
-hl.animation({ leaf = "workspacesIn",  enabled = true,  speed = 1.21, bezier = "almostLinear", style = "fade" })
-hl.animation({ leaf = "workspacesOut", enabled = true,  speed = 1.94, bezier = "almostLinear", style = "fade" })
+-- Horizontal slide when switching workspace. Other possible styles:
+-- "slidevert" (vertical), "slidefade 20%" (slide and fade), "fade".
+hl.animation({ leaf = "workspaces",    enabled = true,  speed = 4,    bezier = "easeOutQuint", style = "slide" })
+hl.animation({ leaf = "workspacesIn",  enabled = true,  speed = 4,    bezier = "easeOutQuint", style = "slide" })
+hl.animation({ leaf = "workspacesOut", enabled = true,  speed = 4,    bezier = "easeOutQuint", style = "slide" })
 hl.animation({ leaf = "zoomFactor",    enabled = true,  speed = 7,    bezier = "quick" })
 
 -- Ref https://wiki.hypr.land/Configuring/Basics/Workspace-Rules/
@@ -434,25 +439,25 @@ local mainMod = "SUPER" -- Sets "Windows" key as main modifier
 hl.bind(mainMod .. " + RETURN", hl.dsp.exec_cmd(terminal))
 local closeWindowBind = hl.bind(mainMod .. " + W", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
--- Menu de energia (salir / reiniciar / apagar) con confirmacion.
--- Antes esto era SUPER + M sin ninguna proteccion y cerraba la sesion
--- al instante; demasiado facil de pulsar por accidente. Ahora pide
--- SHIFT + ESCAPE y ademas hay que elegir en el menu, donde "Cancelar"
--- viene preseleccionado. El script vive en ~/.local/bin/hypr-powermenu.
+-- Power menu (log out / restart / shut down) with confirmation.
+-- This used to be SUPER + M with no protection at all and it ended the
+-- session instantly; far too easy to hit by accident. Now it takes
+-- SHIFT + ESCAPE and you still have to pick from the menu, where "Cancel"
+-- comes preselected. The script lives in ~/.local/bin/hypr-powermenu.
 hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd(powerMenu))
 
--- SUPER + M estuvo libre a proposito una temporada; ahora lo ocupa el
--- workspace especial magic, mas abajo, que cedio la S a las capturas.
+-- SUPER + M was deliberately free for a while; now the magic special
+-- workspace lives there, after giving up S to screenshots.
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
--- Alternar flotante. Estuvo en SUPER+V, que era el bind de ejemplo de
--- Hyprland, pero esa tecla se cedio al historial del portapapeles: V de
--- "pegar" se usa mucho mas a menudo que flotar una ventana. T viene de
--- togglefloating, el nombre real del dispatcher.
+-- Toggle floating. It used to be SUPER+V, Hyprland's example bind, but that
+-- key went to the clipboard history: V for "paste" is used far more often
+-- than floating a window. T comes from togglefloating, the real dispatcher
+-- name.
 hl.bind(mainMod .. " + T", hl.dsp.window.float({ action = "toggle" }))
--- Anclar: la ventana se queda visible en todos los workspaces de SU monitor,
--- en la misma posicion. SHIFT + T por continuidad con el flotante de arriba.
--- OJO: pin solo actua sobre ventanas flotantes, asi que el orden es
--- SUPER+T y luego SUPER+SHIFT+T. Y es por monitor: no cruza al otro.
+-- Pin: the window stays visible on every workspace of ITS monitor, in the
+-- same position. SHIFT + T for continuity with the float bind above.
+-- CAREFUL: pin only acts on floating windows, so the order is SUPER+T and
+-- then SUPER+SHIFT+T. And it is per monitor: it does not cross over.
 hl.bind(mainMod .. " + SHIFT + T", hl.dsp.window.pin())
 hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
@@ -472,54 +477,54 @@ for i = 1, 10 do
     hl.bind(mainMod .. " + SHIFT + " .. key,     hl.dsp.window.move({ workspace = i }))
 end
 
--- Workspace especial (scratchpad). Vivia en SUPER+S, pero esa tecla se
--- cedio entera a las capturas de pantalla, que se usan mucho mas a
--- menudo y donde SUPER+SHIFT+S es el gesto que ya tiene todo el mundo
--- en los dedos. M estaba reservada sin usar, asi que se muda aqui.
+-- Special workspace (scratchpad). It lived on SUPER+S, but that key was
+-- handed over entirely to screenshots, which are used far more often and
+-- where SUPER+SHIFT+S is the gesture everyone already has in their fingers.
+-- M was reserved and unused, so it moved here.
 hl.bind(mainMod .. " + M",         hl.dsp.workspace.toggle_special("magic"))
 hl.bind(mainMod .. " + SHIFT + M", hl.dsp.window.move({ workspace = "special:magic" }))
 
--- Wallpapers: SUPER+SHIFT+W pasa al siguiente, SUPER+SHIFT+A elige al azar.
--- Cada cambio regenera la paleta de acentos (waybar, kitty, bordes, dunst).
+-- Wallpapers: SUPER+SHIFT+W goes to the next one, SUPER+SHIFT+A picks at
+-- random. Each change regenerates the accent palette (waybar, kitty,
+-- borders, dunst).
 hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd(wallpaperSwitch .. " next"))
 hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd(wallpaperSwitch .. " random"))
 
--- Capturas de pantalla: hyprshot (envoltorio sobre grim/slurp que ademas
--- pregunta a hyprctl por la geometria de ventanas y monitores) y satty
--- para anotar. Toda la familia SUPER+S es para esto; el workspace
--- especial magic se mudo a SUPER+M para dejarla libre.
+-- Screenshots: hyprshot (a wrapper over grim/slurp that also asks hyprctl
+-- for window and monitor geometry) plus satty for annotating. The whole
+-- SUPER+S family is for this; the magic special workspace moved to SUPER+M
+-- to free it up.
 --
--- -z congela la imagen mientras seleccionas la region. Sin eso no se
--- pueden capturar menus desplegables ni tooltips: desaparecen en cuanto
--- mueves el raton para arrastrar la seleccion. Necesita hyprpicker.
+-- -z freezes the image while you select the region. Without it you cannot
+-- capture dropdown menus or tooltips: they vanish as soon as you move the
+-- mouse to drag the selection. Requires hyprpicker.
 --
--- SUPER+S a secas solo copia al portapapeles y no toca el disco, que es
--- el caso habitual (pegar en el navegador o en Discord). Las variantes
--- que si escriben fichero van a ~/Pictures via XDG_PICTURES_DIR.
--- satty interpreta el nombre de salida con patrones strftime, asi que no
--- hace falta un $(date) por shell ni preocuparse por el escapado.
+-- Plain SUPER+S only copies to the clipboard and never touches disk, which
+-- is the common case (paste into the browser or Discord). The variants that
+-- do write a file go to ~/Pictures via XDG_PICTURES_DIR.
+-- satty expands strftime patterns in the output name, so no shell $(date)
+-- is needed and there is nothing to escape.
 local sattyPipe = "satty --filename - --copy-command wl-copy --early-exit"
     .. " --output-filename " .. os.getenv("HOME") .. "/Pictures/satty-%Y%m%d-%H%M%S.png"
 
 hl.bind(mainMod .. " + S",         hl.dsp.exec_cmd("hyprshot -m region -z --clipboard-only"))
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("hyprshot -m region -z --raw | " .. sattyPipe))
--- Los modos de hyprshot se combinan: "window" y "output" a secas abren un
--- selector para clicar la ventana o el monitor, que aqui sobra. Anadir
--- "active" hace que cojan directamente la ventana enfocada o el monitor
--- donde esta el raton, sin interaccion. Por eso tampoco llevan -z.
+-- hyprshot modes combine: plain "window" and "output" open a picker to click
+-- the window or the monitor, which is pointless here. Adding "active" makes
+-- them take the focused window or the monitor under the pointer directly,
+-- with no interaction. That is also why they do not carry -z.
 hl.bind(mainMod .. " + CTRL + S",  hl.dsp.exec_cmd("hyprshot -m window -m active"))
 hl.bind(mainMod .. " + ALT + S",   hl.dsp.exec_cmd("hyprshot -m output -m active"))
 
--- Historial del portapapeles (cliphist), reusando wofi en modo dmenu, que
--- es el mismo lanzador de SUPER+SPACE. Se queda con SUPER+V a secas por
--- cercania con el Ctrl+V de toda la vida; el flotante que vivia aqui se
--- mudo a SUPER+T.
+-- Clipboard history (cliphist), reusing wofi in dmenu mode. It keeps plain
+-- SUPER+V for proximity with the usual Ctrl+V; the float toggle that used to
+-- live here moved to SUPER+T.
 --
--- "decode" es imprescindible: cliphist list emite un id numerico y una
--- vista previa recortada, no el contenido. Sin decode pegarias el resumen.
--- Para vaciarlo: cliphist wipe
+-- "decode" is essential: cliphist list emits a numeric id and a truncated
+-- preview, not the content. Without decode you would paste the summary.
+-- To empty it: cliphist wipe
 hl.bind(mainMod .. " + V", hl.dsp.exec_cmd(
-    "cliphist list | wofi --dmenu --prompt Portapapeles | cliphist decode | wl-copy"))
+    "cliphist list | wofi --dmenu --prompt Clipboard | cliphist decode | wl-copy"))
 
 -- Scroll through existing workspaces with mainMod + scroll
 hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
@@ -530,7 +535,7 @@ hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 -- Laptop multimedia keys for volume and LCD brightness
--- -l 1.5 permite sobreamplificar hasta 150% (igual que max-volume en waybar)
+-- -l 1.5 allows boosting up to 150% (same as max-volume in waybar)
 hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
 hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
 hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true, repeating = true })
@@ -586,27 +591,27 @@ hl.window_rule({
 -- })
 -- overlayLayerRule:set_enabled(false)
 
--- Blur para waybar: la barra es semitransparente en el CSS,
--- pero el desenfoque real lo aplica Hyprland sobre la capa.
--- OJO: el namespace de la capa es el campo "name" de cada barra en
--- config.jsonc (no "waybar"). Si renombras una barra, actualiza esto.
+-- Blur for waybar: the bar is semi-transparent in CSS, but the actual blur
+-- is applied by Hyprland on the layer.
+-- CAREFUL: the layer namespace is the "name" field of each bar in
+-- config.jsonc (not "waybar"). If you rename a bar, update this.
 hl.layer_rule({
     name  = "blur-waybar",
-    match = { namespace = "^(principal|vertical)$" },
+    match = { namespace = "^(main|vertical)$" },
 
     blur          = true,
     ignore_alpha  = 0.2,
 
-    -- Los tooltips de la barra (el panel que sale al pasar el cursor
-    -- sobre un modulo) son popups de esta capa, no capas propias.
-    -- Sin esto quedan semitransparentes pero SIN desenfocar, que es
-    -- justo lo que se ve "transparente" en vez de "glass".
+    -- Bar tooltips (the panel that appears when hovering a module) are
+    -- popups of this layer, not layers of their own. Without this they end
+    -- up semi-transparent but NOT blurred, which is exactly what reads as
+    -- "see-through" instead of "glass".
     blur_popups = true,
 })
 
--- Blur para wofi (SUPER + SPACE). Mismo caso que waybar: el fondo
--- semitransparente lo pone ~/.config/wofi/style.css, el desenfoque va aqui.
--- El namespace de la capa de wofi es literalmente "wofi".
+-- Blur for wofi (SUPER + SPACE and SUPER + SHIFT + ESCAPE). Same case as
+-- waybar: the semi-transparent background comes from the stylesheet, the
+-- blur goes here. The wofi layer namespace is literally "wofi".
 hl.layer_rule({
     name  = "blur-wofi",
     match = { namespace = "^wofi$" },
@@ -616,9 +621,9 @@ hl.layer_rule({
     blur_popups   = true,
 })
 
--- Blur para las notificaciones de dunst. El namespace de su capa es
--- "notifications" (no "dunst"), como reporta `hyprctl layers`.
--- La transparencia base la define ~/.config/matugen/templates/dunstrc.
+-- Blur for dunst notifications. Its layer namespace is "notifications"
+-- (not "dunst"), as reported by `hyprctl layers`.
+-- The base transparency is defined in ~/.config/matugen/templates/dunstrc.
 hl.layer_rule({
     name  = "blur-dunst",
     match = { namespace = "^notifications$" },
@@ -636,43 +641,37 @@ hl.window_rule({
     float = true,
 })
 
--- Apps auxiliares fuera del tiling: se abren un rato y se cierran, y
--- tileadas reordenan el resto del workspace en cada apertura.
+-- Helper apps kept out of the tiling: they are opened briefly and closed,
+-- and tiled they would reshuffle the rest of the workspace on every launch.
 --
--- Las clases son las que reporta `hyprctl clients`, NO el
--- StartupWMClass del .desktop: las apps KDE usan el ID inverso
--- ("org.kde.*") y las dos cosas no siempre coinciden. Haruna es el
--- ejemplo: su .desktop declara StartupWMClass=haruna, pero la ventana
--- se registra como "org.kde.haruna".
+-- The classes are the ones reported by `hyprctl clients`, NOT the
+-- StartupWMClass from the .desktop: the two do not always match.
 
--- Nautilus, el gestor de archivos grafico (SUPER + E).
+-- Nautilus, the graphical file manager (SUPER + E).
 --
--- La transparencia es la unica parte del look que NO sale de GTK:
--- libadwaita pinta su fondo opaco y no hay forma de pedirle un alpha
--- desde el CSS de usuario, asi que la pone el compositor. El blur no
--- hace falta declararlo -- decoration.blur ya esta activo globalmente y
--- Hyprland lo aplica detras de cualquier ventana translucida, igual que
--- con kitty.
+-- Transparency is the only part of the look that does NOT come from GTK:
+-- libadwaita paints its background opaque and there is no way to ask it for
+-- an alpha from user CSS, so the compositor provides it. The blur does not
+-- need declaring -- decoration.blur is already globally enabled and Hyprland
+-- applies it behind any translucent window, same as with kitty.
 --
--- OJO: opacity afecta a la ventana ENTERA, texto e iconos incluidos.
--- 0.82 es el punto donde se ve el cristal sin que los nombres de
--- archivo se peleen con el wallpaper. Si bajas mas, el texto de las
--- etiquetas empieza a perder contraste sobre imagenes con detalle
--- claro; el blur ya viene con brightness 0.8 para compensar, pero
--- tiene un limite.
+-- CAREFUL: opacity affects the WHOLE window, text and icons included.
+-- 0.82 is the point where the glass reads without file names fighting the
+-- wallpaper. Go lower and label text starts losing contrast over images with
+-- bright detail; the blur already ships with brightness 0.8 to compensate,
+-- but there is a limit.
 --
--- Y OJO tambien con la SINTAXIS, que aqui no es la que uno esperaria de
--- una config en Lua: opacity es un campo de TEXTO con la gramatica de
--- hyprlang -- "activa inactiva pantalla_completa", los dos ultimos
--- opcionales. No existe ningun campo opacity_inactive, ni se acepta un
--- numero suelto para cada estado, ni una tabla { active =, inactive = }:
--- las tres formas las rechaza el parser con "field 'opacity': string
--- type requires a string".
+-- And CAREFUL with the SYNTAX, which here is not what you would expect from
+-- a Lua config: opacity is a TEXT field with hyprlang grammar --
+-- "active inactive fullscreen", the last two optional. There is no
+-- opacity_inactive field, a bare number per state is not accepted, and
+-- neither is a table { active =, inactive = }: the parser rejects all three
+-- with "field 'opacity': string type requires a string".
 --
--- Peor aun: `hyprctl reload` responde "ok" igualmente y la regla se
--- queda sin aplicar en silencio. El error solo sale por
--- `hyprctl configerrors` y en el banner rojo de la esquina. Si tocas
--- esto, comprueba con configerrors, no con el codigo de salida.
+-- Worse: `hyprctl reload` answers "ok" anyway and the rule is silently
+-- dropped. The error only shows through `hyprctl configerrors` and in the
+-- red banner in the corner. If you touch this, check with configerrors, not
+-- with the exit code.
 hl.window_rule({
     name  = "float-nautilus",
     match = { class = "^org\\.gnome\\.Nautilus$" },
@@ -684,23 +683,20 @@ hl.window_rule({
     opacity = "0.82 0.74",
 })
 
--- Loupe (imagenes) y Celluloid (video) sustituyeron a gwenview y haruna.
--- El motivo fue el mismo que echo a Dolphin: los dos enlazaban
--- libKF6ColorScheme, que le impone BreezeDark a la app por encima del
--- tema de plataforma, asi que se quedaban en gris mientras el resto del
--- escritorio seguia al wallpaper. (El comentario que habia aqui decia
--- que Haruna cogia el tema de qt6ct; era falso, y se comprobo con
--- `ldd $(which haruna) | grep KF6ColorScheme`.)
+-- Loupe (images) and Celluloid (video) replaced gwenview and haruna. The
+-- reason was the same one that pushed out Dolphin: both linked
+-- libKF6ColorScheme, which forces BreezeDark on the app over the platform
+-- theme, so they stayed grey while the rest of the desktop followed the
+-- wallpaper.
 --
--- Los dos son GTK4/libadwaita, o sea que leen ~/.config/gtk-4.0/gtk.css
--- igual que Nautilus y no necesitan ni una plantilla nueva.
+-- Both are GTK4/libadwaita, meaning they read ~/.config/gtk-4.0/gtk.css just
+-- like Nautilus and need no new template.
 --
--- SIN opacity, a diferencia de Nautilus, y es deliberado: opacity en
--- Hyprland afecta a la ventana entera, contenido incluido. En un visor
--- de fotos y en un reproductor eso significa mezclar el wallpaper con
--- la imagen que estas mirando -- adios a los negros y a cualquier
--- juicio de color. El cristal se queda para el chrome, no para el
--- contenido.
+-- NO opacity here, unlike Nautilus, and that is deliberate: opacity in
+-- Hyprland affects the whole window, content included. In an image viewer
+-- and a media player that means blending the wallpaper into the picture you
+-- are looking at -- goodbye blacks and any colour judgement. The glass is
+-- for the chrome, not for the content.
 hl.window_rule({
     name  = "float-loupe",
     match = { class = "^org\\.gnome\\.Loupe$" },
@@ -715,24 +711,24 @@ hl.window_rule({
     match = { class = "^io\\.github\\.celluloid_player\\.Celluloid$" },
 
     float  = true,
-    size   = "1280 720",   -- 16:9, para que no salga con letterbox de origen
+    size   = "1280 720",   -- 16:9, so it does not come up letterboxed
     center = true,
 })
 
--- zathura, el lector de PDF.
+-- zathura, the PDF reader.
 --
--- "size" fijo con proporcion A4 vertical (850/1180 = 0.72, A4 es 0.707).
--- Medido: zathura NO pide un tamano acorde al documento. Con un A4
--- vertical (ratio 0.71) abre a 1252x952 y con uno apaisado (1.41) a
--- 804x617 -- las dos ventanas salen a ratio ~1.30, sin relacion con la
--- pagina. Asi que si no se le fija medida, sale una ventana apaisada
--- para un documento vertical y sobra fondo a los lados.
+-- Fixed "size" with A4 portrait proportions (850/1180 = 0.72, A4 is 0.707).
+-- Measured: zathura does NOT request a size matching the document. With an
+-- A4 portrait (ratio 0.71) it opens at 1252x952 and with a landscape one
+-- (1.41) at 804x617 -- both windows land at ratio ~1.30, unrelated to the
+-- page. So without a fixed size you get a landscape window for a portrait
+-- document and wasted background on the sides.
 --
--- Hyprland tampoco puede medir el contenido: solo ve lo que la ventana
--- pide. Para que se ajuste de verdad haria falta leer las dimensiones
--- con pdfinfo antes de abrir y redimensionar despues.
+-- Hyprland cannot measure the content either: it only sees what the window
+-- asks for. Fitting it properly would need reading the page dimensions with
+-- pdfinfo before opening and resizing afterwards.
 --
--- 1180 de alto cabe en DP-3 (1440) dejando sitio a waybar.
+-- 1180 of height fits DP-3 (1440) leaving room for waybar.
 hl.window_rule({
     name  = "float-zathura",
     match = { class = "^org\\.pwmt\\.zathura$" },
@@ -742,17 +738,17 @@ hl.window_rule({
     center = true,
 })
 
--- satty, el editor de anotaciones al que SUPER+SHIFT+S le pasa la
--- captura por tuberia (ver la seccion de capturas mas arriba).
+-- satty, the annotation editor that SUPER+SHIFT+S pipes the screenshot into
+-- (see the screenshot section above).
 --
--- Sin "size" a proposito: la ventana se ajusta al tamano de la captura,
--- y forzarle una medida fija deformaria el lienzo segun recortes una
--- region pequena o un monitor entero.
+-- No "size" on purpose: the window fits the screenshot, and forcing a fixed
+-- measure would distort the canvas depending on whether you grabbed a small
+-- region or a whole monitor.
 --
--- Pero SI hace falta "max_size": satty pide una ventana del tamano de
--- la imagen, asi que al capturar un monitor entero (o abrir una imagen
--- grande) se sale de la pantalla y los botones de abajo quedan fuera
--- de alcance. El tope cabe en DP-3 dejando sitio para waybar.
+-- But "max_size" IS needed: satty asks for a window the size of the image,
+-- so capturing a whole monitor (or opening a large image) pushes it off
+-- screen and the buttons at the bottom end up out of reach. The cap fits
+-- DP-3 leaving room for waybar.
 hl.window_rule({
     name  = "float-satty",
     match = { class = "^com\\.gabm\\.satty$" },
@@ -766,6 +762,6 @@ hl.window_rule({
 ---------------
 ---- GAMING ----
 ---------------
--- Reglas de render, entorno y ventanas para juegos.
--- Ver ~/.config/hypr/gaming.lua
+-- Render, environment and window rules for games.
+-- See ~/.config/hypr/gaming.lua
 require("gaming")

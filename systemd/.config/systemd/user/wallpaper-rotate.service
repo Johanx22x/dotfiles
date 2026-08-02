@@ -1,11 +1,11 @@
 [Unit]
-Description=Rota el wallpaper y regenera la paleta de acentos
-# Solo tiene sentido con una sesion grafica viva
+Description=Rotate the wallpaper and regenerate the accent palette
+# Only makes sense with a live graphical session
 After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
 Type=oneshot
 ExecStart=%h/.local/bin/wallpaper-switch random
-# El script necesita hablar con Hyprland y con awww
+# The script needs to talk to Hyprland and to awww
 Environment=XDG_RUNTIME_DIR=%t

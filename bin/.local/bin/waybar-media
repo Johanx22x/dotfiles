@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
-"""Modulo de reproduccion para waybar, en reemplazo del modulo nativo "mpris".
+"""Media module for waybar, replacing the native "mpris" module.
 
-POR QUE ESTE SCRIPT Y NO EL MODULO NATIVO
+WHY THIS SCRIPT AND NOT THE NATIVE MODULE
 -----------------------------------------
-El modulo "mpris" de waybar 0.15.0 corrompe memoria y tumba la barra entera
-cuando Brave (o cualquier Chromium) empieza a reproducir. El coredump lo
-muestra sin ambiguedad: Brave emite PropertiesChanged, libplayerctl lo
+The "mpris" module in waybar 0.15.0 corrupts memory and takes the whole bar down
+when Brave (or any Chromium) starts playing. The coredump shows it
+unambiguously: Brave emits PropertiesChanged, libplayerctl
 reenvia, y el handler de waybar termina llamando a un Glib::Dispatcher cuyo
-puntero interno ya esta pisado con basura ASCII:
+internal pointer is already overwritten with ASCII garbage:
 
     Glib::DispatchNotifier::send_notification (this=0x3fe0303030303030)
       <- playerctl_player_properties_changed_callback (playerctl-player.c:187)
 
-Como libplayerctl corre DENTRO del proceso de waybar, ese fallo se lleva la
-barra completa (reloj, bandeja, workspaces, todo). Aqui playerctl corre como
-proceso aparte: si se cae, waybar solo pierde este modulo y lo relanza segun
+Since libplayerctl runs INSIDE the waybar process, that crash takes the
+entire bar with it (clock, tray, workspaces, everything). Here playerctl runs as a
+separate process: if it crashes, waybar only loses this module and relaunches
+it per
 "restart-interval". El bug de arriba deja de poder matar la barra.
 
-Salida: una linea JSON por cada cambio, leida en streaming por waybar.
-Paleta: Tokyo Night, igual que waybar-system.
+Output: one JSON line per change, streamed and read by waybar.
+Palette: Tokyo Night, same as waybar-system.
 """
 
 import json
@@ -30,15 +31,16 @@ C_ARTISTA = "#565f89"   # comment -- secundario en el tooltip
 C_TXT = "#c0caf5"       # fg
 C_DIM = "#a9b1d6"       # fg_dark
 
-# Largo maximo del texto en la barra (equivale a "dynamic-len" del modulo nativo)
-LARGO_MAX = 40
+# Maximum text length on the bar (equivalent to the native module's "dynamic-len")
+MAX_LEN = 40
 
-# Separador entre titulo y artista dentro de la barra
+# Separator between title and artist on the bar
 SEP = "  ·  "
 
-# Iconos por reproductor. La clave se compara contra {{playerName}}, que
-# playerctl ya entrega sin el sufijo de instancia (brave.instance3631 -> brave).
-ICONOS = {
+# Per-player icons. The key is compared against {{playerName}}, which
+# playerctl already delivers without the instance suffix
+# (brave.instance3631 -> brave).
+ICONS = {
     "brave": "󰊯",
     "chromium": "󰊯",
     "chrome": "󰊯",
@@ -48,100 +50,99 @@ ICONOS = {
     "mpv": "",
 }
 ICONO_DEFECTO = "󰝚"
-ICONO_PAUSA = "󰏤"
+PAUSE_ICON = "󰏤"
 
 
-def escapar(texto):
-    """Escapa lo que Pango interpreta como markup.
+def escape(text):
+    """Escape what Pango would interpret as markup.
 
-    Los titulos vienen de paginas web arbitrarias: un solo '&' sin escapar
-    deja el modulo en blanco. Mismo criterio que en waybar-system.
+    Titles come from arbitrary web pages: a single unescaped '&' leaves the
+    module blank. Same criterion as in waybar-system.
     """
-    return (texto.replace("&", "&amp;")
+    return (text.replace("&", "&amp;")
                  .replace("<", "&lt;")
                  .replace(">", "&gt;"))
 
 
-def recortar(texto, limite):
-    if len(texto) <= limite:
-        return texto
-    return texto[:max(1, limite - 1)].rstrip() + "…"
+def recortar(text, limite):
+    if len(text) <= limite:
+        return text
+    return text[:max(1, limite - 1)].rstrip() + "…"
 
 
-def texto_barra(titulo, artista):
-    """Titulo y artista recortados a LARGO_MAX.
+def bar_text(title, artist):
+    """Titulo y artist recortados a MAX_LEN.
 
-    Reproduce el comportamiento de "dynamic-order": si no entran los dos,
-    se sacrifica el artista antes que el titulo.
+    Reproduces the "dynamic-order" behaviour: if both do not fit, the artist
+    is sacrificed before the title.
     """
-    if not titulo and not artista:
+    if not title and not artist:
         return ""
-    if not titulo:
-        return recortar(artista, LARGO_MAX)
-    if artista and len(titulo) + len(SEP) + len(artista) <= LARGO_MAX:
-        return titulo + SEP + artista
-    return recortar(titulo, LARGO_MAX)
+    if not title:
+        return recortar(artist, MAX_LEN)
+    if artist and len(title) + len(SEP) + len(artist) <= MAX_LEN:
+        return title + SEP + artist
+    return recortar(title, MAX_LEN)
 
 
-def emitir(payload):
+def emit(payload):
     print(json.dumps(payload, ensure_ascii=False), flush=True)
 
 
-def vacio():
-    """Sin reproductor: texto vacio hace que waybar oculte el modulo."""
-    emitir({"text": "", "tooltip": "", "class": "parado"})
+def empty():
+    """No player: empty text makes waybar hide the module."""
+    emit({"text": "", "tooltip": "", "class": "stopped"})
 
 
 def procesar(linea):
     campos = linea.split("\x1f")
     if len(campos) != 5 or not linea.strip("\x1f").strip():
-        vacio()
+        empty()
         return
 
-    player, estado, titulo, artista, album = (c.strip() for c in campos)
+    player, estado, title, artist, album = (c.strip() for c in campos)
 
-    # YouTube Music publica el artista como "Fulano - Topic": son los canales
-    # que YouTube genera solo para la musica. En una barra donde el espacio se
-    # cuenta en caracteres (LARGO_MAX), ocho de ellos para no decir nada es
-    # justo lo que hace que se recorte el nombre real.
-    # Se quita aqui, antes de texto_barra() y del tooltip, para que las dos
-    # cosas queden igual. ~/.local/bin/mpris-notify hace lo mismo con las
-    # notificaciones.
-    if artista.endswith(" - Topic"):
-        artista = artista[: -len(" - Topic")]
+    # YouTube Music publishes the artist as "Someone - Topic": those are the
+    # channels YouTube auto-generates for music. On a bar where space is
+    # counted in characters (MAX_LEN), eight of them saying nothing is exactly
+    # what makes the real name get truncated.
+    # Stripped here, before bar_text() and the tooltip, so both come out the
+    # same. ~/.local/bin/mpris-notify does the same for notifications.
+    if artist.endswith(" - Topic"):
+        artist = artist[: -len(" - Topic")]
 
     if estado not in ("Playing", "Paused"):
-        vacio()
+        empty()
         return
 
-    cuerpo = texto_barra(titulo, artista)
-    if not cuerpo:
-        vacio()
+    body = bar_text(title, artist)
+    if not body:
+        empty()
         return
 
-    icono = ICONOS.get(player.lower(), ICONO_DEFECTO)
-    cuerpo = escapar(cuerpo)
+    icon = ICONS.get(player.lower(), ICONO_DEFECTO)
+    body = escape(body)
 
     if estado == "Paused":
-        texto = f"{ICONO_PAUSA} <i>{cuerpo}</i>"
+        text = f"{PAUSE_ICON} <i>{body}</i>"
         clase = "paused"
     else:
-        texto = f"{icono} {cuerpo}"
+        text = f"{icon} {body}"
         clase = "playing"
 
-    lineas = [f"<span color='{C_TXT}'><b>{escapar(titulo)}</b></span>"]
-    if artista:
-        lineas.append(f"<span color='{C_DIM}'>{escapar(artista)}</span>")
+    lineas = [f"<span color='{C_TXT}'><b>{escape(title)}</b></span>"]
+    if artist:
+        lineas.append(f"<span color='{C_DIM}'>{escape(artist)}</span>")
     if album:
-        lineas.append(f"<span color='{C_ARTISTA}'>{escapar(album)}</span>")
-    lineas.append(f"<span color='{C_ARTISTA}'>{escapar(player)}</span>")
+        lineas.append(f"<span color='{C_ARTISTA}'>{escape(album)}</span>")
+    lineas.append(f"<span color='{C_ARTISTA}'>{escape(player)}</span>")
 
-    emitir({"text": texto, "tooltip": "\n".join(lineas), "class": clase})
+    emit({"text": text, "tooltip": "\n".join(lineas), "class": clase})
 
 
 def main():
-    # \x1f (unit separator) como delimitador: no aparece en titulos reales,
-    # asi que no hace falta adivinar donde corta un campo.
+    # \x1f (unit separator) as the delimiter: it does not appear in real
+    # titles, so there is no guessing where a field ends.
     cmd = [
         "playerctl", "--follow", "--format",
         "{{playerName}}\x1f{{status}}\x1f{{title}}\x1f{{artist}}\x1f{{album}}",
@@ -152,14 +153,14 @@ def main():
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                 text=True, bufsize=1)
     except OSError as e:
-        emitir({"text": "󰋔", "tooltip": f"playerctl no disponible: {e}",
+        emit({"text": "󰋔", "tooltip": f"playerctl no disponible: {e}",
                 "class": "critical"})
-        # Sin salir con error: waybar lo reintenta segun restart-interval
+        # Without exiting with an error: waybar retries per restart-interval
         return
 
-    # Estado inicial: si playerctl tarda en emitir, el modulo arranca oculto
-    # en vez de quedarse con el texto del arranque anterior.
-    vacio()
+    # Initial state: if playerctl is slow to emit, the module starts hidden
+    # instead of keeping the text from the previous run.
+    empty()
 
     try:
         for linea in proc.stdout:
@@ -169,9 +170,9 @@ def main():
     finally:
         proc.terminate()
 
-    # playerctl termino (no hay reproductores, o murio): dejamos el modulo
-    # limpio y salimos para que waybar relance el script.
-    vacio()
+    # playerctl ended (no players, or it died): clear the module and exit so
+    # waybar relaunches the script.
+    empty()
 
 
 if __name__ == "__main__":
@@ -179,6 +180,6 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         pass
-    except Exception as e:  # nunca dejar el modulo colgado con texto viejo
-        emitir({"text": "󰋔", "tooltip": str(e), "class": "critical"})
+    except Exception as e:  # never leave the module stuck with stale text
+        emit({"text": "󰋔", "tooltip": str(e), "class": "critical"})
         sys.exit(0)

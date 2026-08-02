@@ -62,16 +62,16 @@ GRUB_DISABLE_RECOVERY=true
 # operating systems.
 #GRUB_DISABLE_OS_PROBER=false
 
-# 10_linux ordena los kernels por nombre con version_sort -r, y con eso
-# "vmlinuz-linux-lts" adelanta a "vmlinuz-linux": el LTS acababa siendo el
-# predeterminado. GRUB_TOP_LEVEL mueve el kernel indicado al frente de la
-# lista, asi que la entrada 'Arch Linux' (la que coge GRUB_DEFAULT=0) pasa
-# a ser mainline. El LTS sigue en el menu como segunda opcion, que es
-# justo para lo que se mantiene.
+# 10_linux sorts kernels by name with version_sort -r, and with that
+# "vmlinuz-linux-lts" gets ahead of "vmlinuz-linux": the LTS ended up being
+# the default. GRUB_TOP_LEVEL moves the given kernel to the front of the
+# list, so the 'Arch Linux' entry (the one GRUB_DEFAULT=0 picks) becomes
+# mainline. The LTS stays in the menu as the second option, which is exactly
+# what it is kept for.
 GRUB_TOP_LEVEL="/boot/vmlinuz-linux"
 
-# No hay ningun otro sistema operativo que detectar: el disco de Bazzite se
-# formateo el 1 ago 2026 y Windows no llego a existir (su entrada EFI apuntaba
-# a la ESP de Bazzite y era huerfana). Se fija explicitamente para que
-# grub-mkconfig deje de avisar en cada ejecucion.
+# There is no other operating system to detect: the Bazzite disk was
+# reformatted on 2026-08-01 and Windows never really existed (its EFI entry
+# pointed at Bazzite's ESP and was orphaned). Set explicitly so grub-mkconfig
+# stops warning on every run.
 GRUB_DISABLE_OS_PROBER=true

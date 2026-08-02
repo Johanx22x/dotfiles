@@ -1,12 +1,13 @@
 # ~/.config/cship.toml
 #
-# Preset "Hero / Recommended" de https://cship.dev/showcase.html
-# Copiado tal cual: paleta Catppuccin Mocha y layout de dos filas.
+# "Hero / Recommended" preset from https://cship.dev/showcase.html
+# Copied as is: Catppuccin Mocha palette and a two-row layout.
 #
-# La fila 1 es $starship_prompt, que se renderiza con el preset
-# catppuccin-powerline desde ~/.config/starship-cship.toml (via STARSHIP_CONFIG
-# en el statusLine de ~/.claude/settings.json), NO con tu ~/.config/starship.toml.
-# Asi la status line lleva Catppuccin y tu prompt de shell sigue con matugen.
+# Row 1 is $starship_prompt, rendered with the catppuccin-powerline preset
+# from ~/.config/starship-cship.toml (via STARSHIP_CONFIG in the statusLine of
+# ~/.claude/settings.json), NOT with ~/.config/starship.toml.
+# That way the status line is Catppuccin and the shell prompt stays on
+# matugen.
 
 [cship]
 lines = [

@@ -1,33 +1,36 @@
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-// WAYBAR - configuracion para Hyprland
+// WAYBAR - configuration for Hyprland
 // Docs: https://github.com/Alexays/Waybar/wiki/Configuration
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
-// Una sola barra, en el monitor principal. El vertical (Gigabyte GS27FA)
-// queda libre a proposito.
+// A single bar, on the main monitor. The portrait one (Gigabyte GS27FA) is
+// deliberately left free.
 //
-// El monitor se identifica por descripcion (marca modelo serie), NO por el
-// nombre del conector (DP-4, HDMI-A-3...): esos nombres los asigna el kernel y
-// cambian al cambiar de kernel. Con "DP-4" la barra seguia corriendo pero no
-// se dibujaba en ninguna pantalla. Misma razon que en ~/.config/hypr/hyprland.lua.
-// Para ver las descripciones: hyprctl monitors all -j | grep description
+// The monitor is identified by description (brand model serial), NOT by
+// connector name (DP-4, HDMI-A-3...): those names are assigned by the kernel
+// and change across kernels. With "DP-4" the bar kept running but was not
+// drawn on any screen. Same reason as in ~/.config/hypr/hyprland.lua.
+// To list the descriptions: hyprctl monitors all -j | grep description
 [
   // =====================================================
-  // BARRA PRINCIPAL - ASR PG32QF2B (2560x1440 horizontal)
+  // MAIN BAR - ASR PG32QF2B (2560x1440 landscape)
   // =====================================================
   {
-    "name": "principal",
+    // This name is the layer namespace Hyprland sees. The blur-waybar rule
+    // in hyprland.lua matches on it: rename the bar and you must update it
+    // there too, or the glass effect silently stops applying.
+    "name": "main",
     "output": ["ASR PG32QF2B G5VL0A003533"],
     "layer": "top",
     "position": "top",
     "height": 44,
-    // spacing 0: la separacion entre modulos la dan el padding y los
-    // separadores del CSS, asi los grupos se ven como bloques solidos.
+    // spacing 0: module separation comes from CSS padding and separators,
+    // so groups read as solid blocks.
     "spacing": 0,
 
-    // Barra flotante: mismo gap que las ventanas (gaps_out = 20 en hyprland.lua).
-    // margin-bottom queda en 0 a proposito: la zona exclusiva termina justo
-    // debajo de la barra y Hyprland ya separa las ventanas otros 20px por su cuenta.
+    // Floating bar: same gap as windows (gaps_out = 20 in hyprland.lua).
+    // margin-bottom stays 0 on purpose: the exclusive zone ends right below
+    // the bar and Hyprland already keeps windows another 20px away.
     "margin-top": 20,
     "margin-left": 20,
     "margin-right": 20,
@@ -49,17 +52,17 @@
       "clock"
     ],
 
-    // ---------------- Boton de energia ----------------
-    // Primer elemento de la barra: abre el mismo menu de wofi que
-    // SUPER + SHIFT + ESCAPE (ver ~/.local/bin/hypr-powermenu).
+    // ---------------- Power button ----------------
+    // First item on the bar: opens the same wofi menu as
+    // SUPER + SHIFT + ESCAPE (see ~/.local/bin/hypr-powermenu).
     //
-    // El glifo es nf-linux-archlinux (U+F303), de la familia "Font Logos"
-    // de Nerd Fonts. Lo aporta la JetBrainsMono Nerd Font, que va primera
-    // en la lista de fuentes del CSS, asi que gana ella y no la
-    // "Font Awesome 7 Free" del fallback.
+    // The glyph is nf-linux-archlinux (U+F303), from the Nerd Fonts "Font
+    // Logos" family. It comes from JetBrainsMono Nerd Font, which is first
+    // in the CSS font list, so it wins over the "Font Awesome 7 Free"
+    // fallback.
     "custom/arch": {
-      "format": "",
-      "tooltip-format": "Menu de energia",
+      "format": "",
+      "tooltip-format": "Power menu",
       "on-click": "/home/johan/.local/bin/hypr-powermenu"
     },
 
@@ -67,7 +70,7 @@
     "hyprland/workspaces": {
       "format": "{icon}",
       "on-click": "activate",
-      // Scroll sobre los workspaces para cambiar entre ellos
+      // Scroll over the workspaces to switch between them
       "on-scroll-up": "hyprctl dispatch workspace e+1",
       "on-scroll-down": "hyprctl dispatch workspace e-1",
       "format-icons": {
@@ -91,7 +94,7 @@
       "tooltip": false
     },
 
-    // ---------------- Ventana activa ----------------
+    // ---------------- Active window ----------------
     "hyprland/window": {
       "format": "{title}",
       "max-length": 70,
@@ -101,33 +104,33 @@
         "(.*) - Chromium": "  $1",
         "(.*) - Visual Studio Code": "󰨞  $1",
         "(.*)kitty": "  terminal",
-        "^$": "󰇄  escritorio"
+        "^$": "󰇄  desktop"
       }
     },
 
-    // ---------------- Reproductor ----------------
-    // Script propio en vez del modulo nativo "mpris": ese modulo tiene un
-    // bug de corrupcion de memoria en waybar 0.15.0 que MATA la barra entera
-    // cuando Brave empieza a reproducir (libplayerctl corre dentro del
-    // proceso de waybar, asi que su segfault se lleva todo). El detalle del
-    // coredump esta al inicio de ~/.local/bin/waybar-media.
+    // ---------------- Media player ----------------
+    // Own script instead of the native "mpris" module: that module has a
+    // memory corruption bug in waybar 0.15.0 that KILLS the whole bar when
+    // Brave starts playing (libplayerctl runs inside the waybar process, so
+    // its segfault takes everything down). The coredump details are at the
+    // top of ~/.local/bin/waybar-media.
     //
-    // Aqui playerctl corre como proceso aparte y waybar solo lee su stdout:
-    // si se cae, se pierde este modulo y nada mas, y "restart-interval" lo
-    // levanta de nuevo.
+    // Here playerctl runs as a separate process and waybar only reads its
+    // stdout: if it crashes, this module is lost and nothing else, and
+    // "restart-interval" brings it back.
     //
-    // Para volver al modulo nativo (si upstream lo arregla): pon "mpris" en
-    // modules-left y renombra "mpris-disabled" a "mpris" aqui abajo.
+    // To return to the native module (if upstream fixes it): put "mpris" in
+    // modules-left and rename "mpris-disabled" to "mpris" below.
     "custom/media": {
       "exec": "/home/johan/.local/bin/waybar-media",
       "return-type": "json",
-      // Sin "interval": el script es de larga duracion y emite una linea
-      // JSON por cada cambio (playerctl --follow). restart-interval solo
-      // actua si el script termina.
+      // No "interval": the script is long running and emits one JSON line
+      // per change (playerctl --follow). restart-interval only kicks in if
+      // the script exits.
       "restart-interval": 2,
-      // Sin escape para que el markup Pango del script se interprete
-      // (cursiva en pausa, colores del tooltip). El script ya escapa los
-      // titulos, que vienen de paginas web arbitrarias.
+      // No escaping, so the script's Pango markup is interpreted (italics
+      // when paused, tooltip colours). The script already escapes titles,
+      // which come from arbitrary web pages.
       "escape": false,
       "on-click": "playerctl play-pause",
       "on-click-middle": "playerctl previous",
@@ -154,7 +157,7 @@
     // ---------------- Audio ----------------
     "pulseaudio": {
       "format": "{icon}  {volume}%",
-      "format-muted": "󰝟  mudo",
+      "format-muted": "󰝟  muted",
       "format-bluetooth": "{icon} 󰂯 {volume}%",
       "format-source": "  {volume}%",
       "format-source-muted": "",
@@ -166,34 +169,34 @@
       },
       "tooltip-format": "{desc} — {volume}%",
       "scroll-step": 5,
-      // Permite sobreamplificar hasta 150%. Arriba de 100% se aplica
-      // ganancia por software: puede distorsionar segun la fuente.
+      // Allows boosting up to 150%. Above 100% the gain is applied in
+      // software: it can distort depending on the source.
       "max-volume": 150,
       "states": { "overamplified": 101 },
       "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
       "on-click-right": "pavucontrol"
     },
 
-    // ---------------- Red ----------------
-    // Tienes ethernet (enp5s0) y wifi (wlo1); waybar elige la activa.
+    // ---------------- Network ----------------
+    // There is ethernet (enp5s0) and wifi (wlo1); waybar picks the active one.
     "network": {
       "format-wifi": "󰤨  {essid}",
       "format-ethernet": "󰈁  {ifname}",
-      "format-linked": "󰈁  sin IP",
+      "format-linked": "󰈁  no IP",
       "format-disconnected": "󰤭  offline",
       "tooltip-format-wifi": "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}\n󰇚 {bandwidthDownBits}  󰕒 {bandwidthUpBits}",
       "tooltip-format-ethernet": "{ifname}\n{ipaddr}/{cidr}\n󰇚 {bandwidthDownBits}  󰕒 {bandwidthUpBits}",
-      "tooltip-format-disconnected": "Sin conexion",
+      "tooltip-format-disconnected": "Disconnected",
       "interval": 3,
       "on-click": "nm-connection-editor"
     },
 
     // ---------------- Bluetooth ----------------
-    // DESACTIVADO: blueman-applet ya publica un icono en la bandeja y
-    // salian dos. No se puede quitar el de blueman (su plugin StatusIcon
-    // es dependencia forzada de ShowConnected), asi que se quita este.
-    // Para volver a usarlo: agrega "bluetooth" a modules-right y renombra
-    // "bluetooth-disabled" a "bluetooth" aqui abajo.
+    // DISABLED: blueman-applet already publishes a tray icon and two were
+    // showing up. The blueman one cannot be removed (its StatusIcon plugin
+    // is a forced dependency of ShowConnected), so this one goes instead.
+    // To use it again: add "bluetooth" to modules-right and rename
+    // "bluetooth-disabled" to "bluetooth" below.
     "bluetooth-disabled": {
       "format": "󰂯",
       "format-disabled": "",
@@ -205,48 +208,47 @@
       "on-click": "blueman-manager"
     },
 
-    // ---------------- Sistema (CPU + RAM + GPU) ----------------
-    // Un solo modulo con los tres. El script imprime JSON con markup
-    // Pango para colorear cada segmento por separado dentro de la
-    // misma pastilla. Ver ~/.local/bin/waybar-system
+    // ---------------- System (CPU + RAM + GPU) ----------------
+    // A single module with all three. The script prints JSON with Pango
+    // markup to colour each segment separately inside the same pill.
+    // See ~/.local/bin/waybar-system
     "custom/system": {
       "exec": "/home/johan/.local/bin/waybar-system",
       "return-type": "json",
       "interval": 3,
-      // Sin escape para que el markup Pango del script se interprete
+      // No escaping, so the script's Pango markup is interpreted
       "escape": false,
       "on-click": "kitty -e btop"
     },
 
-    // ---------------- Opciones de lanzamiento de Steam ----------------
-    // Boton de un solo uso: copia al portapapeles la linea que hay que
-    // pegar en Steam > Propiedades del juego > Opciones de lanzamiento
-    // para que arranque dentro de gamescope (ver ~/.local/bin/gs).
-    // Hay que ponerla a mano en CADA juego nuevo, de ahi el boton.
+    // ---------------- Steam launch options ----------------
+    // One-shot button: copies to the clipboard the line you have to paste
+    // into Steam > Game properties > Launch options so it starts inside
+    // gamescope (see ~/.local/bin/gs). It has to be set by hand on EVERY new
+    // game, hence the button.
     //
-    // Sin "exec": un modulo custom con solo "format" dibuja texto fijo y
-    // sirve nada mas para el on-click.
+    // No "exec": a custom module with only "format" draws static text and is
+    // there purely for the on-click.
     //
-    // wl-copy se queda corriendo en segundo plano como dueno del
-    // portapapeles (en Wayland el contenido lo sirve el proceso que copio,
-    // no el compositor). No hay gestor de portapapeles instalado, asi que
-    // si se mata ese proceso se pierde lo copiado.
+    // wl-copy keeps running in the background as the clipboard owner (on
+    // Wayland the content is served by the process that copied it, not by
+    // the compositor). wl-clip-persist takes over ownership so it survives.
     "custom/gs": {
       "format": "󰊴",
-      "tooltip-format": "Copiar opciones de lanzamiento (gamescope)\n<tt>/home/johan/.local/bin/gs -- %command%</tt>",
-      // -t 2000: dunst deja las notificaciones normales 10 segundos y para
-      // un simple "listo, copiado" estorba. Se acota aqui y no en dunstrc
-      // para no cambiarselo a todo lo demas.
-      "on-click": "wl-copy -- '/home/johan/.local/bin/gs -- %command%' && notify-send -t 2000 -a Waybar -i input-gaming 'Copiado al portapapeles' 'Pegalo en Steam: Propiedades > Opciones de lanzamiento'"
+      "tooltip-format": "Copy launch options (gamescope)\n<tt>/home/johan/.local/bin/gs -- %command%</tt>",
+      // -t 2000: dunst keeps normal notifications for 10 seconds and for a
+      // simple "done, copied" that is in the way. Capped here rather than in
+      // dunstrc so everything else keeps its timeout.
+      "on-click": "wl-copy -- '/home/johan/.local/bin/gs -- %command%' && notify-send -t 2000 -a Waybar -i input-gaming 'Copied to clipboard' 'Paste it in Steam: Properties > Launch options'"
     },
 
-    // Evita que se apague la pantalla (util viendo video)
+    // ---------------- Tray ----------------
     "tray": {
       "icon-size": 16,
       "spacing": 10
     },
 
-    // ---------------- Reloj ----------------
+    // ---------------- Clock ----------------
     "clock": {
       "format": "󰥔  {:%H:%M}",
       "format-alt": "󰃭  {:%a %d %b %Y}",
@@ -257,7 +259,7 @@
         "format": {
           "months": "<span color='#c0caf5'><b>{}</b></span>",
           "days": "<span color='#a9b1d6'>{}</span>",
-          "weeks": "<span color='#9ece6a'><b>S{}</b></span>",
+          "weeks": "<span color='#9ece6a'><b>W{}</b></span>",
           "weekdays": "<span color='#7aa2f7'><b>{}</b></span>",
           "today": "<span color='#7dcfff'><b><u>{}</u></b></span>"
         }

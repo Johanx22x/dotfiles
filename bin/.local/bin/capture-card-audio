@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# =============================================================
+#  capture-card-audio — mute and volume for the capture card audio
+#
+#  The capture card audio does not go through mpv (it goes through a
+#  PipeWire loopback, to avoid adding A/V sync latency). That is why mpv's m
+#  key does nothing: you have to act on the loopback stream, which the
+#  `capture-card` script tags as media.name=capture-card-audio.
+#
+#  Usage:  capture-card-audio [toggle|up|down|status]
+# =============================================================
+set -uo pipefail
+
+action="${1:-toggle}"
+TAG=capture-card-audio
+
+read_stream() {
+    pactl -f json list sink-inputs 2>/dev/null | python3 -c "
+import json,sys
+try: data = json.load(sys.stdin)
+except Exception: sys.exit(1)
+for si in data:
+    if si.get('properties', {}).get('media.name') == '$TAG':
+        vol = si.get('volume', {})
+        pct = next(iter(vol.values()), {}).get('value_percent', '?') if vol else '?'
+        print(si['index'], 'yes' if si.get('mute') else 'no', pct)
+        break
+"
+}
+
+data=$(read_stream)
+if [ -z "$data" ]; then
+    notify-send -u critical "Capture card" "No active audio.\nIs the capture card open?" 2>/dev/null
+    echo "Stream '$TAG' not found. Is 'capture-card' running?" >&2
+    exit 1
+fi
+read -r idx muted volume <<<"$data"
+
+case "$action" in
+    toggle) pactl set-sink-input-mute   "$idx" toggle ;;
+    up)     pactl set-sink-input-volume "$idx" +5%    ;;
+    down)   pactl set-sink-input-volume "$idx" -5%    ;;
+    status) ;;
+    *) echo "Usage: $0 [toggle|up|down|status]" >&2; exit 1 ;;
+esac
+
+# Re-read so the notification shows the applied state, not the previous one.
+read -r idx muted volume <<<"$(read_stream)"
+if [ "$muted" = yes ]; then
+    notify-send -t 1200 -h string:x-dunst-stack-tag:capture-card \
+        "Capture card" "Muted" 2>/dev/null
+    echo "muted"
+else
+    notify-send -t 1200 -h string:x-dunst-stack-tag:capture-card \
+        "Capture card" "Volume $volume" 2>/dev/null
+    echo "volume $volume"
+fi

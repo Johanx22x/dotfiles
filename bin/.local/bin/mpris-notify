@@ -1,120 +1,117 @@
 #!/usr/bin/env bash
-# mpris-notify - notificacion de dunst al cambiar de pista en el navegador
+# mpris-notify - dunst notification when the browser changes track
 #
-# Lo arranca hyprland.lua en el autostart, junto a los otros vigilantes
-# (wl-paste, cliphist). No lleva unidad de systemd a proposito: aqui el
-# patron son los hl.exec_cmd del autostart, y esto es exactamente eso.
+# Started by hyprland.lua in autostart, next to the other watchers
+# (wl-paste, cliphist). No systemd unit on purpose: the pattern here is the
+# hl.exec_cmd entries of autostart, and this is exactly that.
 #
-# Para probarlo a mano, sin reiniciar la sesion:
+# To test it by hand, without restarting the session:
 #   pkill -f 'playerctl.*--follow'; mpris-notify &
 
 set -uo pipefail
 
-# Una sola instancia. Dos vigilantes vivos = dos notificaciones por
-# pista, y es facil acabar asi: basta con lanzarlo a mano para probar y
-# olvidarse de que el autostart ya lo tenia corriendo. El descriptor 9
-# se queda abierto mientras vive el proceso, asi que el cerrojo se
-# suelta solo al morir, incluso a la brava.
+# One instance only. Two live watchers = two notifications per track, and it
+# is easy to end up there: launch it by hand to test and forget autostart
+# already had one running. File descriptor 9 stays open for the life of the
+# process, so the lock releases on its own when it dies, even abruptly.
 exec 9>"${XDG_RUNTIME_DIR:-/tmp}/mpris-notify.lock"
 flock -n 9 || exit 0
 
-# Solo navegadores. mpv y Celluloid tambien hablan MPRIS, y una
-# notificacion por cada pelicula que abres no es lo que se pidio.
-# playerctl empareja por prefijo, asi que "brave" pilla
-# brave.instance3689 y lo que venga.
+# Browsers only. mpv and Celluloid speak MPRIS too, and a notification for
+# every film you open is not what was asked for. playerctl matches by
+# prefix, so "brave" catches brave.instance3689 and whatever else.
 JUGADORES="${MPRIS_NOTIFY_PLAYERS:-brave,firefox,chromium}"
 
-# La carátula se copia aqui antes de notificar. Chromium borra su
-# archivo temporal en cuanto cambia la pista, y dunst lee la imagen un
-# instante despues de recibir la notificacion: sin la copia, la carrera
-# se pierde de vez en cuando y la notificacion sale sin imagen.
+# The cover art is copied here before notifying. Chromium deletes its
+# temporary file as soon as the track changes, and dunst reads the image an
+# instant after receiving the notification: without the copy, the race is
+# lost every now and then and the notification comes up with no image.
 PORTADA="${XDG_RUNTIME_DIR:-/tmp}/mpris-notify-cover"
 
-# id fijo -> cada pista SUSTITUYE la notificacion anterior en vez de
-# apilarse. Encadenar cinco canciones no deja cinco popups.
+# Fixed id -> each track REPLACES the previous notification instead of
+# stacking. Playing five songs in a row does not leave five popups.
 ID=2593
 
-# Segundos de margen para que el navegador publique la caratula de
-# verdad (ver la nota larga en el bucle). Si alguna vez sigue saliendo
-# el icono del navegador, sube esto antes que tocar nada mas.
+# Seconds of slack for the browser to publish the real cover art (see the
+# long note in the loop). If the browser icon still shows up sometimes,
+# raise this before touching anything else.
 ESPERA_CARATULA="${MPRIS_NOTIFY_DELAY:-1.5}"
 
-# Separador para partir la linea de playerctl. Se usa un caracter de
-# control (unit separator) y no ":" o "|" porque los titulos de YouTube
-# llevan de todo.
+# Separator used to split playerctl's line. A control character (unit
+# separator) is used rather than ":" or "|" because YouTube titles contain
+# absolutely anything.
 SEP=$'\x1f'
 
-# Al morir hay que llevarse el playerctl. Con una tuberia normal no
-# pasaba: matabas el script y el vigilante seguia vivo, huerfano, hasta
-# cerrar sesion -- y cada prueba dejaba otro. Por eso se usa sustitucion
-# de proceso, que si da su PID en $!.
+# On exit the playerctl has to go too. With a plain pipe it did not: you
+# killed the script and the watcher stayed alive, orphaned, until you logged
+# out -- and every test left another one. Hence process substitution, which
+# does give its PID in $!.
 limpiar() { [[ -n "${VIGILANTE:-}" ]] && kill "$VIGILANTE" 2>/dev/null; }
 
-# Dos traps y no uno: en bash, un manejador de INT/TERM que no llama a
-# exit deja el script CORRIENDO despues de atenderlo. Con un solo
-# "trap limpiar EXIT INT TERM", un kill se llevaba el playerctl y el
-# script seguia vivo, reenganchandose a los cinco segundos.
+# Two traps and not one: in bash, an INT/TERM handler that does not call
+# exit leaves the script RUNNING after handling it. With a single
+# "trap cleanup EXIT INT TERM", a kill took the playerctl down and the
+# script stayed alive, reattaching five seconds later.
 trap limpiar EXIT
 trap 'limpiar; exit 0' INT TERM
 
 while :; do
-    # "metadata" no es opcional: --format es un modificador del comando,
-    # no de playerctl. Sin el, playerctl escupe el modo de empleo por
-    # stderr y sale, que con el 2>/dev/null de al lado es un fallo mudo.
+    # "metadata" is not optional: --format is a modifier of the command, not
+    # of playerctl. Without it, playerctl prints its usage to stderr and
+    # exits, which with the 2>/dev/null next to it is a silent failure.
     exec 3< <(playerctl --player "$JUGADORES" --follow metadata \
         --format "{{title}}${SEP}{{artist}}${SEP}{{mpris:artUrl}}" 2>/dev/null)
     VIGILANTE=$!
 
     while IFS="$SEP" read -r titulo artista arte <&3; do
-        # Al parar la reproduccion playerctl emite una linea vacia.
+        # When playback stops, playerctl emits an empty line.
         [[ -z "${titulo// /}" ]] && continue
 
-        # YouTube Music publica el artista como "Fulano - Topic": son
-        # los canales que genera automaticamente para la musica. El
-        # sufijo no aporta nada en una notificacion.
+        # YouTube Music publishes the artist as "Someone - Topic": those are
+        # the channels it auto-generates for music. The suffix adds nothing
+        # to a notification.
         artista="${artista% - Topic}"
 
-        # Misma pista con metadatos retocados (a YouTube le da por
-        # reescribir artUrl a mitad de cancion) no vuelve a notificar.
+        # The same track with tweaked metadata (YouTube likes rewriting
+        # artUrl mid-song) does not notify again.
         actual="${titulo}${SEP}${artista}"
         [[ "${anterior:-}" == "$actual" ]] && continue
         anterior="$actual"
 
-        # -- Esperar a que llegue la caratula de verdad --
-        # Al empezar una pista, Brave publica primero el titulo y el
-        # artista, y deja mpris:artUrl apuntando a un provisional: el
-        # icono de la pagina. Si se notifica en ese instante sale el
-        # logo de Brave en vez de la portada del disco.
+        # -- Wait for the real cover art --
+        # When a track starts, Brave publishes the title and artist first and
+        # leaves mpris:artUrl pointing at a placeholder: the page icon. Notify
+        # at that instant and you get the Brave logo instead of the album
+        # cover.
         #
-        # Asi que se deja un respiro y se vuelve a preguntar. La
-        # notificacion sale un segundo mas tarde, que en un aviso de
-        # cambio de cancion no lo nota nadie.
+        # So it waits a beat and asks again. The notification arrives a second
+        # later, which in a track-change alert nobody notices.
         sleep "$ESPERA_CARATULA"
 
         titulo_ahora=$(playerctl --player "$JUGADORES" metadata title 2>/dev/null)
         if [[ -n "$titulo_ahora" && "$titulo_ahora" != "$titulo" ]]; then
-            # Cambio de pista durante la espera (saltaste de cancion).
-            # No se notifica esta: la linea de la nueva ya viene en cola
-            # y esa si llevara su caratula.
+            # Track changed during the wait (you skipped). This one is not
+            # notified: the new track's line is already queued and that one
+            # will carry its cover.
             #
-            # La condicion pide titulo NO VACIO a proposito. Durante la
-            # transicion el navegador puede devolver un titulo vacio un
-            # instante; si eso contara como "cambio de pista" se saltaria
-            # la notificacion, y como "anterior" ya quedo apuntado, esa
-            # cancion no volveria a avisar nunca.
+            # The condition asks for a NON-EMPTY title on purpose. During the
+            # transition the browser can return an empty title for an
+            # instant; if that counted as "track changed" the notification
+            # would be skipped, and since "previous" was already recorded,
+            # that song would never announce itself again.
             continue
         fi
 
-        # Si la consulta falla o vuelve vacia nos quedamos con el artUrl
-        # que traia la linea: peor una caratula provisional que ninguna.
+        # If the query fails or comes back empty we keep the artUrl the line
+        # carried: a placeholder cover beats no cover.
         arte_fresco=$(playerctl --player "$JUGADORES" metadata mpris:artUrl 2>/dev/null)
         [[ -n "$arte_fresco" ]] && arte="$arte_fresco"
 
-        # -- Caratula --
-        # Los navegadores basados en Chromium dan un file:// local ya
-        # descargado. Firefox suele dar la URL https de origen, asi que
-        # hay que bajarla; con tope de tiempo, que una notificacion no
-        # puede quedarse esperando a la red.
+        # -- Cover art --
+        # Chromium-based browsers give a local file:// already downloaded.
+        # Firefox usually gives the origin https URL, so it has to be
+        # fetched; with a timeout, because a notification cannot sit waiting
+        # on the network.
         imagen=()
         case "$arte" in
             file://*)
@@ -128,16 +125,16 @@ while :; do
                 ;;
         esac
 
-        # Sin caratula se cae al icono de tema por defecto en vez de
-        # quedarse sin nada.
+        # With no cover it falls back to a default theme icon instead of
+        # showing nothing.
         [[ ${#imagen[@]} -eq 0 ]] && imagen=(-i multimedia-player)
 
         dunstify -a "mpris-notify" -u low -t 6000 -r "$ID" \
             "${imagen[@]}" -- "$titulo" "$artista"
     done
 
-    # Si el navegador se cierra, playerctl --follow termina. Se espera y
-    # se vuelve a enganchar en vez de morir para el resto de la sesion.
+    # If the browser closes, playerctl --follow ends. It waits and reattaches
+    # instead of dying for the rest of the session.
     exec 3<&-
     limpiar
     sleep 5

@@ -1,19 +1,20 @@
 [Unit]
-Description=Rota el wallpaper cada 30 minutos
+Description=Rotate the wallpaper every 30 minutes
 
 [Timer]
-# Primer cambio 5 min despues de que arranca el timer, luego cada 30 min.
+# First change 5 min after the timer starts, then every 30 min.
 #
-# OJO: aqui va OnActiveSec y no OnStartupSec. OnStartupSec se mide desde
-# que arranco systemd --user; si habilitas el timer despues de eso, ese
-# instante ya paso y el timer se queda sin proxima ejecucion (NEXT = -).
-# OnActiveSec se mide desde que el timer se activa, que es lo que queremos.
+# CAREFUL: this is OnActiveSec, not OnStartupSec. OnStartupSec is measured
+# from when systemd --user started; if you enable the timer after that, the
+# moment has already passed and the timer is left with no next run (NEXT = -).
+# OnActiveSec is measured from when the timer is activated, which is what we
+# want.
 #
-# Para cambiar el intervalo edita OnUnitActiveSec y corre:
+# To change the interval, edit OnUnitActiveSec and run:
 #   systemctl --user daemon-reload && systemctl --user restart wallpaper-rotate.timer
 OnActiveSec=5min
 OnUnitActiveSec=30min
-# Evita que varios timers se disparen exactamente a la vez
+# Keeps several timers from firing at exactly the same instant
 AccuracySec=30s
 Persistent=false
 

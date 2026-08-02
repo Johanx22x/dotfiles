@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# =============================================================
+#  capture-card — viewer for the NZXT Signal HD60 (PS5 / Switch 2)
+#
+#  Equivalent to the PotPlayer setup on Windows: video only, no window
+#  decoration, toggling between 1080p and fullscreen with the f key.
+#
+#  The audio does NOT go through mpv. It runs in parallel through a PipeWire
+#  loopback, so mpv does not add buffering while syncing A/V. While playing
+#  you want video and audio each going as fast as they can, not waiting for
+#  each other.
+#
+#  That loopback is tagged with mpv's PID so Discord also sends it when
+#  sharing the screen. The reason why is at the end of the script.
+#
+#  Keys inside mpv:
+#    f            fullscreen <-> 1080p window
+#    q  /  Esc    quit
+#    ctrl + +/-   adjust the audio delay if it feels out of sync
+#
+#  Variables:
+#    CAP_FMT=nv12      Back to 4:2:0. Defaults to yuyv422 (4:2:2), sharper on
+#                      text and menus. ~250 MB/s against ~186, which USB 3
+#                      swallows easily.
+#    CAP_FS=1          Start straight in fullscreen
+#    CAP_ALAT=20       Audio latency in ms. Defaults to 10. If you hear clicks
+#                      or dropouts, raise it to 15 or 20.
+#    CAP_TEAR=1        Minimum latency at the cost of tearing: mpv stops
+#                      waiting for vsync. Only useful in very twitchy games.
+#    CAP_NOAUDIO=1     No audio (if you route it elsewhere)
+# =============================================================
+set -uo pipefail
+
+FMT="${CAP_FMT:-yuyv422}"
+ALAT="${CAP_ALAT:-10}"
+
+# -------------------------------------------------------------
+# Locate the device by NAME, not by /dev/video0.
+# The number changes depending on the order in which cameras and the capture
+# card are connected at boot.
+# -------------------------------------------------------------
+DEV=""
+for d in /dev/video*; do
+    [ -e "$d" ] || continue
+    v4l2-ctl -d "$d" --info 2>/dev/null | grep -qi 'Signal HD60' || continue
+    # /dev/videoN of the same card can be the metadata node; keep the one
+    # that actually offers capture formats.
+    v4l2-ctl -d "$d" --list-formats-ext 2>/dev/null | grep -q 'NV12' || continue
+    DEV="$d"; break
+done
+
+if [ -z "$DEV" ]; then
+    echo "Cannot find the NZXT Signal HD60. Is it plugged in?" >&2
+    echo "Devices seen:" >&2
+    v4l2-ctl --list-devices 2>&1 | sed 's/^/  /' >&2
+    exit 1
+fi
+echo "Capture card: $DEV  (format $FMT)"
+
+# -------------------------------------------------------------
+# Capture card audio source
+#
+# Only located here. The loopback is started AFTER mpv, because it needs its
+# PID: see the audio block at the end of the script.
+# -------------------------------------------------------------
+SRC=""
+if [ "${CAP_NOAUDIO:-0}" != 1 ]; then
+    SRC=$(pactl list short sources 2>/dev/null \
+          | awk '/Signal_HD60/ && !/\.monitor/ {print $2; exit}')
+    [ -n "$SRC" ] || echo "Warning: cannot find the capture card audio source" >&2
+fi
+
+# -------------------------------------------------------------
+# mpv
+# -------------------------------------------------------------
+args=(
+    "av://v4l2:$DEV"
+
+    # -o-add rather than -o so we do NOT override what the low-latency
+    # profile sets (fflags=+nobuffer, among others).
+    --demuxer-lavf-o-add=video_size=1920x1080
+    --demuxer-lavf-o-add="input_format=$FMT"
+    --demuxer-lavf-o-add=framerate=60
+
+    --profile=low-latency
+    --untimed                       # show every frame as soon as it arrives
+    --no-audio                      # audio goes through the loopback
+
+    # The low-latency profile does not touch the swapchain depth, which
+    # defaults to 2 queued frames. At 60 Hz that is ~16 ms of pure delay.
+    # With 1 the frame goes out as soon as it is ready.
+    --swapchain-depth=1
+    --cache=no
+    # Minimal probe on open: the signal is raw and known, there is nothing to
+    # analyse. Shortens startup, not the running latency.
+    --demuxer-lavf-probesize=32
+
+    --no-border                     # no decoration: video only
+    --title-bar=no
+    --wayland-app-id=capture-card   # own identity for the Hyprland rule
+    --wayland-content-type=game     # hint to the compositor: prioritise latency
+    --autofit=1920x1080
+    --cursor-autohide=1000
+    --no-osc                        # no on-screen controls
+    --keep-open=no
+    --title=capture-card
+    --input-conf="$HOME/.config/mpv/capture-card-input.conf"
+)
+
+[[ ${CAP_FS:-0} == 1 ]] && args+=( --fullscreen )
+
+# Tearing mode: mpv presents without waiting for vsync. Shaves off up to one
+# more frame, in exchange for possible horizontal tears in the image.
+if [[ ${CAP_TEAR:-0} == 1 ]]; then
+    args+=( --vo=gpu-next --gpu-api=vulkan --vulkan-swap-mode=immediate )
+fi
+
+# CAREFUL: 'exec' is NOT used here. With exec, mpv replaces this bash and the
+# trap below goes with it, so the audio loopback is left hanging and the
+# console keeps playing after the window is closed.
+mpv "${args[@]}" &
+MPV=$!
+
+# -------------------------------------------------------------
+# Audio: PipeWire loopback tagged with mpv's PID
+#
+# Why the PID. When sharing the screen, Discord does not capture the system
+# mix: it looks at PulseAudio sink-inputs and keeps only those whose
+# application.process.id matches the PID of the shared window
+# (discord_native_lib/src/media/soundshare/pulseaudio_controller.cpp).
+#
+# A module-loopback belongs to no process: its sink-input comes out with no
+# application.process.id, so Discord never associates it with the capture
+# card window. That was the reason the game could be heard here but not in
+# the stream. And mpv does not help either, because it runs with --no-audio:
+# as far as Discord is concerned that window produces no sound.
+#
+# module-loopback cannot fix it: its sink_input_properties ignores the
+# application.* keys and only honours media.name. pw-loopback does let them
+# be set, so we give it mpv's PID and the audio becomes, in Discord's eyes,
+# "the sound of the capture card window".
+#
+# The audio still does not go through mpv, which is what avoided the A/V sync
+# latency. This only changes the stream's label, not its route.
+# -------------------------------------------------------------
+AUDIO=""
+if [ -n "$SRC" ]; then
+    # media.name=capture-card-audio is what the capture-card-audio script
+    # looks for to mute or change the volume; do not touch it without
+    # changing it there too.
+    pw-loopback --latency "$ALAT" --capture "$SRC" \
+        --playback-props="media.name=capture-card-audio application.name=CaptureCard application.process.binary=mpv application.process.id=$MPV" \
+        >/dev/null 2>&1 &
+    AUDIO=$!
+    echo "Audio: loopback active (${ALAT} ms, tied to PID $MPV)"
+fi
+
+# Kill the loopback no matter how we exit, Ctrl+C included. Otherwise every
+# run leaves a stray process behind and you end up with echo and latency.
+cleanup() { [ -n "$AUDIO" ] && kill "$AUDIO" 2>/dev/null; AUDIO=""; }
+trap cleanup EXIT INT TERM
+
+wait "$MPV"
+status=$?
+cleanup
+trap - EXIT INT TERM
+exit "$status"

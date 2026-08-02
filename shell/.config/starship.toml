@@ -1,13 +1,13 @@
 #  ~/.config/starship.toml
 #
-# Estilo minimalista de una linea.
-# Los colores usan nombres ANSI (purple, green, ...) en vez de hex,
-# para que sigan la paleta que matugen genera para kitty.
+# Minimal single-line style.
+# Colours use ANSI names (purple, green, ...) rather than hex, so they follow
+# the palette matugen generates for kitty.
 
-# Deja una linea en blanco antes de cada prompt: respira mejor.
+# Leaves a blank line before each prompt: it breathes better.
 add_newline = true
 
-# Orden de los modulos. Lo que no aparezca aqui no se muestra.
+# Module order. Anything not listed here is not shown.
 format = """
 $directory\
 $git_branch\
@@ -21,7 +21,7 @@ $character"""
 # ---------------------------------------------------------------- directorio
 [directory]
 style = "bold cyan"
-truncation_length = 3         # muestra como maximo 3 niveles
+truncation_length = 3         # show at most 3 levels
 truncate_to_repo = true       # dentro de un repo, la raiz es el repo
 truncation_symbol = "…/"
 read_only = "  "
@@ -56,7 +56,7 @@ renamed = "»${count}"
 deleted = "✘${count}"
 
 # ------------------------------------------------------------------ lenguajes
-# Solo aparecen dentro de un proyecto de ese lenguaje.
+# They only show up inside a project of that language.
 [nodejs]
 format = "via [$symbol($version )]($style)"
 symbol = " "
@@ -107,19 +107,19 @@ format = "via [$symbol$context]($style) "
 symbol = " "
 style = "bold blue"
 
-# ------------------------------------------------------------------ duracion
+# ------------------------------------------------------------------ duration
 [cmd_duration]
-min_time = 2000               # solo si tardo mas de 2s
+min_time = 2000               # only if it took more than 2s
 format = "took [$duration]($style) "
 style = "bold yellow"
 
-# ------------------------------------------------------------------ caracter
-# Verde si el comando anterior salio bien, rojo si fallo.
+# ------------------------------------------------------------------ character
+# Green if the previous command succeeded, red if it failed.
 [character]
 success_symbol = "[❯](bold green)"
 error_symbol = "[❯](bold red)"
 vimcmd_symbol = "[❮](bold purple)"
 
-# ------------------------------------------------------------------ apagados
+# ------------------------------------------------------------------ disabled
 [package]
-disabled = true               # ruidoso: version del package.json en cada prompt
+disabled = true               # noisy: the package.json version on every prompt

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# wallpaper-switch - cambia el wallpaper y regenera la paleta de acentos
+# wallpaper-switch - change the wallpaper and regenerate the accent palette
 #
-#   wallpaper-switch next     siguiente de la coleccion (orden alfabetico)
-#   wallpaper-switch prev     anterior
-#   wallpaper-switch random   uno al azar (distinto del actual)
-#   wallpaper-switch set RUTA uno especifico
-#   wallpaper-switch reapply  vuelve a aplicar el actual (util tras editar plantillas)
+#   wallpaper-switch next     next one in the collection (alphabetical)
+#   wallpaper-switch prev     previous one
+#   wallpaper-switch random   a random one (different from the current)
+#   wallpaper-switch set PATH a specific one
+#   wallpaper-switch reapply  reapply the current one (handy after editing templates)
 #
-# La coleccion vive en ~/Pictures/wallpapers
+# The collection lives in ~/Pictures/wallpapers
 
 set -uo pipefail
 
@@ -15,16 +15,16 @@ WALLPAPER_DIR="${WALLPAPER_DIR:-$HOME/Pictures/wallpapers}"
 STATE_FILE="$HOME/.cache/wallpaper-current"
 MODE="${1:-next}"
 
-# ---- Transicion ----
-# Tipos: none simple fade left right top bottom wipe wave grow center any outer random
-# Se pueden sobreescribir por entorno, ej:
+# ---- Transition ----
+# Types: none simple fade left right top bottom wipe wave grow center any outer random
+# They can be overridden from the environment, e.g.:
 #   TRANSITION_TYPE=wave wallpaper-switch next
 TRANSITION_TYPE="${TRANSITION_TYPE:-fade}"
 TRANSITION_DURATION="${TRANSITION_DURATION:-1.4}"
 
-# Solo aplica a 'fade': curva que controla la aceleracion de la
-# disolvencia. Esta arranca y termina suave (ease-in-out).
-# Para una disolvencia lineal usa 0.0,0.0,1.0,1.0
+# Only applies to 'fade': the curve controlling the acceleration of the
+# dissolve. This one starts and ends smoothly (ease-in-out).
+# For a linear dissolve use 0.0,0.0,1.0,1.0
 TRANSITION_BEZIER="${TRANSITION_BEZIER:-.42,0,.58,1}"
 
 mkdir -p "$(dirname "$STATE_FILE")"
@@ -32,7 +32,7 @@ mkdir -p "$(dirname "$STATE_FILE")"
 die() { echo "wallpaper-switch: $*" >&2; exit 1; }
 
 # ---------------------------------------------------------------
-# 1. Reunir la coleccion
+# 1. Gather the collection
 # ---------------------------------------------------------------
 mapfile -t WALLPAPERS < <(
     find -L "$WALLPAPER_DIR" -maxdepth 2 -type f \
@@ -40,19 +40,19 @@ mapfile -t WALLPAPERS < <(
            -o -iname '*.webp' -o -iname '*.bmp' \) | sort
 )
 
-(( ${#WALLPAPERS[@]} == 0 )) && die "no hay imagenes en $WALLPAPER_DIR"
+(( ${#WALLPAPERS[@]} == 0 )) && die "no images in $WALLPAPER_DIR"
 
 CURRENT=""
 [[ -r "$STATE_FILE" ]] && CURRENT="$(<"$STATE_FILE")"
 
-# Indice del actual dentro de la coleccion (-1 si no esta)
+# Index of the current one within the collection (-1 if not there)
 INDEX=-1
 for i in "${!WALLPAPERS[@]}"; do
     [[ "${WALLPAPERS[$i]}" == "$CURRENT" ]] && { INDEX=$i; break; }
 done
 
 # ---------------------------------------------------------------
-# 2. Elegir el siguiente
+# 2. Pick the next one
 # ---------------------------------------------------------------
 TOTAL=${#WALLPAPERS[@]}
 case "$MODE" in
@@ -62,7 +62,7 @@ case "$MODE" in
         if (( TOTAL == 1 )); then
             TARGET="${WALLPAPERS[0]}"
         else
-            # Repite hasta sacar uno distinto al actual
+            # Repeat until we get one different from the current
             while :; do
                 PICK=$(( RANDOM % TOTAL ))
                 [[ "${WALLPAPERS[$PICK]}" != "$CURRENT" ]] && break
@@ -76,17 +76,17 @@ case "$MODE" in
         TARGET="$(realpath "$TARGET")"
         ;;
     reapply)
-        [[ -f "$CURRENT" ]] || die "no hay wallpaper actual que reaplicar"
+        [[ -f "$CURRENT" ]] || die "no current wallpaper to reapply"
         TARGET="$CURRENT"
         ;;
     *) die "modo desconocido '$MODE' (usa next|prev|random|set|reapply)" ;;
 esac
 
 # ---------------------------------------------------------------
-# 3. Entorno grafico
+# 3. Graphical environment
 # ---------------------------------------------------------------
-# Bajo systemd --user estas variables pueden no estar. Sin ellas ni
-# awww ni hyprctl encuentran el compositor.
+# Under systemd --user these variables may be missing. Without them
+# neither awww nor hyprctl can find the compositor.
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
@@ -101,9 +101,9 @@ if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" && -d "$XDG_RUNTIME_DIR/hypr" ]]; th
 fi
 
 # ---------------------------------------------------------------
-# 4. Poner el wallpaper
+# 4. Set the wallpaper
 # ---------------------------------------------------------------
-# El demonio tarda un momento en levantar la primera vez.
+# The daemon takes a moment to come up the first time.
 if ! awww query >/dev/null 2>&1; then
     awww-daemon >/dev/null 2>&1 &
     for _ in {1..20}; do
@@ -112,8 +112,8 @@ if ! awww query >/dev/null 2>&1; then
     done
 fi
 
-# 165 fps = el refresco real de ambos monitores. Con menos la
-# transicion se ve entrecortada aunque el efecto sea el correcto.
+# 165 fps = the real refresh rate of both monitors. Any less and the
+# transition looks choppy even when the effect itself is right.
 awww img "$TARGET" \
     --transition-type "$TRANSITION_TYPE" \
     --transition-duration "$TRANSITION_DURATION" \
@@ -124,23 +124,23 @@ awww img "$TARGET" \
 echo "$TARGET" > "$STATE_FILE"
 
 # ---------------------------------------------------------------
-# 5. Regenerar la paleta
+# 5. Regenerate the palette
 # ---------------------------------------------------------------
-# --prefer es obligatorio: sin terminal interactiva matugen no sabe
-# cual color elegir cuando la imagen tiene varios candidatos.
-# saturation da acentos con mas caracter que darkness/lightness.
+# --prefer is mandatory: with no interactive terminal matugen cannot tell
+# which colour to pick when the image has several candidates.
+# saturation gives accents with more character than darkness/lightness.
 matugen image "$TARGET" --mode dark --prefer saturation --quiet \
     || die "matugen fallo"
 
 # ---------------------------------------------------------------
-# 6. Aplicar el borde de Hyprland en vivo
+# 6. Apply the Hyprland border live
 # ---------------------------------------------------------------
-# matugen ya escribio colors.lua (que se lee al arrancar), pero para
-# que el cambio se vea ahora mismo hay que empujarlo al compositor.
+# matugen already wrote colors.lua (which is read at startup), but for the
+# change to show up right now it has to be pushed to the compositor.
 #
-# OJO: "hyprctl keyword" NO sirve con config en Lua -- responde
-# "keyword can't work with non-legacy parsers". Hay que usar
-# "hyprctl eval", que ejecuta codigo Lua contra la config viva.
+# CAREFUL: "hyprctl keyword" does NOT work with a Lua config -- it answers
+# "keyword can't work with non-legacy parsers". You have to use
+# "hyprctl eval", which runs Lua code against the live config.
 COLORS_LUA="$HOME/.config/hypr/colors.lua"
 if [[ -r "$COLORS_LUA" ]] && command -v hyprctl >/dev/null; then
     ACCENT=$(grep -oP 'accent\s*=\s*"\K[0-9a-fA-F]{6}'  "$COLORS_LUA" | head -1)

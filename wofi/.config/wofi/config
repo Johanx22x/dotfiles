@@ -1,37 +1,42 @@
 # -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-# WOFI - comportamiento
-# El aspecto va en style.css. Estas opciones son las que
-# hyprland.lua no pasa por CLI (solo pasa --show drun).
+# WOFI - behaviour
+#
+# Only the clipboard history menu (SUPER + V) reads this file. The app
+# launcher and the power menu are started by ~/.local/bin/wofi-drun and
+# ~/.local/bin/hypr-powermenu, which run wofi with XDG_CONFIG_HOME pointing
+# at an empty directory and therefore pass every option on the command line.
+#
+# Appearance lives in style.css.
 # -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
-# Tamano de la ventana. Acepta px o porcentaje.
+# Window size. Accepts px or a percentage.
 width=600
 height=420
 
-# Texto de la barra de busqueda cuando esta vacia
-prompt=Buscar
+# Placeholder text in the search bar
+prompt=Search
 
-# Busqueda insensible a mayusculas y difusa (no exige coincidencia exacta)
+# Case-insensitive and fuzzy search (no exact match required)
 insensitive=true
 matching=fuzzy
 
-# Iconos de las aplicaciones
+# Application icons
 allow_images=true
 image_size=28
 
-# Oculta la barra de scroll (el estilo la asume oculta)
+# Hide the scrollbar (the stylesheet assumes it is hidden)
 hide_scroll=true
 
-# Ejecuta la app en cuanto solo queda un resultado? No: molesta al escribir.
-# insensitive a esto, dejalo en false salvo que quieras lanzar sin Enter.
+# Run the app as soon as a single result is left? No: it gets in the way
+# while typing. Leave it false unless you want to launch without Enter.
 # auto_select=false
 
-# Terminal para las apps que declaran Terminal=true en su .desktop
+# Terminal for apps declaring Terminal=true in their .desktop
 term=kitty
 
-# Oculta las "acciones" extra de los .desktop (Abrir ventana nueva, etc.)
-# Ponlo en false si las quieres ver.
+# Hide the extra .desktop "actions" (Open new window, etc.)
+# Set to false if you want to see them.
 no_actions=true
 
-# La capa del compositor. overlay = siempre por encima, incluso de waybar.
+# Compositor layer. overlay = always on top, even over waybar.
 layer=overlay
