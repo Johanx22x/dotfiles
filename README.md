@@ -11,11 +11,8 @@
 </p>
 
 <p align="center">
-    <img src="assets/preview-dashboard.png" alt="The same shell on a green palette, with the island's dashboard open: clock, calendar, volume, Wi-Fi, Bluetooth, the screen recorder and the instant replay buffer" width="100%">
-</p>
-
-<p align="center">
-    <img src="assets/preview-media.png" alt="The island on its Media tab with cover art and transport, a notification arriving top right, and ranger, Loupe and Nautilus on the wallpaper folder" width="100%">
+    <img src="assets/preview-dashboard.png" alt="The same shell on a green palette, with the island's dashboard open: clock, calendar, volume, Wi-Fi, Bluetooth, the screen recorder and the instant replay buffer" width="49%">
+    <img src="assets/preview-media.png" alt="The island on its Media tab with cover art and transport, a notification arriving top right, and ranger, Loupe and Nautilus on the wallpaper folder" width="49%">
 </p>
 
 <p align="center">
