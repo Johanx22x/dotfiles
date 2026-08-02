@@ -40,10 +40,10 @@ if pgrep -x steam >/dev/null 2>&1; then
         sleep 1
     done
     if pgrep -x steam >/dev/null 2>&1; then
-        echo "No se ha cerrado solo. Cierralo a mano y vuelve a lanzarme." >&2
+        echo "It did not close on its own. Close it by hand and run me again." >&2
         exit 1
     fi
-    echo "Cerrado."
+    echo "Closed."
 fi
 
 # -------------------------------------------------------------
@@ -84,6 +84,6 @@ else
     steam_args=( steam -gamepadui )   # Big Picture
 fi
 
-echo "Lanzando Steam en gamescope ${W}x${H}@${HZ}..."
+echo "Launching Steam in gamescope ${W}x${H}@${HZ}..."
 echo "The window can take 10-15 seconds to appear. That is normal."
 exec gamescope "${args[@]}" -- "${steam_args[@]}"

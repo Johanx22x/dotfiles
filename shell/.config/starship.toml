@@ -18,11 +18,11 @@ $cmd_duration\
 $line_break\
 $character"""
 
-# ---------------------------------------------------------------- directorio
+# ----------------------------------------------------------------- directory
 [directory]
 style = "bold cyan"
 truncation_length = 3         # show at most 3 levels
-truncate_to_repo = true       # dentro de un repo, la raiz es el repo
+truncate_to_repo = true       # inside a repo, the root is the repo
 truncation_symbol = "…/"
 read_only = "  "
 read_only_style = "red"
@@ -55,7 +55,7 @@ staged = "+${count}"
 renamed = "»${count}"
 deleted = "✘${count}"
 
-# ------------------------------------------------------------------ lenguajes
+# ------------------------------------------------------------------ languages
 # They only show up inside a project of that language.
 [nodejs]
 format = "via [$symbol($version )]($style)"
