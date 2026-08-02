@@ -32,7 +32,9 @@ pragma Singleton
 
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.Pipewire
 import QtQuick
+import "root:/"
 import "root:/modules/island"
 
 Singleton {
@@ -104,21 +106,47 @@ Singleton {
         }
     }
 
-    // The screen being kept. The 1440p one -- the portrait monitor holds chat
-    // and a terminal, and buffering it would spend RAM on nothing worth
-    // replaying.
-    readonly property string monitor: "DP-3"
+    // The screen being kept: the shell's own main screen, so the buffer holds
+    // whatever the bar is on. Asked for by connector name because that is what
+    // gpu-screen-recorder's -w takes.
+    //
+    // NOT written down. "DP-3" used to be a literal here, and the name is
+    // assigned by the kernel: the move from linux-lts to mainline renamed both
+    // outputs on this machine once already, which would have left the buffer
+    // recording a monitor that no longer existed. Screens.qml resolves it live.
+    readonly property string monitor: Screens.mainName
 
     // The system's own sound and the microphone, MERGED INTO ONE TRACK. Passing
     // -a twice would give a file with two separate audio tracks, and most
     // players -- and everything you would send a clip to -- play only the
     // first, so half the sound would go missing on the way out.
     //
-    // default_output rather than the device name, so it follows the default
-    // sink when the headset connects and disconnects. The microphone IS named,
-    // because "default input" is whichever of the three the system last felt
-    // like, and this one is the one being asked for.
-    readonly property string microphone: "alsa_input.usb-NZXT_NZXT_USB_MIC_A00017_15_54-00.mono-fallback"
+    // default_output rather than a device name, so it follows the default sink
+    // when the headset connects and disconnects.
+    //
+    // THE MICROPHONE IS A PREFERENCE, NOT A REQUIREMENT. "default input" is
+    // whichever of the three inputs here the system last felt like, so the one
+    // worth recording is named -- but a named device that is not present makes
+    // gpu-screen-recorder refuse to start at all, and the buffer would be
+    // silently disarmed on any machine without that exact microphone. So the
+    // name is looked up first and default_input stands in when it is missing.
+    readonly property string preferredMicrophone: "alsa_input.usb-NZXT_NZXT_USB_MIC_A00017_15_54-00.mono-fallback"
+
+    // Subscribing is what populates the model: Pipewire objects are bound
+    // lazily, and a node list nothing has asked for stays empty.
+    readonly property int nodeCount: Pipewire.nodes.values.length
+
+    readonly property string microphone: {
+        // Referenced so the binding re-evaluates when a device appears or goes
+        // away, not only at startup.
+        root.nodeCount;
+
+        for (const node of Pipewire.nodes.values)
+            if (node.name === root.preferredMicrophone)
+                return root.preferredMicrophone;
+
+        return "default_input";
+    }
 
     property string lastClip: ""
 

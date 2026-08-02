@@ -16,6 +16,7 @@
 
 import Quickshell
 import QtQml
+import "root:/"
 import "modules"
 import "modules/bar"
 import "modules/cheatsheet"
@@ -35,18 +36,14 @@ ShellRoot {
         Component.onCompleted: ReplayState.armed
     }
 
-    // One Bar per matching screen. Variants is what makes this scale to both
-    // monitors on migration day: widen the filter and each screen gets its
-    // own bar with its own `modelData`.
+    // One Bar on the shell's main screen; see Screens.qml for how that one is
+    // chosen and why it is no longer a model name written out five times.
     //
-    // The screen is matched by MODEL, not by connector name: "HDMI-A-1" is
-    // assigned by the kernel and moves between kernel versions (same reason
-    // waybar matches on description). Quickshell reports serialNumber empty
-    // on both monitors here, so the model is the only stable handle -- it
-    // would only be ambiguous with two identical monitors, which is not the
-    // case: GS27FA (portrait) vs PG32QF2B (main).
+    // Variants is still what would make this scale to every monitor on the day
+    // that is wanted: `model: Quickshell.screens` and each screen gets its own
+    // bar with its own `modelData`. Workspaces.qml is already written for it.
     Variants {
-        model: Quickshell.screens.filter(screen => screen.model === "PG32QF2B")
+        model: Screens.mainOnly
 
         Bar {}
     }
@@ -54,7 +51,7 @@ ShellRoot {
     // The notification daemon, on the same screen as the bar. It takes the
     // org.freedesktop.Notifications bus name, so dunst must not be running.
     Variants {
-        model: Quickshell.screens.filter(screen => screen.model === "PG32QF2B")
+        model: Screens.mainOnly
 
         Notifications {}
     }
@@ -63,7 +60,7 @@ ShellRoot {
     // power menu: it takes an exclusive keyboard grab, and two of them would
     // be two surfaces fighting over the keyboard.
     Variants {
-        model: Quickshell.screens.filter(screen => screen.model === "PG32QF2B")
+        model: Screens.mainOnly
 
         Launcher {}
     }
@@ -72,7 +69,7 @@ ShellRoot {
     // deliberately: it is a single modal thing and a copy per screen would
     // mean two of them opening at once, both grabbing focus.
     Variants {
-        model: Quickshell.screens.filter(screen => screen.model === "PG32QF2B")
+        model: Screens.mainOnly
 
         PowerMenu {}
     }
@@ -82,7 +79,7 @@ ShellRoot {
     // exclusive keyboard grab, and two of them would be two surfaces fighting
     // over the keyboard.
     Variants {
-        model: Quickshell.screens.filter(screen => screen.model === "PG32QF2B")
+        model: Screens.mainOnly
 
         Cheatsheet {}
     }
