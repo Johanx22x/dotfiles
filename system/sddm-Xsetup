@@ -2,24 +2,57 @@
 # Runs as root before starting the SDDM greeter.
 #
 # The greeter runs on Xorg, which knows nothing about Hyprland's
-# `transform = 3`. Without this the Gigabyte comes up sideways on the login
-# screen.
+# `transform = 3`. Without this the portrait monitor comes up sideways on the
+# login screen.
 #
-# Outputs are matched by RESOLUTION, not by name: under the NVIDIA X driver
-# the names differ from Hyprland's (DP-3 / HDMI-A-1 here, DP-4 / HDMI-0
-# there) and they also change between boots.
+# Outputs are matched by SIZE, not by name: under the NVIDIA X driver the names
+# differ from Hyprland's (DP-3 / HDMI-A-1 there, DP-4 / HDMI-0 here) and they
+# also change between boots.
+#
+# NOT by a literal resolution either, which is what this used to do -- it
+# looked for the only 2560x1440 output. On a machine without one MAIN came out
+# empty, and then "the other one" matched the FIRST connected output: the
+# script rotated the only monitor there was and the login screen came up on its
+# side. Largest-wins has no such hole, and the guard below leaves a
+# single-monitor machine alone entirely.
 
 command -v xrandr >/dev/null || exit 0
 
-# The main one is the only 2560x1440 output.
-MAIN=$(xrandr | awk '/ connected/ && /2560x1440/ {print $1; exit}')
+XR=$(xrandr 2>/dev/null) || exit 0
 
-# The portrait one is "the other". Looking for 1920x1080 does NOT work: if
-# Xorg starts with the monitor already rotated, the line reads 1080x1920 and
-# the match fails.
-VERTICAL=$(xrandr | awk -v p="$MAIN" '/ connected/ && $1 != p {print $1; exit}')
+# Connected outputs that already have a mode, as "name width height". The
+# geometry field is the one shaped like 2560x1440+0+0; an output that is
+# connected but unconfigured has none, and is skipped.
+CONNECTED=$(echo "$XR" | awk '
+    / connected/ {
+        for (i = 2; i <= NF; i++)
+            if ($i ~ /^[0-9]+x[0-9]+\+[0-9-]+\+[0-9-]+$/) {
+                split($i, a, /[x+]/);
+                print $1, a[1], a[2];
+                break;
+            }
+    }')
 
-[ -n "$MAIN" ] && xrandr --output "$MAIN" --primary --pos 1080x240
+COUNT=$(echo "$CONNECTED" | grep -c .)
+
+# One screen, or none we can measure: nothing here applies. Leaving early is
+# the point -- everything below is about arranging a second monitor.
+[ "$COUNT" -lt 2 ] && exit 0
+
+# The biggest output is the main one.
+MAIN=$(echo "$CONNECTED" | awk '{ a = $2 * $3; if (a > best) { best = a; name = $1 } } END { print name }')
+[ -z "$MAIN" ] && exit 0
+
+# The portrait one is "the other". Looking for a resolution does NOT work: if
+# Xorg starts with the monitor already rotated, the line reads 1080x1920 and a
+# match on 1920x1080 fails.
+VERTICAL=$(echo "$CONNECTED" | awk -v p="$MAIN" '$1 != p { print $1; exit }')
+
+# The positions are this setup's layout: the portrait panel on the left at 0x0
+# and the main one to its right, centred against it vertically
+# ((1920 - 1440) / 2 = 240). These two --pos are the only numbers in the file
+# that are not derived; adjust them to your own arrangement.
+xrandr --output "$MAIN" --primary --pos 1080x240
 
 # --rotate right = 90 degrees clockwise. Confirmed: with Hyprland's rotation
 # applied, xrandr describes that monitor as "right".
