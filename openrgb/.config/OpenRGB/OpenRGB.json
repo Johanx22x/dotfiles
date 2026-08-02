@@ -2066,6 +2066,14 @@
             "Enabled": false
         }
     },
+    "LogManager": {
+        "dialog_no_show_hashes": [
+            16570991320436560612
+        ]
+    },
+    "Theme": {
+        "theme": "Dark"
+    },
     "UserInterface": {
         "autoload_profiles": {
             "exit_profile": {
@@ -2092,6 +2100,6 @@
         "greyscale_tray_icon": false,
         "language": "System Default",
         "minimize_on_close": false,
-        "run_zone_checks": true
+        "run_zone_checks": false
     }
 }
