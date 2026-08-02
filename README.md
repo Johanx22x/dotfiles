@@ -181,5 +181,17 @@ Tuned for an i5-13600K, an RTX 5070 (Blackwell, needs `nvidia-open-dkms`) and
 vertical.
 
 Monitors are matched **by EDID description**, not by port name — the kernel
-reassigns names like `DP-3` and `HDMI-A-1` between boots. On another machine
-you'll need to adjust that block in `hyprland.lua`.
+reassigns names like `DP-3` and `HDMI-A-1` between boots.
+
+**That block in `hyprland.lua` is the only thing tied to these screens.** It is
+a layout decision (which monitor is main, where the others sit, what is
+rotated), so the installer doesn't guess it — it checks whether the
+descriptions in the file match the hardware that's plugged in, and if not
+prints this machine's ready to paste. Everything else works it out at runtime:
+
+| | |
+|---|---|
+| Which screen the shell is on | `quickshell/Screens.qml` — largest landscape, with an override |
+| The replay buffer's monitor and mic | resolved live, never a connector name |
+| gamescope's virtual output | read off the monitor you're on |
+| The login screen's rotation | largest output wins, and a single-monitor machine is left alone |

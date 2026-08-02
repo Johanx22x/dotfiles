@@ -134,6 +134,54 @@ if ask "Generate it now?"; then
 fi
 
 # ---------------------------------------------------------------------------
+# Monitors. NOT rewritten automatically, and that is deliberate: which screen
+# is the main one, where the others sit around it and whether any is rotated is
+# a layout decision, not something to guess from an EDID. What can be done for
+# you is the mechanical half -- reading the descriptions off the hardware that
+# is actually plugged in, and saying whether the ones in the config match it.
+echo
+blue "== Monitors =="
+HYPR_CONF="$HOME/.config/hypr/hyprland.lua"
+if ! command -v hyprctl >/dev/null || ! hyprctl monitors -j >/dev/null 2>&1; then
+  echo "   Hyprland is not running, so the monitors cannot be read."
+  echo "   Log in and re-run this script, or edit the block by hand."
+elif [[ ! -f $HYPR_CONF ]]; then
+  echo "   $HYPR_CONF not found — run step 4 (stow) first."
+else
+  # Every description the config names, and whether it is attached right now.
+  MISSING=0
+  while IFS= read -r desc; do
+    if hyprctl monitors -j | jq -e --arg d "$desc" 'any(.description == $d)' >/dev/null; then
+      green "   attached: $desc"
+    else
+      red   "   NOT attached: $desc"
+      MISSING=1
+    fi
+  done < <(grep -oP 'desc:\K[^"]+' "$HYPR_CONF" | sort -u)
+
+  if (( MISSING )); then
+    echo
+    echo "   The lines below describe the monitors on THIS machine. Put the"
+    echo "   descriptions into the MONITOR_* variables at the top of"
+    echo "   hyprland.lua, then check mode/position/transform underneath:"
+    echo
+    # width/height are the PANEL's, before rotation: a monitor turned on its
+    # side still reports 1920x1080. `transform` is what says which way it faces.
+    hyprctl monitors -j | jq -r '.[] |
+      "     desc:\(.description)\n       \(.width)x\(.height)@\(.refreshRate|round)  " +
+      (if (.transform % 2) == 1 then "rotated, transform = \(.transform)"
+       elif .width > .height then "landscape"
+       else "portrait panel" end)'
+    echo
+    echo "   Everything else adapts on its own: the shell picks its screen at"
+    echo "   runtime (quickshell/Screens.qml) and gamescope reads the mode off"
+    echo "   whichever monitor you are on."
+  else
+    green "   the config matches the hardware, nothing to change"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 echo
 green "== Ready =="
 cat <<'END'
@@ -142,8 +190,7 @@ Left to do by hand:
 
   1. /etc  — see system/ and the table in the README. The fstab UUIDs belong
              to the original machine: do NOT copy it as is.
-  2. Monitors — hyprland.lua matches them by EDID description. On another
-             machine that block has to be adjusted.
+  2. Monitors — the layout block in hyprland.lua, if the check above said so.
   3. zsh as the default shell, if it is not already:
              chsh -s /usr/bin/zsh
 END
