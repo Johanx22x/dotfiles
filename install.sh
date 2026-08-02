@@ -68,6 +68,16 @@ fi
 #
 # This also covers the case the lists cannot anticipate: a package renamed or
 # dropped from the repos.
+#
+# WHY -Slq AND NOT -Si
+# The first version of this asked `pacman -Si` for each package and read the
+# name back out of the "Name : foo" line. That output is TRANSLATED: on a
+# Spanish system the field is "Nombre", the match found nothing, and the script
+# announced that all 129 packages were unavailable -- failing silently in the
+# worst possible direction, since "skip it" is what it does with a package it
+# cannot see. -Slq prints one package name per line and no field labels at all,
+# so there is nothing left to translate. It costs one call and 0.13s for the
+# ~15k names in the sync repos.
 install_list() {
   local file="$1" label="$2" pkgs=() available=() missing=()
 
@@ -75,7 +85,7 @@ install_list() {
   (( ${#pkgs[@]} )) || return 0
 
   mapfile -t available < <(
-    pacman -Si "${pkgs[@]}" 2>/dev/null | awk '/^Name/ { print $3 }' | sort -u)
+    comm -12 <(printf '%s\n' "${pkgs[@]}" | sort -u) <(pacman -Slq | sort -u))
   mapfile -t missing < <(
     comm -23 <(printf '%s\n' "${pkgs[@]}" | sort -u) <(printf '%s\n' "${available[@]}"))
 
