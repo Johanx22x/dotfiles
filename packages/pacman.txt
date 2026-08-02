@@ -17,6 +17,7 @@ celluloid
 cliphist
 discord
 dkms
+dmidecode
 efibootmgr
 eza
 fastfetch
@@ -42,6 +43,7 @@ hyprland
 hyprpicker
 hyprpolkitagent
 hyprshot
+i2c-tools
 inotify-tools
 intel-ucode
 jedi-language-server
