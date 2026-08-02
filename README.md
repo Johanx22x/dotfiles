@@ -57,7 +57,12 @@ is idempotent — re-running it is safe.
    and the 32-bit libraries) is offered separately, and only if you have the
    multilib repo enabled.
 3. **AUR** — installs `yay` if missing, then `packages/aur.txt`.
-4. **Symlinks** the config with stow, and enables the user systemd units.
+4. **Symlinks** the config with stow, and enables the user systemd units. stow
+   plans the whole operation and aborts all of it on the first conflict, so a
+   single pre-existing file means nothing gets linked — and there usually is
+   one, because Hyprland writes a default config into `~/.config/hypr` the
+   first time it runs. Conflicts are found up front and you're offered to
+   *move* them (never delete, never `--adopt`) into a timestamped folder.
 5. **Neovim** — clones [its own repo](https://github.com/Johanx22x/nvim).
 6. **Palette** — runs `wallpaper-switch` so the generated color files exist.
 
