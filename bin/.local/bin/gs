@@ -69,7 +69,7 @@ fi
 # odd input and a broken overlay. In that case do nothing and let the game
 # through.
 if [[ -n ${GAMESCOPE_WAYLAND_DISPLAY:-} ]]; then
-    echo "gs: ya estamos dentro de gamescope, no anido otro" >&2
+    echo "gs: already inside gamescope, not nesting another one" >&2
     if [[ ${GS_GAMEMODE:-1} == 1 ]] && command -v gamemoderun >/dev/null; then
         exec gamemoderun "$@"
     fi

@@ -72,14 +72,14 @@ case "$MODE" in
         ;;
     set)
         TARGET="${2:-}"
-        [[ -f "$TARGET" ]] || die "no existe el archivo: ${TARGET:-<vacio>}"
+        [[ -f "$TARGET" ]] || die "no such file: ${TARGET:-<empty>}"
         TARGET="$(realpath "$TARGET")"
         ;;
     reapply)
         [[ -f "$CURRENT" ]] || die "no current wallpaper to reapply"
         TARGET="$CURRENT"
         ;;
-    *) die "modo desconocido '$MODE' (usa next|prev|random|set|reapply)" ;;
+    *) die "unknown mode '$MODE' (use next|prev|random|set|reapply)" ;;
 esac
 
 # ---------------------------------------------------------------
@@ -119,7 +119,7 @@ awww img "$TARGET" \
     --transition-duration "$TRANSITION_DURATION" \
     --transition-bezier "$TRANSITION_BEZIER" \
     --transition-fps 165 \
-    || die "awww no pudo aplicar el wallpaper"
+    || die "awww could not apply the wallpaper"
 
 echo "$TARGET" > "$STATE_FILE"
 
@@ -130,7 +130,7 @@ echo "$TARGET" > "$STATE_FILE"
 # which colour to pick when the image has several candidates.
 # saturation gives accents with more character than darkness/lightness.
 matugen image "$TARGET" --mode dark --prefer saturation --quiet \
-    || die "matugen fallo"
+    || die "matugen failed"
 
 # ---------------------------------------------------------------
 # 6. Apply the Hyprland border live
