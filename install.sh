@@ -154,10 +154,47 @@ if ask "Link them?"; then
   # --no-folding: creates real directories and links file by file, instead of
   # linking the whole directory. That way an app writing a new file into
   # ~/.config/something does not drop it inside the repo by accident.
-  if ! stow --no-folding -v -t "$HOME" -d "$DOT" "${PACKAGES[@]}"; then
-    red "   stow found conflicts: those files already exist."
-    echo "   Check what they are and move them, or re-run with --adopt so stow"
-    echo "   absorbs them into the repo (CAREFUL: that overwrites the repo copy)."
+  STOW_ARGS=(--no-folding -v -t "$HOME" -d "$DOT")
+
+  # Simulated first. stow plans the whole operation and aborts the LOT on the
+  # first conflict, so a single pre-existing file means not one link gets made
+  # -- and the usual culprit is there on any machine that has run Hyprland
+  # once, because it writes a default config into ~/.config/hypr itself.
+  #
+  # -n also means the list below is complete: every conflict across every
+  # package, found without having touched anything yet.
+  conflicts=()
+  mapfile -t conflicts < <(
+    stow "${STOW_ARGS[@]}" -n "${PACKAGES[@]}" 2>&1 |
+      sed -n 's/^.*cannot stow .* over existing target \(.*\) since .*$/\1/p')
+
+  if (( ${#conflicts[@]} )); then
+    red "   ${#conflicts[@]} file(s) are in the way, and stow will not touch them:"
+    printf '     ~/%s\n' "${conflicts[@]}"
+    echo
+    echo "   They can be MOVED (not deleted) into a timestamped folder, and the"
+    echo "   repo's versions linked in their place. Nothing is overwritten and"
+    echo "   you can put any of them back afterwards."
+    echo
+    echo "   The other way round is 'stow --adopt', which keeps YOUR files and"
+    echo "   overwrites the repo's copies with them. This script will not do"
+    echo "   that for you: it edits the repo, and a git checkout is the way back."
+
+    BACKUP="$HOME/dotfiles-replaced-$(date +%Y%m%d-%H%M%S)"
+    if ask "Move them to $BACKUP and carry on?"; then
+      for rel in "${conflicts[@]}"; do
+        mkdir -p "$BACKUP/$(dirname "$rel")"
+        mv "$HOME/$rel" "$BACKUP/$rel"
+      done
+      green "   moved ${#conflicts[@]} file(s) to $BACKUP"
+    else
+      red "   nothing linked. Move them by hand and run this again."
+      exit 1
+    fi
+  fi
+
+  if ! stow "${STOW_ARGS[@]}" "${PACKAGES[@]}"; then
+    red "   stow failed even after clearing the conflicts above."
     exit 1
   fi
   # The *.target.wants links are not versioned (they point at absolute paths
