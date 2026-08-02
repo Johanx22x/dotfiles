@@ -8,18 +8,16 @@
 # If they show up as "modified" after a `stow`, that is expected: stow links
 # the whole directory and matugen writes inside it.
 # ---------------------------------------------------------------------------
-waybar/.config/waybar/colors.css
-waybar/.config/waybar/colors.json
 kitty/.config/kitty/colors.conf
 hypr/.config/hypr/colors.lua
-wofi/.config/wofi/colors.css
 qt/.config/qt6ct/colors/matugen.conf
 gtk/.config/gtk-3.0/gtk.css
 gtk/.config/gtk-4.0/gtk.css
 ranger/.config/ranger/accent
+quickshell/.config/quickshell/colors.json
 
-# dunst, zathura and fastfetch are generated WHOLE from a template: they have
-# no stow package of their own. See matugen/.config/matugen/config.toml.
+# zathura and fastfetch are generated WHOLE from a template: they have no stow
+# package of their own. See matugen/.config/matugen/config.toml.
 
 # ---------------------------------------------------------------------------
 # Runtime state

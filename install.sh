@@ -9,7 +9,7 @@
 set -euo pipefail
 
 DOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGES=(zsh hypr waybar kitty wofi matugen shell qt gtk media openrgb systemd bin ranger icons xdg)
+PACKAGES=(zsh hypr quickshell kitty matugen shell qt gtk media openrgb systemd bin ranger icons xdg)
 
 blue()  { printf '\033[1;34m%s\033[0m\n' "$*"; }
 green() { printf '\033[1;32m%s\033[0m\n' "$*"; }
@@ -33,7 +33,7 @@ if [[ "$HOME" == "$ORIGINAL" ]]; then
   echo "   home matches, nothing to rewrite"
 else
   # matugen does NOT expand ~ in output_path, so the absolute path is
-  # mandatory there; same in waybar's custom/ modules and in a few scripts.
+  # mandatory there; same in a few scripts.
   # That is why the repo carries fixed paths and they have to be adapted on
   # cloning.
   # This script itself is excluded: rewriting its ORIGINAL would leave the

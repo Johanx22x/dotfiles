@@ -28,25 +28,123 @@
    GTK 4 / libadwaita
    ================================================================== */
 
-/* ---- Surfaces ---- */
+/* ---- Surfaces ----
+   Two tones only, and the split is chrome vs content:
+
+     #1a1b26  chrome   -- window, sidebar and BOTH top bars
+     #101119  content  -- the view: file list, grid
+
+   WHICH COLOUR ACTUALLY PAINTS WHAT IN NAUTILUS. This is not what the names
+   suggest, and it was established by setting each one to a garish colour,
+   restarting Nautilus and reading the pixels back. Do that again rather
+   than reasoning from the names if this ever needs revisiting:
+
+     window_bg_color    -> the sidebar AND its top bar.
+     view_bg_color      -> the content pane AND its top bar.
+     sidebar_bg_color   -> NOTHING. Set to pure green, no green appeared.
+                           libadwaita does have ".sidebar-pane
+                           { background-color: var(--sidebar-bg-color) }"
+                           and .sidebar-pane does exist here -- a scoped
+                           selector on it works, see the rule at the end --
+                           so something in Nautilus outranks it. Kept in
+                           sync with window_bg_color anyway, for whatever
+                           app does honour it.
+     headerbar_bg_color -> NOTHING, and this one has a known cause:
+                           "toolbarview > .top-bar headerbar
+                            { background: none; box-shadow: none; }"
+                           EVERY headerbar inside an AdwToolbarView is
+                           transparent, and Nautilus wraps both of its
+                           headerbars in one. A headerbar therefore has no
+                           colour of its own; it shows the pane behind it.
+                           That is why the top of the content pane came out
+                           identical to the file list, and why fixing it
+                           needs the RULE at the end of this file and not a
+                           colour up here.
+
+   The gap between the two is wider than it looks like it needs to be, and
+   that is because of Hyprland. hyprland.lua gives Nautilus
+   opacity = "0.82 0.82", so every colour here is composited 82% over the
+   blurred wallpaper. That blend drags both surfaces toward the SAME
+   backdrop and compresses the distance between them: with the content at
+   #15161e the step measured about 2 levels on screen and read as flat.
+   #101119 keeps roughly 8 after the blend.
+
+   Measure it, do not eyeball it -- the wallpaper is part of the result:
+     grim -o DP-3 /tmp/s.png   then sample the pixels.
+
+   The sidebar used to be #15161e, the same as the view, which left the two
+   panes indistinguishable and made the 1px divider between them carry the
+   whole separation on its own. libadwaita draws that divider as
+   "box-shadow: inset -1px 0 var(--sidebar-border-color)" on .sidebar-pane,
+   and sidebar_border_color was not defined here, so it fell back to their
+   dark default -- RGB(0 0 6 / 36%), black at 36% -- which reads as a hard
+   black line.
+
+   Now the tone step does the separating and the divider is only a hint.
+   Note this is the opposite of upstream Adwaita, where the sidebar is
+   LIGHTER than the window (#2e2e32 over #222226); here the chrome is one
+   flat surface and the content is what steps back. */
 @define-color window_bg_color   #1a1b26;
 @define-color window_fg_color   #c0caf5;
 
-/* The view (lists, content areas) goes one step darker than the window: it
-   lifts the content off the chrome. */
-@define-color view_bg_color     #15161e;
+@define-color view_bg_color     #101119;
 @define-color view_fg_color     #c0caf5;
 
+/* headerbar_shade_color: in a plain headerbar this is the "inset 0 -1px"
+   underline, but Nautilus's headerbars live inside AdwToolbarViews and
+   those get "box-shadow: none", so here it only reaches the drop shadow of
+   .top-bar.raised -- the one that appears once the content scrolls. At
+   libadwaita's 0.36 that shadow cuts the window in two horizontally;
+   lowered to match the sidebar divider so the top edge stays as quiet as
+   the left one. */
+/* Every *_backdrop_color below is deliberately EQUAL to its bg colour. The
+   window must not change when it loses focus. Adwaita dims on backdrop by
+   default and that dimming does not land evenly -- the sidebar and the top
+   bar sit on different widgets, so a shared "slightly darker" reads as two
+   different colours the moment you click away. Equal values, no dimming,
+   nothing to mismatch.
+   The other half of this lives in hyprland.lua: its opacity field is
+   "active inactive", and an inactive value below the active one re-creates
+   exactly the same problem from the compositor side. */
 @define-color headerbar_bg_color        #1a1b26;
 @define-color headerbar_fg_color        #c0caf5;
 @define-color headerbar_border_color    #414868;
-@define-color headerbar_backdrop_color  #15161e;
-@define-color headerbar_shade_color     rgba(0, 0, 0, 0.36);
+@define-color headerbar_backdrop_color  #1a1b26;
+@define-color headerbar_shade_color     rgba(0, 0, 0, 0.15);
 
-@define-color sidebar_bg_color        #15161e;
+/* sidebar_border_color: TRANSPARENT, and it must stay defined to be so.
+   Deleting the line does not mean "no divider", it means falling back to
+   libadwaita's dark default of RGB(0 0 6 / 36%) -- black at 36%.
+
+   It went 36% black -> 15% black -> gone, in that order and for a reason.
+   The divider is drawn on .sidebar-pane, which spans the FULL height of
+   the pane, so it runs up through the header too and showed there as a
+   thin dark notch between the hamburger and the back arrow (measured: a
+   3-level dip at the boundary column, against a header that is otherwise
+   flat). Nothing is lost by removing it: the panes are already separated
+   by the tone step plus the rounded card at the end of this file.
+
+   This colour DOES take effect -- unlike sidebar_bg_color right below it,
+   which paints nothing in Nautilus (see the surfaces block). Both come from
+   the same .sidebar-pane rule set, so the border working while the
+   background does not says the class is present and something app-side is
+   overriding only the background. Not worth chasing: window_bg_color
+   already paints the sidebar the intended colour. */
+@define-color sidebar_bg_color        #1a1b26;
 @define-color sidebar_fg_color        #c0caf5;
-@define-color sidebar_backdrop_color  #15161e;
-@define-color sidebar_shade_color     rgba(0, 0, 0, 0.36);
+@define-color sidebar_backdrop_color  #1a1b26;
+@define-color sidebar_border_color    transparent;
+@define-color sidebar_shade_color     rgba(0, 0, 0, 0.18);
+
+/* The secondary_* set is the same rule for a sidebar nested inside another
+   pane. Nautilus does not use it today, but if it is left undefined it
+   falls back to Adwaita's grey (#28282c) and a 36% divider, which would
+   show up as a foreign colour the day some dialog does use it. */
+@define-color secondary_sidebar_bg_color        #1a1b26;
+@define-color secondary_sidebar_fg_color        #c0caf5;
+@define-color secondary_sidebar_backdrop_color  #1a1b26;
+@define-color secondary_sidebar_border_color    rgba(0, 0, 0, 0.15);
+@define-color secondary_sidebar_shade_color     rgba(0, 0, 0, 0.18);
 
 @define-color card_bg_color     #292e42;
 @define-color card_fg_color     #c0caf5;
@@ -106,6 +204,17 @@
    Nautilus's header buttons came from exactly that, back when this file
    shared rules with the GTK3 one.
 
+   ONE deliberate exception, added knowingly: the border-radius on the
+   content pane's scrolledwindow further down. It is geometry and it breaks
+   the rule. The reason the original rule exists is that geometry LEAKED --
+   rules meant for Adwaita GTK3 were being written into the libadwaita file
+   too, so selectors like "button" hit widgets they were never written for.
+   That failure mode does not apply here: the selector is anchored to
+   .content-pane, a class only a split-view app has, and it sets a radius on
+   one container rather than a border on a generic widget. If header buttons
+   or popovers ever come back with boxes, this is still the first block to
+   bisect.
+
    What gets painted and why: libadwaita leaves the selected row of lists in
    a neutral grey that does not depend on the accent, so Nautilus's sidebar
    -- the element with the strongest presence in the window -- showed no
@@ -142,4 +251,93 @@
 .navigation-sidebar child:selected:hover,
 .navigation-sidebar flowboxchild:selected:hover {
   background-color: color-mix(in srgb, var(--accent-bg-color) 38%, transparent);
+}
+
+
+/* ---- Content pane: chrome surface + the file view as a rounded card ----
+
+   Two things are being fixed here and they turned out to be the same fix.
+
+   1. The top of the content pane came out the same colour as the file list.
+      Not a colour bug: "toolbarview > .top-bar headerbar" is
+      "background: none" in libadwaita, so that headerbar has no colour of
+      its own and shows whatever the pane behind it is -- view_bg_color.
+      Setting headerbar_bg_color does nothing at all (verified: painted it
+      pure red, no red appeared anywhere in the window).
+
+   2. The inner edge of the content was a flat corner.
+
+   So the pane itself is painted chrome-coloured, and the file view becomes
+   a rounded card sitting on it. The top bar is then just uncovered pane,
+   which is why it now matches the sidebar without being touched directly.
+
+   The gridview/listview/columnview reset is required, not decorative: the
+   view paints its own opaque background over the scrolledwindow, so
+   without it the radius is drawn and then covered up. Verified by painting
+   the scrolledwindow cyan and the gridview yellow -- only yellow showed.
+
+   The two resets after it are guards, and NEITHER is optional. ".content-pane
+   scrolledwindow" matches descendants, and there is more than one
+   scrolledwindow down there:
+
+     - the breadcrumb / search pill in the header IS a scrolledwindow (it
+       scrolls sideways when the path is long). Without the .top-bar guard
+       it gets the view colour and a 14px radius, which shows up as a
+       wrong-coloured blob poking out of the pill's rounded ends. Verified
+       by painting .content-pane scrolledwindow red: the pill went red.
+     - right-click menus live inside the pane too, hence the popover guard.
+
+   No :backdrop variants anywhere in this block, on purpose: the window must
+   look identical focused and unfocused. Same reason every *_backdrop_color
+   above equals its bg colour, and the same reason hyprland.lua carries
+   opacity "0.82 0.82" instead of a lower second value.
+
+   The corner IS drawn but reads as subtle, and that is the Hyprland
+   opacity again (see the surfaces block): 14px of curve across an 8-level
+   contrast step. Raise the radius and you get more curve, not more
+   contrast -- the lever for visibility is the opacity in hyprland.lua. */
+
+.content-pane {
+  background-color: @window_bg_color;
+}
+
+.content-pane scrolledwindow {
+  background-color: @view_bg_color;
+  border-radius: 14px 0 0 14px;
+}
+
+.content-pane gridview,
+.content-pane listview,
+.content-pane columnview {
+  background: none;
+}
+
+.content-pane .top-bar scrolledwindow,
+.content-pane popover scrolledwindow {
+  background: none;
+  border-radius: 0;
+}
+
+
+/* ---- The breadcrumb / search pill, pinned across focus states ----
+
+   The pill is a "box.linked" (verified: painting box.linked green turned
+   the whole pill green; entry and .pathbar did nothing). libadwaita fades
+   it on :backdrop, so it came out clearly lighter than the header with
+   focus and slightly darker without -- measured a 20-level swing at the
+   same pixel, while the sidebar and the content pane did not move at all.
+   That single widget was the whole of what still changed when the window
+   lost focus.
+
+   Both states are pinned to the same value. #24283b is a deliberate step
+   ABOVE the #1a1b26 chrome: the pill is a control and should read as
+   raised, unlike the panes, which are surfaces and stay flat.
+
+   The same rule catches the linked button groups at the right end of the
+   header, which is intended -- they are the same kind of control and were
+   fading on backdrop for the same reason. */
+
+.content-pane .top-bar box.linked,
+.content-pane .top-bar box.linked:backdrop {
+  background-color: #24283b;
 }

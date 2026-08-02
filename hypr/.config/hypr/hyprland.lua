@@ -79,14 +79,17 @@ local terminal    = "kitty"
 -- are already in kitty.
 local fileManager = "nautilus"
 
--- Grid launcher with a glass background. It is a script rather than plain
--- "wofi --show drun" because it needs XDG_CONFIG_HOME pointing at an empty
--- directory, or the user gtk.css forces an opaque background on it.
-local menu        = os.getenv("HOME") .. "/.local/bin/wofi-drun"
+-- Application launcher. No longer a script: like the power menu, this only
+-- flips a property in the running shell, so `qs -d` has to be up for the
+-- bind to do anything. See modules/launcher in the quickshell config.
+
+local menu        = "qs ipc call launcher toggle"
 
 -- Power menu with confirmation (SUPER + SHIFT + ESCAPE).
--- Absolute path for consistency with wallpaperSwitch.
-local powerMenu   = os.getenv("HOME") .. "/.local/bin/hypr-powermenu"
+-- No longer a script: the menu is a Quickshell module and this only flips a
+-- property in the running shell. See modules/powermenu in the quickshell
+-- config. `toggle` and not `open`, so the same shortcut puts it away.
+local powerMenu   = "qs ipc call powermenu toggle"
 
 
 -------------------------------
@@ -122,7 +125,7 @@ end
 -- hl.on("hyprland.start", function ()
 --   hl.exec_cmd(terminal)
 --   hl.exec_cmd("nm-applet")
---   hl.exec_cmd("waybar & hyprpaper & firefox")
+--   hl.exec_cmd("qs -d & firefox")
 -- end)
 
 hl.on("hyprland.start", function ()
@@ -131,21 +134,29 @@ hl.on("hyprland.start", function ()
     -- to the compositor. It has to come first.
     hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE")
 
-    -- Status bar. Config in ~/.config/waybar/
-    hl.exec_cmd("waybar")
+    -- The shell: bar, island, notifications, launcher and power menu.
+    -- Config in ~/.config/quickshell/.
+    --
+    -- --no-duplicate makes a second invocation exit instead of stacking a
+    -- second copy of every layer surface, which is what happens when this
+    -- line and a manual `qs -d` both run.
+    hl.exec_cmd("qs -d --no-duplicate")
 
-    -- Notification daemon
-    hl.exec_cmd("dunst")
+    -- No notification daemon is started here any more. Quickshell IS the
+    -- daemon: it takes org.freedesktop.Notifications itself, and two processes
+    -- cannot own one bus name -- whichever asks second simply does not get it.
+    -- dunst is gone; see modules/notifications in the quickshell config.
+    --
+    -- mpris-notify went with it. It sent its track notifications with
+    -- `dunstify`, a binary the dunst package owns, so it could not survive the
+    -- removal -- and it had already stopped doing anything visible before
+    -- that: the shell drops notifications from "mpris-notify" on purpose, and
+    -- what is playing now lives in the island in the centre of the bar. The
+    -- script is still in ~/.local/bin if it is ever wanted back.
 
     -- Wallpaper daemon + restore the last one used
     hl.exec_cmd("awww-daemon")
     hl.exec_cmd(wallpaperSwitch .. " reapply")
-
-    -- Notification with cover art when the browser changes track (YouTube,
-    -- YouTube Music). Deliberately after dunst: if the notification daemon
-    -- is not up yet, the first track is lost.
-    -- See ~/.local/bin/mpris-notify.
-    hl.exec_cmd("mpris-notify")
 
     -- On Wayland the clipboard is not stored anywhere central: it is owned
     -- by the source application. Close it and whatever you copied is gone.
@@ -257,7 +268,17 @@ hl.config({
     },
 
     decoration = {
-        rounding       = 10,
+        -- 24, matching the shell. Started at 10, went to 16 to line up with
+        -- Quickshell, then to 24: a bigger radius spreads a curve's
+        -- antialiasing over more pixels, which is what finally settled the
+        -- jagged fillets.
+        -- Quickshell uses the same figure for the rounded screen corners and
+        -- for the fillet where the bar meets the sides (Theme.qml:
+        -- screenCornerRadius / barCornerRadius). Windows used to round at 10
+        -- and the bar's fillet at 24, and the mismatch showed wherever the
+        -- two met. 16 is the middle ground; change all three together or the
+        -- edges stop agreeing again.
+        rounding       = 24,
         rounding_power = 2,
 
         -- Change transparency of focused and unfocused windows
@@ -281,7 +302,22 @@ hl.config({
         blur = {
             enabled = true,
             size    = 8,
-            passes  = 3,
+
+            -- 2 AND NOT 3, and the reason is edge quality rather than taste.
+            --
+            -- Each pass halves the resolution the blur is computed at, so at
+            -- 3 the backdrop is sampled 8x coarser than the screen. Where a
+            -- shell surface has an ANTIALIASED curved edge, its partially
+            -- transparent pixels blend with that coarse backdrop, and the
+            -- gradient that makes the curve look smooth turns into steps --
+            -- the jagged corners that took a whole session to pin down.
+            --
+            -- Measured on the notification panel's bottom-right corner over a
+            -- bright window, in intermediate pixels per row (more is
+            -- smoother): passes 3 -> 1.58, passes 1 -> 3.00, passes 2 -> 4.04,
+            -- which equals turning the blur off entirely. So 2 costs nothing
+            -- visually and fixes the edges.
+            passes  = 2,
 
             -- Subtle grain: breaks the banding (colour stepping) that blur
             -- leaves over wallpaper gradients.
@@ -442,12 +478,19 @@ local closeWindowBind = hl.bind(mainMod .. " + W", hl.dsp.window.close())
 -- Power menu (log out / restart / shut down) with confirmation.
 -- This used to be SUPER + M with no protection at all and it ended the
 -- session instantly; far too easy to hit by accident. Now it takes
--- SHIFT + ESCAPE and you still have to pick from the menu, where "Cancel"
--- comes preselected. The script lives in ~/.local/bin/hypr-powermenu.
+-- SHIFT + ESCAPE and you still have to pick from the menu, where nothing is
+-- preselected and a click anywhere outside dismisses it.
+--
+-- If nothing happens, the shell is not running: the menu lives inside
+-- Quickshell now, so `qs -d` has to be up for this bind to do anything.
 hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd(powerMenu))
 
 -- SUPER + M was deliberately free for a while; now the magic special
 -- workspace lives there, after giving up S to screenshots.
+-- The island's dashboard. Same call the click on the island makes, so the
+-- key and the pointer cannot drift apart. D for dashboard; it was free.
+hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("qs ipc call island dashboard"))
+
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 -- Toggle floating. It used to be SUPER+V, Hyprland's example bind, but that
 -- key went to the clipboard history: V for "paste" is used far more often
@@ -485,8 +528,8 @@ hl.bind(mainMod .. " + M",         hl.dsp.workspace.toggle_special("magic"))
 hl.bind(mainMod .. " + SHIFT + M", hl.dsp.window.move({ workspace = "special:magic" }))
 
 -- Wallpapers: SUPER+SHIFT+W goes to the next one, SUPER+SHIFT+A picks at
--- random. Each change regenerates the accent palette (waybar, kitty,
--- borders, dunst).
+-- random. Each change regenerates the accent palette (the shell, kitty,
+-- window borders).
 hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd(wallpaperSwitch .. " next"))
 hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd(wallpaperSwitch .. " random"))
 
@@ -516,15 +559,25 @@ hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("hyprshot -m region -z --raw 
 hl.bind(mainMod .. " + CTRL + S",  hl.dsp.exec_cmd("hyprshot -m window -m active"))
 hl.bind(mainMod .. " + ALT + S",   hl.dsp.exec_cmd("hyprshot -m output -m active"))
 
--- Clipboard history (cliphist), reusing wofi in dmenu mode. It keeps plain
--- SUPER+V for proximity with the usual Ctrl+V; the float toggle that used to
--- live here moved to SUPER+T.
+-- Instant replay. The shell keeps the last 30 seconds of the main monitor in
+-- RAM at all times (see modules/recorder/ReplayState.qml), so this writes the
+-- past rather than starting anything: by the time you know you want the clip,
+-- the moment is already over, which is the entire reason the buffer is armed
+-- from boot.
 --
--- "decode" is essential: cliphist list emits a numeric id and a truncated
--- preview, not the content. Without decode you would paste the summary.
--- To empty it: cliphist wipe
-hl.bind(mainMod .. " + V", hl.dsp.exec_cmd(
-    "cliphist list | wofi --dmenu --prompt Clipboard | cliphist decode | wl-copy"))
+-- ALT + Z, with no SUPER, because it is pressed in the middle of whatever was
+-- worth keeping -- and that is also the one caveat: a global bind on a plain
+-- ALT combination takes ALT+Z away from every application that wanted it.
+hl.bind("ALT + Z", hl.dsp.exec_cmd("qs ipc call replay save"))
+
+-- Clipboard history. It opens the shell's launcher straight into its
+-- clipboard picker instead of a dmenu: images are shown as images there,
+-- which a text menu could never do -- cliphist only reports binary entries as
+-- a description like "[[ binary data 7 KiB png 234x119 ]]".
+--
+-- cliphist itself stays: it is the store, and the two `wl-paste --watch`
+-- processes above keep filling it. Only the picking moved.
+hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("qs ipc call launcher clipboard"))
 
 -- Scroll through existing workspaces with mainMod + scroll
 hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
@@ -535,7 +588,7 @@ hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 -- Laptop multimedia keys for volume and LCD brightness
--- -l 1.5 allows boosting up to 150% (same as max-volume in waybar)
+-- -l 1.5 allows boosting up to 150%
 hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
 hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
 hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true, repeating = true })
@@ -591,46 +644,59 @@ hl.window_rule({
 -- })
 -- overlayLayerRule:set_enabled(false)
 
--- Blur for waybar: the bar is semi-transparent in CSS, but the actual blur
--- is applied by Hyprland on the layer.
--- CAREFUL: the layer namespace is the "name" field of each bar in
--- config.jsonc (not "waybar"). If you rename a bar, update this.
+
+-- Blur for the Quickshell bar under trial on the portrait monitor.
+-- Its namespace is set in QML, not by the process name: see
+-- WlrLayershell.namespace in ~/.config/quickshell/modules/bar/Bar.qml.
+-- Remove this rule together with the quickshell stow package if the trial
+-- does not end in a migration.
 hl.layer_rule({
-    name  = "blur-waybar",
-    match = { namespace = "^(main|vertical)$" },
+    name  = "blur-quickshell",
+    -- The popouts, the notification panel and the power menu share the bar's
+    -- glass, so they share its blur. Screen corners are opaque black and
+    -- deliberately left out.
+    --
+    -- Anything quickshell puts on screen with a glass surface has to be named
+    -- here. A namespace that is NOT matched does not come out unblurred -- it
+    -- falls through to the GLOBAL decoration.blur, which has different
+    -- parameters and no xray, and the surface ends up visibly blurrier than
+    -- the bar it is supposed to belong to. That is how the power menu looked
+    -- before it was added to this list.
+    match = { namespace = "^quickshell-(bar|popout|notifications|powermenu|launcher)$" },
 
     blur          = true,
-    ignore_alpha  = 0.2,
 
-    -- Bar tooltips (the panel that appears when hovering a module) are
-    -- popups of this layer, not layers of their own. Without this they end
-    -- up semi-transparent but NOT blurred, which is exactly what reads as
-    -- "see-through" instead of "glass".
-    blur_popups = true,
-})
-
--- Blur for wofi (SUPER + SPACE and SUPER + SHIFT + ESCAPE). Same case as
--- waybar: the semi-transparent background comes from the stylesheet, the
--- blur goes here. The wofi layer namespace is literally "wofi".
-hl.layer_rule({
-    name  = "blur-wofi",
-    match = { namespace = "^wofi$" },
-
-    blur          = true,
-    ignore_alpha  = 0.2,
+    -- 0.84: JUST UNDER the surfaces' own alpha (Theme.glassAlpha = 0.85).
+    -- These two numbers are tied; move one and move the other.
+    --
+    -- Hyprland blurs the WHOLE rectangle of a layer surface. It has no idea
+    -- the shell drew a rounded corner inside it, so the blur carries on into
+    -- the transparent area outside the curve and juts out past the edge --
+    -- the sawtooth sticking out beyond the border. ignore_alpha is what
+    -- excludes pixels from the blur: at 0 (what was here) nothing is
+    -- excluded and the whole corner bleeds; just below the fill's alpha, only
+    -- the solid interior gets blurred and the antialiased edge is left alone.
+    --
+    -- It is not enough on its own: with passes at 3 the corner steps again
+    -- whatever this is set to. Both changes are needed.
+    ignore_alpha  = 0.84,
     blur_popups   = true,
+
+    -- xray makes the blur sample ONLY the wallpaper, ignoring the windows in
+    -- between. Without it the bar and its popouts are the same colour in the
+    -- config and different colours on screen: the bar sits over the
+    -- wallpaper, a popout hangs over whatever window is below it, and a
+    -- surface at 85% opacity shows what is behind it. Measured: bar
+    -- rgb(39,44,37) against popout rgb(25,28,25). With xray both composite
+    -- over the same wallpaper and match.
+    xray = true,
 })
 
--- Blur for dunst notifications. Its layer namespace is "notifications"
--- (not "dunst"), as reported by `hyprctl layers`.
--- The base transparency is defined in ~/.config/matugen/templates/dunstrc.
-hl.layer_rule({
-    name  = "blur-dunst",
-    match = { namespace = "^notifications$" },
 
-    blur          = true,
-    ignore_alpha  = 0.2,
-})
+-- The blur-dunst rule was here. It matched the namespace "notifications",
+-- which was dunst's layer; Quickshell's panel calls itself
+-- "quickshell-notifications" and is covered by blur-quickshell above.
+-- Nothing on this system creates a bare "notifications" layer any more.
 
 -- Hyprland-run windowrule
 hl.window_rule({
@@ -680,7 +746,16 @@ hl.window_rule({
     size   = "1400 850",
     center = true,
 
-    opacity = "0.82 0.74",
+    -- Both values identical, and that is the point: the second one is the
+    -- INACTIVE opacity, and at 0.74 the window visibly changed colour the
+    -- moment it lost focus. Worse than a uniform dim: the sidebar and the
+    -- content pane are different widgets sitting over different parts of
+    -- the blurred wallpaper, so the same drop in alpha moved them by
+    -- different amounts and the chrome stopped matching itself.
+    -- The GTK side of this is in the gtk4-colors.css template, where every
+    -- *_backdrop_color equals its bg colour for the same reason. Changing
+    -- one without the other brings the mismatch back.
+    opacity = "0.82 0.82",
 })
 
 -- Loupe (images) and Celluloid (video) replaced gwenview and haruna. The
@@ -728,7 +803,7 @@ hl.window_rule({
 -- asks for. Fitting it properly would need reading the page dimensions with
 -- pdfinfo before opening and resizing afterwards.
 --
--- 1180 of height fits DP-3 (1440) leaving room for waybar.
+-- 1180 of height fits DP-3 (1440) leaving room for the bar.
 hl.window_rule({
     name  = "float-zathura",
     match = { class = "^org\\.pwmt\\.zathura$" },
@@ -748,7 +823,7 @@ hl.window_rule({
 -- But "max_size" IS needed: satty asks for a window the size of the image,
 -- so capturing a whole monitor (or opening a large image) pushes it off
 -- screen and the buttons at the bottom end up out of reach. The cap fits
--- DP-3 leaving room for waybar.
+-- DP-3 leaving room for the bar.
 hl.window_rule({
     name  = "float-satty",
     match = { class = "^com\\.gabm\\.satty$" },

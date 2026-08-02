@@ -4,6 +4,10 @@
 # backgrounds and text colour stay fixed in every app to guarantee contrast
 # no matter which wallpaper comes up.
 #
+# Waybar, wofi and dunst were here. All three are gone: the shell draws the
+# bar, the launcher and the notifications now, and it reads the palette live
+# from colors.json instead of having files regenerated for it.
+#
 # Template syntax: {{colors.<role>.default.hex}}
 # Useful roles: primary, secondary, tertiary, source_color, error, outline
 
@@ -29,22 +33,17 @@ cpu = { color = "#bb9af7", blend = true }   # magenta TN
 ram = { color = "#9ece6a", blend = true }   # TN green -- also the gs button
 gpu = { color = "#7aa2f7", blend = true }   # blue TN
 
-# ---- Waybar ----
-# Defines only @accent, @accent2 and @accent3; style.css imports it and
-# keeps its own fixed @base/@text.
-[templates.waybar]
-input_path = '/home/johan/.config/matugen/templates/waybar-colors.css'
-output_path = '/home/johan/.config/waybar/colors.css'
-post_hook = 'pkill -SIGUSR2 waybar || true'
-
-# ---- Waybar: system module ----
-# #custom-system colours each segment with Pango markup from Python, not
-# with CSS, so it needs the palette in a format it can read.
-# No post_hook: the script runs every 3s (interval in config.jsonc) and
-# picks up the new file on its own.
-[templates.waybar_system]
-input_path = '/home/johan/.config/matugen/templates/waybar-colors.json'
-output_path = '/home/johan/.config/waybar/colors.json'
+# ---- Quickshell (trial bar on the portrait monitor) ----
+# JSON and not a generated .qml on purpose: Quickshell reloads the WHOLE
+# config when any .qml changes, so a generated QML file would restart the
+# shell on every wallpaper change. Theme.qml reads this file through a
+# FileView with watchChanges, which updates the accents in place and lets
+# them fade along with the wallpaper.
+#
+# No post_hook for the same reason: nothing has to be signalled or reloaded.
+[templates.quickshell]
+input_path = '/home/johan/.config/matugen/templates/quickshell-colors.json'
+output_path = '/home/johan/.config/quickshell/colors.json'
 
 # ---- Kitty ----
 # Background, text and the 16 ANSI colours still come from kitty.conf.
@@ -61,20 +60,10 @@ post_hook = 'pkill -SIGUSR1 -x kitty || true'
 input_path = '/home/johan/.config/matugen/templates/hypr-colors.lua'
 output_path = '/home/johan/.config/hypr/colors.lua'
 
-# ---- Dunst ----
-# dunst does not support "include", so the whole file is regenerated.
-# To change any setting, edit the TEMPLATE, not the dunstrc.
-[templates.dunst]
-input_path = '/home/johan/.config/matugen/templates/dunstrc'
-output_path = '/home/johan/.config/dunst/dunstrc'
-post_hook = 'dunstctl reload || true'
-
-# ---- Wofi ----
-# Same scheme as waybar: accents only. No post_hook because wofi is not a
-# daemon; it reads the CSS every time it is launched.
-[templates.wofi]
-input_path = '/home/johan/.config/matugen/templates/wofi-colors.css'
-output_path = '/home/johan/.config/wofi/colors.css'
+# The Dunst template was here. Quickshell draws the notifications now and
+# reads the palette live from colors.json, so there is no file to regenerate
+# and no daemon to poke afterwards -- the post_hook called `dunstctl`, which
+# went out with the package.
 
 # ---- Non-KDE Qt6 apps (qBittorrent, OBS) ----
 # The PALETTE only. The qt6ct config (which style, which icons) is a
@@ -151,6 +140,18 @@ output_path = '/home/johan/.config/ranger/accent'
 # No post_hook on purpose: GTK does not reload user CSS live and there is no
 # signal to send it. Apps pick up the new palette when they open, same as
 # wofi, ranger and fastfetch.
+#
+# Both files write ONLY @define-color, never a CSS rule, and that is what
+# makes ~/.config/gtk-3.0/gtk.css safe again. GTK loads it at priority USER
+# (800), above the sheet an application passes for itself (APPLICATION, 600).
+# A RULE there beats every app: that is how the old GTK3 patch made wofi
+# impossible to make transparent, whose workaround -- hiding ~/.config behind
+# an empty XDG_CONFIG_HOME -- left Discord, Brave and OpenRGB reading an empty
+# config on tmpfs after every reboot (2026-08-01). A @define-color declares a
+# variable and overrides nobody, so priority stops mattering.
+#
+# The theme doing the painting is adw-gtk3-dark (package adw-gtk-theme), which
+# reads those names. Never put a selector in these templates.
 [templates.gtk3]
 input_path = '/home/johan/.config/matugen/templates/gtk3-colors.css'
 output_path = '/home/johan/.config/gtk-3.0/gtk.css'

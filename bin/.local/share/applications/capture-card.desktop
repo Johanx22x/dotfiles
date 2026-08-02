@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Capture card
+GenericName=HDMI capture viewer
+Comment=NZXT Signal HD60 output (PS5 / Switch 2) at 1080p60
+Exec=/home/johan/.local/bin/capture-card
+Icon=camera-video
+Terminal=false
+Categories=AudioVideo;Video;Player;
+Keywords=capture;capturadora;captura;hdmi;ps5;switch;console;consola;nzxt;mpv;
+StartupNotify=true

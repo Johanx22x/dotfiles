@@ -2,7 +2,7 @@
 # Template: ~/.config/matugen/templates/zathurarc
 # Wallpaper: {{image}}
 #
-# The file is generated WHOLE, like dunstrc and fastfetch: zathura cannot
+# The file is generated WHOLE, like fastfetch: zathura cannot
 # include another file from zathurarc, so "config" and "colours" cannot be
 # split in two. That is why zathura has no stow package.
 #

@@ -2,250 +2,190 @@
    Template: ~/.config/matugen/templates/gtk3-colors.css
    Wallpaper: {{image}}
 
-   GTK3 / Adwaita ONLY. The app that matters here is GIMP.
+   GTK3 ONLY, and the mirror image of gtk4-colors.css: no CSS rules here,
+   just the colour names the theme exposes.
 
-   This file is kept apart from the GTK4 one on purpose. The rules at the end
-   are a patch for Adwaita GTK3, which hardcodes its colours instead of going
-   through @define-color; but its selectors (button, popover, entry, listbox
-   row...) also exist in GTK4, and when both toolkits shared a file those
-   rules drew boxes and borders on libadwaita windows. See the header of
-   gtk4-colors.css.
+   READ THIS BEFORE ADDING A SELECTOR
+   ----------------------------------
+   This file used to be a patch: ~180 lines of selectors repainting Adwaita
+   widget by widget, because Adwaita GTK3 hardcodes its colours instead of
+   going through @define-color. That approach has no end, and it cost a full
+   day on 2026-08-01:
 
-   Same rule as everywhere else (see config.toml): fixed Tokyo Night
-   backgrounds and text, and from matugen only the accent -- which in GTK is
-   the selection, the focus, switches and progress bars.
+     - Living in ~/.config/gtk-3.0/gtk.css, its `window { background-color }`
+       loaded at priority USER (800) -- above the sheet an application passes
+       for itself (APPLICATION, 600). wofi therefore could not be transparent,
+       and the workaround was to hide ~/.config from it via XDG_CONFIG_HOME.
+       Since wofi launches applications as its own children, everything opened
+       from the menu inherited that empty config on tmpfs: Discord logged out,
+       Brave with no history, OpenRGB back to defaults after every reboot.
 
-   Coverage is PARTIAL and depends on the widget: the large surfaces are
-   covered, which is where the grey shows. If some stray widget turns up
-   untinted, add its selector below. */
+     - Moved into a theme to fix that, the patch lost on specificity instead:
+       Adwaita's own `:backdrop`, `treeview.view header button` and
+       `treeview.view:backdrop:selected` all beat the generic selectors here.
+       Colours changed depending on whether the window had focus.
+
+   The theme is adw-gtk3-dark now (package adw-gtk-theme, repo extra): the
+   libadwaita theme ported to GTK3, built to read named colours. So the whole
+   patch collapses into the list below, and it can live at USER priority
+   without hurting anyone -- @define-color declares variables, it does not
+   override any application's rules. That is why wofi keeps its glass with no
+   trickery at all.
+
+   So: if a widget comes out the wrong colour, find the NAME it reads, do not
+   write a selector for it. The names the theme understands are in
+   /usr/share/themes/adw-gtk3-dark/gtk-3.0/gtk.css:
+
+     grep -o '@define-color [a-z_0-9]*' \
+       /usr/share/themes/adw-gtk3-dark/gtk-3.0/gtk.css | sort -u
+
+   Values are the same Tokyo Night as gtk4-colors.css, on purpose: the two
+   toolkits have to be indistinguishable on screen. Only the accent follows
+   the wallpaper. */
 
 
 /* ==================================================================
-   GTK 3 / Adwaita
+   GTK 3 / adw-gtk3
    ================================================================== */
 
-@define-color theme_bg_color    #1a1b26;
-@define-color theme_fg_color    #c0caf5;
-@define-color theme_base_color  #15161e;
-@define-color theme_text_color  #c0caf5;
+/* ---- Surfaces ---- */
+@define-color window_bg_color   #1a1b26;
+@define-color window_fg_color   #c0caf5;
 
-@define-color theme_selected_bg_color  {{colors.primary.default.hex}};
-@define-color theme_selected_fg_color  {{colors.on_primary.default.hex}};
+/* The view (lists, content areas) goes one step darker than the window: it
+   lifts the content off the chrome. Same reasoning and the same values as
+   in GTK4, where the gap was widened from #15161e to #101119.
 
-/* Disabled: the text is dimmed, the background is not lightened.
-   Lightening it on a dark theme is exactly what makes a disabled widget
-   unreadable. */
-@define-color insensitive_bg_color    #1a1b26;
-@define-color insensitive_fg_color    #565f89;
-@define-color insensitive_base_color  #15161e;
+   One caveat on "indistinguishable on screen", which is the goal stated at
+   the top of this file: it holds for every app EXCEPT Nautilus. Nautilus
+   alone carries opacity 0.82 in hyprland.lua, so there these same values
+   get composited over the blurred wallpaper and the step reads weaker.
+   #101119 was chosen to survive that blend. In an opaque app -- every GTK3
+   one, plus Loupe and Celluloid on the GTK4 side -- it lands at full
+   strength, which is a slightly firmer content/chrome step than Nautilus
+   shows. Matching the numbers is what keeps the toolkits in sync;
+   compensating per-app is what would put them out of sync. */
+@define-color view_bg_color     #101119;
+@define-color view_fg_color     #c0caf5;
 
-@define-color theme_unfocused_bg_color    #1a1b26;
-@define-color theme_unfocused_fg_color    #c0caf5;
-@define-color theme_unfocused_base_color  #15161e;
-@define-color theme_unfocused_text_color  #c0caf5;
-@define-color theme_unfocused_selected_bg_color  {{colors.primary_container.default.hex}};
-@define-color theme_unfocused_selected_fg_color  {{colors.on_primary_container.default.hex}};
+@define-color headerbar_bg_color        #1a1b26;
+@define-color headerbar_fg_color        #c0caf5;
+@define-color headerbar_border_color    #414868;
+@define-color headerbar_backdrop_color  #1a1b26;
+@define-color headerbar_shade_color     rgba(0, 0, 0, 0.15);
 
-@define-color unfocused_borders  #414868;
+/* The full sidebar_* set, and three of these five were MISSING before --
+   which meant falling back to adw-gtk3's own defaults, not to "nothing":
 
-@define-color wm_bg              #1a1b26;
-@define-color wm_title           #c0caf5;
-@define-color wm_unfocused_title #565f89;
+     sidebar_border_color   rgba(0, 0, 6, 0.36)   <- hard black divider
+     sidebar_backdrop_color #28282c               <- a grey off the palette
+     sidebar_shade_color    rgba(0, 0, 6, 0.25)
 
+   The border is the same 36% black that was cutting the panes apart in
+   Nautilus; transparent here for the same reason, the tone step already
+   separates them. The backdrop one mattered even more: the Backdrop
+   section further down exists precisely so nothing shifts when a window
+   loses focus, and the sidebar was escaping it through a name nobody had
+   defined. Undefined is not neutral -- check the theme's default before
+   assuming a name can be left out:
 
-/* ==================================================================
-   GTK 3: actual rules
-   ==================================================================
-   Redefining the @define-color entries above is NOT enough in GTK3. Tested:
-   with that alone, GTK resolves theme_bg_color to #1a1b26 correctly
-   (verified with Gtk.StyleContext.lookup_color) but pavucontrol
-   kept painting #2d2d2d. The reason is that modern Adwaita no longer paints
-   through those names: it hardcodes the colours in its own rules, so the
-   name is overridden but nobody uses it.
+     grep -m1 '@define-color <name> ' \
+       /usr/share/themes/adw-gtk3-dark/gtk-3.0/gtk.css */
+@define-color sidebar_bg_color        #1a1b26;
+@define-color sidebar_fg_color        #c0caf5;
+@define-color sidebar_backdrop_color  #1a1b26;
+@define-color sidebar_border_color    transparent;
+@define-color sidebar_shade_color     rgba(0, 0, 0, 0.18);
 
-   What does work is concrete rules: user CSS is loaded with
-   GTK_STYLE_PROVIDER_PRIORITY_USER, above the theme, so these win over
-   Adwaita's.
+@define-color card_bg_color     #292e42;
+@define-color card_fg_color     #c0caf5;
+@define-color card_shade_color  rgba(0, 0, 0, 0.36);
 
-   This is not meant to be a complete theme -- it covers the large surfaces,
-   which is where the grey shows. If some stray widget turns up untinted, add
-   its selector here. */
+@define-color dialog_bg_color   #1a1b26;
+@define-color dialog_fg_color   #c0caf5;
 
-window,
-.background,
-dialog,
-messagedialog .response-area > button,
-paned > separator {
-  background-color: @theme_bg_color;
-  color: @theme_fg_color;
-}
+@define-color popover_bg_color  #292e42;
+@define-color popover_fg_color  #c0caf5;
 
-/* Action bars and toolbars, for apps that use them (GIMP).
-   CAREFUL: it does NOT cover the bottom strip of pavucontrol, which stays
-   #2d2d2d -- ese widget no responde a ninguno de estos selectores y no
-   has not been identified. It is ~6% of that window and reads fine, so it
-   is left alone. If it ever bothers you, open the inspector with
-   GTK_DEBUG=interactive pavucontrol and look at the real node. */
-actionbar,
-actionbar > revealer > box,
-.toolbar,
-.inline-toolbar,
-searchbar,
-infobar,
-frame > border {
-  background-color: @theme_bg_color;
-  color: @theme_fg_color;
-  border-color: @borders;
-}
+@define-color thumbnail_bg_color #292e42;
+@define-color thumbnail_fg_color #c0caf5;
 
-/* CAREFUL with "background-image: none": it is not redundant. Adwaita paints
-   the header bar with a gradient, and in CSS the background image goes ON
-   TOP of the colour, so without cancelling it the background-color here is
-   never seen. The twist is that Adwaita DOES drop the gradient on :backdrop
-   -- hence the misleading symptom: the bar looked right when the window did
-   NOT have focus and turned grey when focused. That is the same reason the
-   button rule below carries it too. */
-headerbar,
-headerbar:backdrop,
-.titlebar,
-.titlebar:backdrop,
-notebook > header,
-notebook > header > tabs > tab:checked {
-  background-color: @theme_bg_color;
-  background-image: none;
-  color: @theme_fg_color;
-  border-color: @borders;
-}
+@define-color shade_color   rgba(0, 0, 0, 0.36);
+@define-color scrim_color   rgba(0, 0, 0, 0.5);
+@define-color borders       #414868;
 
-/* Content surfaces: lists, trees, text views and fields.
-   One step darker than the window, same as Base in Qt. */
-entry,
-spinbutton,
-textview,
-textview text,
-treeview.view,
-list,
-listbox,
-scrolledwindow viewport {
-  background-color: @theme_base_color;
-  color: @theme_fg_color;
-  border-color: @borders;
-}
+/* content_view_bg exists only in the GTK3 port: it is what an icon view or a
+   file list paints behind the items. Left equal to the view so a file chooser
+   does not show two different blacks.
 
-/* Selection: the only place the wallpaper colour comes in. */
-:selected,
-:selected:focus,
-treeview.view:selected,
-listbox row:selected,
-entry selection,
-textview text selection {
-  background-color: @theme_selected_bg_color;
-  color: @theme_selected_fg_color;
-}
+   panel_bg_color / panel_fg_color are the other two the port hardcodes
+   rather than deriving: their defaults are literally "black" and "white",
+   which is how a menubar or panel ends up as a pure-black strip in the
+   middle of a Tokyo Night window. Pinned to the chrome.
 
-button,
-combobox button,
-spinbutton button {
-  background-image: none;
-  background-color: #292e42;
-  color: @theme_fg_color;
-  border-color: @borders;
-}
+   Not listed here because the theme already derives them from the names
+   above, so they follow on their own: theme_base_color, theme_bg_color,
+   theme_fg_color, theme_text_color, theme_selected_bg_color and
+   text_view_bg. */
+@define-color content_view_bg   #101119;
 
-button:hover {
-  background-color: #363b54;
-}
+@define-color panel_bg_color    #1a1b26;
+@define-color panel_fg_color    #c0caf5;
 
-button:active,
-button:checked {
-  background-color: @theme_selected_bg_color;
-  color: @theme_selected_fg_color;
-}
+/* ---- Backdrop ----
+   GTK3 keeps a separate set of colours for a window WITHOUT focus, and with
+   focus-follows-mouse that is every time the pointer leaves it. They are set
+   to exactly the focused values on purpose: a window that changes colour when
+   you look away reads as broken, not as unfocused. The title bar already
+   marks focus on its own.
 
-button:disabled {
-  background-color: #1a1b26;
-  color: #565f89;
-}
+   This is the same shift that the old selector patch fought with a whole
+   :backdrop section. Here it is eight lines and it cannot be beaten on
+   specificity, because it is not a rule. */
+@define-color theme_unfocused_bg_color            #1a1b26;
+@define-color theme_unfocused_fg_color            #c0caf5;
+@define-color theme_unfocused_base_color          #101119;
+@define-color theme_unfocused_text_color          #c0caf5;
+@define-color theme_unfocused_selected_bg_color   {{colors.primary.default.hex}};
+@define-color theme_unfocused_selected_fg_color   {{colors.on_primary.default.hex}};
+@define-color unfocused_borders                   #414868;
 
-popover,
-popover > contents,
-menu,
-.menu,
-.context-menu {
-  background-color: #292e42;
-  color: @theme_fg_color;
-  border-color: @borders;
-}
+/* ---- Disabled ----
+   The text dims, the background does NOT lighten. Lightening it on a dark
+   theme is exactly what makes a disabled widget unreadable. */
+@define-color insensitive_bg_color      #1a1b26;
+@define-color insensitive_fg_color      #565f89;
+@define-color insensitive_base_color    #101119;
+@define-color unfocused_insensitive_color #565f89;
 
-menuitem:hover,
-popover listview row:hover {
-  background-color: @theme_selected_bg_color;
-  color: @theme_selected_fg_color;
-}
+/* ---- Accent: the only thing that follows the wallpaper ----
+   accent_color    = for TEXT and icons over the window background.
+   accent_bg_color = for FILLS (active switch, selection).
+   accent_fg_color = the text that goes ON TOP of accent_bg_color.
 
-tooltip,
-tooltip.background {
-  background-color: #292e42;
-  color: @theme_fg_color;
-}
+   on_primary is used for the fg rather than a fixed white: matugen computes
+   it with guaranteed contrast against primary, so text over an accented
+   button is readable with any wallpaper -- including when the accent comes
+   out light and a white would vanish. */
+@define-color accent_color     {{colors.primary.default.hex}};
+@define-color accent_bg_color  {{colors.primary.default.hex}};
+@define-color accent_fg_color  {{colors.on_primary.default.hex}};
 
-/* Progress bars and scales: the fill carries the accent, the trough stays a
-   grey from the palette so the track can be told apart. */
-progressbar > trough > progress,
-scale > trough > highlight,
-levelbar block.filled {
-  background-color: @theme_selected_bg_color;
-}
+/* ---- Semantic: NOT harmonised ----
+   Same as warning/critical in waybar (see config.toml): an alert has to look
+   the same always, even over a red wallpaper. */
+@define-color destructive_color     #f7768e;
+@define-color destructive_bg_color  #f7768e;
+@define-color destructive_fg_color  #1a1b26;
 
-progressbar > trough,
-scale > trough,
-levelbar > trough {
-  background-color: #292e42;
-}
+@define-color success_color     #9ece6a;
+@define-color success_bg_color  #9ece6a;
+@define-color success_fg_color  #1a1b26;
 
-/* The slider knob. Adwaita leaves it light grey and it was the last trace of
-   #2d2d2d visible in pavucontrol. */
-scale slider {
-  background-color: @theme_selected_bg_color;
-  border-color: @borders;
-}
+@define-color warning_color     #e0af68;
+@define-color warning_bg_color  #e0af68;
+@define-color warning_fg_color  #1a1b26;
 
-scale slider:hover {
-  background-color: @theme_fg_color;
-}
-
-scale slider:disabled {
-  background-color: #414868;
-}
-
-scrollbar {
-  background-color: @theme_bg_color;
-}
-
-scrollbar slider {
-  background-color: #414868;
-}
-
-scrollbar slider:hover {
-  background-color: @theme_selected_bg_color;
-}
-
-
-/* File chooser: the XDG portal's "Save as" dialog.
-   xdg-desktop-portal-gtk is GTK3, which is where you saw it, but any
-   GtkFileChooser had the same gap.
-
-   The path strip (the breadcrumbs: johan / Pictures / wallpapers) stayed on
-   Adwaita's #2d2d2d while the rest of the dialog was already Tokyo Night.
-   The node is called #pathbarbox and it was located by painting candidates
-   in impossible colours and seeing which one showed up in that strip;
-   box.horizontal covered it too, but it also took out the sidebar rows and
-   the column header.
-
-   It carries an explicit :backdrop because Adwaita defines both states
-   separately, and without naming it the colour only changed in one. */
-filechooser #pathbarbox,
-filechooser #pathbarbox:backdrop {
-  background-color: @theme_bg_color;
-  border-color: @borders;
-}
+@define-color error_color       #f7768e;
+@define-color error_bg_color    #f7768e;
+@define-color error_fg_color    #1a1b26;
