@@ -10,6 +10,14 @@
     <img src="assets/preview.png" alt="The desktop: Quickshell's bar with the island open on its Performance tab, fastfetch in kitty, neovim, Nautilus and zathura" width="100%">
 </p>
 
+<p align="center">
+    <img src="assets/preview-dashboard.png" alt="The same shell on a green palette, with the island's dashboard open: clock, calendar, volume, Wi-Fi, Bluetooth, the screen recorder and the instant replay buffer" width="100%">
+</p>
+
+<p align="center">
+    <sub>Same shell, two wallpapers. Every colour above is generated from the image behind it.</sub>
+</p>
+
 ---
 
 | | |
@@ -77,7 +85,7 @@ icons/      .local/share/icons/      app icons that don't ship with their packag
 bin/        .local/bin/              6 scripts + the capture-card desktop entry
 packages/   pacman and AUR package lists
 system/     copies of /etc — reference only, NOT symlinked
-assets/     the screenshot at the top of this file
+assets/     the screenshots at the top of this file
 ```
 
 `--no-folding` matters and the installer uses it: it links file by file instead
