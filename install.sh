@@ -60,13 +60,65 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# pacman aborts the WHOLE transaction over a single package it cannot find, so
+# one entry that does not exist on this machine means nothing at all gets
+# installed -- which is exactly what happened the first time this ran on a box
+# without the multilib repo: ten unavailable names took the other 129 with
+# them. Everything that is available is installed and the rest is reported.
+#
+# This also covers the case the lists cannot anticipate: a package renamed or
+# dropped from the repos.
+install_list() {
+  local file="$1" label="$2" pkgs=() available=() missing=()
+
+  mapfile -t pkgs < <(grep -v '^[[:space:]]*$' "$file")
+  (( ${#pkgs[@]} )) || return 0
+
+  mapfile -t available < <(
+    pacman -Si "${pkgs[@]}" 2>/dev/null | awk '/^Name/ { print $3 }' | sort -u)
+  mapfile -t missing < <(
+    comm -23 <(printf '%s\n' "${pkgs[@]}" | sort -u) <(printf '%s\n' "${available[@]}"))
+
+  if (( ${#missing[@]} )); then
+    red "   not available in your repos, skipped:"
+    printf '     %s\n' "${missing[@]}"
+  fi
+
+  if (( ${#available[@]} == 0 )); then
+    red "   nothing from $label could be installed"
+    return 0
+  fi
+
+  # --needed skips the ones already installed.
+  sudo pacman -S --needed "${available[@]}"
+  green "   $label: ${#available[@]} package(s) handled"
+}
+
 blue "== 2/6  Packages from the official repos =="
 echo "   $(wc -l < "$DOT/packages/pacman.txt") packages in packages/pacman.txt"
 if ask "Install them (plus stow)?"; then
   sudo pacman -S --needed --noconfirm stow
-  # --needed skips the ones already installed; < feeds the list to stdin
-  sudo pacman -S --needed - < "$DOT/packages/pacman.txt"
-  green "   done"
+  install_list "$DOT/packages/pacman.txt" "core"
+fi
+
+# --- 32-bit libraries and Steam -------------------------------------------
+# Their own list because they need the multilib repo, which is off by default
+# on Arch. Enabling it means editing /etc/pacman.conf, and this script does not
+# touch /etc -- same rule as system/.
+echo
+echo "   packages/multilib.txt holds Steam and the 32-bit libraries."
+if grep -q '^\[multilib\]' /etc/pacman.conf; then
+  if ask "Install them?"; then
+    install_list "$DOT/packages/multilib.txt" "multilib"
+  fi
+else
+  echo "   The multilib repo is NOT enabled, so these are unavailable."
+  echo "   To enable it, uncomment these two lines in /etc/pacman.conf:"
+  echo
+  echo "     [multilib]"
+  echo "     Include = /etc/pacman.d/mirrorlist"
+  echo
+  echo "   then run 'sudo pacman -Sy' and this script again. Skipping for now."
 fi
 
 # ---------------------------------------------------------------------------
@@ -191,6 +243,9 @@ Left to do by hand:
   1. /etc  — see system/ and the table in the README. The fstab UUIDs belong
              to the original machine: do NOT copy it as is.
   2. Monitors — the layout block in hyprland.lua, if the check above said so.
-  3. zsh as the default shell, if it is not already:
+  3. The GPU driver. Deliberately not installed by this script: it is the one
+             thing that depends on hardware nothing here can see, and a driver
+             for a card you do not have is not a harmless mistake.
+  4. zsh as the default shell, if it is not already:
              chsh -s /usr/bin/zsh
 END
