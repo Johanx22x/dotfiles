@@ -214,6 +214,19 @@ Singleton {
                 "-f", "60",
                 "-c", "mp4",
                 "-k", "h264",
+                // Not every GPU can encode. Navi 24 -- the RX 6400 and 6500 XT
+                // -- ships with no video encoder AT ALL: AMD dropped the VCN
+                // encode block because the chip was meant for laptops paired
+                // with an APU that has its own. gsr is a hardware recorder, so
+                // there it refused to start at all, three times, and the buffer
+                // disarmed itself with "keeps failing to start".
+                //
+                // This changes nothing where an encoder exists -- NVENC is
+                // still used here -- and rescues the machines where it does
+                // not. The cost on those is real and worth knowing: encoding
+                // 1080p60 CBR in software, permanently, because the buffer is
+                // armed from boot. -f and -q are the knobs to turn there.
+                "-fallback-cpu-encoding", "yes",
                 // CBR is what the man page recommends for a replay buffer, and
                 // it is also what makes the RAM cost predictable: 40 Mbit/s for
                 // 30 s is about 150 MB, whatever is happening on screen.
