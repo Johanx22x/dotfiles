@@ -21,7 +21,7 @@
         // AT RANDOM on each run. It is native, no script needed.
         // Drop more PNGs into logos/ and they join the rotation on their
         // own.
-        "source": "/home/johan/.config/fastfetch/logos/*.png",
+        "source": "~/.config/fastfetch/logos/*.png",
         // The box is fixed (26x15), so the text always takes 16 rows no
         // matter what. But preserveAspectRatio fits INSIDE the box: a wider
         // image will look smaller and leave a gap. For consistent framing,

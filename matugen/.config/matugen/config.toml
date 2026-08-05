@@ -33,7 +33,7 @@ cpu = { color = "#bb9af7", blend = true }   # magenta TN
 ram = { color = "#9ece6a", blend = true }   # TN green -- also the gs button
 gpu = { color = "#7aa2f7", blend = true }   # blue TN
 
-# ---- Quickshell (trial bar on the portrait monitor) ----
+# ---- Quickshell (the shell: bar, notifications, launcher, dashboard) ----
 # JSON and not a generated .qml on purpose: Quickshell reloads the WHOLE
 # config when any .qml changes, so a generated QML file would restart the
 # shell on every wallpaper change. Theme.qml reads this file through a
@@ -42,23 +42,23 @@ gpu = { color = "#7aa2f7", blend = true }   # blue TN
 #
 # No post_hook for the same reason: nothing has to be signalled or reloaded.
 [templates.quickshell]
-input_path = '/home/johan/.config/matugen/templates/quickshell-colors.json'
-output_path = '/home/johan/.config/quickshell/colors.json'
+input_path = '~/.config/matugen/templates/quickshell-colors.json'
+output_path = '~/.config/quickshell/colors.json'
 
 # ---- Kitty ----
 # Background, text and the 16 ANSI colours still come from kitty.conf.
 # Only cursor, selection, tabs and links here.
 [templates.kitty]
-input_path = '/home/johan/.config/matugen/templates/kitty-colors.conf'
-output_path = '/home/johan/.config/kitty/colors.conf'
+input_path = '~/.config/matugen/templates/kitty-colors.conf'
+output_path = '~/.config/kitty/colors.conf'
 post_hook = 'pkill -SIGUSR1 -x kitty || true'
 
 # ---- Hyprland ----
 # A Lua table that hyprland.lua reads at startup. The live change is done by
 # wallpaper-switch through hyprctl, without reloading the whole config.
 [templates.hyprland]
-input_path = '/home/johan/.config/matugen/templates/hypr-colors.lua'
-output_path = '/home/johan/.config/hypr/colors.lua'
+input_path = '~/.config/matugen/templates/hypr-colors.lua'
+output_path = '~/.config/hypr/colors.lua'
 
 # The Dunst template was here. Quickshell draws the notifications now and
 # reads the palette live from colors.json, so there is no file to regenerate
@@ -74,8 +74,8 @@ output_path = '/home/johan/.config/hypr/colors.lua'
 # No post_hook: qt6ct watches the file and open apps pick up the new palette
 # by themselves.
 [templates.qt6ct]
-input_path = '/home/johan/.config/matugen/templates/qt6ct-colors.conf'
-output_path = '/home/johan/.config/qt6ct/colors/matugen.conf'
+input_path = '~/.config/matugen/templates/qt6ct-colors.conf'
+output_path = '~/.config/qt6ct/colors/matugen.conf'
 
 # ---- There is NO kdeglobals template: do not add one back ----
 #
@@ -110,8 +110,8 @@ output_path = '/home/johan/.config/qt6ct/colors/matugen.conf'
 # No post_hook: zathura reads the config when it opens, it does not reload
 # live.
 [templates.zathura]
-input_path = '/home/johan/.config/matugen/templates/zathurarc'
-output_path = '/home/johan/.config/zathura/zathurarc'
+input_path = '~/.config/matugen/templates/zathurarc'
+output_path = '~/.config/zathura/zathurarc'
 
 # ---- Ranger ----
 # The terminal file manager. It is curses: it does not understand hex, only
@@ -127,8 +127,8 @@ output_path = '/home/johan/.config/zathura/zathurarc'
 # No post_hook: ranger is not a daemon. It reads the file when it opens,
 # same as wofi and fastfetch.
 [templates.ranger]
-input_path = '/home/johan/.config/matugen/templates/ranger-accent'
-output_path = '/home/johan/.config/ranger/accent'
+input_path = '~/.config/matugen/templates/ranger-accent'
+output_path = '~/.config/ranger/accent'
 
 # ---- GTK apps ----
 # TWO templates, not one. The GTK3 and GTK4 colour names do not clash, so
@@ -153,12 +153,12 @@ output_path = '/home/johan/.config/ranger/accent'
 # The theme doing the painting is adw-gtk3-dark (package adw-gtk-theme), which
 # reads those names. Never put a selector in these templates.
 [templates.gtk3]
-input_path = '/home/johan/.config/matugen/templates/gtk3-colors.css'
-output_path = '/home/johan/.config/gtk-3.0/gtk.css'
+input_path = '~/.config/matugen/templates/gtk3-colors.css'
+output_path = '~/.config/gtk-3.0/gtk.css'
 
 [templates.gtk4]
-input_path = '/home/johan/.config/matugen/templates/gtk4-colors.css'
-output_path = '/home/johan/.config/gtk-4.0/gtk.css'
+input_path = '~/.config/matugen/templates/gtk4-colors.css'
+output_path = '~/.config/gtk-4.0/gtk.css'
 
 # ---- Zen Browser ----
 # The only browser whose OWN interface -- tabs, sidebar, omnibox -- can be
@@ -185,8 +185,8 @@ output_path = '/home/johan/.config/gtk-4.0/gtk.css'
 # into /opt/zen-browser-bin and would be wiped by every package update; the
 # reasoning is in userChrome.css.
 [templates.zen]
-input_path = '/home/johan/.config/matugen/templates/zen-colors.css'
-output_path = '/home/johan/.zen/rice/chrome/colors.css'
+input_path = '~/.config/matugen/templates/zen-colors.css'
+output_path = '~/.zen/rice/chrome/colors.css'
 
 # ---- Fastfetch ----
 # Same case as dunst: fastfetch does not support "include", so the template
@@ -200,5 +200,5 @@ output_path = '/home/johan/.zen/rice/chrome/colors.css'
 # No post_hook: fastfetch is not a daemon, it re-reads the config on every
 # run (same as wofi).
 [templates.fastfetch]
-input_path = '/home/johan/.config/matugen/templates/fastfetch-config.jsonc'
-output_path = '/home/johan/.config/fastfetch/config.jsonc'
+input_path = '~/.config/matugen/templates/fastfetch-config.jsonc'
+output_path = '~/.config/fastfetch/config.jsonc'

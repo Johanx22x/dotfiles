@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-    <sub>The same shell on three wallpapers. Every colour above is generated from the image behind it.</sub>
+    <sub>Two palettes, one shell. Every colour above is generated from the image behind it.</sub>
 </p>
 
 ---
@@ -25,7 +25,7 @@
 |---|---|
 | Compositor | Hyprland, configured in **Lua** (`hyprland.lua`, not `hyprland.conf`) |
 | Terminal | kitty + zsh + starship |
-| Shell | Quickshell — bar, dynamic island, launcher, notifications, power menu, keybind cheatsheet |
+| Shell | Quickshell — bar, dynamic island, launcher, notifications, power menu, settings window, keybind cheatsheet |
 | Login | SDDM |
 | Files | ranger · Nautilus |
 | Images / video / PDF | Loupe · Celluloid · zathura |
@@ -34,6 +34,13 @@
 
 The base palette is fixed (Tokyo Night) and matugen only supplies the
 **accents**, so contrast never depends on which wallpaper happens to be set.
+
+**Nothing in this repository is tied to one home directory.** There is no
+absolute `/home/<user>` path in any tracked file, and the installer does not
+rewrite one into your own — everything resolves `$HOME` or `%h` at runtime.
+What *is* specific to one machine or one person lives outside git; see
+[Per-machine configuration](#per-machine-configuration), which is the section
+to read if you are cloning this for yourself.
 
 ---
 
@@ -45,79 +52,230 @@ cd ~/dotfiles
 ./install.sh
 ```
 
-Six steps, each one asking first, so you can apply only the parts you want. It
-is idempotent — re-running it is safe.
+Six numbered steps plus a monitor check, each asking before it does anything,
+so you can apply only the parts you want. It is idempotent — re-running it is
+safe — and it refuses to run as root or on a non-Arch system.
 
-1. **Absolute paths.** If your home isn't `/home/johan`, rewrites the paths in
-   the repo to match. matugen doesn't expand `~` in `output_path`, so absolute
-   paths are unavoidable there; the installer handles it, you don't.
-2. **Packages** from `packages/pacman.txt`. Anything your repos don't have is
-   skipped and listed, rather than aborting the whole transaction — which is
-   what pacman does over a single missing name. `packages/multilib.txt` (Steam
-   and the 32-bit libraries) is offered separately, and only if you have the
-   multilib repo enabled.
-3. **AUR** — installs `yay` if missing, then `packages/aur.txt`.
-4. **Symlinks** the config with stow, and enables the user systemd units. stow
-   plans the whole operation and aborts all of it on the first conflict, so a
-   single pre-existing file means nothing gets linked — and there usually is
-   one, because Hyprland writes a default config into `~/.config/hypr` the
-   first time it runs. Conflicts are found up front and you're offered to
-   *move* them (never delete, never `--adopt`) into a timestamped folder.
-5. **Neovim** — clones [its own repo](https://github.com/Johanx22x/nvim).
-6. **Palette** — runs `wallpaper-switch` so the generated color files exist.
+1. **Packages** from `packages/pacman.txt` (129 of them), plus `stow` itself.
+   Anything your repos don't have is skipped and listed rather than aborting
+   the whole transaction, which is what pacman does over a single missing
+   name. `packages/multilib.txt` (Steam and the 32-bit libraries) is offered
+   straight afterwards, and only if `[multilib]` is enabled in
+   `/etc/pacman.conf` — the script prints the two lines to uncomment and moves
+   on if it isn't, because enabling it means editing `/etc`.
+2. **AUR** — builds `yay` if it is missing, then installs `packages/aur.txt`
+   through it.
+3. **Symlinks** the config with stow, then reloads the user systemd daemon and
+   enables `wallpaper-rotate.timer` and `hyprpolkitagent.service`. stow plans
+   the whole operation and aborts all of it on the first conflict, so a single
+   pre-existing file means nothing gets linked — and there usually is one,
+   because Hyprland writes a default config into `~/.config/hypr` the first
+   time it runs. The conflicts are found up front with a dry run and you are
+   offered to *move* them (never delete, never `--adopt`) into
+   `~/dotfiles-replaced-<timestamp>`.
+4. **Seeds** — copies `seeds/` into `$HOME`, but only where nothing is there
+   yet. Never overwrites. See [Seeds, not symlinks](#seeds-not-symlinks).
+5. **Neovim** — clones [its own repo](https://github.com/Johanx22x/nvim) into
+   `~/.config/nvim`, and leaves it alone if that path already exists.
+6. **Palette** — runs `wallpaper-switch random` so the generated colour files
+   exist. Needs at least one image in `~/Pictures/wallpapers`; without one it
+   says so instead of failing.
 
-Left to do by hand afterwards: `/etc` (see below), the monitor block in
-`hyprland.lua`, and `chsh -s /usr/bin/zsh`.
+Then, unnumbered, a **monitor check**: if Hyprland is running it compares
+every `desc:` in `hyprland.lua` against the monitors actually attached and
+prints this machine's descriptions, modes and orientation ready to use. It
+changes nothing — which screen is main and where the others sit is a layout
+decision, not something to infer from an EDID.
 
-**The GPU driver is not part of this and never gets installed for you.** It is
-the one choice that depends on hardware the repo cannot see — and guessing
-wrong is not free: an NVIDIA DKMS module rebuilds on every kernel update, for
-a card that isn't there. Install yours before or after, whichever it is. Where
-32-bit drivers are concerned, `steam` depends on the `lib32-vulkan-driver` and
-`lib32-libgl` virtual packages, so pacman asks you to pick a provider itself.
+Left to do by hand, as the script says when it finishes:
+
+1. `/etc` — see [the table below](#etc--applied-by-hand). **The fstab UUIDs
+   belong to the original machine**; do not copy it as is.
+2. The monitors, if the check above said they don't match.
+3. The GPU driver.
+4. `chsh -s /usr/bin/zsh`, if zsh is not already your shell.
+
+**The GPU driver is deliberately not installed for you.** It is the one choice
+that depends on hardware the repo cannot see, and guessing wrong is not free:
+an NVIDIA DKMS module rebuilds on every kernel update, for a card that isn't
+there. Install yours before or after. Where 32-bit drivers are concerned,
+`steam` depends on the `lib32-vulkan-driver` and `lib32-libgl` virtual
+packages, so pacman asks you to pick a provider itself.
 
 ---
 
 ## Layout
 
-Every top-level directory is a **stow package** and mirrors the path it will
-have relative to `$HOME`. So `stow hypr` creates
+Every stow package is a top-level directory that mirrors the path it will have
+relative to `$HOME`. So `stow hypr` creates
 `~/.config/hypr/hyprland.lua -> ~/dotfiles/hypr/.config/hypr/hyprland.lua`.
+
+These fourteen are the packages, and the list matches `PACKAGES=` in
+`install.sh` exactly:
 
 ```
 zsh/        .zshrc
 hypr/       .config/hypr/            hyprland.lua + gaming.lua
-quickshell/ .config/quickshell/      bar, island, launcher, notifications, cheatsheet
+quickshell/ .config/quickshell/      bar, island, launcher, notifications,
+                                     power menu, cheatsheet, settings window
 kitty/      .config/kitty/
-matugen/    .config/matugen/         config.toml + 9 color templates
-ranger/     .config/ranger/          rc.conf, scope.sh, tokyonight colorscheme
-shell/      .config/                 btop, starship, cship
-qt/         .config/qt6ct/           Qt platform theme
-gtk/        .config/                 gtk-3.0, gtk-4.0 settings
-media/      .config/mpv/
+matugen/    .config/matugen/         config.toml + 10 colour templates
+shell/      .config/                 btop, starship (two profiles), cship
+gtk/        .config/                 gtk-3.0 and gtk-4.0 settings.ini
+media/      .config/mpv/             + a wireplumber rule for the capture card
 openrgb/    .config/OpenRGB/
-xdg/        .config/mimeapps.list    default applications
-systemd/    .config/systemd/user/    wallpaper rotation timer
-icons/      .local/share/icons/      app icons that don't ship with their package
-bin/        .local/bin/              6 scripts + the capture-card desktop entry
+systemd/    .config/systemd/user/    wallpaper rotation service + timer
+bin/        .local/bin/              9 scripts + the capture-card desktop entry
+ranger/     .config/ranger/          rc.conf, scope.sh, tokyonight colorscheme
+icons/      .local/share/icons/      an icon that does not ship with its app
+zen/        .zen/rice/               user.js + userChrome.css (Zen browser)
+```
+
+Four directories are **never stowed**:
+
+```
 packages/   package lists: core, multilib, AUR
-system/     copies of /etc — reference only, NOT symlinked
+system/     copies of /etc — reference only, applied by hand
+seeds/      qt6ct.conf, mimeapps.list — COPIED once, not linked
 assets/     the screenshots at the top of this file
 ```
 
-`--no-folding` matters and the installer uses it: it links file by file instead
-of linking whole directories. That keeps `~/.config/hypr` a real directory, so
-matugen can write `colors.lua` into it without the generated file landing
-inside the repo.
+`--no-folding` matters and the installer uses it: it links file by file
+instead of linking whole directories. That keeps `~/.config/hypr` a real
+directory, so matugen can write `colors.lua` into it without the generated
+file landing inside the repo. The flip side is that a **new** file you create
+under a stowed directory is not in the repo — move it into the package and
+re-run `stow --no-folding -t ~ -d ~/dotfiles <package>`.
 
-The flip side: a **new** file you create under a stowed directory is not in the
-repo. Move it into the package and re-run `stow --no-folding <package>`.
+---
+
+## Per-machine configuration
+
+This repo is pulled by more than one machine, with different monitors and a
+different keyboard. Anything that belongs to *one* of them is kept out of git
+on purpose: a tracked personal file turns every pull on the other machine into
+a conflict. `hyprland.lua` loads the pieces with `pcall(dofile, ...)`, so a
+missing file is the normal case on a fresh clone and a broken one leaves the
+tracked config standing instead of taking the desktop down.
+
+| File | Written by | Holds |
+|---|---|---|
+| `~/.config/hypr/monitors.lua` | **generated** — `hypr-monitor`, called by the settings window | mode, position, scale and rotation per monitor |
+| `~/.config/hypr/local.lua` | **you**, by hand | keyboard layout, extra binds, window rules |
+
+Both are in `.gitignore`. Neither is required.
+
+**`monitors.lua`** is a pure override layer: `hyprland.lua` declares the
+monitors it was written for, and this file is `dofile`'d at the end of that
+section, where a later `hl.monitor` for the same output replaces the earlier
+one. Delete it and the tracked block stands on its own again. It is generated,
+so do not edit it by hand — the script rewrites it whole:
+
+```sh
+hypr-monitor                       # show what is overridden
+hypr-monitor set <desc> <mode> <position> <scale> <transform>
+hypr-monitor forget <desc>         # drop one override
+hypr-monitor clear                 # drop them all
+```
+
+`<desc>` is the monitor's EDID description **without** the `desc:` prefix.
+Values are validated before anything is written, and the change is also pushed
+into the running compositor with `hyprctl eval`, so it takes effect without a
+reload. The Display page of the settings window drives exactly this script.
+
+**`local.lua`** is loaded last, after every declaration in `hyprland.lua`, and
+is the escape hatch for everything personal. What "override" means there is not
+uniform, and the file's own comment spells it out: variables and `hl.monitor`
+are replaced by the later call, `hl.window_rule` / `hl.layer_rule` edit in
+place when the name matches, but **`hl.bind` does not replace** — it appends,
+and both binds fire. To take a chord over, `hl.unbind("SUPER + W")` first.
+
+### Seeds, not symlinks
+
+Two files are **copied** rather than linked, and live in `seeds/`:
+`~/.config/qt6ct/qt6ct.conf` and `~/.config/mimeapps.list`. The applications
+that own them rewrite them — qt6ct rewrites its config in full on every save,
+comments and all, and stores its own window geometry in there; `mimeapps.list`
+is rewritten by anything that claims a default handler. Symlinked into the
+repo, both left every machine with a permanently dirty working tree and a
+collision on every `git pull`.
+
+So the installer copies them once, only where nothing exists yet, and never
+overwrites. From that moment they belong to the machine. They are not
+decoration either: `qt6ct.conf` puts Qt on the Adwaita icon theme, without
+which tray menus asking for icons by name come up as missing-icon
+chequerboards. [`seeds/README.md`](seeds/README.md) has the rest, including how
+to adopt a change to a seed on a machine that already has the file.
+
+### Shared state under `~/.local/state`
+
+Some settings are not the shell's alone. The desktop transparency is read by
+Quickshell, kitty, Zen and Hyprland; the type size has to agree between the
+shell and the terminal. Rather than four numbers in four configs, each one is a
+single file that one script writes and everything else reads:
+
+| File | Written by | Read by |
+|---|---|---|
+| `desktop-opacity` | `desktop-opacity` | Quickshell, `hyprland.lua`, kitty (`opacity.conf`), Zen (`opacity.css`) |
+| `desktop-font` | `desktop-font` | Quickshell, kitty (`font.conf`) |
+| `hypr-monitors` | `hypr-monitor` | `hypr-monitor` itself, to regenerate `monitors.lua` |
+
+```sh
+desktop-opacity          # print the current value
+desktop-opacity 0.75     # set it (0.40 - 1.00)
+desktop-font             # print size and family
+desktop-font 12          # set the size (8 - 16)
+```
+
+The shell's own preferences — 24-hour clock, date on the bar, notification
+timeout — stay in Quickshell's `config.json` under
+`~/.local/state/quickshell/`, because nothing outside the shell reads them.
+`Config.qml` explains why the split is two stores and not one, and why the
+settings window lives inside the shell process rather than beside it.
+
+---
+
+## The shell
+
+Quickshell replaces waybar, wofi and dunst; `hyprland.lua` starts it with
+`qs -d --no-duplicate`. It picks its monitor at runtime (`Screens.qml`:
+`preferredModel` if set, else the only screen, else the largest landscape one)
+instead of naming a model, so a clone on other hardware still comes up with a
+bar. The rounded display corners are the exception and go on every monitor.
+
+| Key | |
+|---|---|
+| `SUPER + /` | the cheatsheet — every bind that carries a description |
+| `SUPER + SPACE` | launcher |
+| `SUPER + V` | clipboard history |
+| `SUPER + D` | dashboard (clock, calendar, volume, Wi-Fi, Bluetooth, recorder) |
+| `SUPER + C` | settings window |
+| `SUPER + N` / `SUPER + SHIFT + N` | do not disturb / notification history |
+| `SUPER + SHIFT + ESCAPE` | power menu |
+| `SUPER + SHIFT + W` / `SUPER + SHIFT + A` | next / random wallpaper |
+| `SUPER + S` | region screenshot to the clipboard |
+| `ALT + Z` | save the last 30 seconds from the replay buffer |
+
+The **settings window** (`SUPER + C`, or the gear on the bar) is an ordinary
+window inside the shell process, not a second `qs` instance — the state path is
+hashed per entry point, so two processes would write two files and read
+neither. Its pages: User, Appearance, Wallpaper, Bar, Notifications, Display,
+Network, Bluetooth, Keybinds, About.
+
+Two of those are worth knowing about before you go looking for a button that
+isn't there. **Display** writes through `hypr-monitor`, so a change made there
+is the same override you would have written by hand. **Keybinds** reads and
+never writes: with a Lua config every bind reaches `hyprctl binds -j` as
+`"dispatcher": "__lua"` with an opaque callback index, so the chord and the
+description are knowable but what the bind *does* is not — and a generator
+pointed at `hyprland.lua` would produce a correct list of binds while
+destroying the prose that explains why they are those binds.
 
 ---
 
 ## Color
 
-`wallpaper-switch` sets the wallpaper and runs matugen, which renders twelve
+`wallpaper-switch` sets the wallpaper and runs matugen, which renders ten
 files from the templates in `matugen/.config/matugen/templates/`:
 
 ```
@@ -125,21 +283,29 @@ files from the templates in `matugen/.config/matugen/templates/`:
 ~/.config/kitty/colors.conf        ~/.config/gtk-4.0/gtk.css
 ~/.config/hypr/colors.lua          ~/.config/qt6ct/colors/matugen.conf
 ~/.config/zathura/zathurarc        ~/.config/ranger/accent
-~/.config/fastfetch/config.jsonc
+~/.config/fastfetch/config.jsonc   ~/.zen/rice/chrome/colors.css
 ```
 
 **None of these are in the repo** — they change with every wallpaper. Edit the
 template, then `wallpaper-switch reapply`. They all carry a
 `GENERATED BY MATUGEN` header so you notice when you're in the wrong file.
 
-`zathurarc` and `fastfetch/config.jsonc` are generated *whole*, not just their
-colors: neither can include a separate color file. So their template is the
-entire configuration, and they have no stow package.
+```sh
+wallpaper-switch next | prev | random | reapply
+wallpaper-switch set /path/to/image.jpg
+```
 
-**ranger** is the odd one: it's curses, so it only understands 256-color
-palette indices, not hex. matugen writes just the accent as decimal RGB and the
-colorscheme converts it to an index in Python at startup. Everything else
-inherits the 16 ANSI colors kitty already defines.
+`zathurarc` and `fastfetch/config.jsonc` are generated *whole*, not just their
+colours: neither application can include a separate colour file, so the
+template is the entire configuration and neither has a stow package.
+
+**ranger** is the odd one: it's curses, so it only understands indices into the
+256-colour palette, not hex. matugen writes the two accents as decimal RGB and
+the colorscheme converts them to indices in Python at startup. Everything else
+inherits the 16 ANSI colours kitty already defines.
+
+A systemd user timer (`wallpaper-rotate.timer`, enabled by the installer)
+picks a new wallpaper every 30 minutes.
 
 ---
 
@@ -156,7 +322,7 @@ its configuration from a directory the user can write to.
 | `modules-load-ntsync.conf` | `/etc/modules-load.d/ntsync.conf` | Proton needs `/dev/ntsync` |
 | `default-grub` | `/etc/default/grub` | `GRUB_TOP_LEVEL` pins `vmlinuz-linux` as the default entry |
 | `fstab` | `/etc/fstab` | **the UUIDs belong to this machine** — regenerate them |
-| `reflector.conf` | `/etc/xdg/reflector/` | mirrors |
+| `reflector.conf` | `/etc/xdg/reflector/reflector.conf` | mirrors, sorted by measured rate |
 | `sddm-10-general.conf` | `/etc/sddm.conf.d/10-general.conf` | theme, cursor, numlock |
 | `sddm-Xsetup` | `/usr/share/sddm/scripts/Xsetup` | rotates the vertical monitor at the login screen |
 
@@ -165,13 +331,13 @@ Then: `sudo mkinitcpio -P && sudo grub-mkconfig -o /boot/grub/grub.cfg`.
 Two things that are easy to get wrong:
 
 **`/boot` is a directory inside the `@` subvolume**, not the ESP — the ESP is
-mounted at `/efi`. That's what puts the kernel and initramfs inside the
+mounted at `/efi`. That is what puts the kernel and initramfs inside the
 snapshots, which is what makes a rollback produce a coherent system.
 
 **The SDDM greeter runs on Xorg**, which knows nothing about Hyprland's
 `transform`. Without `Xsetup` the vertical monitor comes up sideways on the
 login screen. It matches outputs by SIZE, not by name, because the names differ
-between Xorg and Hyprland and change between boots — and it leaves early unless
+between Xorg and Hyprland and change between boots — and it exits early unless
 at least two outputs have a mode, so a single-monitor machine is never touched.
 
 ---
@@ -181,34 +347,47 @@ at least two outputs have a mode, so a single-monitor machine is never touched.
 **Neovim** — [its own repo](https://github.com/Johanx22x/nvim). Vendoring it
 here would make it a submodule and complicate cloning.
 
-**The wallpapers** (47 MB). Not configuration, and git handles large binaries
-poorly.
+**The wallpapers.** Not configuration, and git handles large binaries poorly.
+Put your own in `~/Pictures/wallpapers`.
 
-**`cship`** is a compiled binary. Its configuration *is* here, under `shell/`.
+**`cship`** is a compiled binary, so only the binary is ignored; its
+configuration *is* here, under `shell/`.
 
-**Application state** — Brave, Discord, Firefox, GIMP, Steam, and
-`github-copilot` and `gh`, which **hold credentials**.
+**Everything generated**: the matugen output above, `monitors.lua`,
+kitty's `opacity.conf` and `font.conf`, Zen's `opacity.css`, and the
+`*.target.wants` symlinks that `systemctl --user enable` creates — those point
+at absolute paths and would dangle for another user, which is why the installer
+recreates them instead.
+
+**Application state and anything holding credentials.** No browser, Discord,
+Steam or `gh` profile is tracked here.
 
 ---
 
 ## Hardware
 
-Tuned for an i5-13600K, an RTX 5070 (Blackwell, needs `nvidia-open-dkms`) and
-32 GB of RAM. Two monitors on the 5070: one 2560x1440@165 and one 1080p rotated
-vertical.
+Written on an i5-13600K, an RTX 5070 (Blackwell — `nvidia-open-dkms`) and
+32 GB of RAM, with two monitors on the 5070: a 2560x1440@165 and a 1080p one
+rotated to portrait.
 
-Monitors are matched **by EDID description**, not by port name — the kernel
-reassigns names like `DP-3` and `HDMI-A-1` between boots.
+Monitors are matched **by EDID description**, not by connector name: the kernel
+reassigns names like `DP-3` and `HDMI-A-1` between kernel versions, and every
+rule keyed on them silently stops applying.
 
-**That block in `hyprland.lua` is the only thing tied to these screens.** It is
-a layout decision (which monitor is main, where the others sit, what is
-rotated), so the installer doesn't guess it — it checks whether the
-descriptions in the file match the hardware that's plugged in, and if not
-prints this machine's ready to paste. Everything else works it out at runtime:
+The monitor block in `hyprland.lua` is the only part of the tracked config
+that describes these particular screens, and you do not have to edit it —
+`hypr-monitor` and the settings window override it from outside git (see
+[Per-machine configuration](#per-machine-configuration)). Everything else works
+itself out at runtime:
 
 | | |
 |---|---|
 | Which screen the shell is on | `quickshell/Screens.qml` — largest landscape, with an override |
 | The replay buffer's monitor and mic | resolved live, never a connector name |
-| gamescope's virtual output | read off the monitor you're on |
+| gamescope's virtual output | read off the monitor you are on |
 | The login screen's rotation | largest output wins, and a single-monitor machine is left alone |
+
+`gaming-check` is a read-only health check for the gaming half of this setup —
+multilib, the 32-bit libraries, the NVIDIA driver, `/dev/ntsync`, the boot
+images. It changes nothing; run it with `sudo` if you want it to inspect the
+initramfs too.
