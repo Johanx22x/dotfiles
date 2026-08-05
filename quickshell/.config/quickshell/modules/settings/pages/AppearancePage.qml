@@ -53,6 +53,31 @@ SettingsPage {
 
     SettingsSection {
         width: parent.width
+        title: "Windows"
+
+        // THE COMPOSITOR'S, NOT THE SHELL'S, which is why it sits in its own
+        // section rather than under Transparency: it is drawn around every
+        // window on the machine, and this window is only the place that asks
+        // for it. Hyprland applies it the moment the number changes, to
+        // windows already open as well as new ones -- unlike the opacity
+        // above, which new windows pick up and old ones do not.
+        StepperRow {
+            glyph: Icons.windowTiles
+            label: "Window border"
+            value: Config.borderSize
+            from: 0
+            to: 6
+            step: 1
+            suffix: " px"
+            onMoved: value => Config.setBorder(value)
+
+            hint: "Zero removes it entirely. The colour comes from the "
+                + "wallpaper and is not set here."
+        }
+    }
+
+    SettingsSection {
+        width: parent.width
         title: "Type"
 
         StepperRow {
