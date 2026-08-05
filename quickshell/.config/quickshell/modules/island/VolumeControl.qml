@@ -12,6 +12,7 @@ import Quickshell
 import Quickshell.Services.Pipewire
 import QtQuick
 import "root:/"
+import "root:/components"
 
 Item {
     id: root
@@ -20,14 +21,18 @@ Item {
     readonly property bool muted: sink?.audio?.muted ?? false
     readonly property real volume: sink?.audio?.volume ?? 0
 
-    // What the SLIDER draws, as opposed to what the volume is.
+    // The keyboard keys go to 150% on purpose (see hyprland.lua) and this
+    // track only represents 0..100: past that the fill would be drawn wider
+    // than its own rail and the handle would walk off the end. The slider is
+    // given a maximum of 1 and clamps the geometry itself; colouring the
+    // overflow says "above the limit" without the bar having to grow a second
+    // scale nobody asked for.
     //
-    // The keyboard keys go to 150% on purpose (see hyprland.lua), and the
-    // track only represents 0..100: past that the fill was drawn wider than
-    // its own rail and the handle walked off the end. Clamping the geometry
-    // and colouring the overflow says "above the limit" without the bar
-    // having to grow a second scale nobody asked for.
-    readonly property real sliderValue: Math.min(1, root.volume)
+    // THE SETTINGS WINDOW MAKES THE OPPOSITE CHOICE and shows the real 0..150
+    // range. That is not a contradiction: this control hangs off the bar
+    // under a pointer that is on its way somewhere else, and the settings
+    // page is somewhere you go on purpose. See the note over VolumeLine in
+    // AudioPage.qml.
     readonly property bool overamplified: root.volume > 1.001
 
     readonly property color accent: {
@@ -36,20 +41,10 @@ Item {
         return root.overamplified ? Theme.warning : Theme.primary;
     }
 
-    readonly property string glyph: {
-        if (root.muted)
-            return Icons.volumeMuted;
-        const both = `${sink?.name ?? ""} ${sink?.description ?? ""}`.toLowerCase();
-        if (both.includes("headset"))
-            return Icons.headset;
-        if (both.includes("headphone"))
-            return Icons.headphones;
-        if (root.volume < 0.01)
-            return Icons.volumeLow;
-        if (root.volume < 0.5)
-            return Icons.volumeMedium;
-        return Icons.volumeHigh;
-    }
+    // Shared with the sound page rather than decided twice -- see the note on
+    // the function in Icons.qml.
+    readonly property string glyph: Icons.outputGlyph(
+        `${sink?.name ?? ""} ${sink?.description ?? ""}`, root.muted, root.volume)
 
     function setVolume(value: real): void {
         if (!root.sink?.audio)
@@ -123,73 +118,22 @@ Item {
     }
 
     // ---------------- Slider ----------------
-    // Built from two rectangles and a MouseArea rather than from
-    // QtQuick.Controls: a Controls Slider brings its own style, and styling it
-    // back into this palette is more code than drawing a bar.
-    Item {
-        id: track
-
+    //
+    // The drawing moved out to components/VolumeSlider.qml when the sound
+    // page needed four more of them. Nothing about the behaviour here
+    // changed with it except for one bug that came out in the move: the
+    // MouseArea is inset by negative margins, and the old code divided its
+    // raw x by the track width without correcting for them, so every click
+    // landed about 3% high.
+    VolumeSlider {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
 
-        height: 20
+        value: root.volume
+        maximum: 1
+        accent: root.accent
 
-        Rectangle {
-            anchors.verticalCenter: parent.verticalCenter
-            width: parent.width
-            height: 6
-            radius: 3
-            color: Theme.surfaceContainerHighest
-        }
-
-        Rectangle {
-            anchors.verticalCenter: parent.verticalCenter
-            width: parent.width * root.sliderValue
-            height: 6
-            radius: 3
-            color: root.accent
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-        }
-
-        Rectangle {
-            x: parent.width * root.sliderValue - width / 2
-            anchors.verticalCenter: parent.verticalCenter
-
-            width: 14
-            height: 14
-            radius: 7
-            color: root.accent
-
-            // Grows under the pointer: the handle is the thing being aimed at
-            // and 14px is small for a mouse.
-            scale: trackMouse.containsMouse || trackMouse.pressed ? 1.25 : 1
-
-            Behavior on scale {
-                NumberAnimation { duration: Theme.animDuration }
-            }
-        }
-
-        MouseArea {
-            id: trackMouse
-
-            anchors.fill: parent
-            anchors.margins: -6
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-
-            // Both, so a click jumps and a drag follows.
-            onPressed: mouse => root.setVolume(mouse.x / track.width)
-            onPositionChanged: mouse => {
-                if (pressed)
-                    root.setVolume(mouse.x / track.width);
-            }
-
-            // Same 5% step the bar's wheel uses.
-            onWheel: wheel => root.setVolume(root.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05))
-        }
+        onMoved: value => root.setVolume(value)
     }
 }
