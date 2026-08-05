@@ -371,6 +371,13 @@ Put your own in `~/Pictures/wallpapers`.
 **`cship`** is a compiled binary, so only the binary is ignored; its
 configuration *is* here, under `shell/`.
 
+**`claude`** is a symlink into `~/.local/share/claude/`, which its own
+installer manages and versions. Both it and `cship` sit in `~/.local/bin`
+alongside the nine scripts that *are* tracked, and both are named in
+`.gitignore` for the same reason as the generated files there: with
+`--no-folding` that directory is real and nothing can leak into the repo
+anyway, so the rules are the net for a stow run without it.
+
 **Everything generated**: the matugen output above, `monitors.lua`,
 kitty's `opacity.conf` and `font.conf`, Zen's `opacity.css`, and the
 `*.target.wants` symlinks that `systemctl --user enable` creates — those point
