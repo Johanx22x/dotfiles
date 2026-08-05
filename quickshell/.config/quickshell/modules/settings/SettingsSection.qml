@@ -164,6 +164,22 @@ Column {
             // of the card behind it.
             anchors.margins: 4
             spacing: 2
+
+            // The same descending order SettingsPage puts on the sections, and
+            // for the same reason: a tooltip hangs downwards out of its row
+            // and has to cover the rows below it, which it cannot do from
+            // inside one of them. See the long note in SettingsPage.qml.
+            //
+            // It matters more here than there, because rows arrive from
+            // Repeaters as well as from the file -- which is why this is
+            // hooked to the signal and not only to completion.
+            onChildrenChanged: rows.restack()
+            Component.onCompleted: rows.restack()
+
+            function restack(): void {
+                for (let i = 0; i < children.length; i++)
+                    children[i].z = children.length - i;
+            }
         }
     }
 }
