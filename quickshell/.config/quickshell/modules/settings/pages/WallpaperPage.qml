@@ -661,8 +661,9 @@ SettingsPage {
         // A FOOTER, WHICH IS A SENTENCE ABOUT THE GRID AND NOT A SETTING. It
         // reads as a caption because it is one -- "these fifty-two pictures,
         // and they live here" -- and captions go under. The whole line stays
-        // at textOnSurfaceVariant and a point down; the only thing that lights
-        // up is "Change", on hover, because it is the only thing you can press.
+        // at textOnSurfaceVariant and a point down, with one exception: the
+        // chip at its right end, which is the only thing here you can press
+        // and is drawn as such rather than waiting for a hover to admit it.
         //
         // A HAIRLINE AND NOT JUST AIR, which was the other option and reads
         // worse HERE specifically: the grid deliberately cuts its last row
@@ -750,19 +751,58 @@ SettingsPage {
                 }
             }
 
-            // NO PILL AROUND IT, unlike the ActionRow this came out of. A
-            // border here would put back exactly the weight the row was
-            // deleted for; hover colour plus the pointing cursor is what marks
-            // it, and it is the only pressable thing on the line.
-            Item {
+            // THE SAME CHIP AS "Random" IN THE HEADING ABOVE, deliberately, and
+            // it is the second attempt: this was a bare hover-coloured word,
+            // on the argument that a border would put back the weight the
+            // deleted row was carrying. That argument was about the ROW -- a
+            // full-width bordered strip -- and it does not reach a chip the
+            // size of the word inside it, which costs no vertical space at all.
+            //
+            // What it cost instead was the only thing a control has to get
+            // right: a word that is only a word until you happen to hover it
+            // does not read as pressable, and nothing else on the line is. So
+            // it takes the window's one shape for a small action -- hairline
+            // border, pill radius, fill on hover -- which is already on this
+            // page eighteen rows up. One shape to learn, not two.
+            Rectangle {
                 id: change
 
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.groupPadding
                 anchors.bottom: parent.bottom
 
-                width: changeLabel.implicitWidth
+                // WIDE ENOUGH FOR THE LONGER OF THE TWO WORDS, always, so
+                // pressing it does not resize it. The chip is right-anchored:
+                // growing means it eats leftwards into the path beside it and
+                // re-elides that line, all at the instant of the click, which
+                // is exactly when the eye is on it.
+                width: Math.max(idleMetrics.width, busyMetrics.width)
+                    + Theme.groupPadding * 1.6
                 height: footer.lineHeight
+                radius: height / 2
+
+                color: changeMouse.containsMouse && !picker.running
+                    ? Theme.surfaceContainerHigh : "transparent"
+                border.width: 1
+                border.color: Theme.outlineVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
+
+                TextMetrics {
+                    id: idleMetrics
+
+                    font: changeLabel.font
+                    text: "Change"
+                }
+
+                TextMetrics {
+                    id: busyMetrics
+
+                    font: changeLabel.font
+                    text: "Choosing…"
+                }
 
                 Text {
                     id: changeLabel
@@ -772,7 +812,14 @@ SettingsPage {
                     // The word changes while zenity is up, because `picker` is
                     // a Process precisely so this line knows the dialog is
                     // still open -- see its declaration above.
-                    text: picker.running ? "Choosing…" : "Change"
+                    text: picker.running ? busyMetrics.text : idleMetrics.text
+
+                    // A POINT DOWN AND NOT TWO, unlike the heading's chip. That
+                    // one sits beside a bold heading at full size and needs the
+                    // step; this one sits beside the caption, which is already
+                    // a point down, and matching it keeps the line one line.
+                    // The border is what makes both of them buttons, not the
+                    // type size.
                     font.family: Theme.fontFamily
                     font.pointSize: Theme.fontSize - 1
                     font.weight: Theme.fontWeight
@@ -788,13 +835,10 @@ SettingsPage {
                 MouseArea {
                     id: changeMouse
 
-                    // Bigger than the word it covers. A bare label is a small
-                    // target and this one has no pill to aim at, so the hit
-                    // area is grown past the text rather than the text padded
-                    // out -- padding would move "Change" off the right margin
-                    // the glyph on the far left is aligned to.
+                    // The chip is the target now, so it fills it exactly. The
+                    // old version grew the hit area 6 px past a bare word,
+                    // because there was nothing drawn to aim at.
                     anchors.fill: parent
-                    anchors.margins: -6
 
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
