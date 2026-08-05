@@ -359,6 +359,7 @@ FloatingWindow {
                 BarPage {}
                 NotificationsPage {}
                 DisplayPage {}
+                AudioPage {}
                 NetworkPage {}
                 BluetoothPage {}
                 KeybindsPage {}

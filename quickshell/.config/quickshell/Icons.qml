@@ -140,6 +140,53 @@ Singleton {
     readonly property string headphones: String.fromCodePoint(0xF02CB)   // nf-md-headphones
     readonly property string headset: String.fromCodePoint(0xF02CE)      // nf-md-headset
 
+    // The sound page's devices. Resolved by NAME out of the installed font
+    // rather than read off a chart, which is this file's rule and which paid
+    // for itself again here: md-usb was guessed at 0xF0528 and is 0xF0553.
+    //
+    //   python3 -c "from fontTools.ttLib import TTFont; \
+    //     f = TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf'); \
+    //     print({n: c for c, n in f.getBestCmap().items()}['md-usb'])"
+    readonly property string microphone: String.fromCodePoint(0xF036C)    // nf-md-microphone
+    readonly property string microphoneOff: String.fromCodePoint(0xF036D) // nf-md-microphone_off
+    readonly property string speaker: String.fromCodePoint(0xF04C3)       // nf-md-speaker
+    readonly property string usb: String.fromCodePoint(0xF0553)           // nf-md-usb
+
+    // Which of the above an audio output should be drawn with.
+    //
+    // IT IS A FUNCTION BECAUSE THREE PLACES ASK IT: the island's volume
+    // control, the sound page's output row, and every device in the sound
+    // page's list. The same headset drawn as headphones in one of them and as
+    // a speaker in another is the kind of disagreement nobody reports and
+    // everybody notices.
+    //
+    // `label` is the node's name and description run together -- the words
+    // are in one or the other depending on the driver, and searching both
+    // costs nothing. Pass a volume of 1 and muted false to ask what a device
+    // IS rather than what it is currently doing, which is what a row in a
+    // list of devices wants.
+    function outputGlyph(label: string, muted: bool, volume: real): string {
+        if (muted)
+            return root.volumeMuted;
+
+        const text = (label ?? "").toLowerCase();
+        if (text.includes("headset"))
+            return root.headset;
+        if (text.includes("headphone"))
+            return root.headphones;
+        // Its own glyph rather than a speaker: an HDMI output goes to the
+        // monitor, and on this machine that is the difference between the
+        // desk speakers and the screen on the wall.
+        if (text.includes("hdmi"))
+            return root.display;
+
+        if (volume < 0.01)
+            return root.volumeLow;
+        if (volume < 0.5)
+            return root.volumeMedium;
+        return root.volumeHigh;
+    }
+
     // ---------------- Bluetooth ----------------
     readonly property string bluetooth: String.fromCodePoint(0xF00AF)     // nf-md-bluetooth
 
