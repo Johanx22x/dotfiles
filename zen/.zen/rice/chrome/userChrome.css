@@ -1,0 +1,119 @@
+/* Zen Browser -- static half of the theme.
+   Profile: ~/.zen/rice (fixed name, see user.js)
+
+   Same split as kitty: this file is the base and is versioned; colors.css is
+   written by matugen on every wallpaper change and is gitignored. Backgrounds
+   and text live HERE, at fixed Tokyo Night values; only the accent follows the
+   wallpaper. That is the rule the whole system runs on -- contrast is
+   guaranteed no matter which image comes up.
+
+   HOW ZEN THEMING WORKS (read this before writing a selector)
+   -----------------------------------------------------------
+   Zen derives its ENTIRE palette from one variable, --zen-primary-color, with
+   color-mix. From chrome/browser/content/browser/zen-styles/zen-theme.css:
+
+     --zen-primary-color: AccentColor;                 <- the single lever
+     --zen-colors-primary:   color-mix(primary 20%, branding-bg 80%)
+     --zen-colors-secondary: color-mix(primary 30%, branding-bg 70%)
+     --zen-colors-tertiary:  color-mix(primary  1%, branding-bg 99%)
+     --zen-colors-hover-bg:  color-mix(primary 90%, branding-bg 10%)
+     --zen-colors-border:    color-mix(secondary 20%, rgb(79,79,79))
+
+   So colors.css sets ONE line and the whole browser follows. This is the same
+   situation as adw-gtk3 and @define-color: find the variable that feeds the
+   widget, do not write a selector for it. To see the current values, open
+   Ctrl+Shift+Alt+I -> Inspector and read :root.
+
+   Everything below is a variable override for the same reason. If some day a
+   widget really needs a rule, put it after this block and say why.
+
+   WHY !important ON EVERY LINE
+   ----------------------------
+   Zen declares these same variables in its own :root, and there they are
+   author-origin. A userChrome.css declaration cannot beat that on origin or
+   on specificity -- only importance carries it. Drop the !important and the
+   line silently does nothing.
+
+   WHAT DOES *NOT* HAPPEN HERE: LIVE RELOAD
+   ----------------------------------------
+   Firefox reads userChrome.css once, at startup. An external write -- which is
+   exactly what matugen does -- is NOT picked up: the accent changes on the
+   next Zen restart, not with the wallpaper fade like kitty or the shell.
+   Only edits made through the Style Editor apply live, which is what the
+   devtools prefs in user.js are for.
+
+   The way to get live reload is fx-autoconfig, and it was deliberately NOT
+   installed: it requires dropping config.js and defaults/pref/*.js into
+   /opt/zen-browser-bin, the package's own directory, which pacman overwrites
+   on every zen-browser-bin update. The theme would break silently on an
+   ordinary system upgrade, and the failure would show up days later with no
+   obvious cause. A restart to see the new accent is the cheaper trade. */
+
+@import url("colors.css");
+
+:root {
+  /* ---- Surfaces: fixed, Tokyo Night ----
+     Zen's dark base is a set of neutral near-blacks (#101010, #171717,
+     #1b1b1b, #1c1c1c) that read cold next to the blue-tinted #1a1b26 the rest
+     of the system uses. They do NOT all derive from one another -- each of
+     the four lines below was verified by screenshot, not by reading the
+     cascade:
+
+       branding-dark             feeds --zen-branding-bg via light-dark(),
+                                 and through it the derived surfaces.
+       themed-toolbar-bg-transp  is what actually paints the chrome you see:
+                                 #zen-main-app-wrapper reads it directly
+                                 (zen-browser-ui.css). In dark mode Zen sets
+                                 it to the LITERAL #171717, so overriding
+                                 branding-dark alone leaves the sidebar grey.
+                                 This was the line that was missing.
+       main-browser-background   the area behind the web content.
+       dialog-background         modal dialogs.
+
+     Dark mode itself is NOT forced here. Zen follows the XDG portal, which
+     already answers "dark" system-wide. If it ever comes up light, the
+     problem is the portal, not this file. */
+  --zen-branding-dark: #1a1b26 !important;
+  --zen-main-browser-background: #1a1b26 !important;
+
+  /* Dialogs stay OPAQUE on purpose. They are small surfaces that show up
+     over a page and ask something; blur behind text you have to read to
+     answer is where glass stops being worth it. */
+  --zen-dialog-background: #1a1b26 !important;
+
+  /* ---- The glass ----
+     zen.widget.linux.transparency (user.js) hands the compositor a real
+     ARGB window, and Hyprland blurs whatever is behind it (blur size 8,
+     passes 2 in hyprland.lua).
+
+     THE TRAP, found by screenshot: turning the pref on is not enough,
+     because .zen-browser-generic-background is `position:absolute; inset:0`
+     -- it covers the ENTIRE window -- and its ::after paints
+     --zen-main-browser-background over everything. Pin that variable to an
+     opaque colour, as this file did at first, and the window is opaque no
+     matter what the pref says. The sidebar measured a flat (20,20,23) at
+     every height while the desktop behind it varied from (29,32,38) to
+     (58,31,46): no wallpaper was coming through at all.
+
+     So the colour above stays, and the transparency is done with Zen's own
+     dial for exactly this layer: ::after carries `opacity:
+     var(--zen-background-opacity)`. The tint is Tokyo Night, the alpha lets
+     the blur through, and the text on top keeps full opacity -- which is
+     the whole reason for doing it here instead of with a Hyprland `opacity`
+     windowrule, as hyprland.lua warns at the Nautilus rule.
+
+     0.85, the same figure the shell's bar uses. It started at 0.72 and the
+     wallpaper came through too strongly for a surface this large: the bar
+     is a thin strip, this is a full sidebar carrying small text over
+     whatever image is up. The glass comes from the blur behind it, not from
+     how thin the tint is -- that is why the compositor's blur radius went
+     up at the same time this went up (hyprland.lua, decoration.blur.size).
+     This is the number to turn: towards 1.0 for more solid, down for more
+     wallpaper.
+
+     --zen-themed-toolbar-bg-transparent is deliberately NOT set here. The
+     pref's media query sets it to `transparent`, and that is what we want;
+     an override with !important would beat the media query and put the grey
+     back. */
+  --zen-background-opacity: 0.85 !important;
+}

@@ -160,6 +160,34 @@ output_path = '/home/johan/.config/gtk-3.0/gtk.css'
 input_path = '/home/johan/.config/matugen/templates/gtk4-colors.css'
 output_path = '/home/johan/.config/gtk-4.0/gtk.css'
 
+# ---- Zen Browser ----
+# The only browser whose OWN interface -- tabs, sidebar, omnibox -- can be
+# painted from a generated file. Chromium (Brave) cannot: at best it copies
+# the GTK theme at startup, so it can never follow a wallpaper change.
+#
+# One single line is generated, --zen-primary-color, because Zen derives its
+# entire palette from it with color-mix. The fixed part of the theme
+# (Tokyo Night backgrounds) is the versioned userChrome.css, which imports
+# this file. Same split as kitty.
+#
+# The output goes INSIDE the profile, ~/.zen/rice: that is the only place
+# Firefox reads chrome/ from. The profile has a fixed name for exactly this
+# reason -- the random xxxxxxxx.Default that Zen creates on its own gives
+# neither matugen nor stow a stable path. It is declared in
+# ~/.zen/profiles.ini, and userChrome.css needs
+# toolkit.legacyUserProfileCustomizations.stylesheets, pinned in the
+# profile's user.js.
+#
+# No post_hook, and this one is a limitation rather than a choice: Firefox
+# reads userChrome.css once at startup and ignores later writes, so the new
+# accent shows up when Zen restarts, not with the wallpaper fade. There is
+# nothing to signal. Live reload would mean fx-autoconfig, which installs
+# into /opt/zen-browser-bin and would be wiped by every package update; the
+# reasoning is in userChrome.css.
+[templates.zen]
+input_path = '/home/johan/.config/matugen/templates/zen-colors.css'
+output_path = '/home/johan/.zen/rice/chrome/colors.css'
+
 # ---- Fastfetch ----
 # Same case as dunst: fastfetch does not support "include", so the template
 # IS the entire config. To touch modules, icons or the logo edit

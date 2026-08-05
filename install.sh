@@ -9,7 +9,7 @@
 set -euo pipefail
 
 DOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGES=(zsh hypr quickshell kitty matugen shell qt gtk media openrgb systemd bin ranger icons xdg)
+PACKAGES=(zsh hypr quickshell kitty matugen shell qt gtk media openrgb systemd bin ranger icons xdg zen)
 
 blue()  { printf '\033[1;34m%s\033[0m\n' "$*"; }
 green() { printf '\033[1;32m%s\033[0m\n' "$*"; }
