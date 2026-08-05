@@ -54,7 +54,11 @@ cd ~/dotfiles
 
 Six numbered steps plus a monitor check, each asking before it does anything,
 so you can apply only the parts you want. It is idempotent — re-running it is
-safe — and it refuses to run as root or on a non-Arch system.
+safe — and it refuses to run as root or on a non-Arch system. Most of what can
+go wrong is reported and stepped over rather than fatal — a `yay` that will not
+build, an AUR package that fails, no user session to enable the timer with, no
+network for the Neovim clone, no wallpaper to build a palette from — because
+none of it is worth losing the linking step over.
 
 1. **Packages** from `packages/pacman.txt` (129 of them), plus `stow` itself.
    Anything your repos don't have is skipped and listed rather than aborting
@@ -70,9 +74,13 @@ safe — and it refuses to run as root or on a non-Arch system.
    the whole operation and aborts all of it on the first conflict, so a single
    pre-existing file means nothing gets linked — and there usually is one,
    because Hyprland writes a default config into `~/.config/hypr` the first
-   time it runs. The conflicts are found up front with a dry run and you are
+   time it runs. The conflicts are found up front with a dry run — all of them,
+   and in each of the three wordings stow uses for one: a plain file in the
+   way, a link stow does not own (another clone of this repo, a previous
+   dotfiles manager), and a link stowed from a different package. You are
    offered to *move* them (never delete, never `--adopt`) into
-   `~/dotfiles-replaced-<timestamp>`.
+   `~/dotfiles-replaced-<timestamp>`. Anything else stow objects to is not
+   guessed at: it is printed as it came and the run stops there.
 4. **Seeds** — copies `seeds/` into `$HOME`, but only where nothing is there
    yet. Never overwrites. See [Seeds, not symlinks](#seeds-not-symlinks).
 5. **Neovim** — clones [its own repo](https://github.com/Johanx22x/nvim) into
@@ -81,17 +89,27 @@ safe — and it refuses to run as root or on a non-Arch system.
    exist. Needs at least one image in `~/Pictures/wallpapers`; without one it
    says so instead of failing.
 
-Then, unnumbered, a **monitor check**: if Hyprland is running it compares
-every `desc:` in `hyprland.lua` against the monitors actually attached and
-prints this machine's descriptions, modes and orientation ready to use. It
-changes nothing — which screen is main and where the others sit is a layout
-decision, not something to infer from an EDID.
+Then, unnumbered, a **monitor check**. It works from the hardware inwards: for
+every screen Hyprland reports it says whether this machine has already recorded
+it in `monitors.lua`, whether `hyprland.lua` names it, or neither. Only the
+last case is a problem, and not a fatal one — the fallback rule still gives an
+unlisted screen its preferred mode and an automatic position, it just does not
+place it or pin a rate.
+
+When there is one, it prints every attached monitor as the compositor sees it,
+each with **the `hypr-monitor set` command that records it**, ready to run once
+you have arranged the screens the way you want them. It changes nothing by
+itself: which screen is main and where the others sit is a layout decision,
+not something to infer from an EDID.
 
 Left to do by hand, as the script says when it finishes:
 
 1. `/etc` — see [the table below](#etc--applied-by-hand). **The fstab UUIDs
    belong to the original machine**; do not copy it as is.
-2. The monitors, if the check above said they don't match.
+2. The monitors, if the check listed one as not configured — with the
+   `hypr-monitor set` line it printed, or from the settings window. Both write
+   `monitors.lua`, which is generated and gitignored;
+   [`hyprland.lua` is tracked and does not need editing](#per-machine-configuration).
 3. The GPU driver.
 4. `chsh -s /usr/bin/zsh`, if zsh is not already your shell.
 
@@ -248,7 +266,7 @@ bar. The rounded display corners are the exception and go on every monitor.
 | `SUPER + /` | the cheatsheet — every bind that carries a description |
 | `SUPER + SPACE` | launcher |
 | `SUPER + V` | clipboard history |
-| `SUPER + D` | dashboard (clock, calendar, volume, Wi-Fi, Bluetooth, recorder) |
+| `SUPER + D` | dashboard (clock, calendar, volume, Wi-Fi, Bluetooth, recorder), with notifications, media and performance on its other tabs |
 | `SUPER + C` | settings window |
 | `SUPER + N` / `SUPER + SHIFT + N` | do not disturb / notification history |
 | `SUPER + SHIFT + ESCAPE` | power menu |
@@ -383,6 +401,7 @@ itself out at runtime:
 | | |
 |---|---|
 | Which screen the shell is on | `quickshell/Screens.qml` — largest landscape, with an override |
+| Which GPU the shell reads | `quickshell/modules/island/SystemStats.qml` — whichever driver is bound in `/sys/class/drm`: `nvidia-smi` on a GeForce, amdgpu's sysfs files on a Radeon, and no GPU tile at all when neither answers |
 | The replay buffer's monitor and mic | resolved live, never a connector name |
 | gamescope's virtual output | read off the monitor you are on |
 | The login screen's rotation | largest output wins, and a single-monitor machine is left alone |
