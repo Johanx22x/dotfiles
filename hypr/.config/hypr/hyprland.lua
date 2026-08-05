@@ -268,17 +268,31 @@ hl.config({
     },
 
     decoration = {
-        -- 24, matching the shell. Started at 10, went to 16 to line up with
-        -- Quickshell, then to 24: a bigger radius spreads a curve's
-        -- antialiasing over more pixels, which is what finally settled the
-        -- jagged fillets.
+        -- 10, and this one is set from the OUTSIDE in. Applications draw
+        -- their own rounded corner for the content inside the window, and at
+        -- 24 the compositor's curve was visibly rounder than the app's, so
+        -- every window showed two disagreeing arcs nested in one another.
+        -- Measured on Zen's content area (grim over the window, first light
+        -- pixel per row, from y=8 x=200 to y=17 x=191): the curve spans
+        -- ~10 px. So this is not a taste setting, it is the radius the
+        -- applications already use.
+        --
         -- Quickshell uses the same figure for the rounded screen corners and
         -- for the fillet where the bar meets the sides (Theme.qml:
-        -- screenCornerRadius / barCornerRadius). Windows used to round at 10
-        -- and the bar's fillet at 24, and the mismatch showed wherever the
-        -- two met. 16 is the middle ground; change all three together or the
-        -- edges stop agreeing again.
-        rounding       = 24,
+        -- screenCornerRadius / barCornerRadius). Those three are one
+        -- decision, not three: they are the radii that touch each other on
+        -- screen. Change all three together or the edges stop agreeing.
+        --
+        -- What this costs, because the history below is real and going back
+        -- down is not free: a concave fillet has only as many pixel rows as
+        -- its radius to spread its antialiasing over, so the bar fillet at
+        -- 10 shades more coarsely than at 24. That is the price paid to kill
+        -- the double arc on every window. If the fillet ever reads jagged,
+        -- this is why, and the fix is a bigger radius in all three places.
+        --
+        -- History: 10 -> 16 (to line up with Quickshell) -> 24 (to settle
+        -- the jagged fillets) -> 10 (to match the applications).
+        rounding       = 10,
         rounding_power = 2,
 
         -- Change transparency of focused and unfocused windows

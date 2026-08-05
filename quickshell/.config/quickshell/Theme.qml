@@ -188,20 +188,26 @@ Singleton {
     // components/ScreenCorner.qml. Black rather than a palette role: it
     // stands in for the panel bezel, and a bezel does not change colour with
     // the wallpaper.
-    readonly property int screenCornerRadius: 24
+    readonly property int screenCornerRadius: 10
 
     // The concave fillet where the bar meets the left and right edges of the
     // screen, so the bar flows down into the side instead of ending in a
     // hard step. Drawn in the bar's own colour, inside the bar's surface.
-    // The same 24 as screenCornerRadius above and as `rounding` in
+    // The same 10 as screenCornerRadius above and as `rounding` in
     // hyprland.lua. These three are one decision, not three: they are the
     // radii that touch each other on screen.
     //
-    // 24 and not the original 16 for a reason beyond taste: a concave fillet
-    // only has as many pixel rows as its radius to spread the antialiasing
-    // over, so a bigger curve reads visibly cleaner even though the shading
-    // per row is identical.
-    readonly property int barCornerRadius: 24
+    // 10 because that is what applications round their own content at --
+    // measured on Zen, ~10 px -- and at 24 the compositor's curve sat
+    // visibly outside the app's, two arcs disagreeing on every window. The
+    // window radius is what leads here; these two follow so the edges keep
+    // agreeing.
+    //
+    // Known cost, do not rediscover it: a concave fillet only has as many
+    // pixel rows as its radius to spread its antialiasing over, so at 10 it
+    // shades more coarsely than at 24 did. That is the trade. If it reads
+    // jagged, the fix is a bigger radius in all three places at once.
+    readonly property int barCornerRadius: 10
     readonly property color screenBezel: "#000000"
 
     // ---------------- Motion ----------------
