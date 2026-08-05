@@ -4,7 +4,7 @@
 #
 #  Usage in Steam:  Game properties -> Launch options:
 #
-#      /home/johan/.local/bin/gs -- %command%
+#      ~/.local/bin/gs -- %command%
 #
 #  Wraps the game in gamescope, which presents it with ONE single virtual
 #  "monitor" of 2560x1440@165. The game never sees the two-screen setup (one
