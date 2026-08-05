@@ -52,7 +52,15 @@ openrgb/.config/OpenRGB/logs/
 openrgb/.config/OpenRGB/plugins/
 
 # ---------------------------------------------------------------------------
-# Binaries: nothing compiled in the repo
+# Executables that live in bin/ but are not this repo's to ship
+#
+# Two different cases, both landing in ~/.local/bin and neither belonging in
+# git. cship is COMPILED: its configuration is versioned under shell/ and the
+# binary is built, not stored. claude is INSTALLED BY ITS OWN TOOL -- what is
+# at that path is a symlink into ~/.local/share/claude/versions/, so tracking
+# it would version a pointer at one machine's install. Its icon
+# (icons/.local/share/icons/claude.png) IS tracked, because that one really is
+# an asset the desktop entry needs and the application does not provide.
 # ---------------------------------------------------------------------------
 bin/.local/bin/cship
 bin/.local/bin/claude
