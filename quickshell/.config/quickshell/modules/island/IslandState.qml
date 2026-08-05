@@ -157,6 +157,36 @@ Singleton {
         root.dashboardRequested();
     }
 
+    // Open it on a named tab, without the toggle.
+    //
+    // Two things separate this from toggleDashboard. It takes a tab, because
+    // whatever asked has a reason to send you somewhere specific -- the
+    // do-not-disturb badge means "here is what you missed", not "here is the
+    // dashboard". And it OPENS rather than toggles: a second press of a key
+    // you pressed by mistake should close the panel, but a click on a badge
+    // that has already sent you to a tab should not close the thing it just
+    // opened.
+    //
+    // The tab is named, not numbered, so a caller cannot be silently pointed
+    // at a different tab by a change to the order below. An unknown name
+    // leaves the tab where it was rather than guessing.
+    signal dashboardOpenRequested
+
+    // THE list of tabs, in the order the strip draws them. It lives here and
+    // not in Dashboard.qml for the same reason `dashboardTab` does: the
+    // dashboard is destroyed every time the popout closes, and the order has
+    // to be answerable to a caller like the do-not-disturb badge while it
+    // does not exist. Dashboard.qml reads this rather than keeping its own
+    // copy -- two lists that had to agree on an order would eventually not.
+    readonly property var dashboardTabs: ["Dashboard", "Notifications", "Media", "Performance"]
+
+    function openDashboard(tab: string): void {
+        const index = root.dashboardTabs.indexOf(tab);
+        if (index >= 0)
+            root.dashboardTab = index;
+        root.dashboardOpenRequested();
+    }
+
     // Asking for the dashboard to go away, for the same reason as above: the
     // popout that holds it is not this singleton's to close.
     //
@@ -176,6 +206,14 @@ Singleton {
 
         function dashboard(): void {
             root.toggleDashboard();
+        }
+
+        // The keyboard's way into the history. Without it the only doors are
+        // the badge -- which exists only while muted -- and the dashboard plus
+        // a click on a tab, and "what did I miss" is a question you ask when
+        // you sit back down, whether or not the mute was ever on.
+        function notifications(): void {
+            root.openDashboard("Notifications");
         }
     }
 
