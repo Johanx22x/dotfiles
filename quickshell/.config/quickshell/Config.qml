@@ -60,6 +60,7 @@ Singleton {
         opacity: 0.85,
         fontSize: 11,
         fontFamily: "JetBrainsMono Nerd Font",
+        borderSize: 2,
         use24Hour: true,
         showDate: true,
         notificationTimeout: 10
@@ -198,6 +199,51 @@ Singleton {
             root.fontFamily = family;
     }
 
+    // ---------------- The compositor's border ----------------
+    //
+    // NOT A Theme CONSTANT, and it is the clearest case on this page for why
+    // some appearance settings cannot be: the border is drawn by Hyprland
+    // around every window on the machine, including all the ones this shell
+    // knows nothing about. The shell does not draw it, cannot draw it, and
+    // only reads it here so the settings window has something to show.
+    //
+    // Same shape as the two above: a flat file, a script that owns the
+    // writing, and hyprland.lua reading it at load so a reload does not undo
+    // what `hyprctl eval` put into the running compositor.
+    property int borderSize: root.defaults.borderSize
+
+    function setBorder(size: int): void {
+        root.borderSize = size;
+        borderPushTimer.restart();
+    }
+
+    Timer {
+        id: borderPushTimer
+
+        interval: 150
+        onTriggered: Quickshell.execDetached(["hypr-border", String(root.borderSize)])
+    }
+
+    FileView {
+        id: borderFile
+
+        path: `${root.stateDir}/hypr-border`
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: reload()
+        onLoaded: root.adoptBorder()
+    }
+
+    function adoptBorder(): void {
+        if (borderPushTimer.running)
+            return;
+
+        const parsed = parseInt(borderFile.text());
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 6)
+            root.borderSize = parsed;
+    }
+
     // ---------------- Bar ----------------
 
     property alias use24Hour: adapter.use24Hour
@@ -219,6 +265,7 @@ Singleton {
     function restoreDefaults(): void {
         root.setOpacity(root.defaults.opacity);
         root.setFont(root.defaults.fontSize, root.defaults.fontFamily);
+        root.setBorder(root.defaults.borderSize);
         adapter.use24Hour = root.defaults.use24Hour;
         adapter.showDate = root.defaults.showDate;
         adapter.notificationTimeout = root.defaults.notificationTimeout;
