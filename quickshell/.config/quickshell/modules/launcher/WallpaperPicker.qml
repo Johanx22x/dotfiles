@@ -1,4 +1,4 @@
-// The wallpaper picker: a strip of the images in ~/Pictures/wallpapers.
+// The wallpaper picker: a strip of the images in the wallpaper collection.
 //
 // Horizontal and not a grid, and with real thumbnails rather than names,
 // because a wallpaper is chosen by LOOKING. A list of filenames would make
@@ -89,7 +89,11 @@ Item {
     FolderListModel {
         id: folder
 
-        folder: `file://${Quickshell.env("HOME")}/Pictures/wallpapers`
+        // From Config, not from a literal here. This strip and the grid on
+        // the settings window's Wallpaper page are two views of one folder,
+        // and that folder is a setting now -- a copy of the path in each of
+        // them is how one of the two silently stops agreeing with the other.
+        folder: `file://${Config.wallpaperDir}`
         // The same extensions wallpaper-switch looks for.
         nameFilters: ["*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp"]
         showDirs: false

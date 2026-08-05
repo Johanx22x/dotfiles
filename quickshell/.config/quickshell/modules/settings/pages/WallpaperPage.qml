@@ -17,8 +17,8 @@
 // change the picture and leave the rest of the desktop on the previous
 // colours -- including this window, which is painted out of Theme.
 //
-// NOTHING ON THIS PAGE IS STORED IN Config. The two facts it shows already
-// have owners outside the shell -- a state file written by the script, and a
+// NOTHING ON THIS PAGE IS STORED IN Config. Every fact it shows already has
+// an owner outside the shell -- two state files written by the script, and a
 // systemd timer -- so a copy in Config would be a second answer to a question
 // that already has one, and the two would drift the first time the wallpaper
 // was changed from a keybind.
@@ -41,8 +41,27 @@ SettingsPage {
     glyph: Icons.image
     // "rotation" and "timer" appear nowhere on the page -- the switch says
     // "Change automatically" -- and they are what someone would type after
-    // remembering that the desktop changes on its own.
-    keywords: ["wallpaper", "background", "rotation", "timer", "random", "shuffle", "image"]
+    // remembering that the desktop changes on its own. "directory" is here for
+    // the same reason: the footer below says "folder".
+    keywords: ["wallpaper", "background", "rotation", "timer", "random",
+        "shuffle", "image", "folder", "directory", "collection"]
+
+    // NOT IN Icons.qml, and not because it does not belong there -- that file
+    // is off limits to this change. It was read out of the installed font's
+    // cmap rather than off the Nerd Fonts chart, which is the rule Icons.qml
+    // itself spells out after three glyphs turned out to draw a music box, a
+    // shield and a bluetooth speaker:
+    //
+    //   python -c "from fontTools.ttLib import TTFont; \
+    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
+    //       .getBestCmap()[0xF024F])"
+    //
+    // 0xF024F answers md-folder_image.
+    //
+    // ITS COMPANION 0xF0770 (md-folder_open) WAS DELETED WITH THE PILL IT SAT
+    // IN. The footer's action is a bare word now; a glyph at both ends of one
+    // muted line is the kind of furniture this page was carrying too much of.
+    readonly property string folderGlyph: String.fromCodePoint(0xF024F)
 
     // ---------------- What is applied right now ----------------
     //
@@ -53,13 +72,12 @@ SettingsPage {
     // -- the length of the crossfade -- and does not move at all if the script
     // fails. Moving it on click instead would be quicker and would be a lie in
     // exactly the case where the truth matters.
+    // THE PATH AND NOT A NAME DERIVED FROM IT. There used to be a currentName
+    // here, spelled out in bold at the top of the card, and it was saying a
+    // second time what the ring in the grid says better: the ring is ON the
+    // picture, and revealCurrent below scrolls it into view on the first
+    // visit, so the name only ever restated a thing already on screen.
     readonly property string currentPath: stateFile.text().trim()
-
-    readonly property string currentName: {
-        if (root.currentPath === "")
-            return "";
-        return root.currentPath.split("/").pop().replace(/\.[^.]+$/, "");
-    }
 
     // watchChanges only emits fileChanged(); reloading is the handler's job.
     // Without the reload this reads the file once at startup and then shows
@@ -213,17 +231,78 @@ SettingsPage {
 
     // ---------------- The folder ----------------
     //
+    // WHERE THE COLLECTION LIVES IS NOT THIS FILE'S TO DECIDE. It used to be:
+    // ~/Pictures/wallpapers was written out literally here, and moving the
+    // collection meant editing the shell as well as the script -- until both
+    // were edited, this grid listed one folder while the keybinds cycled
+    // another and said nothing about it. wallpaper-switch now keeps the answer
+    // in a state file, and this page reads that file exactly the way it
+    // already reads which wallpaper is applied.
+    //
+    // STILL OUTSTANDING, so it is not rediscovered as a bug in this page:
+    // modules/launcher/WallpaperPicker.qml and the entry in Commands.qml carry
+    // their own literal ~/Pictures/wallpapers. Point the collection somewhere
+    // else and the settings grid follows while the launcher's strip does not.
+    // The fix there is these same six lines; it was out of scope for the
+    // change that added them.
+    //
+    // NOT $WALLPAPER_DIR, and that is a decision rather than an omission. The
+    // script's variable is a per-invocation override -- the point of
+    // `WALLPAPER_DIR=/tmp/x wallpaper-switch next` is that it changes ONE run
+    // -- so it never described the collection in the first place. And a
+    // process inherits its environment at launch: this shell started before
+    // any such variable existed and would carry whatever it had then until the
+    // next restart, so the grid could sit on a folder that no keybind, no
+    // timer and no terminal agrees with, with nothing on screen to explain the
+    // disagreement.
+    //
+    // XDG_STATE_HOME is the opposite case and is honoured. It is a property of
+    // the session, set once at login and read identically by every process in
+    // it, so the script and this page cannot end up pointing at different
+    // files because of it. Set to ~/.local/state here, which is also the
+    // fallback, so this costs nothing today and is right if it ever moves.
+    // THE FOLDER COMES FROM Config, not from a FileView of this page's own.
+    // It had one, watching the same ~/.local/state/wallpaper-dir the launcher
+    // would have needed to watch as well -- two readers of one file, and the
+    // launcher's strip did not have one at all, so pointing the collection
+    // elsewhere moved this grid and left that strip on the old folder. One
+    // property in Config is what makes the two views the same view.
+    readonly property string folderPath: Config.wallpaperDir
+
+    // For reading, never for passing to anything: ~ is a shell expansion and
+    // means a directory literally called "~" to FolderListModel and to find,
+    // which is the trap wallpaper-switch expands it away for.
+    readonly property string folderLabel: {
+        const home = Quickshell.env("HOME");
+        if (root.folderPath === home)
+            return "~";
+        return root.folderPath.startsWith(`${home}/`)
+            ? `~${root.folderPath.slice(home.length)}`
+            : root.folderPath;
+    }
+
+    // A Process where everything else on this page uses execDetached, and the
+    // exit code is not the reason. The footer's "Change" has to go quiet while
+    // the chooser is on screen, and `running` is the only thing that knows the
+    // dialog is still open -- detached, a second click opens a second zenity,
+    // and then two dialogs are racing to write the same state file.
+    //
+    // Deliberately no onExited handler. Config.wallpaperDir is what moves the grid,
+    // and it fires when the folder actually changed rather than when the
+    // script happened to finish -- which is also the right answer for a
+    // cancelled dialog, where the script exits 0 having changed nothing.
+    Process {
+        id: picker
+
+        command: ["wallpaper-switch", "dir", "pick"]
+    }
+
     // The same five extensions and the same sort as the launcher's picker,
-    // which are the ones wallpaper-switch itself looks for. The path is the
-    // literal one WallpaperPicker.qml uses rather than $WALLPAPER_DIR: the
-    // script's variable is a per-invocation override, so reading it out of the
-    // shell's own environment would only ever agree with the script by
-    // accident, and two windows of this shell listing different folders is
-    // worse than neither of them following the override.
+    // which are the ones wallpaper-switch itself looks for.
     FolderListModel {
         id: folder
 
-        folder: `file://${Quickshell.env("HOME")}/Pictures/wallpapers`
+        folder: `file://${root.folderPath}`
         nameFilters: ["*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp"]
         showDirs: false
         sortField: FolderListModel.Name
@@ -319,132 +398,44 @@ SettingsPage {
     }
 
     // ---------------- Wallpaper ----------------
+    //
+    // HEADING, GRID, ONE FOOTER LINE -- AND NOTHING ELSE. What this replaced
+    // was three horizontal bands stacked before a single picture appeared: a
+    // header row inside the card carrying the applied wallpaper's name in bold
+    // with a "Random now" pill on its right, then a full ActionRow reading
+    // "Wallpaper folder / ~/Pictures/Wallpapers" with a "Change" pill, and only
+    // then the thumbnails. Two label-plus-button rows in a row -- 30 px of
+    // header plus a 45 px ActionRow plus the spacing between them, near enough
+    // 80 px of chrome to walk past before a section whose entire content is
+    // pictures.
+    //
+    // Each band was wrong in its own way:
+    //
+    //   - The NAME was a second answer to a question already answered better.
+    //     The ring in the grid is on the picture; revealCurrent scrolls it into
+    //     view on first visit. See the note on currentPath above.
+    //   - RANDOM is an action on the whole section, not a setting, so it
+    //     belongs to the heading -- see SettingsSection's own note. The heading
+    //     line already existed with nothing on its right, so it now costs zero
+    //     vertical space where it used to cost a full row.
+    //   - The FOLDER row looked like a setting and was not one. It is the scope
+    //     of the pictures, which makes it a caption, and a caption goes under
+    //     the thing it captions.
     SettingsSection {
         width: parent.width
         title: "Wallpaper"
 
-        // The name of what is applied, spelled out. The ring in the grid says
-        // the same thing better, but only while the thumbnail it is on is
-        // scrolled into view -- and there are fifty of them.
-        Item {
-            id: actions
+        // NOT a ConfirmButton, wherever it lives. That component is for the
+        // click you should not be able to take by accident, and this one is
+        // undone by clicking any thumbnail below -- arming it would be
+        // ceremony around a change that costs a second to reverse.
+        actionText: "Random"
+        actionGlyph: Icons.shuffle
 
-            width: parent.width
-            height: Theme.groupHeight - 6
-
-            Text {
-                anchors.left: parent.left
-                anchors.leftMargin: Theme.groupPadding
-                anchors.right: randomButton.left
-                anchors.rightMargin: Theme.itemSpacing
-                anchors.verticalCenter: parent.verticalCenter
-
-                text: root.currentName !== "" ? root.currentName : "Nothing applied yet"
-                elide: Text.ElideRight
-
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                font.weight: Font.Bold
-                color: root.currentName !== "" ? Theme.textOnSurface : Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-
-            // NOT a ConfirmButton. That component is for the click you should
-            // not be able to take by accident, and this one is undone by
-            // clicking any thumbnail below -- arming it would be ceremony
-            // around a change that costs a second to reverse.
-            Rectangle {
-                id: randomButton
-
-                anchors.right: parent.right
-                anchors.rightMargin: Theme.groupPadding - 4
-                anchors.verticalCenter: parent.verticalCenter
-
-                implicitWidth: randomLabel.implicitWidth + randomGlyph.implicitWidth
-                    + Theme.itemSpacing + Theme.groupPadding * 2
-                implicitHeight: Theme.groupHeight - 6
-                radius: height / 2
-
-                color: randomMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
-                border.width: 1
-                border.color: Theme.outlineVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
-
-                Row {
-                    anchors.centerIn: parent
-                    spacing: Theme.itemSpacing
-
-                    Text {
-                        id: randomGlyph
-
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: Icons.shuffle
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.iconSize
-                        color: Theme.textOnSurfaceVariant
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.recolorDuration }
-                        }
-                    }
-
-                    Text {
-                        id: randomLabel
-
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "Random now"
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize - 1
-                        font.weight: Theme.fontWeight
-                        color: Theme.textOnSurfaceVariant
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.recolorDuration }
-                        }
-                    }
-                }
-
-                MouseArea {
-                    id: randomMouse
-
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    // `random` and not a random index picked here: the script
-                    // refuses to hand back the one that is already applied,
-                    // and a button that sometimes appears to do nothing is a
-                    // button people press twice.
-                    onClicked: Quickshell.execDetached(["wallpaper-switch", "random"])
-                }
-            }
-        }
-
-        // The folder is missing or holds nothing this shell can draw. Says
-        // where it looked, because that is the only thing anyone can act on.
-        Text {
-            visible: folder.count === 0
-
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            topPadding: 4
-            bottomPadding: 6
-
-            text: "No images in ~/Pictures/wallpapers."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
-        }
+        // `random` and not a random index picked here: the script refuses to
+        // hand back the one that is already applied, and a button that
+        // sometimes appears to do nothing is a button people press twice.
+        onActionTriggered: Quickshell.execDetached(["wallpaper-switch", "random"])
 
         // A GRID AND NOT THE LAUNCHER'S STRIP. The strip is walked with two
         // keys and shows three images at a time, which is right for a thing
@@ -661,6 +652,159 @@ SettingsPage {
                     // been edited, and it is what `wallpaper-switch reapply`
                     // is for -- there is no reason to make the grid refuse it.
                     onClicked: Quickshell.execDetached(["wallpaper-switch", "set", cell.filePath])
+                }
+            }
+        }
+
+        // ---------------- Where the pictures come from ----------------
+        //
+        // A FOOTER, WHICH IS A SENTENCE ABOUT THE GRID AND NOT A SETTING. It
+        // reads as a caption because it is one -- "these fifty-two pictures,
+        // and they live here" -- and captions go under. The whole line stays
+        // at textOnSurfaceVariant and a point down; the only thing that lights
+        // up is "Change", on hover, because it is the only thing you can press.
+        //
+        // A HAIRLINE AND NOT JUST AIR, which was the other option and reads
+        // worse HERE specifically: the grid deliberately cuts its last row
+        // mid-picture (see its height cap), so its bottom edge is a torn
+        // photograph, not a clean boundary. Muted text floating under a torn
+        // edge with only whitespace between them looks like a caption ON that
+        // half-thumbnail. The rule gives the grid a definite floor. It is
+        // hidden when there is no grid, since a rule under nothing is a lid.
+        Item {
+            id: footer
+
+            readonly property int lineHeight: Theme.groupHeight - 12
+
+            width: parent.width
+            // Air above the rule as well as below it. The card's Column only
+            // puts 2 px between its children, and a rule 2 px under a row of
+            // cropped photographs reads as part of the photographs.
+            implicitHeight: footer.lineHeight + Theme.itemSpacing * 2
+
+            Rectangle {
+                anchors.top: parent.top
+                anchors.topMargin: Theme.itemSpacing - 2
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: Theme.groupPadding
+                anchors.rightMargin: Theme.groupPadding
+
+                visible: grid.visible
+                height: 1
+                color: Theme.outlineVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+            }
+
+            Text {
+                id: originGlyph
+
+                anchors.left: parent.left
+                anchors.leftMargin: Theme.groupPadding
+                anchors.verticalCenter: originText.verticalCenter
+
+                text: root.folderGlyph
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.iconSize - 2
+                color: Theme.textOnSurfaceVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+            }
+
+            Text {
+                id: originText
+
+                anchors.left: originGlyph.right
+                anchors.leftMargin: Theme.itemSpacing - 3
+                anchors.right: change.left
+                anchors.rightMargin: Theme.itemSpacing
+                anchors.verticalCenter: change.verticalCenter
+
+                // THE COUNT REPLACES THE OLD "No images in ~/Pictures/x." LINE.
+                // Nothing else on this desktop prints this path, so the line
+                // still has to name the folder it looked in -- but "0 images"
+                // is a complete answer to the empty case, and when the count is
+                // zero the grid collapses to nothing and this line becomes the
+                // entire card, so it cannot be walked past. A second widget
+                // that only ever appears to say what this one already says was
+                // the kind of stacking this redesign was about.
+                text: `${root.folderLabel} · ${folder.count} ${folder.count === 1 ? "image" : "images"}`
+
+                // MIDDLE and not Right: the count is at the END of the string,
+                // and eliding right drops it first -- the one part of this line
+                // that cannot be guessed from anywhere else in the window. The
+                // middle of a long path is the cheapest thing to lose.
+                elide: Text.ElideMiddle
+
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize - 1
+                color: Theme.textOnSurfaceVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+            }
+
+            // NO PILL AROUND IT, unlike the ActionRow this came out of. A
+            // border here would put back exactly the weight the row was
+            // deleted for; hover colour plus the pointing cursor is what marks
+            // it, and it is the only pressable thing on the line.
+            Item {
+                id: change
+
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.groupPadding
+                anchors.bottom: parent.bottom
+
+                width: changeLabel.implicitWidth
+                height: footer.lineHeight
+
+                Text {
+                    id: changeLabel
+
+                    anchors.centerIn: parent
+
+                    // The word changes while zenity is up, because `picker` is
+                    // a Process precisely so this line knows the dialog is
+                    // still open -- see its declaration above.
+                    text: picker.running ? "Choosing…" : "Change"
+                    font.family: Theme.fontFamily
+                    font.pointSize: Theme.fontSize - 1
+                    font.weight: Theme.fontWeight
+                    color: !picker.running && changeMouse.containsMouse
+                        ? Theme.primary : Theme.textOnSurfaceVariant
+                    opacity: picker.running ? 0.5 : 1
+
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.animDuration }
+                    }
+                }
+
+                MouseArea {
+                    id: changeMouse
+
+                    // Bigger than the word it covers. A bare label is a small
+                    // target and this one has no pill to aim at, so the hit
+                    // area is grown past the text rather than the text padded
+                    // out -- padding would move "Change" off the right margin
+                    // the glyph on the far left is aligned to.
+                    anchors.fill: parent
+                    anchors.margins: -6
+
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    enabled: !picker.running
+
+                    // The dialog belongs to the script, not to this window.
+                    // Same argument the avatar row makes: a shell that grows
+                    // its own file browser has to maintain a file browser, and
+                    // this one gets GTK's for the price of a Process.
+                    onClicked: picker.running = true
                 }
             }
         }

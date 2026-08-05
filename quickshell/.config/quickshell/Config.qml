@@ -244,6 +244,38 @@ Singleton {
             root.borderSize = parsed;
     }
 
+    // ---------------- The wallpaper collection ----------------
+    //
+    // ONE READER FOR TWO VIEWS. The launcher's picker and the settings
+    // window's grid both list this folder, and until this property existed
+    // they each carried their own `~/Pictures/wallpapers`. Pointing the
+    // collection somewhere else moved one of them and not the other, which is
+    // the worst outcome available: not a setting that fails, a setting that
+    // half works.
+    //
+    // NOT $WALLPAPER_DIR, which `wallpaper-switch` also honours. That
+    // variable is a per-invocation override -- run the script once against
+    // some other folder -- and a process inherits its environment at launch,
+    // so a shell started before it was set would show a folder nothing else
+    // on the desktop agrees with.
+    readonly property string wallpaperDirDefault: `${Quickshell.env("HOME")}/Pictures/wallpapers`
+
+    property string wallpaperDir: root.wallpaperDirDefault
+
+    FileView {
+        id: wallpaperDirFile
+
+        path: `${root.stateDir}/wallpaper-dir`
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: reload()
+        onLoaded: {
+            const value = (text() || "").trim();
+            root.wallpaperDir = value !== "" ? value : root.wallpaperDirDefault;
+        }
+    }
+
     // ---------------- Bar ----------------
 
     property alias use24Hour: adapter.use24Hour

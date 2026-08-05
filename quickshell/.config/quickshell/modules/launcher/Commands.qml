@@ -38,7 +38,10 @@ Singleton {
         {
             id: "wallpaper",
             name: "Wallpaper",
-            description: "Pick from ~/Pictures/wallpapers",
+            // The folder is a setting, so the description reads it rather
+            // than naming one. A ~ for $HOME because that is how a person
+            // writes the path they are being shown.
+            description: `Pick from ${Config.wallpaperDir.replace(Quickshell.env("HOME"), "~")}`,
             glyph: Icons.image,
             picker: "wallpaper"
         },
