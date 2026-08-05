@@ -8,11 +8,29 @@
 //                                 asking another program to read them for us.
 //   CPU temperature               /sys/class/hwmon, but the path is DISCOVERED
 //                                 rather than written down. See below.
-//   GPU                           nvidia-smi. There is no sysfs equivalent for
-//                                 an NVIDIA card -- utilisation, VRAM and
-//                                 power all come out of the driver's own tool,
-//                                 so this is the one reading that costs a
-//                                 process.
+//   GPU                           whichever card this machine has, and WHICH
+//                                 ONE is discovered too. NVIDIA exposes
+//                                 nothing useful in sysfs, so utilisation,
+//                                 VRAM, temperature and power all come out of
+//                                 nvidia-smi -- the one reading here that
+//                                 costs a process. amdgpu publishes all four
+//                                 as plain sysfs files, so on a Radeon there
+//                                 is no process to hold open at all and the
+//                                 GPU is read exactly like the CPU is.
+//
+// WHY THE VENDOR IS DETECTED AND NOT CONFIGURED.
+//
+// These dotfiles are stowed onto more than one machine and this file is the
+// same file on all of them: one has a GeForce, another a Radeon. A setting
+// would make the shell wrong on every machine until somebody remembered to
+// change it, and wrong in the worst way -- a GPU card sitting at zero with
+// nothing on screen to say why, which reads as a broken panel rather than a
+// missed checkbox. The kernel already knows which driver is bound to which
+// card. Asking it costs one shell at startup and cannot disagree with the
+// hardware it is running on.
+//
+// The same reasoning rules out hardcoding a card number or a model name: both
+// were true on exactly one machine on exactly one boot.
 //
 // EVERYTHING IS GATED ON `active`. The Performance tab sets it while it is on
 // screen and clears it when the popout closes, so nothing here polls /proc or
@@ -61,6 +79,21 @@ Singleton {
     property real gpuPower: 0
     property bool gpuAvailable: false
 
+    // "" until the detection below answers, then "nvidia" or "amd". It stays
+    // "" on a machine with neither, and that is what keeps the panel quiet
+    // there: nvidia-smi is never spawned, no timer runs, and every figure
+    // above stays at its initial zero rather than half of them being real.
+    property string gpuVendor: ""
+
+    // The amdgpu sysfs files, resolved at startup for the same reason
+    // cpuTempPath is. An empty one means this particular card does not publish
+    // that reading -- an APU with no power telemetry, say -- and the figure it
+    // feeds keeps its zero instead of the panel inventing one.
+    property string gpuBusyPath: ""
+    property string gpuVramPath: ""
+    property string gpuTempPath: ""
+    property string gpuPowerPath: ""
+
     // The hwmon path for the CPU package sensor, resolved at startup.
     property string cpuTempPath: ""
 
@@ -101,6 +134,14 @@ Singleton {
     // slowdown spec at -2 -- so throttling begins at about 85 C. 83 puts the
     // warning just before the card starts losing performance rather than
     // after.
+    //
+    // The threshold is one number for both vendors, which only holds because
+    // both are fed the same KIND of reading: nvidia-smi's temperature.gpu and
+    // amdgpu's temp1 are the edge sensor on their respective cards. amdgpu's
+    // temp2 is the junction hotspot, a number tens of degrees higher by
+    // design, and pointing this at it would have the island shouting through
+    // every game. That is the whole reason the detection asks for temp1 by
+    // name instead of taking whichever sensor comes first.
     //
     // Both are the point where something is WRONG, not the point where
     // something is warm. An indicator that cries during a game is one that
@@ -189,6 +230,35 @@ Singleton {
         path: root.cpuTempPath
     }
 
+    // The amdgpu readings. Four files instead of one process, and each one
+    // holds a single number the driver keeps current -- the same deal /proc
+    // offers for the CPU, which is why the GPU costs a process on one machine
+    // and nothing on the other. radeontop and the like would only be another
+    // program reading these for us, and would have to be installed first.
+    FileView {
+        id: gpuBusyFile
+
+        path: root.gpuBusyPath
+    }
+
+    FileView {
+        id: gpuVramFile
+
+        path: root.gpuVramPath
+    }
+
+    FileView {
+        id: gpuTempFile
+
+        path: root.gpuTempPath
+    }
+
+    FileView {
+        id: gpuPowerFile
+
+        path: root.gpuPowerPath
+    }
+
     // WHY THE SENSOR PATH IS DISCOVERED AND NOT WRITTEN DOWN.
     //
     // The package sensor is currently /sys/class/hwmon/hwmon7/temp1_input, and
@@ -224,17 +294,160 @@ Singleton {
         }
     }
 
+    // WHICH GPU THIS MACHINE HAS, asked once at startup.
+    //
+    // It walks /sys/class/drm and reads the PCI driver bound to each card,
+    // which is the one question that answers everything at once: it names the
+    // vendor, it proves the card is PRESENT and BOUND rather than merely
+    // having its userspace tools installed, and it hands over the sysfs
+    // directory the amdgpu readings live in. `command -v nvidia-smi` would
+    // have answered a different and weaker question -- a machine can carry the
+    // tool with the card pulled out.
+    //
+    // NVIDIA is looked for first and wins outright. Two cards from different
+    // vendors in one machine is a tie somebody has to break, and nvidia-smi is
+    // the richer of the two sources, so it gets the vote. On NVIDIA the driver
+    // link is the PCI driver `nvidia`, and /sys/class/drm/cardN only exists at
+    // all once nvidia_drm has registered the card -- which it always has here,
+    // since there is no Wayland compositor to run this shell under otherwise.
+    //
+    // AMONG SEVERAL amdgpu CARDS, the one with the most VRAM wins. Card
+    // numbers are probe order, and on a machine with an APU and a discrete
+    // Radeon the APU usually enumerates first -- taking the first match would
+    // reliably pick the wrong card and report the chip nobody is gaming on.
+    // Memory size is the one property that actually separates them.
+    //
+    // NOT a template literal, for the reason recorded on the CPU sensor
+    // lookup above: `${...}` and `$(...)` both mean something to QML's string
+    // interpolation and the command would reach sh already mangled. Plain
+    // strings joined with + have nothing to interpolate. The backslashes in
+    // the sed are DOUBLED because QML eats a single one before sh ever sees
+    // it.
+    //
+    // Output is one key=value per line, and a key is simply absent when the
+    // machine cannot answer it. No GPU means no output at all.
+    Process {
+        running: true
+
+        command: ["sh", "-c",
+            "amd=\n" +
+            "amdv=-1\n" +
+            "for c in /sys/class/drm/card*; do\n" +
+            // Skips the connector directories -- card1-DP-1 and friends --
+            // whose `device` points back at the card and has no driver link.
+            "[ -e $c/device/driver ] || continue\n" +
+            "case $(readlink -f $c/device/driver) in\n" +
+            "*/nvidia) echo vendor=nvidia; exit 0 ;;\n" +
+            "*/amdgpu)\n" +
+            "d=$(readlink -f $c/device)\n" +
+            "v=0\n" +
+            "[ -r $d/mem_info_vram_total ] && read v < $d/mem_info_vram_total\n" +
+            // Anything that is not a plain number counts as no VRAM rather
+            // than reaching `[ -gt ]` and printing a shell error at us.
+            "case $v in ''|*[!0-9]*) v=0 ;; esac\n" +
+            // amdv starts at -1 so the first amdgpu card always wins the
+            // comparison, even one reporting zero bytes, and only a strictly
+            // larger card displaces it afterwards.
+            "[ $v -gt $amdv ] && { amd=$d; amdv=$v; }\n" +
+            ";;\n" +
+            "esac\n" +
+            "done\n" +
+            "case x$amd in x) exit 0 ;; esac\n" +
+            "echo vendor=amd\n" +
+            // Total VRAM is a constant, so it is emitted as the value itself
+            // rather than as one more file to re-read every two seconds.
+            "[ $amdv -gt 0 ] && echo vramtotal=$amdv\n" +
+            "[ -r $amd/gpu_busy_percent ] && echo busy=$amd/gpu_busy_percent\n" +
+            "[ -r $amd/mem_info_vram_used ] && echo vramused=$amd/mem_info_vram_used\n" +
+            // The hwmon number is probe order too, so it is found by looking
+            // rather than by assuming hwmon0. Both nestings are globbed: the
+            // hwmon class puts its device under <parent>/hwmon/hwmonN for a
+            // bus device like this PCI one, but not every driver in the tree
+            // ends up that way and the extra pattern costs nothing.
+            "for h in $amd/hwmon/hwmon* $amd/hwmon*; do\n" +
+            "[ -f $h/name ] || continue\n" +
+            // temp1 and NOT temp2. temp1 is the edge sensor, the counterpart
+            // of nvidia-smi's temperature.gpu; temp2 is the junction hotspot,
+            // which runs far above it and would trip gpuHotAt below during
+            // perfectly ordinary load. Same reading on both machines or the
+            // threshold means two different things.
+            "[ -r $h/temp1_input ] && echo temp=$h/temp1_input\n" +
+            // power1_average preferred, power1_input as the fallback: some
+            // SMU generations publish only one of the two.
+            "[ -r $h/power1_average ] && echo power=$h/power1_average\n" +
+            "[ -r $h/power1_average ] || { [ -r $h/power1_input ] && echo power=$h/power1_input; }\n" +
+            "break\n" +
+            "done\n" +
+            // THE NAME IS LOOKED UP, NOT WRITTEN DOWN. amdgpu's own
+            // product_name attribute is documented as server cards only, so
+            // on a desktop Radeon the only name the system holds is the one
+            // pci.ids gives for the card's PCI ID, which is what lspci
+            // prints. The sed drops the slot and class, drops the revision,
+            // drops the AMD/ATI vendor tag, and then takes the bracketed
+            // marketing name if there is one -- "Navi 24 [Radeon RX
+            // 6400/6500 XT/6500M]" becomes "Radeon RX 6400/6500 XT/6500M",
+            // which is the same shape the dashboard shows for NVIDIA once it
+            // has trimmed the vendor off. A card pci.ids does not know falls
+            // back to whatever it does know, and no lspci at all prints
+            // nothing, leaving gpuName empty rather than wrong.
+            "lspci -s $(basename $amd) 2>/dev/null | sed -n" +
+            " -e 's/^[^ ]* [^:]*: //'" +
+            " -e 's/ (rev [^)]*)$//'" +
+            " -e 's|^Advanced Micro Devices, Inc. \\[AMD/ATI\\] ||'" +
+            " -e 's/.*\\[\\(.*\\)\\].*/\\1/'" +
+            " -e 's/^./name=&/p'\n"]
+
+        stdout: SplitParser {
+            splitMarker: "\n"
+
+            onRead: line => {
+                const split = line.indexOf("=");
+                if (split < 0)
+                    return;
+                const value = line.slice(split + 1).trim();
+                switch (line.slice(0, split)) {
+                case "vendor":
+                    root.gpuVendor = value;
+                    break;
+                case "vramtotal":
+                    // amdgpu reports bytes, nvidia-smi MiB. Both end in GiB.
+                    root.gpuVramTotal = Number(value) / 1024 / 1024 / 1024;
+                    break;
+                case "busy":
+                    root.gpuBusyPath = value;
+                    break;
+                case "vramused":
+                    root.gpuVramPath = value;
+                    break;
+                case "temp":
+                    root.gpuTempPath = value;
+                    break;
+                case "power":
+                    root.gpuPowerPath = value;
+                    break;
+                case "name":
+                    root.gpuName = value;
+                    break;
+                }
+            }
+        }
+    }
+
     // nvidia-smi held OPEN in a loop rather than spawned every two seconds.
     // Starting it costs about 20 ms of process setup; `-l` makes one process
     // emit one line per interval instead, which is the same shape the cava
     // spectrum uses.
-    // ALWAYS running, not just while the Performance tab is open: the island
-    // has to be able to warn about a hot card whether or not anyone is looking
-    // at the dashboard. The interval is what changes -- 2 s while the tab is
-    // being read, 5 s the rest of the time, which is plenty for a temperature
-    // that takes tens of seconds to move.
+    // ALWAYS running once the card is known, not just while the Performance
+    // tab is open: the island has to be able to warn about a hot card whether
+    // or not anyone is looking at the dashboard. The interval is what changes
+    // -- 2 s while the tab is being read, 5 s the rest of the time, which is
+    // plenty for a temperature that takes tens of seconds to move.
+    //
+    // Gated on the detection rather than started unconditionally, so that on
+    // a machine without the card this is a process that is never spawned
+    // instead of one that fails on every launch and writes about it.
     Process {
-        running: true
+        running: root.gpuVendor === "nvidia"
 
         command: ["nvidia-smi",
             "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
@@ -258,6 +471,65 @@ Singleton {
                 root.gpuAvailable = true;
             }
         }
+    }
+
+    // One sysfs number, or null when there is nothing to say yet -- the file
+    // was not found at detection, or the reload has not landed. null and not
+    // 0, because 0 is a legitimate reading for three of the four figures and
+    // the caller has to be able to tell "idle" from "no answer".
+    //
+    // Reads BEFORE the reload lands, deliberately: FileView.reload() is
+    // asynchronous, so text() in the same tick still returns the previous
+    // contents. Every reading here is therefore one tick old, which for a
+    // GPU sampled every 2 s is the difference between a temperature and the
+    // same temperature. readCpuTemp() above works the same way.
+    function sysfsNumber(view: var, path: string): var {
+        if (!path)
+            return null;
+        view.reload();
+        const text = view.text();
+        if (!text)
+            return null;
+        const value = Number(text.trim());
+        return isNaN(value) ? null : value;
+    }
+
+    // The amdgpu counterpart of the nvidia-smi block above: same four figures,
+    // same units out, no process. Each is assigned only if the card answered,
+    // so a card that publishes no power leaves gpuPower at zero rather than
+    // flickering between a real number and a fabricated one.
+    function readGpu(): void {
+        const busy = root.sysfsNumber(gpuBusyFile, root.gpuBusyPath);
+        const vram = root.sysfsNumber(gpuVramFile, root.gpuVramPath);
+        const temp = root.sysfsNumber(gpuTempFile, root.gpuTempPath);
+        const power = root.sysfsNumber(gpuPowerFile, root.gpuPowerPath);
+
+        if (busy !== null)
+            root.gpuPercent = busy;
+        // Bytes.
+        if (vram !== null)
+            root.gpuVramUsed = vram / 1024 / 1024 / 1024;
+        // Millidegrees, like the CPU package sensor.
+        if (temp !== null)
+            root.gpuTemp = temp / 1000;
+        // Microwatts.
+        if (power !== null)
+            root.gpuPower = power / 1000000;
+
+        if (busy !== null || temp !== null)
+            root.gpuAvailable = true;
+    }
+
+    // Always running, on the same 2 s / 5 s split as the nvidia-smi loop and
+    // for the same reason: the island's heat warning has to work while the
+    // dashboard is shut. Only started once detection has said "amd", so on
+    // every other machine this timer never ticks.
+    Timer {
+        interval: root.active ? 2000 : 5000
+        repeat: true
+        running: root.gpuVendor === "amd"
+        triggeredOnStart: true
+        onTriggered: root.readGpu()
     }
 
     // Split out of sample() so the always-on watch below can call it too.
