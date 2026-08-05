@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# =============================================================
+#  desktop-avatar — the picture that stands for this account
+#
+#      desktop-avatar              print the current one, or "none"
+#      desktop-avatar pick         choose one in a file dialog
+#      desktop-avatar set PATH     use this file
+#      desktop-avatar clear        go back to the initial
+#
+#  ~/.face IS NOT THIS SHELL'S INVENTION. It is the freedesktop convention for
+#  a user's picture, and it is what the settings window reads -- but also what
+#  a display manager and AccountsService look for. Writing anywhere else would
+#  give this desktop a picture nothing else on the machine knows about, which
+#  is why the file is a copy at that path rather than a link to wherever the
+#  original lives: an avatar that disappears when a folder is tidied is worse
+#  than no avatar.
+#
+#  THE DIALOG IS ZENITY'S, and that is a dependency this repo now declares
+#  (packages/pacman.txt) rather than something that happened to be installed --
+#  it was here only because Steam pulls it in, which is exactly the kind of
+#  thing that works on one machine and not the other. Nothing is built by hand
+#  here: GTK's file chooser already knows about thumbnails, recent places and
+#  the image filter, and it is themed by the same gtk.css matugen generates.
+# =============================================================
+set -euo pipefail
+
+FACE="$HOME/.face"
+
+# The cap on either side. 512 is well past what anything draws this at -- the
+# sidebar uses 38, a display manager a hundred and something -- and leaves room
+# for a screen that scales.
+MAX_SIDE=512
+
+die() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; exit 1; }
+note() { printf '  %s\n' "$*"; }
+
+# Copied, then moved into place. A half-written ~/.face is a broken image in
+# the sidebar, and the copy of a large file over a network mount is long
+# enough for that to be seen.
+install_face() {
+  local src="$1"
+
+  [[ -f "$src" ]] || die "Not a file: $src"
+
+  # The dialog filters by extension, which is a filename check and not a
+  # content one. This is the content one: a PDF renamed .png would otherwise
+  # be installed and simply never draw.
+  local kind
+  kind="$(file --mime-type -b "$src")"
+  [[ "$kind" == image/* ]] || die "Not an image: $src is $kind"
+
+  local tmp
+  tmp="$(mktemp "$HOME/.face.XXXXXX")"
+
+  # SCALED DOWN IF IT IS BIG, and the first version of this was not: picking a
+  # wallpaper put a 12 MB 4K JPEG at ~/.face, to be drawn in a circle 38 pixels
+  # across. Nothing broke -- the shell asks for it at the size it paints it --
+  # but every program that reads this file decodes all twelve megabytes to get
+  # a thumbnail out of it, and a display manager is one of them.
+  #
+  # ONLY DOWNWARDS. An avatar already smaller than the cap is copied untouched
+  # rather than blown up to meet it: upscaling costs bytes and quality to
+  # produce exactly the same picture, softer.
+  #
+  # ffmpeg is not a declared dependency of this repo, and this does not make it
+  # one -- it arrives with mpv and the recorder, both of which are declared, so
+  # it is there in practice. When it is not, the copy below is the whole of
+  # what happens and the only cost is a larger file.
+  # The comma is ffprobe's default csv separator and this asks for no other
+  # one. `-of csv=p=0:s=' '` is the form every example uses and it is refused
+  # here -- "Failed to parse option string 'p=0:s= '" -- while still exiting 1
+  # quietly enough that the dimensions came back as 0 and nothing was ever
+  # scaled. A zero here means "could not measure", and the copy branch is the
+  # right answer to that.
+  local width=0 height=0 size=""
+  if command -v ffprobe >/dev/null; then
+    size="$(ffprobe -v error -select_streams v:0 \
+      -show_entries stream=width,height -of csv=p=0 "$src" 2>/dev/null || true)"
+    if [[ "$size" =~ ^([0-9]+),([0-9]+) ]]; then
+      width="${BASH_REMATCH[1]}"
+      height="${BASH_REMATCH[2]}"
+    fi
+  fi
+
+  if command -v ffmpeg >/dev/null && (( width > MAX_SIDE || height > MAX_SIDE )); then
+    # -f image2 with an explicit encoder, because the output name is a mktemp
+    # file with no extension and ffmpeg picks its format from that name.
+    ffmpeg -v error -y -i "$src" \
+      -vf "scale=$MAX_SIDE:$MAX_SIDE:force_original_aspect_ratio=decrease:flags=lanczos" \
+      -frames:v 1 -f image2 -c:v png "$tmp"
+    note "scaled from ${width}x${height} down to fit ${MAX_SIDE}px"
+  else
+    cp "$src" "$tmp"
+  fi
+
+  chmod 644 "$tmp"
+  mv "$tmp" "$FACE"
+
+  printf 'Profile picture set from %s\n' "${src/#$HOME/\~}"
+  note "$(file --mime-type -b "$FACE"), $(du -h "$FACE" | cut -f1)"
+  note "the sidebar crops it to a circle, so a square image frames best"
+}
+
+case "${1:-show}" in
+  show)
+    if [[ -f "$FACE" ]]; then
+      printf '%s\n' "$FACE"
+    else
+      echo "none"
+    fi
+    ;;
+
+  pick)
+    command -v zenity >/dev/null || die "zenity is not installed (pacman -S zenity)"
+
+    # --file-filter twice: the named image filter first so it is the default,
+    # and "All files" after it for the case the picture has no extension the
+    # filter knows. Without the second one such a file is unpickable and the
+    # dialog gives no hint why.
+    #
+    # Starting in ~/Pictures rather than at $HOME, since that is where a
+    # picture is, and the trailing slash is what makes zenity treat it as a
+    # directory to open instead of a filename to preselect.
+    chosen="$(zenity --file-selection \
+      --title="Choose a profile picture" \
+      --filename="$HOME/Pictures/" \
+      --file-filter="Images | *.png *.jpg *.jpeg *.webp *.bmp *.gif" \
+      --file-filter="All files | *" 2>/dev/null)" || {
+        # Cancelling is not a failure. zenity exits 1 for it, and under set -e
+        # that would end the script with a red message about nothing at all.
+        echo "Cancelled."
+        exit 0
+      }
+
+    install_face "$chosen"
+    ;;
+
+  set)
+    (( $# == 2 )) || die "Usage: desktop-avatar set PATH"
+    install_face "$2"
+    ;;
+
+  clear)
+    if [[ -f "$FACE" ]]; then
+      rm -f "$FACE"
+      echo "Profile picture removed."
+      note "the sidebar goes back to the initial"
+    else
+      echo "There was no profile picture."
+    fi
+    ;;
+
+  *)
+    die "Unknown command: '$1' (expected pick, set, clear or show)"
+    ;;
+esac

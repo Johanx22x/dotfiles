@@ -124,6 +124,7 @@ xdg-desktop-portal-hyprland
 xdg-utils
 zathura
 zathura-pdf-poppler
+zenity
 zoxide
 zram-generator
 zsh

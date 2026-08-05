@@ -6,13 +6,16 @@
 // entry in the rail that is a person rather than a subject, which is why it
 // sits above the list with a gap rather than inside it.
 //
-// THE PICTURE IS OPTIONAL AND THERE IS NONE ON THIS MACHINE. Checked, not
-// assumed: there is no ~/.face, no AccountsService user record, and the GECOS
-// field in /etc/passwd is empty -- so there is no full name to show either.
-// Rather than an empty circle and a blank line, the fallback is the initial
-// over the accent, which is what every application that has ever had this
-// problem settles on. Drop a square image at ~/.face and it is used instead;
-// nothing else has to change.
+// THE PICTURE IS OPTIONAL, and the fallback is the initial over the accent --
+// what every application that has ever had this problem settles on. It is
+// what a fresh machine shows: there is no AccountsService user record here and
+// the GECOS field in /etc/passwd is empty, so there is no full name either and
+// the username stands in for both.
+//
+// The picture itself is ~/.face, set from the User page of this window through
+// the `desktop-avatar` script. It is deliberately NOT a path of this shell's
+// own: ~/.face is the freedesktop convention, so a display manager finds the
+// same picture.
 
 import Quickshell
 import QtQuick
@@ -26,7 +29,23 @@ Rectangle {
 
     signal clicked
 
-    readonly property string avatarPath: `${Quickshell.env("HOME")}/.face`
+    readonly property string avatarPath: SessionInfo.avatarPath
+
+    // RELOADED BY HAND, because an Image will not do it on its own: it caches
+    // by URL, and the URL of the profile picture never changes -- only its
+    // contents do. Setting the source to nothing and back is what makes it
+    // read the file again, and `cache: false` on the Image is what stops the
+    // second assignment being answered out of the cache anyway.
+    //
+    // A query string on the URL would be the shorter trick, and it is not used
+    // here: appending ?v=2 to a file:// URL asks the filesystem for a file
+    // whose name ends in "?v=2".
+    readonly property int revision: SessionInfo.avatarRevision
+
+    onRevisionChanged: {
+        picture.source = "";
+        picture.source = `file://${root.avatarPath}`;
+    }
 
     width: parent ? parent.width : implicitWidth
     implicitWidth: 200
@@ -78,25 +97,53 @@ Rectangle {
                 }
             }
 
-            // ROUND, AND THAT TAKES AN EFFECT. An Image has no radius, and
-            // clip on a rounded Rectangle clips to its bounding box and not
-            // to its curve -- a photo in one would come out square with
-            // rounded corners painted behind it. MultiEffect's mask is the
-            // supported way to do this in Qt 6 (6.11 here), and it costs one
-            // offscreen texture 38 pixels across.
+            // ROUND, AND THAT TAKES AN EFFECT. An Image is a rectangle: put
+            // inside a rounded parent it keeps its own square corners, and
+            // `clip` does not help because it clips to the bounding box and
+            // not to the curve. The first version of this used MultiEffect
+            // with only maskSpreadAtMin set, and the result was a perfectly
+            // square photograph sitting in a circular hole.
+            //
+            // What was missing is maskThresholdMin. Without it the mask is
+            // cut at a hard step at zero, which for a fully opaque mask
+            // texture means everything passes and nothing is masked at all.
+            // The pair below -- 0.5 and 1.0 -- is copied verbatim from
+            // WallpaperPicker.qml, which took it from CornerWedge.qml, where
+            // the note says the spread is what keeps the antialiasing on the
+            // cut edge instead of throwing it away.
+            //
+            // The mask is a Rectangle with a colour and its own layer, not an
+            // Item wrapping one: the layer texture comes from the item the
+            // property is set on, so a bare wrapper renders an empty mask.
             Image {
                 id: picture
 
                 anchors.fill: parent
                 source: `file://${root.avatarPath}`
+                cache: false
                 fillMode: Image.PreserveAspectCrop
                 // Asked for at twice the size it is drawn at, so it stays
                 // sharp on a scaled output without a 1024px portrait being
                 // held in memory to be shown at 38.
                 sourceSize.width: width * 2
                 sourceSize.height: height * 2
+                smooth: true
+
                 // A missing file is the normal case here, not an error.
                 visible: false
+                layer.enabled: true
+            }
+
+            Rectangle {
+                id: pictureMask
+
+                anchors.fill: parent
+                radius: height / 2
+                antialiasing: true
+                color: "black"
+
+                visible: false
+                layer.enabled: true
             }
 
             MultiEffect {
@@ -104,21 +151,9 @@ Rectangle {
                 source: picture
                 visible: picture.status === Image.Ready
                 maskEnabled: true
-                maskSource: mask
-                maskSpreadAtMin: 1
-            }
-
-            Item {
-                id: mask
-
-                anchors.fill: parent
-                layer.enabled: true
-                visible: false
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: height / 2
-                }
+                maskSource: pictureMask
+                maskThresholdMin: 0.5
+                maskSpreadAtMin: 1.0
             }
         }
 
