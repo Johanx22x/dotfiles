@@ -49,4 +49,31 @@ Column {
     // another would shadow the positioner's own and the sections would stop
     // being laid out.
     spacing: Theme.groupSpacing
+
+    // EARLIER SECTIONS PAINT OVER LATER ONES, which is the opposite of what a
+    // Column does on its own and is the whole fix for tooltips.
+    //
+    // A tooltip hangs DOWNWARDS out of the row it explains, so it overlaps
+    // whatever comes after it -- and `z` only orders an item among its own
+    // SIBLINGS. The note carries z: 100, which wins inside its row and buys
+    // nothing outside it: the row is buried three levels down, and the next
+    // section is a sibling of the CARD, not of the note. So a tooltip on the
+    // last row of a card was drawn under the next section's heading and under
+    // the next card, which is what this is here to stop.
+    //
+    // Descending z rather than raising one item, because the rule generalises:
+    // anything that hangs out of a section belongs over what follows it, and
+    // nothing in this window overlaps upwards. Positive and not negative -- a
+    // child with z below zero paints behind its own parent's background, so
+    // 0, -1, -2 would have posted the sections behind the cards.
+    //
+    // Re-run when the children change, since a page can add a section after it
+    // has loaded.
+    onChildrenChanged: root.restack()
+    Component.onCompleted: root.restack()
+
+    function restack(): void {
+        for (let i = 0; i < children.length; i++)
+            children[i].z = children.length - i;
+    }
 }
