@@ -255,12 +255,44 @@ fi
 # without ever saying which link it was. -L catches it first and says so.
 blue "== 4/6  Seed the files the applications rewrite =="
 echo "   seeds/ -> \$HOME, and only where there is nothing already"
+
+# Where each seed goes. A destination cannot be derived from a seed's name --
+# qt6ct.conf sits a directory deeper than mimeapps.list -- so there is a list,
+# and a list is a thing to forget.
+#
+# WHICH IS WHY THE LOOP BELOW IS OVER THE DIRECTORY AND NOT OVER THIS. Dropping
+# a third file into seeds/ used to copy nothing at all: the loop iterated the
+# pairs, so an unlisted seed was not skipped with a warning, it was never
+# looked at. Now the directory decides what gets considered and this only
+# decides where it lands, so the failure is a message instead of a silence.
+#
+# The other way out would be to mirror $HOME inside seeds/ and derive the
+# destination from the path, the way every stow package does. Rejected on
+# purpose: it would make `stow seeds` -- the one thing seeds/README.md forbids
+# in capitals -- produce a working set of symlinks instead of obvious garbage,
+# and the whole point of a seed is that it must not be a link.
+declare -A SEED_DEST=(
+  ["qt6ct.conf"]="$HOME/.config/qt6ct/qt6ct.conf"
+  ["mimeapps.list"]="$HOME/.config/mimeapps.list"
+)
+
 if ask "Copy the missing ones?"; then
   seeded=0
-  for pair in "qt6ct.conf:$HOME/.config/qt6ct/qt6ct.conf" \
-              "mimeapps.list:$HOME/.config/mimeapps.list"; do
-    src="$DOT/seeds/${pair%%:*}"
-    dst="${pair#*:}"
+  unmapped=()
+
+  for src in "$DOT"/seeds/*; do
+    [[ -f "$src" ]] || continue
+    name="$(basename "$src")"
+
+    # The directory's own documentation, not a seed.
+    [[ "$name" == "README.md" ]] && continue
+
+    dst="${SEED_DEST[$name]:-}"
+    if [[ -z "$dst" ]]; then
+      unmapped+=("$name")
+      continue
+    fi
+
     if [[ -L $dst && ! -e $dst ]]; then
       red "   $dst is a dangling symlink"
       echo "     It pointed at the repo copy that is now a seed. Delete it and"
@@ -274,7 +306,28 @@ if ask "Copy the missing ones?"; then
       seeded=$(( seeded + 1 ))
     fi
   done
+
   green "   done, $seeded file(s) copied"
+
+  # Loud rather than fatal. A seed with nowhere to go is a mistake in this
+  # script, not in the machine being set up, and stopping the install over it
+  # would punish the wrong person -- but saying nothing is how it went
+  # unnoticed in the first place.
+  if (( ${#unmapped[@]} )); then
+    red "   ${#unmapped[@]} file(s) in seeds/ have no destination and were skipped:"
+    printf '     %s\n' "${unmapped[@]}"
+    echo "     Add them to SEED_DEST above, and to the table in seeds/README.md."
+  fi
+
+  # qt6ct's colour scheme lands in ~/.config/qt6ct/colors/, which nothing else
+  # creates any more: qt6ct stopped being a stow package when its config became
+  # a seed, and the seed only makes the directory its own file sits in.
+  #
+  # matugen does create missing parents, so this is insurance rather than a
+  # fix -- but it is insurance against a silent one. A palette that fails to
+  # write leaves Qt applications on the factory grey with nothing on screen to
+  # say why, which is a long way to walk back from.
+  mkdir -p "$HOME/.config/qt6ct/colors"
 fi
 
 # ---------------------------------------------------------------------------
