@@ -51,6 +51,20 @@
 
 @import url("colors.css");
 
+/* The one transparency of the desktop, written by the `desktop-opacity`
+   script (the settings window's slider calls it, and so can you from a
+   terminal). It carries --zen-background-opacity, which used to be a number
+   further down this file; the long note next to where it was explains what it
+   does and why it is done here rather than with a Hyprland windowrule.
+
+   IT HAS TO BE AN @import AND IT HAS TO BE UP HERE. CSS only accepts @import
+   before any rule, so this cannot go next to the :root block it feeds. That
+   also means everything below wins over it on equal specificity -- which is
+   exactly why the declaration was REMOVED from that block instead of being
+   left there as a fallback: left in place, the hardcoded value would beat the
+   generated one and the slider would appear to do nothing. */
+@import url("opacity.css");
+
 :root {
   /* ---- Surfaces: fixed, Tokyo Night ----
      Zen's dark base is a set of neutral near-blacks (#101010, #171717,
@@ -114,6 +128,12 @@
      --zen-themed-toolbar-bg-transparent is deliberately NOT set here. The
      pref's media query sets it to `transparent`, and that is what we want;
      an override with !important would beat the media query and put the grey
-     back. */
-  --zen-background-opacity: 0.85 !important;
+     back.
+
+     THE NUMBER ITSELF NOW LIVES IN opacity.css, imported at the top of this
+     file and written by the `desktop-opacity` script, so that this surface
+     and the shell's bar and kitty all move together. Everything above still
+     applies -- it is the same declaration, one file across. Setting it here
+     as well would win over the import and freeze the value; see the note by
+     the @import. */
 }

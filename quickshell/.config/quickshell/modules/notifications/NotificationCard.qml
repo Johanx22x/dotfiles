@@ -37,11 +37,19 @@ Rectangle {
     // (browser notifications especially) and the result is a panel that only
     // grows. Critical gets a longer window instead of an infinite one, so
     // even something important eventually clears itself.
+    //
+    // The default is Config.notificationTimeout, in SECONDS there and
+    // multiplied here -- the one place in the shell that conversion happens,
+    // so there is one place to get it wrong.
+    //
+    // Critical keeps its own longer window and does NOT follow the setting: a
+    // preference set for "how long do I want to read a chat notification" is
+    // not an answer to "how long should the recorder's failure stay up".
     readonly property int timeout: {
         const asked = root.notification.expireTimeout;
         if (asked > 0)
             return asked;
-        return root.critical ? 30000 : 10000;
+        return root.critical ? 30000 : Config.notificationTimeout * 1000;
     }
 
     readonly property bool critical: root.notification.urgency === NotificationUrgency.Critical

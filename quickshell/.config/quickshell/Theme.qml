@@ -109,7 +109,19 @@ Singleton {
     // 0.85 is this setup's standard, the same figure waybar, wofi and dunst
     // use. The blur behind it is Hyprland's, applied per layer namespace in
     // hyprland.lua -- nothing here produces it.
-    readonly property real glassAlpha: 0.85
+    //
+    // THE ONE VALUE IN THIS FILE THAT IS A PREFERENCE and not a decision, so
+    // it is the one that comes from Config rather than being written here.
+    // The 0.85 still lives in Config.qml, as its default -- and it is no
+    // longer only the shell's: kitty, Zen and Hyprland's window rules read
+    // the same number now, through the `desktop-opacity` script.
+    //
+    // Note what this buys, and it is the whole reason the settings window
+    // sits in the shell process: glass() is called inside bindings all over
+    // the shell, so those bindings capture this property as a dependency and
+    // re-evaluate the moment it changes. The bar restyles itself while the
+    // number is still moving under the pointer.
+    readonly property real glassAlpha: Config.opacity
 
     function glass(colour: color): color {
         return Qt.alpha(colour, root.glassAlpha);
@@ -162,20 +174,46 @@ Singleton {
     // pixels would only match at one particular DPI and drift apart at any
     // other, so the shell asks for the same 11pt the terminal does and lets
     // Qt do the conversion. Change it here only if kitty changes.
-    readonly property string fontFamily: "JetBrainsMono Nerd Font"
-    readonly property real fontSize: 11
+    // FAMILY AND SIZE COME FROM Config NOW, and the note above is the reason
+    // rather than an argument against it: the pair was one decision shared
+    // with kitty, remembered by a comment. It still is one decision -- the
+    // `desktop-font` script writes both -- but the remembering is mechanical.
+    //
+    // The family is restricted to the Nerd Font variants at the setting, not
+    // here, because the reason is not about type: every glyph this shell
+    // draws is a Nerd Font codepoint rendered as text in THIS property. Point
+    // it anywhere else and the bar fills with tofu.
+    readonly property string fontFamily: Config.fontFamily
+    readonly property real fontSize: Config.fontSize
     readonly property int fontWeight: Font.DemiBold
 
     // Glyph size for the Nerd Font pictograms, also in points. Two points
     // over the text: a pictogram drawn inside the same em box as a letter
     // reads smaller than the letter does, and matching the numbers would
     // make the icons look undersized next to their own labels.
-    readonly property real iconSize: 13
+    // DERIVED, not a second setting. It was 13 next to a fontSize of 11, and
+    // the two points between them are the whole reason it exists -- a
+    // pictogram drawn in the same em box as a letter reads smaller than the
+    // letter. Leaving it a constant while the size moved would have made the
+    // icons shrink relative to their own labels at every step.
+    readonly property real iconSize: root.fontSize + 2
 
     // The Arch mark on its own: it is the only logo on the bar and it reads
     // smaller than a pictogram at the same size because of how much fine
     // detail it packs.
-    readonly property real logoSize: 19
+    // Also derived, at the ratio it had when both were constants (19/11).
+    // Rounded, because a glyph asked for at 20.7pt is a glyph rendered at a
+    // size no hinting was done for.
+    readonly property real logoSize: Math.round(root.fontSize * 1.73)
+
+    // The shell's own controls -- the settings and power buttons. Between the
+    // two above, and for the same reason each of those exists: a control has
+    // to invite a click, which a reading's glyph does not, but it is not the
+    // lone mark the logo is either. At iconSize the pair read as two more
+    // readings that happened to get a pill; at logoSize they dwarfed the
+    // clock's glyphs one group over.
+    // Derived like the rest, so it tracks the font setting.
+    readonly property real controlSize: root.iconSize + 3
 
     // Size in PIXELS for real images -- tray icons and application icons.
     // These are bitmaps, not glyphs: they are asked for at the exact pixel

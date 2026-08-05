@@ -587,6 +587,17 @@ Item {
                         radius: Theme.cardRadius - 8
                         color: Theme.surfaceContainerHighest
 
+                        // TEMPORARY -- chasing the unpainted bottom band. Dumps
+                        // the geometry of the cover and of both layers whenever
+                        // any of it settles. Remove once the cause is known; do
+                        // not commit.
+                        function dumpGeometry(what: string): void {
+                            console.log(`[cover] ${what}` + ` cover=${cover.width}x${cover.height}` + ` backdrop=${artBackdrop.width}x${artBackdrop.height}` + ` status=${artBackdrop.status} painted=${artBackdrop.paintedWidth}x${artBackdrop.paintedHeight}` + ` source=${artBackdrop.sourceSize.width}x${artBackdrop.sourceSize.height}` + ` art=${art.width}x${art.height} artStatus=${art.status}` + ` artPainted=${art.paintedWidth}x${art.paintedHeight}` + ` url=${playerRow.artSource}`);
+                        }
+
+                        onWidthChanged: dumpGeometry("cover resized")
+                        onHeightChanged: dumpGeometry("cover resized")
+
                         // A BLURRED COPY BEHIND, and the sharp one fitted in
                         // front. This is damage control, not a fix: what the
                         // player publishes is all there is.
@@ -612,6 +623,10 @@ Item {
                             fillMode: Image.PreserveAspectCrop
                             sourceSize.width: 1024
                             asynchronous: true
+
+                            // TEMPORARY, see cover.dumpGeometry above.
+                            onStatusChanged: cover.dumpGeometry("backdrop status " + status)
+                            onPaintedHeightChanged: cover.dumpGeometry("backdrop repainted")
                         }
 
                         MultiEffect {
@@ -642,6 +657,9 @@ Item {
                             onStatusChanged: {
                                 if (status === Image.Error && playerRow.youtubeId && !playerRow.maxResFailed)
                                     playerRow.maxResFailed = true;
+
+                                // TEMPORARY, see cover.dumpGeometry above.
+                                cover.dumpGeometry("art status " + status);
                             }
                             fillMode: Image.PreserveAspectFit
                             asynchronous: true

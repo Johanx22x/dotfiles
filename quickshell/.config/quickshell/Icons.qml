@@ -103,6 +103,25 @@ Singleton {
     readonly property string search: String.fromCodePoint(0xF0349)     // nf-md-magnify
     readonly property string close: String.fromCodePoint(0xF0156)      // nf-md-close
     readonly property string power: String.fromCodePoint(0xF0425)      // nf-md-power
+    // Solid and not md-cog_outline (0xF08BB): it sits next to the power glyph
+    // on the bar, which is solid, and an outlined one beside it read as the
+    // disabled version of a button rather than as a different button.
+    // Checked against the font's cmap rather than guessed -- see the note
+    // above `monitor` for why that matters.
+    readonly property string settings: String.fromCodePoint(0xF0493)   // nf-md-cog
+    // Outline and not the filled md-information (0xF02FC): it marks a row
+    // that has something extra to say, and a solid disc next to a label reads
+    // as a status light -- as though something were wrong with the setting.
+    readonly property string info: String.fromCodePoint(0xF02FD)       // nf-md-information_outline
+
+    // ---------------- Settings window ----------------
+    // All four checked against the font's cmap before being written down,
+    // which is the rule the two corrections further down this file exist to
+    // enforce.
+    readonly property string account: String.fromCodePoint(0xF0009)     // nf-md-account_circle
+    readonly property string textSize: String.fromCodePoint(0xF027F)    // nf-md-format_size
+    readonly property string restore: String.fromCodePoint(0xF099B)     // nf-md-restore
+    readonly property string tune: String.fromCodePoint(0xF062E)        // nf-md-tune
 
     // ---------------- Session ----------------
     // The power menu's actions, alongside `power` above. Same Material Design
@@ -175,10 +194,25 @@ Singleton {
     // checked against the font before being used.
     readonly property string image: String.fromCodePoint(0xF02E9)         // nf-md-image
     readonly property string shuffle: String.fromCodePoint(0xF049D)       // nf-md-shuffle_variant
-    readonly property string clipboard: String.fromCodePoint(0xF0385)     // nf-md-clipboard_text
+    // The third one of these found the same way, and the most quietly wrong:
+    // 0xF0385 is md-MUSIC_BOX_OUTLINE, so the launcher's clipboard mode has
+    // been offering to paste a music box. clipboard_text is 0xF014D.
+    readonly property string clipboard: String.fromCodePoint(0xF014D)     // nf-md-clipboard_text
     readonly property string refresh: String.fromCodePoint(0xF0450)       // nf-md-refresh
     readonly property string chevronRight: String.fromCodePoint(0xF0142)  // nf-md-chevron_right
-    readonly property string palette: String.fromCodePoint(0xF0765)       // nf-md-palette
+    // It was 0xF0765 until the settings window put it next to a label and it
+    // was obviously a plain filled disc. Read out of the font's cmap: 0xF0765
+    // is md-CIRCLE. The palette is 0xF03D8.
+    //
+    // It had gone unnoticed because both places using it tolerate a disc: the
+    // colour picker in the launcher, where it passes for a swatch, and the
+    // "Look" heading in the cheatsheet, where it is one glyph in a column of
+    // them. That is the failure mode this file's other notes warn about: the
+    // name in the comment is not evidence, the cmap is.
+    //
+    //   python -c "from fontTools.ttLib import TTFont; \
+    //     print(TTFont('<font>.ttf').getBestCmap()[0xF03D8])"
+    readonly property string palette: String.fromCodePoint(0xF03D8)       // nf-md-palette
 
     // ---------------- Notifications ----------------
     // BOTH OF THESE WERE WRONG, and silently: the codepoints below used to be
@@ -209,7 +243,10 @@ Singleton {
     // and Media, and are reused instead of duplicated.
     readonly property string keyboard: String.fromCodePoint(0xF030C)      // nf-md-keyboard
     readonly property string apps: String.fromCodePoint(0xF003B)          // nf-md-apps
-    readonly property string windowTiles: String.fromCodePoint(0xF169B)   // nf-md-dock_window
+    // Same correction as `palette` above, found the same way: 0xF169B is
+    // md-BOOK_SETTINGS_OUTLINE, which is why the "Windows" heading on the
+    // cheatsheet carried a little book. dock_window is 0xF10AC.
+    readonly property string windowTiles: String.fromCodePoint(0xF10AC)   // nf-md-dock_window
     readonly property string workspaces: String.fromCodePoint(0xF0570)    // nf-md-view_grid
     readonly property string camera: String.fromCodePoint(0xF0100)        // nf-md-camera
     readonly property string widgets: String.fromCodePoint(0xF072C)       // nf-md-widgets
