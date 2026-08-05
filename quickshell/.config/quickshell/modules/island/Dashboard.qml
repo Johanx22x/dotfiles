@@ -983,7 +983,12 @@ Item {
 
                     StatCard {
                         width: parent.width
-                        height: (parent.height - 14) / 2
+                        // Half the column, or the whole of it when the GPU
+                        // card is not there to take the other half. The same
+                        // arrangement RAM has with the identity card above it:
+                        // one card takes what the other left, so a card that
+                        // does not apply to this machine costs no empty space.
+                        height: gpuCard.visible ? (parent.height - 14) / 2 : parent.height
                         horizontal: true
 
                         title: "CPU"
@@ -998,9 +1003,33 @@ Item {
                     }
 
                     StatCard {
+                        id: gpuCard
+
                         width: parent.width
                         height: (parent.height - 14) / 2
                         horizontal: true
+
+                        // ONLY ONCE A CARD HAS ANSWERED. On a machine with
+                        // neither vendor bound SystemStats spawns nothing and
+                        // leaves every figure below at its initial zero, and a
+                        // tile reading 0 °C, 0.0 / 0 GiB, 0 W under a blank
+                        // name looks like a panel that broke rather than a
+                        // machine without the part. No tile says the second.
+                        //
+                        // `visible` and not a zero height, for the reason the
+                        // empty album line down in Media uses it: a Column
+                        // skips an invisible child AND the spacing in front of
+                        // it, which is what lets the CPU card above simply
+                        // grow into the space instead of leaving a gap where
+                        // this one would have been.
+                        //
+                        // It only ever turns on. Both readers run whether or
+                        // not this tab is open -- the island has to be able to
+                        // warn about a hot card with the dashboard shut -- so
+                        // by the first time anyone opens Performance the card
+                        // is either already here or was never coming, and
+                        // there is no appearing tile to animate.
+                        visible: SystemStats.gpuAvailable
 
                         title: "GPU"
                         glyph: Icons.gpu
@@ -1010,9 +1039,10 @@ Item {
                             { label: "VRAM", value: `${SystemStats.gpuVramUsed.toFixed(1)} / ${SystemStats.gpuVramTotal.toFixed(0)} GiB` },
                             { label: "Power", value: `${Math.round(SystemStats.gpuPower)} W` }
                         ]
-                        // Trimmed: the card would otherwise start with the same
-                        // six characters every card starts with.
-                        footer: SystemStats.gpuName.replace("NVIDIA ", "")
+                        // Already trimmed of its vendor prefix by SystemStats,
+                        // for both vendors, where the card is named and the
+                        // vendor is known. Nothing to do here.
+                        footer: SystemStats.gpuName
                     }
                 }
             }
