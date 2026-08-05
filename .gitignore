@@ -16,6 +16,11 @@ gtk/.config/gtk-4.0/gtk.css
 ranger/.config/ranger/accent
 quickshell/.config/quickshell/colors.json
 
+# Zen writes outside .config: its chrome/ only counts inside the profile,
+# ~/.zen/rice. The versioned part is userChrome.css (zen/.zen/rice/chrome/),
+# which imports this one.
+zen/.zen/rice/chrome/colors.css
+
 # zathura and fastfetch are generated WHOLE from a template: they have no stow
 # package of their own. See matugen/.config/matugen/config.toml.
 

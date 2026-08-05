@@ -315,7 +315,21 @@ hl.config({
         --            noticeable and costs GPU.
         blur = {
             enabled = true,
-            size    = 8,
+
+            -- 14, up from 8, for a frostier glass behind Zen's sidebar.
+            -- `size` is the only lever available for that: `passes` is
+            -- pinned at 2 for edge quality (measured, see below), so making
+            -- the backdrop softer has to come from the radius.
+            --
+            -- CAREFUL, this is GLOBAL. It is not a browser setting: every
+            -- translucent surface gets it -- kitty at background_opacity
+            -- 0.70, the Quickshell bar, the notification panel, popups. It
+            -- was raised alongside Zen's own tint going 0.72 -> 0.85
+            -- (userChrome.css, --zen-background-opacity), which is the pair
+            -- that produces "glass" rather than "see-through": more blur
+            -- behind, less wallpaper coming through the tint. If the
+            -- terminal ever looks mushy behind its text, this is the number.
+            size    = 14,
 
             -- 2 AND NOT 3, and the reason is edge quality rather than taste.
             --
