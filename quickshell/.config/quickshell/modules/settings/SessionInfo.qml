@@ -41,6 +41,43 @@ Singleton {
 
     property string fullName: ""
 
+    // ---------------- The profile picture ----------------
+    //
+    // ~/.face, the freedesktop convention, which is what makes it worth using
+    // rather than a path of this shell's own: a display manager and
+    // AccountsService look for the same file. Written by the `desktop-avatar`
+    // script; nothing here writes it.
+    readonly property string avatarPath: `${root.home}/.face`
+
+    property bool hasAvatar: false
+
+    // Bumped every time the file might have changed. It is what the sidebar
+    // watches to know it has to read the picture off disk again -- an Image
+    // caches by URL, and the URL here never changes, so without a signal the
+    // avatar set a second ago would keep showing the one from before.
+    //
+    // NOT A FileView WATCHER, which is how everything else in this config
+    // notices a file. A FileView loads the CONTENT, and the content here is a
+    // picture: watching it would hold a copy of the image in memory as text
+    // for the sole purpose of learning that it exists.
+    property int avatarRevision: 0
+
+    function refreshAvatar(): void {
+        avatarProbe.running = true;
+    }
+
+    Process {
+        id: avatarProbe
+
+        running: true
+        command: ["test", "-f", root.avatarPath]
+
+        onExited: code => {
+            root.hasAvatar = code === 0;
+            root.avatarRevision++;
+        }
+    }
+
     // Seconds since boot, straight out of /proc/uptime's first field.
     function uptimeSeconds(): int {
         // Re-read on the spot. A FileView loads asynchronously, so the first
