@@ -461,7 +461,13 @@ Singleton {
                 const f = line.split(",").map(v => v.trim());
                 if (f.length < 6)
                     return;
-                root.gpuName = f[0];
+                // The vendor prefix goes here and not at the point of display,
+                // for the same reason the AMD branch trims its own: a card is
+                // named once, where the vendor is known. This used to be a
+                // .replace() in Dashboard.qml, which meant one vendor was
+                // normalised upstream and the other downstream, and only the
+                // NVIDIA half was ever applied.
+                root.gpuName = f[0].replace(/^NVIDIA /, "");
                 root.gpuPercent = Number(f[1]) || 0;
                 // nvidia-smi reports MiB.
                 root.gpuVramUsed = (Number(f[2]) || 0) / 1024;
