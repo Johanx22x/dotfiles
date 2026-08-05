@@ -60,7 +60,7 @@ build, an AUR package that fails, no user session to enable the timer with, no
 network for the Neovim clone, no wallpaper to build a palette from — because
 none of it is worth losing the linking step over.
 
-1. **Packages** from `packages/pacman.txt` (129 of them), plus `stow` itself.
+1. **Packages** from `packages/pacman.txt` (130 of them), plus `stow` itself.
    Anything your repos don't have is skipped and listed rather than aborting
    the whole transaction, which is what pacman does over a single missing
    name. `packages/multilib.txt` (Steam and the 32-bit libraries) is offered
@@ -143,7 +143,7 @@ gtk/        .config/                 gtk-3.0 and gtk-4.0 settings.ini
 media/      .config/mpv/             + a wireplumber rule for the capture card
 openrgb/    .config/OpenRGB/
 systemd/    .config/systemd/user/    wallpaper rotation service + timer
-bin/        .local/bin/              9 scripts + the capture-card desktop entry
+bin/        .local/bin/              11 scripts + the capture-card desktop entry
 ranger/     .config/ranger/          rc.conf, scope.sh, tokyonight colorscheme
 icons/      .local/share/icons/      an icon that does not ship with its app
 zen/        .zen/rice/               user.js + userChrome.css (Zen browser)
@@ -237,13 +237,36 @@ single file that one script writes and everything else reads:
 | `desktop-opacity` | `desktop-opacity` | Quickshell, `hyprland.lua`, kitty (`opacity.conf`), Zen (`opacity.css`) |
 | `desktop-font` | `desktop-font` | Quickshell, kitty (`font.conf`) |
 | `hypr-monitors` | `hypr-monitor` | `hypr-monitor` itself, to regenerate `monitors.lua` |
+| `hypr-border` | `hypr-border` | Quickshell, `hyprland.lua` |
+| `wallpaper-dir` | `wallpaper-switch dir` | Quickshell, `wallpaper-switch` |
 
 ```sh
 desktop-opacity          # print the current value
 desktop-opacity 0.75     # set it (0.40 - 1.00)
 desktop-font             # print size and family
 desktop-font 12          # set the size (8 - 16)
+hypr-border              # print the window border width
+hypr-border 0            # remove it (0 - 6 px)
+
+desktop-avatar           # print the profile picture, or "none"
+desktop-avatar pick      # choose one in a file dialog
+desktop-avatar clear     # go back to the initial
+
+wallpaper-switch dir             # print the collection's folder
+wallpaper-switch dir pick        # choose it in a folder dialog
+wallpaper-switch dir ~/Wallpapers
 ```
+
+`desktop-avatar` is the odd one out of that list: it writes `~/.face` rather
+than a state file, because `~/.face` is the freedesktop convention and a
+display manager looks for the same picture. It scales anything larger than
+512px down on the way in — a wallpaper picked as an avatar was a 12 MB file
+being decoded by everything that reads it to draw a 38px circle.
+
+The two dialogs are **GTK's, through zenity** (a declared dependency, since it
+was previously only present because Steam pulls it in). Nothing here builds a
+file browser: one already knows about thumbnails, recent places and filtering
+by type, and it is themed by the same `gtk.css` matugen generates.
 
 The shell's own preferences — 24-hour clock, date on the bar, notification
 timeout — stay in Quickshell's `config.json` under
@@ -366,7 +389,9 @@ at least two outputs have a mode, so a single-monitor machine is never touched.
 here would make it a submodule and complicate cloning.
 
 **The wallpapers.** Not configuration, and git handles large binaries poorly.
-Put your own in `~/Pictures/wallpapers`.
+Put your own in `~/Pictures/wallpapers`, or point the collection somewhere else
+with `wallpaper-switch dir` — the launcher's picker and the settings window's
+grid both read that one setting.
 
 **`cship`** is a compiled binary, so only the binary is ignored; its
 configuration *is* here, under `shell/`.
