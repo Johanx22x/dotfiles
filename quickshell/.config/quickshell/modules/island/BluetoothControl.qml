@@ -140,13 +140,13 @@ Item {
             }
         }
 
-        // Only the area left of the switch expands, so reaching for the
-        // toggle never opens the list by accident.
+        // The whole row expands, chevron included: that arrow is what the row
+        // looks like it is offering, so it has to be the one thing that is
+        // certain to work. Below the switch in stacking, so reaching for the
+        // toggle still never opens the list by accident.
         MouseArea {
-            anchors.left: parent.left
-            anchors.right: btToggle.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
+            anchors.fill: parent
+            z: -1
 
             cursorShape: Qt.PointingHandCursor
             onClicked: root.expanded = !root.expanded
