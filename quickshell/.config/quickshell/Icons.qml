@@ -181,8 +181,24 @@ Singleton {
     readonly property string palette: String.fromCodePoint(0xF0765)       // nf-md-palette
 
     // ---------------- Notifications ----------------
-    readonly property string bell: String.fromCodePoint(0xF09A2)         // nf-md-bell_outline
-    readonly property string bellOff: String.fromCodePoint(0xF09A1)      // nf-md-bell_off_outline
+    // BOTH OF THESE WERE WRONG, and silently: the codepoints below used to be
+    // 0xF09A2 and 0xF09A1, which the comments called bell_outline and
+    // bell_off_outline. In the font actually installed here they are
+    // md-speaker_bluetooth and md-shower_head -- so the fallback icon on a
+    // notification with no image of its own has been a bluetooth speaker.
+    //
+    // Read out of the font rather than off a chart, which is how it was
+    // caught in the first place. To check any other entry in this file the
+    // same way:
+    //
+    //   python -c "from fontTools.ttLib import TTFont; \
+    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
+    //       .getBestCmap().get(0xF009C))"
+    //
+    // Nerd Fonts keeps the icon's own name as the glyph name, so the answer is
+    // the identity of the glyph and not just "something is mapped there".
+    readonly property string bell: String.fromCodePoint(0xF009C)         // nf-md-bell_outline
+    readonly property string bellOff: String.fromCodePoint(0xF0A91)      // nf-md-bell_off_outline
 
     // ---------------- Cheatsheet ----------------
     // One per category heading. The names on the LEFT are the categories as
