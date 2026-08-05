@@ -72,7 +72,12 @@ Item {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: Qt.formatDateTime(clock.date, "HH:mm")
+                // "hh:mm AP" and not "h:mm AP": the reading has to keep a
+                // constant width or the group either side of it moves every
+                // time the hour goes from 9 to 10. A leading zero on a
+                // 12-hour clock is unusual, and it is the price of a bar that
+                // does not twitch.
+                text: Qt.formatDateTime(clock.date, Config.use24Hour ? "HH:mm" : "hh:mm AP")
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.fontSize
                 font.weight: Font.Bold
@@ -85,7 +90,11 @@ Item {
         }
 
         // ---------------- Date ----------------
+        //
+        // Hidden as a whole -- glyph and number together. Hiding only the
+        // number would leave a calendar icon introducing nothing.
         Row {
+            visible: Config.showDate
             spacing: root.glyphGap
 
             Text {

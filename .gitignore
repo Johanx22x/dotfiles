@@ -10,7 +10,6 @@
 # ---------------------------------------------------------------------------
 kitty/.config/kitty/colors.conf
 hypr/.config/hypr/colors.lua
-qt/.config/qt6ct/colors/matugen.conf
 gtk/.config/gtk-3.0/gtk.css
 gtk/.config/gtk-4.0/gtk.css
 ranger/.config/ranger/accent
@@ -23,6 +22,10 @@ zen/.zen/rice/chrome/colors.css
 
 # zathura and fastfetch are generated WHOLE from a template: they have no stow
 # package of their own. See matugen/.config/matugen/config.toml.
+#
+# ~/.config/qt6ct/colors/matugen.conf is generated too, but there is nothing to
+# ignore: qt6ct has no stow package either. Its config is a seed (seeds/), so
+# the whole directory is the machine's and matugen writes outside the repo.
 
 # ---------------------------------------------------------------------------
 # Runtime state
@@ -48,3 +51,16 @@ __pycache__/
 # Links created by `systemctl --user enable`. They are regenerated, not
 # versioned: install.sh does it.
 systemd/.config/systemd/user/*.target.wants/
+
+# ---------------------------------------------------------------------------
+# Machine-local Hyprland pieces
+#
+# monitors.lua is written by the `hypr-monitor` script from the settings
+# window; local.lua is hand-written and holds whatever belongs to one machine
+# or one person (keyboard layout, extra binds, window rules). Neither may be
+# versioned: the repo is shared with another machine and another layout, and
+# a tracked personal file turns every pull over there into a conflict.
+# hyprland.lua loads both with pcall, so not having them is the normal case.
+# ---------------------------------------------------------------------------
+hypr/.config/hypr/monitors.lua
+hypr/.config/hypr/local.lua

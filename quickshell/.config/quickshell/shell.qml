@@ -24,6 +24,7 @@ import "modules/notifications"
 import "modules/launcher"
 import "modules/powermenu"
 import "modules/recorder"
+import "modules/settings"
 
 ShellRoot {
     // THE INSTANT REPLAY ARMS ITSELF, and this line is what lets it.
@@ -83,6 +84,12 @@ ShellRoot {
 
         Cheatsheet {}
     }
+
+    // The settings window. NOT wrapped in Variants, and it is the only thing
+    // here that is not: everything above is a layer surface, which belongs to
+    // one screen and has to be told which. This is an ordinary window -- the
+    // compositor decides where it opens, the same way it does for a terminal.
+    Settings {}
 
     // Rounded display corners, on EVERY monitor -- they belong to the panel
     // edge, not to the bar, so they are not filtered by model.

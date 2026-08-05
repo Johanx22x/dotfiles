@@ -237,8 +237,31 @@ PanelWindow {
                 }
             }
 
-            PowerButton {
+            // The shell's own controls, in a pill of their own. They are not
+            // readings like the groups before them, and that is the point of
+            // putting them together: one pill at the end says "this is where
+            // you operate the shell" instead of two loose glyphs trailing off
+            // the edge.
+            //
+            // The gap INSIDE this pill is groupSpacing, not the itemSpacing a
+            // group normally uses. See PowerButton: nothing may sit one
+            // slipped click from it, and sharing a background does not change
+            // that.
+            Group {
                 anchors.verticalCenter: parent.verticalCenter
+
+                spacing: Theme.groupSpacing
+
+                SettingsButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // LAST, and it stays last. The bar ends in the one control
+                // that can end the session, with nothing after it to reach
+                // past.
+                PowerButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                }
             }
         }
     }
