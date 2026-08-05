@@ -6,12 +6,27 @@
 #   wallpaper-switch random   a random one (different from the current)
 #   wallpaper-switch set PATH a specific one
 #   wallpaper-switch reapply  reapply the current one (handy after editing templates)
+#   wallpaper-switch dir      print the collection's folder
+#   wallpaper-switch dir PATH use a different folder from now on
 #
-# The collection lives in ~/Pictures/wallpapers
+# The collection lives in ~/Pictures/wallpapers unless told otherwise. WHERE
+# THAT IS TOLD is a state file, ~/.local/state/wallpaper-dir, and not this
+# script: the folder is one person's answer on one machine, and this file is
+# shared with another. The WALLPAPER_DIR environment variable still wins over
+# both, for a one-off run against some other folder.
 
 set -uo pipefail
 
-WALLPAPER_DIR="${WALLPAPER_DIR:-$HOME/Pictures/wallpapers}"
+DIR_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/wallpaper-dir"
+DEFAULT_DIR="$HOME/Pictures/wallpapers"
+
+# Precedence, highest first: the environment, the state file, the default.
+# The environment comes first so a single run can be pointed elsewhere without
+# changing what every other run does.
+if [[ -z "${WALLPAPER_DIR:-}" && -r "$DIR_STATE" ]]; then
+    WALLPAPER_DIR="$(<"$DIR_STATE")"
+fi
+WALLPAPER_DIR="${WALLPAPER_DIR:-$DEFAULT_DIR}"
 STATE_FILE="$HOME/.cache/wallpaper-current"
 MODE="${1:-next}"
 
@@ -30,6 +45,54 @@ TRANSITION_BEZIER="${TRANSITION_BEZIER:-.42,0,.58,1}"
 mkdir -p "$(dirname "$STATE_FILE")"
 
 die() { echo "wallpaper-switch: $*" >&2; exit 1; }
+
+# ---------------------------------------------------------------
+# The folder itself, handled before anything looks inside it: asking where the
+# collection is must not fail because the collection is empty, which is
+# exactly what the enumeration below does.
+# ---------------------------------------------------------------
+if [[ "$MODE" == "dir" ]]; then
+    if (( $# < 2 )); then
+        printf '%s\n' "$WALLPAPER_DIR"
+        exit 0
+    fi
+
+    NEW_DIR="$2"
+
+    # "pick" opens GTK's folder chooser, the same one desktop-avatar borrows
+    # for the profile picture. The dialog belongs to the script and not to the
+    # settings window for the reason that keeps coming back: a shell that
+    # grows its own file browser has to maintain a file browser.
+    if [[ "$NEW_DIR" == "pick" ]]; then
+        command -v zenity >/dev/null || die "zenity is not installed (pacman -S zenity)"
+        NEW_DIR="$(zenity --file-selection --directory \
+            --title="Choose the wallpaper folder" \
+            --filename="$WALLPAPER_DIR/" 2>/dev/null)" || {
+                echo "Cancelled."
+                exit 0
+            }
+    fi
+    # Expanded and resolved, so what is stored is what find will be given --
+    # a path with a ~ in it is a directory literally called "~" to everything
+    # downstream, and a relative one means whatever the caller's cwd was.
+    NEW_DIR="${NEW_DIR/#\~/$HOME}"
+    NEW_DIR="$(realpath -m "$NEW_DIR")"
+
+    [[ -d "$NEW_DIR" ]] || die "not a folder: $NEW_DIR"
+
+    mkdir -p "$(dirname "$DIR_STATE")"
+    printf '%s\n' "$NEW_DIR" > "$DIR_STATE"
+
+    COUNT=$(find -L "$NEW_DIR" -maxdepth 2 -type f \
+        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+           -o -iname '*.webp' -o -iname '*.bmp' \) | wc -l)
+
+    echo "Wallpaper folder: $NEW_DIR"
+    # Said rather than treated as an error: an empty folder is a perfectly
+    # reasonable thing to point at just before filling it.
+    echo "  $COUNT image(s) found"
+    exit 0
+fi
 
 # ---------------------------------------------------------------
 # 1. Gather the collection
