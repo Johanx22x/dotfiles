@@ -4,14 +4,15 @@
 // it inherits the welding to the bar, the outside-click dismissal and the
 // blur for free. See components/Popout.qml.
 //
-// THREE TABS, and the split is by QUESTION rather than by widget:
-//   Dashboard   what time is it, what day, and the four things worth
-//               reaching for without leaving the panel: volume, wi-fi,
-//               bluetooth and starting a recording
-//   Media       what is playing, and the controls for it
-//   Performance what is this machine doing right now
+// FOUR TABS, and the split is by QUESTION rather than by widget:
+//   Dashboard     what time is it, what day, and the things worth reaching
+//                 for without leaving the panel: do not disturb, volume,
+//                 wi-fi, bluetooth and starting a recording
+//   Notifications what has been through here, and what the mute swallowed
+//   Media         what is playing, and the controls for it
+//   Performance   what is this machine doing right now
 //
-// There was a fourth, Workspaces. It went because the bar already answers
+// There was another, Workspaces. It went because the bar already answers
 // that question permanently and better: the dots are on screen at all times
 // and switch on a click, while the dashboard's copy needed opening first.
 //
@@ -28,6 +29,7 @@ import QtQuick
 import QtQuick.Layouts
 import "root:/"
 import "root:/modules/bar"
+import "root:/modules/notifications"
 
 Item {
     id: root
@@ -61,6 +63,13 @@ Item {
                  // column with the recorder and the replay buffer, opening one
                  // shoved those off the bottom of the card. Things that grow
                  // and things that must stay put now have a column each.
+        {
+            width: 620,
+            height: 480
+        },       // Notifications: as tall as the Dashboard tab so the panel
+                 // does not shrink under you on the way in from the badge,
+                 // and narrow enough that a body wraps into two readable
+                 // lines rather than one very long one.
         {
             width: 700,
             height: 380
@@ -116,7 +125,7 @@ Item {
         // Only while the tab is on screen AND something is playing. The
         // popout destroys its content when it closes, so this stops on its
         // own the rest of the time rather than polling D-Bus all day.
-        running: root.currentTab === 1 && (root.mediaPlayer?.isPlaying ?? false)
+        running: root.tab === "Media" && (root.mediaPlayer?.isPlaying ?? false)
         triggeredOnStart: true
 
         onTriggered: {
@@ -144,14 +153,29 @@ Item {
     Binding {
         target: SystemStats
         property: "active"
-        value: root.currentTab === 2
+        value: root.tab === "Performance"
     }
 
-    readonly property var tabs: ["Dashboard", "Media", "Performance"]
+    // Both the names and the current one come from the singleton: see
+    // IslandState.dashboardTabs for why the order is not written down here.
+    readonly property var tabs: IslandState.dashboardTabs
     // Read-only: the tab is IslandState's to own, so that it is still there
     // the next time this component is built. Clicking a tab writes to the
     // singleton, which flows straight back here.
     readonly property int currentTab: IslandState.dashboardTab
+
+    // WHAT IS SHOWING, BY NAME. Everything below asks this rather than
+    // comparing currentTab to a number.
+    //
+    // The numbers were fine while the order was fixed and became a trap the
+    // moment it was not: adding Notifications in second place moved Media and
+    // Performance along by one, and every `currentTab === 2` in the file was
+    // silently about a different tab than it used to be. Three of those were
+    // `visible` bindings, which fail loudly, and one was the binding that
+    // decides whether SystemStats samples the machine -- which would have gone
+    // on polling /proc and nvidia-smi from the wrong tab without anything
+    // looking wrong.
+    readonly property string tab: root.tabs[root.currentTab] ?? root.tabs[0]
 
     Column {
         anchors.fill: parent
@@ -257,7 +281,7 @@ Item {
             Row {
                 anchors.fill: parent
                 spacing: 14
-                visible: root.currentTab === 0
+                visible: root.tab === "Dashboard"
 
                 // Clock and calendar in ONE column, not two cards side by
                 // side.
@@ -341,10 +365,10 @@ Item {
                 }
 
 
-                // Controls. The three things most often reached for without
-                // leaving the panel.
+                // Controls. The things most often reached for without leaving
+                // the panel.
                 //
-                // A column of its own rather than three more cards in the row:
+                // A column of its own rather than four more cards in the row:
                 // they are all small, they are all actions, and side by side
                 // they would each be too narrow to hold a slider or a list.
                 Card {
@@ -355,6 +379,20 @@ Item {
                         anchors.fill: parent
                         anchors.margins: 16
                         spacing: 14
+
+                        // First, and not last, because it is the only one of
+                        // the four that never changes height: below Wi-Fi and
+                        // Bluetooth it would be shoved down the card every
+                        // time one of their lists opened.
+                        DndControl {
+                            width: parent.width
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 1
+                            color: Theme.outlineVariant
+                        }
 
                         VolumeControl {
                             width: parent.width
@@ -427,13 +465,32 @@ Item {
                 }
             }
 
+            // ============ Notifications ============
+            // One card and no columns: this tab is a list, and a list wants
+            // the whole width rather than a share of it.
+            Card {
+                anchors.fill: parent
+                visible: root.tab === "Notifications"
+
+                // Its `visible` is not set here on purpose: an item's
+                // effective visibility follows its parent's, so hiding the
+                // card hides this, and the onVisibleChanged inside it -- the
+                // thing that marks the count read -- fires off that. Same
+                // mechanism WifiControl uses to only scan while it is on
+                // screen.
+                NotificationHistory {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                }
+            }
+
             // ============ Media ============
             // A real player rather than a readout: cover, transport, seek and
             // volume, with the waveform the island already uses so the two
             // read as the same instrument at two sizes.
             Card {
                 anchors.fill: parent
-                visible: root.currentTab === 1
+                visible: root.tab === "Media"
 
                 // Same rule the island uses: prefer what is actually playing,
                 // fall back to the first player that exists so a paused track
@@ -453,6 +510,61 @@ Item {
                     id: playerRow
 
                     readonly property var player: parent.player
+
+                    // ---- Cover art, and the fallback for Firefox players ----
+                    // Zen publishes title, album and artist over MPRIS but NOT
+                    // mpris:artUrl, so trackArtUrl is empty and the card came
+                    // up blank. Verified on the bus while a track was playing:
+                    //
+                    //   busctl --user get-property \
+                    //     org.mpris.MediaPlayer2.firefox.instance_1_148 \
+                    //     /org/mpris/MediaPlayer2 \
+                    //     org.mpris.MediaPlayer2.Player Metadata
+                    //
+                    // returns xesam:title / album / artist / url and no art
+                    // key, and nothing is written to any temp directory
+                    // either. Firefox has had this since 81 (bug 1642729:
+                    // fetch the MediaSession image, save it in the profile,
+                    // publish a file:// URL), so the code is there and
+                    // something in Zen is not running it. That is the real
+                    // bug and it is NOT fixed here.
+                    //
+                    // What is fixed here is the symptom, using the one thing
+                    // Zen does publish: xesam:url. For anything YouTube --
+                    // which is what music.youtube.com is -- the video id in
+                    // that URL maps to a public thumbnail. No key, no API, no
+                    // extra process.
+                    //
+                    // Scope, so nobody expects more than it does: this covers
+                    // YouTube URLs only. Any other site playing in Zen still
+                    // shows the stand-in, exactly as before. Every non-Firefox
+                    // player is untouched -- trackArtUrl wins whenever it has
+                    // a value.
+                    readonly property string youtubeId: {
+                        const meta = player?.metadata ?? null;
+                        const url = meta ? (meta["xesam:url"] ?? "") : "";
+                        const m = url.match(/[?&]v=([\w-]{11})/) || url.match(/youtu\.be\/([\w-]{11})/);
+                        return m ? m[1] : "";
+                    }
+
+                    // maxresdefault first, mqdefault as the retry. Both are
+                    // 16:9 and BAR-FREE, which is the point: hqdefault is
+                    // 480x360 and pads a widescreen frame with black bands,
+                    // and those bands would be part of the image the sharp
+                    // layer draws. maxresdefault does not exist for every
+                    // video, hence the retry rather than picking one.
+                    property bool maxResFailed: false
+                    onYoutubeIdChanged: maxResFailed = false
+
+                    readonly property string artSource: {
+                        const direct = player?.trackArtUrl ?? "";
+                        if (direct)
+                            return direct;
+                        if (!youtubeId)
+                            return "";
+                        const size = maxResFailed ? "mqdefault" : "maxresdefault";
+                        return "https://i.ytimg.com/vi/" + youtubeId + "/" + size + ".jpg";
+                    }
 
                     anchors.fill: parent
                     anchors.margins: 20
@@ -517,11 +629,20 @@ Item {
                             id: art
 
                             anchors.fill: parent
-                            source: playerRow.player?.trackArtUrl ?? ""
+                            source: playerRow.artSource
                             // Ready and not just "source is set": a player that
                             // publishes no art would otherwise leave the
                             // broken-image chequerboard sitting in the card.
                             visible: status === Image.Ready
+
+                            // The retry described on playerRow.artSource. An
+                            // Error on the maxres URL means that video has no
+                            // maxres thumbnail, so drop to mqdefault; the flag
+                            // resets by itself on the next track.
+                            onStatusChanged: {
+                                if (status === Image.Error && playerRow.youtubeId && !playerRow.maxResFailed)
+                                    playerRow.maxResFailed = true;
+                            }
                             fillMode: Image.PreserveAspectFit
                             asynchronous: true
 
@@ -739,7 +860,7 @@ Item {
             Row {
                 anchors.fill: parent
                 spacing: 14
-                visible: root.currentTab === 2
+                visible: root.tab === "Performance"
 
                 // ---- Left: identity over memory ----
                 Column {

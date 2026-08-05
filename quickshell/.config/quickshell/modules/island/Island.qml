@@ -208,6 +208,14 @@ Item {
         function onDashboardRequested(): void {
             root.popout.toggleAt(root.mapToItem(null, root.width / 2, 0).x, dashboardComponent);
         }
+
+        // Open, never toggle -- see IslandState.openDashboard. Anchored on the
+        // island all the same, even though what asked for it was the badge
+        // beside it: the dashboard is the island's panel and it should come
+        // out of the same place every time, whichever door was used.
+        function onDashboardOpenRequested(): void {
+            root.popout.openAt(root.mapToItem(null, root.width / 2, 0).x, dashboardComponent);
+        }
     }
 
     Rectangle {

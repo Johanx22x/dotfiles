@@ -115,6 +115,22 @@ PanelWindow {
             if (ignoredApps.includes(notification.appName))
                 return;
 
+            // Do not disturb. Not claiming it is what drops it -- the same
+            // mechanism the ignored apps above go through. Critical is let
+            // through on purpose; the reasoning for both is in
+            // NotificationState.qml.
+            const silenced = NotificationState.dnd && notification.urgency !== NotificationUrgency.Critical;
+
+            // Written down BEFORE the decision to show it, and regardless of
+            // which way that goes: the history is what arrived here, not what
+            // made it to the screen. Recorded here rather than deeper in, so
+            // there is exactly one line in this file where a notification
+            // enters the shell and one place that can forget to log it.
+            NotificationState.record(notification, silenced);
+
+            if (silenced)
+                return;
+
             // Retire whatever is already on screen under the same tag, so the
             // panel shows the LATEST state of that thing rather than its
             // history. Nudging the capture card's volume five times leaves one
@@ -130,6 +146,27 @@ PanelWindow {
             }
 
             notification.tracked = true;
+        }
+    }
+
+    // Switching do-not-disturb ON clears what is already up.
+    //
+    // The gesture is "shut up", and a panel that keeps three cards on screen
+    // after it has been muted has half-obeyed. They are dismissed rather than
+    // expired: dismiss() is the deliberate close, which is what tells an
+    // application like Discord to stop re-sending the same thing.
+    //
+    // Collected into a plain array first, because dismiss() removes the entry
+    // from the very model being walked and mutating a list mid-iteration skips
+    // elements -- the same trap the stack-tag code above documents.
+    Connections {
+        target: NotificationState
+
+        function onDndChanged(): void {
+            if (!NotificationState.dnd)
+                return;
+            for (const existing of server.trackedNotifications.values.slice())
+                existing.dismiss();
         }
     }
 

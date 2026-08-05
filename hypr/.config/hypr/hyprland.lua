@@ -519,6 +519,19 @@ hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd(powerMenu), { descriptio
 -- key and the pointer cannot drift apart. D for dashboard; it was free.
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("qs ipc call island dashboard"), { description = "Shell: open the dashboard" })
 
+-- Do not disturb. N for notifications; it was free.
+--
+-- A key and not only the switch in the dashboard, because the moment it is
+-- wanted is the moment a game or a call has already started -- which is
+-- exactly when opening a panel to reach a toggle is what you cannot do.
+-- Turning it on is silent by design; the badge beside the island is how it
+-- stays visible afterwards.
+hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("qs ipc call dnd toggle"), { description = "Shell: mute notifications (do not disturb)" })
+
+-- ...and the other half: what came in while it was muted, or while you were
+-- not at the desk. Same key with SHIFT, because it is the same subject.
+hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("qs ipc call island notifications"), { description = "Shell: notification history" })
+
 -- The cheatsheet: every bind that carries a description, laid out by category.
 --
 -- It reads `hyprctl binds` rather than this file, so the two cannot drift: the

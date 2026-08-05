@@ -25,6 +25,7 @@ import "root:/"
 import "root:/components"
 import "root:/modules/island"
 import "root:/modules/launcher"
+import "root:/modules/notifications"
 
 PanelWindow {
     id: bar
@@ -177,6 +178,22 @@ PanelWindow {
 
                 popout: barPopout
             }
+        }
+
+        // The do-not-disturb badge, on the island's LEFT edge and outside the
+        // centred Row for the same reason as the capture badge below: inside
+        // it, the Row would grow when the badge appeared and the centre of the
+        // bar would shift because you muted your notifications.
+        //
+        // Left and right of the island on purpose. Both are facts that have to
+        // stay true on screen rather than take a turn in the island's one
+        // slot, and putting them on opposite sides is what keeps them from
+        // being read as the same kind of thing: one is something being done to
+        // this desktop, the other something this desktop was told to do.
+        DndIndicator {
+            anchors.right: centre.left
+            anchors.rightMargin: Theme.itemSpacing
+            anchors.verticalCenter: parent.verticalCenter
         }
 
         // The screen-capture badge, anchored to the island's right edge and
