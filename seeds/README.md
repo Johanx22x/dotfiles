@@ -44,6 +44,18 @@ They are not decoration — a fresh clone without them comes up wrong:
 - **`mimeapps.list`** is the default-application table: Brave for the web,
   Celluloid for video, Loupe for images, zathura for PDFs.
 
+## Adding one
+
+Two steps, and the second is the one to remember: drop the file here, then add
+its destination to `SEED_DEST` in `install.sh`. A seed cannot say where it goes
+— `qt6ct.conf` lands a directory deeper than `mimeapps.list` — so the mapping
+lives there.
+
+Forgetting the second step is loud rather than silent: the installer walks this
+directory, so an unmapped file is reported and skipped by name instead of being
+quietly passed over. It used to iterate the mapping instead, which meant a new
+seed was never looked at at all.
+
 ## Editing them
 
 Change a seed and nothing happens to a machine that already has the file —
