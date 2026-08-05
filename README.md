@@ -301,9 +301,9 @@ The **settings window** (`SUPER + C`, or the gear on the bar) is an ordinary
 window inside the shell process, not a second `qs` instance — the state path is
 hashed per entry point, so two processes would write two files and read
 neither. Its pages: User, Appearance, Wallpaper, Bar, Notifications, Display,
-Network, Bluetooth, Keybinds, About.
+Sound, Network, Bluetooth, Keybinds, About.
 
-Two of those are worth knowing about before you go looking for a button that
+Three of those are worth knowing about before you go looking for a button that
 isn't there. **Display** writes through `hypr-monitor`, so a change made there
 is the same override you would have written by hand. **Keybinds** reads and
 never writes: with a Lua config every bind reaches `hyprctl binds -j` as
@@ -311,6 +311,19 @@ never writes: with a Lua config every bind reaches `hyprctl binds -j` as
 description are knowable but what the bind *does* is not — and a generator
 pointed at `hyprland.lua` would produce a correct list of binds while
 destroying the prose that explains why they are those binds.
+
+**Sound** talks to PipeWire directly through Quickshell's binding — no `wpctl`,
+no `pactl`, nothing polled. It chooses the default output and input, sets the
+volume of either, meters what is actually coming through them, and gives every
+running application its own volume and mute alongside the device it is linked
+to, so "what is listening to my microphone" is answerable in one place. Three
+things are deliberately not there, because the binding does not expose them:
+card profiles (a headset's stereo mode versus its microphone mode), port
+selection, and moving a running application to another device. The last section
+of the page says so and opens `pavucontrol`, which has all three. Balance is
+absent for a different reason — `audio.volume` reads back as the *average* of
+the channels, so a balance control and the volume percentage fight over one
+number; the note at the top of `AudioPage.qml` has the measurements.
 
 ---
 
