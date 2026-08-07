@@ -43,6 +43,7 @@ hyprland
 hyprpicker
 hyprpolkitagent
 hyprshot
+hyprsunset
 i2c-tools
 inotify-tools
 intel-ucode

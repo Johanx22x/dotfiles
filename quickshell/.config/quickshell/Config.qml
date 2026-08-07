@@ -63,7 +63,14 @@ Singleton {
         borderSize: 2,
         use24Hour: true,
         showDate: true,
-        notificationTimeout: 10
+        notificationTimeout: 10,
+        // Evening to morning, which is the only schedule anybody sets. See
+        // the note on `dueNow` in NightLight.qml about why a window whose
+        // start is later than its end is the normal case here rather than a
+        // mistake to guard against.
+        nightLightScheduled: false,
+        nightLightFrom: 20 * 60,
+        nightLightTo: 7 * 60
     })
 
     // Where the cross-application state files live. Not statePath(): that
@@ -294,6 +301,19 @@ Singleton {
     // header of NotificationCard.qml.
     property alias notificationTimeout: adapter.notificationTimeout
 
+    // ---------------- Night light ----------------
+    //
+    // ONLY THE SCHEDULE, and not whether the filter is on. That lives in
+    // ~/.local/state/night-light, written by the `night-light` script, for the
+    // same reason the opacity does: hyprsunset and a terminal have to agree
+    // with the shell about it. What is here is the part nothing outside this
+    // process has any use for -- see the header of NightLight.qml.
+    //
+    // Minutes since midnight.
+    property alias nightLightScheduled: adapter.nightLightScheduled
+    property alias nightLightFrom: adapter.nightLightFrom
+    property alias nightLightTo: adapter.nightLightTo
+
     function restoreDefaults(): void {
         root.setOpacity(root.defaults.opacity);
         root.setFont(root.defaults.fontSize, root.defaults.fontFamily);
@@ -301,6 +321,9 @@ Singleton {
         adapter.use24Hour = root.defaults.use24Hour;
         adapter.showDate = root.defaults.showDate;
         adapter.notificationTimeout = root.defaults.notificationTimeout;
+        adapter.nightLightScheduled = root.defaults.nightLightScheduled;
+        adapter.nightLightFrom = root.defaults.nightLightFrom;
+        adapter.nightLightTo = root.defaults.nightLightTo;
     }
 
     // ---------------- Persistence ----------------
@@ -331,6 +354,9 @@ Singleton {
             property bool use24Hour: true
             property bool showDate: true
             property int notificationTimeout: 10
+            property bool nightLightScheduled: false
+            property int nightLightFrom: 1200
+            property int nightLightTo: 420
         }
     }
 }

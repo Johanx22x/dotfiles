@@ -27,6 +27,16 @@ Rectangle {
     // of the value, so the arithmetic never has to parse it back out.
     property string suffix: ""
 
+    // Shown INSTEAD of the number when it is set.
+    //
+    // FOR VALUES THAT ARE NOT READ AS NUMBERS. A time of day steps in half
+    // hours and is stored as minutes since midnight, because that is the only
+    // representation the arithmetic is simple in -- but "1230 min" is not a
+    // time and nobody reading it would know what it meant. The stepper keeps
+    // the range, the step and the clamping; only the few characters on screen
+    // become the caller's.
+    property string display: ""
+
     // Optional. A row with one grows an info glyph after its label, and the
     // note appears under it on hover. Empty means no glyph at all -- a mark
     // that is always there and usually says nothing trains the eye to skip
@@ -174,7 +184,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 52
             horizontalAlignment: Text.AlignHCenter
-            text: `${root.value}${root.suffix}`
+            text: root.display !== "" ? root.display : `${root.value}${root.suffix}`
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize
             font.weight: Font.Bold
