@@ -391,17 +391,13 @@ SettingsPage {
             }
         }
 
-        Flickable {
+        ScrollList {
             id: pairedList
 
             width: parent.width
             height: Math.min(pairedEntries.implicitHeight, root.listCeiling)
             visible: height > 0
-
-            contentWidth: width
             contentHeight: pairedEntries.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
 
             // A Repeater in a Flickable and not a ListView, the same trade
             // NetworkPage documents: ListView recycles delegates as they
@@ -800,16 +796,13 @@ SettingsPage {
             }
         }
 
-        Flickable {
+        ScrollList {
             id: availableList
 
             width: parent.width
             height: Math.min(availableEntries.implicitHeight, root.listCeiling)
             visible: height > 0
-
-            contentWidth: width
             contentHeight: availableEntries.implicitHeight
-            clip: true
             boundsBehavior: Flickable.StopAtBounds
 
             Column {
