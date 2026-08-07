@@ -308,7 +308,7 @@ SettingsPage {
         // 200 is about five rows, which is enough to see the top of the list
         // -- where the connected and the saved ones already are -- without the
         // section pushing anything else off the bottom of a 380px window.
-        Flickable {
+        ScrollList {
             id: list
 
             width: parent.width
@@ -325,10 +325,7 @@ SettingsPage {
             // with the line in, adding three rows to an empty hidden list left
             // implicitHeight at 0 and the list closed forever. An empty
             // Flickable is zero pixels tall anyway, so it buys nothing.
-            contentWidth: width
             contentHeight: entries.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
 
             // A Repeater IN a Flickable, not a ListView, and that is a
             // deliberate trade. ListView recycles delegates as they scroll,

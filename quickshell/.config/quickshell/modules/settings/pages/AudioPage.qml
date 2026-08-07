@@ -744,43 +744,42 @@ SettingsPage {
             }
         }
 
-        // A CEILING, the same one the network list carries and for the same
-        // reason: the number of rows is decided by what is plugged into the
-        // machine, and a card that grows to fit them decides the height of
-        // the window. Four sinks and four sources is an ordinary desktop; a
-        // capture card and a couple of USB devices make it eight.
-        Flickable {
+        // NO CEILING AND NO INNER SCROLL, which is a departure from the
+        // network list this was copied from -- and the reason is that the two
+        // lists are bounded by different things. The air can carry twenty
+        // access points; a machine has the sound cards that are plugged into
+        // it, which here is four outputs and four inputs and would be eight
+        // on a bad day. A cap that never bites is a cap that only costs
+        // something, and what it cost was real: a wheel turned over the list
+        // moved the list and the page at once, so a device four rows down
+        // walked out from under the pointer aimed at it.
+        //
+        // The page still scrolls, so nothing is unreachable. One scroll
+        // surface, no fight. Where a list genuinely can be long -- Wi-Fi,
+        // Bluetooth discovery, the keybind table -- the cap stays and
+        // components/ScrollList.qml settles the same fight properly.
+        Column {
+            id: sinkList
+
             width: parent.width
-            height: Math.min(sinkList.implicitHeight, 150)
+            spacing: 2
 
-            contentWidth: width
-            contentHeight: sinkList.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
+            Repeater {
+                model: root.sinks
 
-            Column {
-                id: sinkList
+                delegate: DeviceRow {
+                    required property var modelData
 
-                width: parent.width
-                spacing: 2
+                    node: modelData
+                    isDefault: modelData === root.sink
+                    glyph: Icons.outputGlyph(`${modelData?.name ?? ""} ${modelData?.description ?? ""}`,
+                        false, 1)
 
-                Repeater {
-                    model: root.sinks
-
-                    delegate: DeviceRow {
-                        required property var modelData
-
-                        node: modelData
-                        isDefault: modelData === root.sink
-                        glyph: Icons.outputGlyph(`${modelData?.name ?? ""} ${modelData?.description ?? ""}`,
-                            false, 1)
-
-                        // Verified against a live machine rather than assumed:
-                        // writing this property moved the default off the
-                        // headset and onto HDMI, and putting the old node back
-                        // moved it home again.
-                        onChosen: Pipewire.preferredDefaultAudioSink = modelData
-                    }
+                    // Verified against a live machine rather than assumed:
+                    // writing this property moved the default off the
+                    // headset and onto HDMI, and putting the old node back
+                    // moved it home again.
+                    onChosen: Pipewire.preferredDefaultAudioSink = modelData
                 }
             }
         }
@@ -856,33 +855,24 @@ SettingsPage {
             }
         }
 
-        Flickable {
+        // Uncapped, like the outputs above and for the same reason.
+        Column {
+            id: sourceList
+
             width: parent.width
-            height: Math.min(sourceList.implicitHeight, 150)
+            spacing: 2
 
-            contentWidth: width
-            contentHeight: sourceList.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
+            Repeater {
+                model: root.sources
 
-            Column {
-                id: sourceList
+                delegate: DeviceRow {
+                    required property var modelData
 
-                width: parent.width
-                spacing: 2
+                    node: modelData
+                    isDefault: modelData === root.source
+                    glyph: Icons.microphone
 
-                Repeater {
-                    model: root.sources
-
-                    delegate: DeviceRow {
-                        required property var modelData
-
-                        node: modelData
-                        isDefault: modelData === root.source
-                        glyph: Icons.microphone
-
-                        onChosen: Pipewire.preferredDefaultAudioSource = modelData
-                    }
+                    onChosen: Pipewire.preferredDefaultAudioSource = modelData
                 }
             }
         }

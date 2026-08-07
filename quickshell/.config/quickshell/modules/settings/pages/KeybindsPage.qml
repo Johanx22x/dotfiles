@@ -579,17 +579,13 @@ SettingsPage {
             }
         }
 
-        Flickable {
+        ScrollList {
             id: scroller
 
             width: parent.width
             height: Math.min(groupList.implicitHeight, root.listCeiling)
             visible: height > 0
-
-            contentWidth: width
             contentHeight: groupList.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
 
             // A Repeater in a Flickable rather than a ListView, the same call
             // NetworkPage makes: sixty-four rows all told, so recycling
