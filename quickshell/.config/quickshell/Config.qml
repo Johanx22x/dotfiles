@@ -206,49 +206,114 @@ Singleton {
             root.fontFamily = family;
     }
 
-    // ---------------- The compositor's border ----------------
+    // ---------------- What the compositor is told ----------------
     //
-    // NOT A Theme CONSTANT, and it is the clearest case on this page for why
-    // some appearance settings cannot be: the border is drawn by Hyprland
-    // around every window on the machine, including all the ones this shell
-    // knows nothing about. The shell does not draw it, cannot draw it, and
-    // only reads it here so the settings window has something to show.
+    // NOT Theme CONSTANTS, and this is the clearest case on the page for why
+    // some appearance settings cannot be: none of these is drawn by the
+    // shell. Hyprland puts the border, the gaps and the rounded corners on
+    // every window on the machine, including all the ones this shell knows
+    // nothing about, and it owns the pointer and the mouse. The shell only
+    // reads them so the settings window has something to show.
     //
-    // Same shape as the two above: a flat file, a script that owns the
-    // writing, and hyprland.lua reading it at load so a reload does not undo
-    // what `hyprctl eval` put into the running compositor.
-    property int borderSize: root.defaults.borderSize
+    // ONE FILE AND ONE SCRIPT FOR ALL OF THEM, which is a change from how the
+    // border alone used to work. That had its own state file, its own script
+    // and its own reader function in hyprland.lua -- three new pieces for
+    // every value, and the moment gaps, rounding, sensitivity and the cursor
+    // followed, that was thirty. `hypr-tweak` owns the lot: one
+    // tab-separated file here, one generated tweaks.lua for the compositor.
+    //
+    // Parsed rather than aliased, because the file is a small table and QML
+    // has no reader for one. The defaults repeated below are the script's own
+    // -- the two have to agree, and the script is the copy that gets to
+    // refuse a value.
+    property var tweaks: ({})
 
-    function setBorder(size: int): void {
-        root.borderSize = size;
-        borderPushTimer.restart();
+    readonly property int gapsIn: root.tweakInt("gaps-in", 5)
+    readonly property int gapsOut: root.tweakInt("gaps-out", 20)
+    readonly property int rounding: root.tweakInt("rounding", 10)
+    readonly property int borderSize: root.tweakInt("border", root.defaults.borderSize)
+    // In HUNDREDTHS of Hyprland's -1.0..1.0, the same units the script keeps
+    // them in: bash has no floating point, and a settings window that had to
+    // agree with it about rounding would be one more place to disagree.
+    readonly property int sensitivity: root.tweakInt("sensitivity", 0)
+    readonly property string accel: root.tweaks["accel"] ?? "adaptive"
+    readonly property bool naturalScroll: (root.tweaks["natural-scroll"] ?? "0") === "1"
+    readonly property int repeatRate: root.tweakInt("repeat-rate", 25)
+    readonly property int repeatDelay: root.tweakInt("repeat-delay", 600)
+    // Empty means "whatever the system already has". There is no sensible
+    // default to invent: the theme in use came from the distribution.
+    readonly property string cursorTheme: root.tweaks["cursor-theme"] ?? ""
+    readonly property int cursorSize: root.tweakInt("cursor-size", 24)
+
+    function tweakInt(key: string, fallback: int): int {
+        const parsed = parseInt(root.tweaks[key]);
+        return isNaN(parsed) ? fallback : parsed;
+    }
+
+    // The map moves at once and the script is called when the value settles,
+    // for the reason setOpacity gives: a stepper repeats sixteen times a
+    // second while held, and each one would otherwise be a process and a
+    // round trip to the compositor.
+    //
+    // KEYED, so two different rows changed inside the same 150ms each get
+    // their own call rather than one of them being lost.
+    property var pendingTweaks: ({})
+
+    function setTweak(key: string, value: var): void {
+        const next = Object.assign({}, root.tweaks);
+        next[key] = String(value);
+        root.tweaks = next;
+
+        const pending = Object.assign({}, root.pendingTweaks);
+        pending[key] = String(value);
+        root.pendingTweaks = pending;
+
+        tweakPushTimer.restart();
     }
 
     Timer {
-        id: borderPushTimer
+        id: tweakPushTimer
 
         interval: 150
-        onTriggered: Quickshell.execDetached(["hypr-border", String(root.borderSize)])
+        onTriggered: {
+            for (const key in root.pendingTweaks)
+                Quickshell.execDetached(["hypr-tweak", "set", key, root.pendingTweaks[key]]);
+
+            root.pendingTweaks = ({});
+        }
     }
 
     FileView {
-        id: borderFile
+        id: tweaksFile
 
-        path: `${root.stateDir}/hypr-border`
+        path: `${root.stateDir}/hypr-tweaks`
         watchChanges: true
         printErrors: false
 
         onFileChanged: reload()
-        onLoaded: root.adoptBorder()
+        onLoaded: root.adoptTweaks()
     }
 
-    function adoptBorder(): void {
-        if (borderPushTimer.running)
+    function adoptTweaks(): void {
+        if (tweakPushTimer.running)
             return;
 
-        const parsed = parseInt(borderFile.text());
-        if (!isNaN(parsed) && parsed >= 0 && parsed <= 6)
-            root.borderSize = parsed;
+        const parsed = ({});
+
+        for (const line of (tweaksFile.text() || "").split("\n")) {
+            if (line.trim() === "")
+                continue;
+
+            // One tab, and split on the FIRST one only: a cursor theme name
+            // is free text and nothing stops it containing another.
+            const at = line.indexOf("\t");
+            if (at < 0)
+                continue;
+
+            parsed[line.slice(0, at)] = line.slice(at + 1);
+        }
+
+        root.tweaks = parsed;
     }
 
     // ---------------- The wallpaper collection ----------------
@@ -317,7 +382,7 @@ Singleton {
     function restoreDefaults(): void {
         root.setOpacity(root.defaults.opacity);
         root.setFont(root.defaults.fontSize, root.defaults.fontFamily);
-        root.setBorder(root.defaults.borderSize);
+        root.setTweak("border", root.defaults.borderSize);
         adapter.use24Hour = root.defaults.use24Hour;
         adapter.showDate = root.defaults.showDate;
         adapter.notificationTimeout = root.defaults.notificationTimeout;
