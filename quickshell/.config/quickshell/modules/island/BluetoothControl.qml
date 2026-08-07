@@ -230,10 +230,17 @@ Item {
                     cursorShape: Qt.PointingHandCursor
 
                     onClicked: {
-                        if (entry.modelData.connected)
+                        if (entry.modelData.connected) {
                             entry.modelData.disconnect();
-                        else
-                            entry.modelData.connect();
+                            return;
+                        }
+
+                        // Trusted first, for the reason written out at the
+                        // same call in BluetoothPage.qml: without it BlueZ
+                        // leaves the audio profiles down and the headphones
+                        // connect without becoming an output.
+                        entry.modelData.trusted = true;
+                        entry.modelData.connect();
                     }
                 }
             }

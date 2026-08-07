@@ -632,10 +632,30 @@ SettingsPage {
                                 if (!device)
                                     return;
 
-                                if (device.connected)
+                                if (device.connected) {
                                     device.disconnect();
-                                else
-                                    device.connect();
+                                    return;
+                                }
+
+                                // TRUSTED ON THE WAY IN, and this is the fix
+                                // for a real failure rather than a nicety. An
+                                // untrusted device connects, and then BlueZ
+                                // does not bring its audio profiles up on its
+                                // own: the AirPods here appeared in
+                                // `bluetoothctl` as connected while PipeWire
+                                // had no sink for them at all, and they only
+                                // became an output after a second, manual
+                                // "connect the audio" from a tray menu.
+                                //
+                                // Deliberately connecting a device from this
+                                // window IS the statement that it is trusted;
+                                // making that a separate step somewhere else
+                                // is asking the same question twice. The row
+                                // shows the flag, so it is visible rather than
+                                // magic, and Forget clears it with everything
+                                // else.
+                                device.trusted = true;
+                                device.connect();
                             }
                         }
                     }
