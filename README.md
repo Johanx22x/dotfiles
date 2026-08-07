@@ -242,6 +242,7 @@ single file that one script writes and everything else reads:
 | `hypr-monitors` | `hypr-monitor` | `hypr-monitor` itself, to regenerate `monitors.lua` |
 | `hypr-tweaks` | `hypr-tweak` | Quickshell, and `hypr-tweak` itself to regenerate `tweaks.lua` |
 | `night-light` | `night-light` | Quickshell |
+| `airpods-battery` | `airpods-battery`, on a systemd timer | Quickshell |
 | `wallpaper-dir` | `wallpaper-switch dir` | Quickshell, `wallpaper-switch` |
 
 ```sh
@@ -258,6 +259,7 @@ night-light on           # blue light filter on
 night-light temp 3200    # how warm (2500 - 6000 K)
 night-light off
 
+airpods-battery show     # the charge in each bud and the case
 default-apps             # print every role and its handler
 default-apps candidates image
 default-apps set image org.gnome.Loupe.desktop

@@ -969,6 +969,16 @@ SettingsPage {
                                 if (device.pairing)
                                     return;
 
+                                // TRUSTED BEFORE PAIRING, for the reason
+                                // written out at the connect handler above:
+                                // BlueZ leaves an untrusted device's profiles
+                                // down, so a freshly paired headset connects
+                                // with no audio and a freshly paired
+                                // controller with no input. Pairing something
+                                // from this window is the statement that it is
+                                // trusted; asking again afterwards would be
+                                // asking the same question twice.
+                                device.trusted = true;
                                 device.pair();
                             }
                         }

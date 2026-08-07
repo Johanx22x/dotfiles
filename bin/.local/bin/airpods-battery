@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+"""airpods-battery -- read the charge out of a connected pair of AirPods.
+
+WHY THIS EXISTS AT ALL. AirPods report no battery to Linux through any
+standard road: they expose no org.bluez.Battery1, and their UUID list has no
+Battery Service (0x180F is simply absent -- checked on the pair here). UPower
+therefore cannot see them, so neither can anything that reads UPower.
+
+WHY IT IS NOT A BLE SCAN, which was the obvious plan and was measured to be
+the wrong one. Apple does put battery levels in a BLE advertisement, the
+"proximity pairing" type 0x07 -- and a ten-second LE scan with the AirPods
+connected and in use produced only type 0x10 (Nearby) and 0x09 (AirPlay)
+adverts from them. The battery advert is broadcast around the case being
+opened, not continuously, so a periodic scan would report a number while the
+AirPods sit in their case and nothing at all while they are on your head,
+which is exactly backwards.
+
+WHAT IT DOES INSTEAD is talk to them. Apple's accessory protocol (AAP) runs
+over an L2CAP channel on PSM 0x1001, and a connected pair answers it. That
+needs no scanning, no radio left listening, and gives an exact level for each
+bud and for the case. The packet shapes came from librepods
+(github.com/kavishdevar/librepods), which is GPL and is the reference
+implementation for this protocol on Linux; this is a reader, so none of its
+code is copied -- only the constants below, which are facts about a device.
+
+REVERSE-ENGINEERED, AND THEREFORE FALLIBLE. The protocol is undocumented.
+Every value below was checked against a real pair of AirPods Pro:
+
+    BATTERY 0400040004 00 03 | 04 01 4c 02 01 | 02 01 4b 02 01 | 08 01 00 04 01
+      component 0x04 (left)  = 0x4c = 76%, state 2 (discharging)
+      component 0x02 (right) = 0x4b = 75%, state 2
+      component 0x08 (case)  = 0,           state 4 (disconnected -- lid shut)
+
+Another model may lay it out differently. Everything here fails to "no
+reading" rather than to a wrong number: a packet that does not parse is
+dropped, and the file is only written when at least one component was read.
+"""
+
+import os
+import socket
+import struct
+import sys
+import time
+
+# The device answers on Apple's accessory protocol channel.
+PSM = 0x1001
+
+HANDSHAKE = bytes.fromhex("00000400010002000000000000000000")
+SET_FEATURES = bytes.fromhex("040004004d00d700000000000000")
+REQUEST_NOTIFICATIONS = bytes.fromhex("040004000f00ffffffffff")
+BATTERY_HEADER = bytes.fromhex("040004000400")
+
+# From librepods' enums, and confirmed against the packet in the docstring.
+COMPONENTS = {0x02: "right", 0x04: "left", 0x08: "case"}
+STATES = {0: "unknown", 1: "charging", 2: "discharging", 4: "disconnected"}
+
+# The vendor UUID an Apple accessory that speaks AAP advertises. Used to find
+# the device instead of hardcoding an address, so a second pair -- or somebody
+# else's clone of these dotfiles -- works without editing anything.
+AAP_UUID = "74ec2172-0bad-4d01-8f77-997b2be0722a"
+
+STATE_DIR = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+STATE_FILE = os.path.join(STATE_DIR, "airpods-battery")
+
+
+def connected_airpods():
+    """Every connected BlueZ device that speaks AAP, as (address, name)."""
+    try:
+        import dbus  # noqa: F401
+    except ImportError:
+        return _connected_airpods_busctl()
+
+    return _connected_airpods_busctl()
+
+
+def _connected_airpods_busctl():
+    """Ask BlueZ over the bus without pulling in a Python D-Bus binding.
+
+    busctl is part of systemd and is already on any machine this runs on;
+    python-dbus is a package that would have to be installed for a script
+    that makes exactly two property reads.
+    """
+    import subprocess
+
+    try:
+        tree = subprocess.run(
+            ["busctl", "--system", "tree", "org.bluez"],
+            capture_output=True, text=True, timeout=10, check=True).stdout
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return []
+
+    # PULLED OUT WITH A REGEX AND NOT BY STRIPPING THE PREFIX. `busctl tree`
+    # draws the hierarchy with box-drawing characters, so the line begins with
+    # multi-byte glyphs that no list of ASCII punctuation removes -- the first
+    # version stripped "|-` " and matched nothing at all.
+    import re
+
+    found = []
+    for line in tree.splitlines():
+        match = re.search(r"(/org/bluez/hci\d+/dev_[0-9A-F_]+)$", line.strip())
+        if not match:
+            continue
+        path = match.group(1)
+
+        props = {}
+        for name in ("Connected", "UUIDs", "Alias", "Address"):
+            try:
+                out = subprocess.run(
+                    ["busctl", "--system", "get-property", "org.bluez", path,
+                     "org.bluez.Device1", name],
+                    capture_output=True, text=True, timeout=5).stdout.strip()
+            except subprocess.SubprocessError:
+                out = ""
+            props[name] = out
+
+        if not props["Connected"].endswith("true"):
+            continue
+        if AAP_UUID not in props["UUIDs"].lower():
+            continue
+
+        address = _unquote(props["Address"])
+        alias = _unquote(props["Alias"]) or "AirPods"
+        if address:
+            found.append((address, alias))
+
+    return found
+
+
+def _unquote(raw):
+    """The string out of a busctl property line, with its escapes undone.
+
+    busctl prints non-ASCII as OCTAL escapes of the UTF-8 bytes, so an
+    apostrophe in "Johan's AirPods Pro" arrives as \\342\\200\\231 and the
+    name lands on the bar looking like a mojibake accident. Decoding the
+    escapes gives bytes, and those bytes are UTF-8.
+    """
+    if '"' not in raw:
+        return ""
+
+    inner = raw.split('"', 1)[1].rsplit('"', 1)[0]
+    try:
+        return inner.encode("latin-1", "backslashreplace") \
+                    .decode("unicode_escape") \
+                    .encode("latin-1") \
+                    .decode("utf-8")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return inner
+
+
+def read_battery(address, timeout=8.0):
+    """One battery packet, as {component: (level, state)}. Empty on failure."""
+    try:
+        sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET,
+                             socket.BTPROTO_L2CAP)
+    except (AttributeError, OSError):
+        return {}
+
+    sock.settimeout(timeout)
+
+    try:
+        sock.connect((address, PSM))
+        sock.send(HANDSHAKE)
+        time.sleep(0.4)
+        sock.send(SET_FEATURES)
+        time.sleep(0.2)
+        sock.send(REQUEST_NOTIFICATIONS)
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                data = sock.recv(1024)
+            except socket.timeout:
+                break
+            if not data:
+                break
+            if not data.startswith(BATTERY_HEADER):
+                continue
+
+            body = data[len(BATTERY_HEADER):]
+            if not body:
+                continue
+
+            count = body[0]
+            # Five bytes per component: id, ?, level, state, ?. Anything
+            # short of that is a packet shape this does not know, and a
+            # partial parse would invent numbers.
+            if len(body) < 1 + count * 5:
+                continue
+
+            reading = {}
+            for i in range(count):
+                entry = body[1 + i * 5:6 + i * 5]
+                name = COMPONENTS.get(entry[0])
+                if name is None:
+                    continue
+                level, state = entry[2], entry[3]
+                if level > 100:
+                    continue
+                reading[name] = (level, STATES.get(state, "unknown"))
+
+            if reading:
+                return reading
+    except OSError:
+        return {}
+    finally:
+        sock.close()
+
+    return {}
+
+
+def write_state(name, reading):
+    os.makedirs(STATE_DIR, exist_ok=True)
+
+    lines = [f"name\t{name}"]
+    for component in ("left", "right", "case"):
+        if component in reading:
+            level, state = reading[component]
+            lines.append(f"{component}\t{level}\t{state}")
+
+    tmp = STATE_FILE + ".tmp"
+    with open(tmp, "w") as handle:
+        handle.write("\n".join(lines) + "\n")
+    # Replaced rather than truncated and rewritten: the shell watches this
+    # file, and a reader that arrives mid-write would otherwise see half of it.
+    os.replace(tmp, STATE_FILE)
+
+
+def main():
+    argument = sys.argv[1] if len(sys.argv) > 1 else "read"
+
+    if argument in ("-h", "--help", "help"):
+        print(__doc__)
+        return 0
+
+    if argument == "clear":
+        try:
+            os.remove(STATE_FILE)
+        except FileNotFoundError:
+            pass
+        return 0
+
+    devices = connected_airpods()
+    if not devices:
+        # NOT an error and NOT a reason to delete the file. AirPods that are
+        # in their case are simply not connected, and the last known charge is
+        # still the most useful thing anybody can be told about them.
+        if argument == "show":
+            print("No AirPods connected.")
+        return 0
+
+    address, name = devices[0]
+    reading = read_battery(address)
+
+    if not reading:
+        if argument == "show":
+            print(f"{name}: connected, but it did not answer.")
+        return 1
+
+    write_state(name, reading)
+
+    if argument == "show":
+        print(name)
+        for component in ("left", "right", "case"):
+            if component in reading:
+                level, state = reading[component]
+                print(f"  {component:<6} {level:>3}%  {state}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

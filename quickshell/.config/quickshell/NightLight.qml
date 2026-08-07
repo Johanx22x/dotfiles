@@ -128,7 +128,16 @@ Singleton {
     // Recomputed every half minute rather than by an alarm set for the
     // boundary. See the header: an alarm is only correct on a machine that
     // was awake to hear it ring.
-    property int minuteOfDay: 0
+    //
+    // MINUS ONE MEANS "THE CLOCK HAS NOT BEEN READ YET", and it is not
+    // decoration -- it is the fix for a bug that shipped. This started at 0,
+    // which is not "unset", it is MIDNIGHT: the bindings below evaluated once
+    // before the timer had ever fired, an evening-to-morning window contains
+    // midnight by definition, and so the filter came on for an instant every
+    // time the shell started. Worse, it did it at any hour of the day, so a
+    // reload at one in the afternoon turned the screen orange and then turned
+    // it back.
+    property int minuteOfDay: -1
 
     Timer {
         running: true
@@ -136,10 +145,17 @@ Singleton {
         repeat: true
         triggeredOnStart: true
 
-        onTriggered: {
-            const now = new Date();
-            root.minuteOfDay = now.getHours() * 60 + now.getMinutes();
-        }
+        onTriggered: root.readClock()
+    }
+
+    // Read once more at startup, before anything can look at it. Timers fire
+    // from the event loop, so triggeredOnStart is not early enough on its own
+    // -- the property bindings are evaluated first.
+    Component.onCompleted: root.readClock()
+
+    function readClock(): void {
+        const now = new Date();
+        root.minuteOfDay = now.getHours() * 60 + now.getMinutes();
     }
 
     // WRAPS AROUND MIDNIGHT, which is the whole difficulty and the only reason
@@ -149,6 +165,10 @@ Singleton {
     // rather than the middle of it.
     readonly property bool dueNow: {
         if (!root.scheduled)
+            return false;
+
+        // Nothing decided until the clock has been read. See minuteOfDay.
+        if (root.minuteOfDay < 0)
             return false;
 
         if (root.from === root.to)

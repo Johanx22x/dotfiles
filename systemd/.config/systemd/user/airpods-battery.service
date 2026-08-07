@@ -1,0 +1,16 @@
+[Unit]
+Description=Read the charge out of connected AirPods
+# The script talks to BlueZ and then opens an L2CAP socket to the earphones,
+# so there is nothing to do before the session's bluetooth is up.
+After=bluetooth.target
+
+[Service]
+Type=oneshot
+# By name: ~/.local/bin is on the user manager's PATH through the environment
+# generator, and hardcoding /home/<user> here is exactly what the rest of this
+# repository refuses to do.
+ExecStart=%h/.local/bin/airpods-battery
+# It waits on a socket for a packet that may never come -- earphones that went
+# back in their case answer nothing -- so it is given a ceiling rather than
+# being left to the default.
+TimeoutStartSec=30
