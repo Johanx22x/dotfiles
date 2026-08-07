@@ -607,6 +607,13 @@ SettingsPage {
         if (!overrideQuery.running)
             overrideQuery.running = true;
 
+        // Whether the night light daemon is up. Asked here rather than polled
+        // or watched: the answer only changes when a package is installed or
+        // a session restarts, and both of those end with a trip back to this
+        // page. See the section at the bottom of this file.
+        if (!sunsetProbe.running)
+            sunsetProbe.running = true;
+
         // The forget advice belongs to the visit it was earned in. It says to
         // go and run `hyprctl reload`, and leaving the settings window is the
         // likeliest thing to have happened in order to do that.
@@ -1057,6 +1064,153 @@ SettingsPage {
             }
         }
     }
+
+    // ---------------- Night light ----------------
+    //
+    // ON THIS PAGE AND NOT ON APPEARANCE, which is where a colour setting
+    // would normally go. What this changes is not how the shell is drawn --
+    // it is a matrix applied to the whole output, below every window, by the
+    // compositor. It belongs with the other things that are true of the
+    // screen rather than with the things that are true of the desktop.
+    //
+    // The state and the schedule both live in NightLight.qml; this section
+    // only draws them. See its header for why the schedule is the shell's job
+    // and the filter is not.
+    SettingsSection {
+        width: root.width
+        glyph: Icons.nightLight
+        title: "Night light"
+
+        // FIRST, AND ONLY WHEN IT IS TRUE. Everything below this line is a
+        // control that silently does nothing without the daemon, and a page
+        // full of switches that do nothing is a worse bug than a missing
+        // feature -- the user concludes the setting is broken rather than
+        // absent.
+        Text {
+            visible: !root.sunsetRunning
+
+            x: Theme.groupPadding
+            width: parent.width - Theme.groupPadding * 2
+            topPadding: 4
+            bottomPadding: 6
+
+            text: "hyprsunset is not running, so nothing below will reach the screen. "
+                + "It is the daemon that owns the colour matrix; Hyprland only passes "
+                + "messages to it. Start it with "
+                + "`systemctl --user enable --now hyprsunset.service`."
+            wrapMode: Text.WordWrap
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize - 1
+            color: Theme.warning
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
+            }
+        }
+
+        ToggleRow {
+            glyph: Icons.nightLight
+            label: "Warm the screen"
+            checked: NightLight.enabled
+            // Off to the pointer while the schedule owns it. Not hidden: the
+            // switch is still the clearest statement of whether the filter is
+            // on right now, and watching it move at 20:00 is how you find out
+            // the schedule works.
+            enabled: !NightLight.scheduled && root.sunsetRunning
+
+            onToggled: value => NightLight.setEnabled(value)
+        }
+
+        Text {
+            visible: NightLight.scheduled
+
+            x: Theme.groupPadding
+            width: parent.width - Theme.groupPadding * 2
+            bottomPadding: 4
+
+            text: "The schedule below is driving this."
+            wrapMode: Text.WordWrap
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize - 2
+            color: Theme.textOnSurfaceVariant
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
+            }
+        }
+
+        StepperRow {
+            glyph: Icons.palette
+            label: "Temperature"
+            value: NightLight.temperature
+            from: NightLight.minTemperature
+            to: NightLight.maxTemperature
+            step: 100
+            suffix: "K"
+            enabled: root.sunsetRunning
+            hint: "Lower is warmer. 6000K is roughly daylight and is where the "
+                + "screen sits with no filter at all, which is why the range "
+                + "stops there — the top of the scale and the switch above "
+                + "would otherwise mean the same thing."
+
+            onMoved: value => NightLight.setTemperature(value)
+        }
+
+        ToggleRow {
+            glyph: Icons.clock
+            label: "Turn on automatically"
+            checked: NightLight.scheduled
+            enabled: root.sunsetRunning
+
+            onToggled: value => NightLight.setScheduled(value)
+        }
+
+        // HALF HOURS, and the value behind them is minutes since midnight --
+        // see the note on `display` in StepperRow.qml. Anything finer is a
+        // precision nobody has an opinion about: the difference between 20:15
+        // and 20:30 for a blue light filter is not a difference.
+        StepperRow {
+            glyph: Icons.nightLight
+            label: "From"
+            value: NightLight.from
+            from: 0
+            to: 23 * 60 + 30
+            step: 30
+            display: NightLight.clockText(NightLight.from)
+            enabled: NightLight.scheduled && root.sunsetRunning
+
+            onMoved: value => NightLight.setFrom(value)
+        }
+
+        StepperRow {
+            glyph: Icons.clock
+            label: "To"
+            value: NightLight.to
+            from: 0
+            to: 23 * 60 + 30
+            step: 30
+            display: NightLight.clockText(NightLight.to)
+            enabled: NightLight.scheduled && root.sunsetRunning
+            hint: "An end earlier than the start is the normal case, not a "
+                + "mistake: 20:00 to 07:00 is the two ends of the day rather "
+                + "than the middle of it, and that is what this reads it as."
+
+            onMoved: value => NightLight.setTo(value)
+        }
+    }
+
+    // Whether the daemon is up, asked when the page is looked at rather than
+    // polled. The same argument the Wi-Fi scanner makes: every page in this
+    // window is built and alive, so `visible` is the only honest signal that
+    // somebody is reading this one.
+    //
+    // It is asked ONCE per visit and not watched, because the answer only
+    // changes when a person installs a package or a session restarts -- and
+    // both of those end with a trip back to this page.
+    // Asked from the page's single onVisibleChanged handler further up, next
+    // to the two hyprctl queries -- QML allows one handler per signal, and a
+    // second `onVisibleChanged` here is not an override but an error.
+    property bool sunsetRunning: true
 
     // ---------------- One section per connected monitor ----------------
     Repeater {
@@ -1515,5 +1669,14 @@ SettingsPage {
                 ColorAnimation { duration: Theme.recolorDuration }
             }
         }
+    }
+
+    Process {
+        id: sunsetProbe
+
+        command: ["pgrep", "-x", "hyprsunset"]
+        // pgrep exits 1 when it matches nothing, which is the whole answer --
+        // there is no output to collect.
+        onExited: code => root.sunsetRunning = code === 0
     }
 }

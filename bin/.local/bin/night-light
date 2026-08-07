@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# night-light -- the blue light filter, on or off and how warm.
+#
+# A thin wrapper over hyprsunset, which does the actual work: it owns the
+# colour matrix and Hyprland proxies commands to it over a socket. What this
+# adds is the one thing hyprsunset 0.4 does not have -- somewhere to remember
+# what was asked for.
+#
+# WHY THE STATE FILE IS NOT OPTIONAL. `hyprctl hyprsunset temperature` looks
+# like it answers "is the filter on", and it does not. Measured: set 4000,
+# then `identity` to turn the filter off, and it still reads back 4000. The
+# temperature it reports is the last one it was told, not the one on screen.
+# So a settings window trusting that reading would draw the switch as on with
+# the screen plainly untinted. The file below is the truth; hyprsunset is told
+# what it says.
+#
+# TWO LINES, enabled then temperature, in the same shape desktop-font uses --
+# readable by hand, parsed with `read`, no JSON in a shell script.
+#
+# The temperature is remembered even while the filter is off, so turning it
+# back on returns to the warmth that was chosen rather than to a default.
+
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
+STATE_FILE="$STATE_DIR/night-light"
+
+# 2500K is candlelight and 6000K is roughly daylight, which is where
+# hyprsunset sits with no filter at all. Below 2500 the screen goes orange
+# enough that reds stop being distinguishable; above 6000 there is nothing to
+# see, so the top of the range IS the off switch and does not need to be
+# offered twice.
+MIN_TEMP=2500
+MAX_TEMP=6000
+DEFAULT_TEMP=4000
+
+usage() {
+    cat >&2 <<'EOF'
+Usage:
+  night-light on               turn the filter on
+  night-light off              turn it off
+  night-light toggle           flip it
+  night-light temp <2500-6000> set the temperature in kelvin
+  night-light apply            re-apply what is saved (login, compositor restart)
+  night-light show             print the saved state
+EOF
+    exit 2
+}
+
+read_state() {
+    enabled=0
+    temperature=$DEFAULT_TEMP
+
+    [[ -r $STATE_FILE ]] || return 0
+
+    { read -r saved_enabled || true; read -r saved_temperature || true; } < "$STATE_FILE"
+
+    [[ ${saved_enabled:-} == 1 ]] && enabled=1
+
+    # Validated rather than trusted, like every other reader in this
+    # repository: a mangled file falls back to the default instead of handing
+    # hyprsunset something it will refuse, which would leave the screen tinted
+    # with no way back from the settings window.
+    if [[ ${saved_temperature:-} =~ ^[0-9]+$ ]] \
+        && (( saved_temperature >= MIN_TEMP && saved_temperature <= MAX_TEMP )); then
+        temperature=$saved_temperature
+    fi
+}
+
+write_state() {
+    mkdir -p "$STATE_DIR"
+    printf '%s\n%s\n' "$enabled" "$temperature" > "$STATE_FILE"
+}
+
+# hyprsunset has to be running before anything can be sent to it. The systemd
+# user unit ships with the package and is bound to graphical-session.target,
+# so this is normally a no-op -- it is here for the session where the unit was
+# never enabled, and for the moment right after installing it.
+#
+# NOT started with a bare `hyprsunset &`: a daemon spawned from whatever shell
+# happens to call this dies with it, and the filter would come off at a moment
+# unrelated to anything the user did.
+ensure_daemon() {
+    pgrep -x hyprsunset >/dev/null && return 0
+
+    systemctl --user start hyprsunset.service 2>/dev/null || return 1
+
+    # The socket appears a moment after the process does, and a command sent
+    # before it exists is simply lost.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        pgrep -x hyprsunset >/dev/null && return 0
+        sleep 0.1
+    done
+
+    return 1
+}
+
+apply() {
+    if ! ensure_daemon; then
+        echo "night-light: hyprsunset is not running and could not be started." >&2
+        echo "  Install it with 'sudo pacman -S hyprsunset', then" >&2
+        echo "  'systemctl --user enable --now hyprsunset.service'." >&2
+        return 1
+    fi
+
+    if (( enabled )); then
+        hyprctl hyprsunset temperature "$temperature" >/dev/null
+    else
+        # identity, not temperature 6000. They look the same on screen and
+        # they are not the same thing: identity removes the colour matrix
+        # altogether, which is what "off" should mean for something sitting
+        # between every application and the display.
+        hyprctl hyprsunset identity >/dev/null
+    fi
+}
+
+read_state
+
+case "${1:-show}" in
+    on)     enabled=1; write_state; apply ;;
+    off)    enabled=0; write_state; apply ;;
+    toggle) enabled=$(( 1 - enabled )); write_state; apply ;;
+
+    temp)
+        [[ $# -eq 2 ]] || usage
+        [[ $2 =~ ^[0-9]+$ ]] || usage
+        (( $2 >= MIN_TEMP && $2 <= MAX_TEMP )) || {
+            echo "night-light: temperature must be between $MIN_TEMP and $MAX_TEMP." >&2
+            exit 2
+        }
+        temperature=$2
+        write_state
+        # Only reaches the screen when the filter is on. Choosing a warmth
+        # with the filter off is setting what it will be, not turning it on by
+        # the side door.
+        (( enabled )) && apply
+        ;;
+
+    apply)  apply ;;
+
+    show)
+        echo "enabled:     $enabled"
+        echo "temperature: ${temperature}K"
+        pgrep -x hyprsunset >/dev/null \
+            && echo "hyprsunset:  running" \
+            || echo "hyprsunset:  not running"
+        ;;
+
+    *) usage ;;
+esac

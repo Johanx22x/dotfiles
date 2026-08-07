@@ -227,9 +227,15 @@ if ask "Link them?"; then
     red "   the wallpaper timer could not be enabled (no user session?)"
     echo "   Once logged in: systemctl --user enable --now wallpaper-rotate.timer"
   fi
-  # Best-effort on its own line: the unit belongs to the hyprpolkitagent
-  # package, which is not there if step 1 was skipped.
+  # Best-effort on their own lines: these units belong to packages, which are
+  # not there if step 1 was skipped.
   systemctl --user enable --now hyprpolkitagent.service 2>/dev/null || true
+  # The blue light filter's daemon. Shipped by the hyprsunset package and
+  # bound to graphical-session.target, so it comes and goes with the session;
+  # the `night-light` script only talks to it. Enabled here rather than
+  # started from hyprland.lua because the unit already exists and already
+  # knows when to run -- see the note at the top of that script.
+  systemctl --user enable --now hyprsunset.service 2>/dev/null || true
   green "   done"
 fi
 

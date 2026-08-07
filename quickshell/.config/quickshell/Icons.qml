@@ -78,7 +78,13 @@ Singleton {
     readonly property string arch: String.fromCodePoint(0xF303)
 
     // ---------------- Clock ----------------
-    readonly property string clock: String.fromCodePoint(0xF0954)      // nf-md-clock_outline
+    // The comment used to say clock_outline. Read out of the cmap while adding
+    // the glyphs below: 0xF0954 is md-CLOCK, the filled one. Harmless -- both
+    // draw a clock face and the filled one is the better mark at this size --
+    // but a comment naming the wrong glyph is exactly how the two corrections
+    // at the bottom of this file happened, so it is fixed rather than left as
+    // a small lie.
+    readonly property string clock: String.fromCodePoint(0xF0954)      // nf-md-clock
     readonly property string calendar: String.fromCodePoint(0xF00ED)   // nf-md-calendar_text
 
     // ---------------- System ----------------
@@ -122,6 +128,19 @@ Singleton {
     readonly property string textSize: String.fromCodePoint(0xF027F)    // nf-md-format_size
     readonly property string restore: String.fromCodePoint(0xF099B)     // nf-md-restore
     readonly property string tune: String.fromCodePoint(0xF062E)        // nf-md-tune
+
+    // The settings pages added after the sound one. Every codepoint below was
+    // resolved by NAME out of the installed font, which is this file's rule --
+    // see the command in the notification block at the bottom.
+    readonly property string nightLight: String.fromCodePoint(0xF0594)  // nf-md-weather_night
+    readonly property string mouse: String.fromCodePoint(0xF037D)       // nf-md-mouse
+    // Outlined, not the solid md-cursor_default (0xF01C0): a filled arrow at
+    // label size is a black wedge, and the thing it stands for is a pointer
+    // with a visible outline.
+    readonly property string cursor: String.fromCodePoint(0xF01BF)      // nf-md-cursor_default_outline
+    readonly property string battery: String.fromCodePoint(0xF0079)     // nf-md-battery
+    readonly property string gaps: String.fromCodePoint(0xF004C)        // nf-md-arrow_expand_all
+    readonly property string rounding: String.fromCodePoint(0xF0607)    // nf-md-rounded_corner
 
     // ---------------- Session ----------------
     // The power menu's actions, alongside `power` above. Same Material Design
