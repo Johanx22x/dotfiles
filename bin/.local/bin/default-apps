@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# default-apps -- which program opens what.
+#
+# A thin wrapper over xdg-mime and gio, which already own this. Nothing here
+# keeps state of its own: the answer lives in ~/.config/mimeapps.list, written
+# by xdg-mime, and this script only groups the MIME types into the handful of
+# roles a person actually thinks in.
+#
+# THE ROLES ARE THE POINT. Nobody wants to set the handler for image/webp;
+# they want "the thing that opens pictures", which is nine MIME types that
+# have to move together or the setting half works -- a viewer chosen for PNG
+# and not for JPEG is worse than not choosing, because it looks like it took.
+#
+# WHY gio AND NOT A .desktop WALK. `gio mime <type>` already answers both
+# questions this needs: what the default is, and which installed applications
+# declare they can handle it. Parsing /usr/share/applications by hand would
+# reimplement that, badly, and would miss the per-user directory and the
+# desktop-specific overrides that gio already reads.
+#
+# NOT THE TERMINAL, which is the one role a person would expect here and the
+# one this cannot set. There is no MIME type for it: the terminal is named in
+# hyprland.lua, a tracked file this must not rewrite -- see the header of
+# hypr-tweak for that boundary.
+
+set -euo pipefail
+
+# role -> the MIME types that move together. The FIRST one is what candidates
+# are listed from: an application that handles image/png and not image/jpeg
+# would be an odd viewer, and offering the union would list programs that only
+# handle one corner of the role.
+readonly -A ROLES=(
+    [browser]="x-scheme-handler/https x-scheme-handler/http text/html"
+    [files]="inode/directory"
+    [image]="image/png image/jpeg image/gif image/webp image/tiff image/bmp image/svg+xml"
+    [video]="video/mp4 video/x-matroska video/webm video/quicktime video/x-msvideo"
+    [audio]="audio/mpeg audio/flac audio/x-wav audio/ogg audio/x-vorbis+ogg"
+    [pdf]="application/pdf"
+    [text]="text/plain"
+)
+
+# The order they are shown in, which an associative array does not have.
+readonly ORDER=(browser files image video audio pdf text)
+
+usage() {
+    cat >&2 <<'EOF'
+Usage:
+  default-apps show                    print every role and its handler
+  default-apps candidates <role>       list the .desktop ids that can do it
+  default-apps set <role> <desktop-id> make one the default
+
+Roles: browser files image video audio pdf text
+EOF
+    exit 2
+}
+
+check_role() {
+    [[ -n ${ROLES[$1]:-} ]] || {
+        echo "default-apps: unknown role '$1'. One of: ${ORDER[*]}" >&2
+        exit 2
+    }
+}
+
+first_type() {
+    local types=(${ROLES[$1]})
+    printf '%s' "${types[0]}"
+}
+
+case "${1:-show}" in
+    show)
+        for role in "${ORDER[@]}"; do
+            # `|| true` and a default of "-": a MIME type nothing is
+            # registered for is a normal state, not an error, and the settings
+            # window has to be able to say so.
+            handler=$(xdg-mime query default "$(first_type "$role")" 2>/dev/null || true)
+            printf '%s\t%s\n' "$role" "${handler:--}"
+        done
+        ;;
+
+    candidates)
+        [[ $# -eq 2 ]] || usage
+        check_role "$2"
+        # Everything between "Registered applications:" and the next
+        # unindented line. gio prints three sections and the other two are the
+        # default -- already known -- and the "Recommended" subset, which on
+        # this machine is routinely empty even when applications are
+        # registered.
+        gio mime "$(first_type "$2")" 2>/dev/null \
+            | awk '/^Registered applications:/ {on=1; next} /^[^\t]/ {on=0} on {gsub(/^\t/, ""); print}' \
+            | grep -v '^$' || true
+        ;;
+
+    set)
+        [[ $# -eq 3 ]] || usage
+        check_role "$2"
+
+        [[ -f /usr/share/applications/$3 || -f $HOME/.local/share/applications/$3 ]] || {
+            echo "default-apps: no desktop entry called '$3'." >&2
+            exit 2
+        }
+
+        # EVERY TYPE IN THE ROLE, in one call, which is the whole reason this
+        # script exists rather than a note telling you to run xdg-mime.
+        # shellcheck disable=SC2086
+        xdg-mime default "$3" ${ROLES[$2]}
+
+        # The browser needs a second call. xdg-settings keeps its own idea of
+        # the default browser -- it is what GTK's "open link" path asks, and
+        # it is NOT derived from the MIME association -- so setting only the
+        # scheme handlers leaves links opening in the old browser from about
+        # half the places that open links.
+        if [[ $2 == browser ]]; then
+            xdg-settings set default-web-browser "$3" 2>/dev/null || true
+        fi
+        ;;
+
+    *) usage ;;
+esac
