@@ -463,15 +463,22 @@ Row {
 
             readonly property var entry: root.shownEntry
 
-            width: 260
+            // Wide enough for a long product name on two lines rather
+            // than three. Measured against the longest thing connected
+            // here, "DualSense Wireless Controller".
+            width: 300
             spacing: Theme.itemSpacing
             visible: detail.entry !== null
 
             Row {
+                id: heading
+
                 width: parent.width
                 spacing: Theme.itemSpacing
 
                 Text {
+                    id: headingGlyph
+
                     anchors.verticalCenter: parent.verticalCenter
 
                     text: detail.entry?.glyph ?? ""
@@ -484,7 +491,23 @@ Row {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
 
+                    // GIVEN A WIDTH RATHER THAN LEFT TO FIND ONE. A Row hands
+                    // every child whatever it asks for, so a Column of Text
+                    // asks for the width of its longest line and gets it --
+                    // and "DualSense Wireless Controller" ran straight out of
+                    // the panel. Nothing about the Row being width-bound
+                    // reaches its children on its own.
+                    width: heading.width - headingGlyph.width - heading.spacing
+
                     Text {
+                        width: parent.width
+                        // WRAPPED AND NOT ELIDED, unlike the line under it.
+                        // This is the device's identity -- "DualSense
+                        // Wireless Cont..." is the one thing on the panel
+                        // that must not be guessed at, and a second line
+                        // costs nothing here.
+                        wrapMode: Text.WordWrap
+
                         // The manufacturer's own name for it. Nothing else on
                         // this desktop prints it, which is half the reason the
                         // panel exists: with two wireless things connected,
@@ -498,6 +521,9 @@ Row {
                     }
 
                     Text {
+                        width: parent.width
+                        elide: Text.ElideRight
+
                         text: `${detail.entry?.charge ?? 0}%  ·  ${detail.entry?.stateText ?? ""}`
                         font.family: Theme.fontFamily
                         font.pointSize: Theme.fontSize - 1
