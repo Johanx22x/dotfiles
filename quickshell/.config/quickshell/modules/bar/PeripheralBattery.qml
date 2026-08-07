@@ -533,8 +533,17 @@ Row {
             // two buds, and "which one, and how is the case doing" is exactly
             // what that number leaves out. A mouse has one battery and gets no
             // list, because a list of one is a heading.
+            //
+            // ONLY THE ONES THAT ANSWERED. This went back and forth twice and
+            // the second answer is the right one. Dropping an absent component
+            // reads as the panel forgetting the case exists -- so it was shown
+            // saying "not connected", and that turned out worse: the case is
+            // out of range for as long as the earphones are being worn, so
+            // that row is permanent furniture that never once tells you
+            // anything. It is the same rule the whole widget follows, which is
+            // that a reading with nothing to say should not be on screen.
             Repeater {
-                model: detail.entry?.parts ?? []
+                model: (detail.entry?.parts ?? []).filter(p => p.available)
 
                 delegate: Item {
                     id: part
@@ -562,18 +571,13 @@ Row {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
 
-                        text: !part.modelData.available ? "not connected"
-                            : part.modelData.charging
-                                ? `${part.modelData.charge}%  ·  charging`
-                                : `${part.modelData.charge}%`
+                        text: part.modelData.charging
+                            ? `${part.modelData.charge}%  ·  charging`
+                            : `${part.modelData.charge}%`
                         font.family: Theme.fontFamily
                         font.pointSize: Theme.fontSize - 1
                         font.weight: Theme.fontWeight
-                        // Never the warning colour for a component that simply
-                        // is not there: an absent case is not a low case.
-                        color: !part.modelData.available
-                            ? Theme.outline
-                            : root.tintFor(part.modelData.charge, part.modelData.charging)
+                        color: root.tintFor(part.modelData.charge, part.modelData.charging)
                     }
                 }
             }
