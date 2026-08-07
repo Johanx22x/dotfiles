@@ -1,0 +1,20 @@
+[Unit]
+Description=Read the AirPods charge every few minutes
+
+[Timer]
+# THREE MINUTES, WHICH IS ABOUT HOW FAST THE NUMBER MOVES. A pair of AirPods
+# runs for some hours, so a percentage point takes minutes to change; polling
+# faster would open an L2CAP channel to them for nothing.
+#
+# OnActiveSec and not OnStartupSec, for the reason spelled out in
+# wallpaper-rotate.timer: OnStartupSec is measured from when systemd --user
+# started, so enabling the timer later leaves it with no next run at all.
+OnActiveSec=30s
+OnUnitActiveSec=3min
+AccuracySec=15s
+# The reading is only true while they are connected, so there is nothing to
+# catch up on after a suspend -- the next tick is soon enough.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

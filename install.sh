@@ -223,7 +223,8 @@ if ask "Link them?"; then
   # now, and losing the seeds, the palette and the closing notes over a timer
   # that can be enabled later is a bad trade. Whatever fails is said out loud.
   if ! { systemctl --user daemon-reload &&
-         systemctl --user enable --now wallpaper-rotate.timer; }; then
+         systemctl --user enable --now wallpaper-rotate.timer &&
+         systemctl --user enable --now airpods-battery.timer; }; then
     red "   the wallpaper timer could not be enabled (no user session?)"
     echo "   Once logged in: systemctl --user enable --now wallpaper-rotate.timer"
   fi
