@@ -226,6 +226,21 @@ PanelWindow {
                 popout: barPopout
             }
 
+            // Whatever wireless thing has a battery, when there is one. It
+            // sits before the clock rather than after: everything to the
+            // right of here is either the time or a control, and a reading
+            // dropped among the controls reads as one of them.
+            Group {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: peripheralBattery.hasAny
+
+                PeripheralBattery {
+                    id: peripheralBattery
+
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+
             // Volume used to sit here. It moved into the island in the
             // centre, which is where a value that changes for two seconds and
             // then stops mattering belongs -- see modules/island.
