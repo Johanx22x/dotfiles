@@ -1,0 +1,351 @@
+#!/usr/bin/env bash
+# hypr-tweak -- the compositor settings the settings window can change.
+#
+# Gaps, corner rounding, border thickness, mouse behaviour and the cursor.
+# One script for all of them, and that is the point: the alternative -- which
+# this repository briefly had -- is one script, one state file and one reader
+# function in hyprland.lua PER VALUE, which is three new pieces every time a
+# row is added to a settings page.
+#
+# HOW IT REACHES THE COMPOSITOR, twice, on purpose:
+#
+#   1. `hyprctl eval` for the running session, so the change is visible before
+#      the finger comes off the button. NOT `hyprctl keyword`, which on a Lua
+#      config refuses and EXITS 0 WHILE REFUSING -- see the header of
+#      DisplayPage.qml, where that cost an afternoon.
+#   2. ~/.config/hypr/tweaks.lua, generated, which hyprland.lua reads at the
+#      very end. That is what survives `hyprctl reload`, which re-runs
+#      hyprland.lua and throws away everything eval'd.
+#
+# The generated file is a pure override layer and never has to know what it is
+# overriding: it is the LAST thing hyprland.lua reads, and a later assignment
+# of a hyprlang variable replaces the earlier one. Same arrangement, and the
+# same argument, as monitors.lua.
+#
+# WHY IT DOES NOT EDIT hyprland.lua. That file is a stow symlink into a git
+# repo, a thousand lines of hand-written prose in an order a person chose. A
+# program rewriting it would flatten the commentary on the first change. The
+# boundary is: the shell owns tweaks.lua, the person owns hyprland.lua.
+#
+# THE CURSOR IS THE ODD ONE and does not go through hl.config at all. Three
+# separate things have to be told: Hyprland for the session (`hyprctl
+# setcursor`), the environment for anything launched afterwards (XCURSOR_*,
+# which is why it lands in the generated file as hl.env), and GTK through
+# gsettings, because GTK applications ask the settings portal and not the
+# compositor. Miss any one and the pointer changes over some windows and not
+# others.
+
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
+STATE_FILE="$STATE_DIR/hypr-tweaks"
+GENERATED="$HOME/.config/hypr/tweaks.lua"
+
+# key|minimum|maximum|default. The bounds are the settings window's range as
+# well: it reads them from nowhere, so the two have to agree, and this is the
+# copy that gets to refuse.
+#
+# SENSITIVITY IS IN HUNDREDTHS because bash does not do floating point and a
+# shell script that shells out to bc to validate a number is a shell script
+# looking for a different language. -100..100 here is Hyprland's -1.0..1.0,
+# divided again on the way into the Lua.
+readonly -A NUMERIC=(
+    [gaps-in]="0|40|5"
+    [gaps-out]="0|80|20"
+    [rounding]="0|30|10"
+    [border]="0|6|2"
+    [sensitivity]="-100|100|0"
+    [repeat-rate]="10|80|25"
+    [repeat-delay]="150|800|600"
+    [cursor-size]="16|48|24"
+)
+
+# The ones that are not numbers, with their accepted values.
+readonly -A CHOICES=(
+    [accel]="adaptive flat"
+    [natural-scroll]="0 1"
+)
+
+usage() {
+    cat >&2 <<'EOF'
+Usage:
+  hypr-tweak set <key> <value>   set one and apply it
+  hypr-tweak reset <key>         put one back to its default
+  hypr-tweak show                print every key, its value and its range
+  hypr-tweak apply               re-apply everything (after a compositor restart)
+  hypr-tweak clear               forget the lot
+
+Keys:
+  gaps-in gaps-out rounding border      look
+  sensitivity accel natural-scroll      mouse
+  repeat-rate repeat-delay              keyboard
+  cursor-theme cursor-size              pointer
+
+`accel` is adaptive or flat, `natural-scroll` is 0 or 1, `sensitivity` is in
+hundredths (-100..100 is Hyprland's -1.0..1.0), and `cursor-theme` is the name
+of a directory under /usr/share/icons or ~/.icons.
+EOF
+    exit 2
+}
+
+# ---------------------------------------------------------------------------
+# The store. Tab-separated, one key per line, sorted -- so a diff of it is
+# readable and the settings window can parse it by splitting on a tab.
+
+declare -A VALUES=()
+
+load() {
+    [[ -r $STATE_FILE ]] || return 0
+
+    local key value
+    while IFS=$'\t' read -r key value; do
+        [[ -n ${key:-} ]] || continue
+        VALUES[$key]=$value
+    done < "$STATE_FILE"
+}
+
+save() {
+    mkdir -p "$STATE_DIR"
+
+    local key
+    for key in "${!VALUES[@]}"; do
+        printf '%s\t%s\n' "$key" "${VALUES[$key]}"
+    done | sort > "$STATE_FILE"
+}
+
+# The value in effect: what was set, or the default. Every reader below goes
+# through this, so an unset key behaves exactly like one set to its default
+# rather than like a hole.
+current() {
+    local key=$1
+
+    if [[ -n ${VALUES[$key]:-} ]]; then
+        printf '%s' "${VALUES[$key]}"
+        return
+    fi
+
+    if [[ -n ${NUMERIC[$key]:-} ]]; then
+        printf '%s' "${NUMERIC[$key]##*|}"
+        return
+    fi
+
+    case "$key" in
+        accel)          printf 'adaptive' ;;
+        natural-scroll) printf '0' ;;
+        # Empty, and it means "whatever the system already has". There is no
+        # sensible default cursor name to invent: the theme in use came from
+        # the distribution, and overwriting it with a guess would change the
+        # pointer on a machine where nobody asked for it.
+        cursor-theme)   printf '' ;;
+    esac
+}
+
+validate() {
+    local key=$1 value=$2
+
+    if [[ -n ${NUMERIC[$key]:-} ]]; then
+        local spec=${NUMERIC[$key]} min max
+        IFS='|' read -r min max _ <<< "$spec"
+
+        [[ $value =~ ^-?[0-9]+$ ]] || {
+            echo "hypr-tweak: $key takes a whole number ($min to $max)." >&2
+            exit 2
+        }
+        (( value >= min && value <= max )) || {
+            echo "hypr-tweak: $key must be between $min and $max." >&2
+            exit 2
+        }
+        return
+    fi
+
+    if [[ -n ${CHOICES[$key]:-} ]]; then
+        local option
+        for option in ${CHOICES[$key]}; do
+            [[ $value == "$option" ]] && return
+        done
+        echo "hypr-tweak: $key must be one of: ${CHOICES[$key]}." >&2
+        exit 2
+    fi
+
+    if [[ $key == cursor-theme ]]; then
+        # Checked against the directories that actually exist rather than
+        # accepted blind: a cursor theme that is not installed does not fail,
+        # it silently leaves the old pointer in place, and the settings window
+        # would show a name nothing on screen agrees with.
+        [[ -d /usr/share/icons/$value || -d $HOME/.icons/$value ]] || {
+            echo "hypr-tweak: no cursor theme called '$value'." >&2
+            echo "  Installed: $(themes | tr '\n' ' ')" >&2
+            exit 2
+        }
+        return
+    fi
+
+    echo "hypr-tweak: unknown key '$key'." >&2
+    usage
+}
+
+# Every directory under the icon paths that has a cursors/ subdirectory. An
+# icon theme without one is an application icon set, not a pointer, and
+# offering it would produce a choice that does nothing.
+themes() {
+    local dir theme
+    for dir in "$HOME/.icons" /usr/share/icons; do
+        [[ -d $dir ]] || continue
+        for theme in "$dir"/*/; do
+            # An `if` and not `[[ ... ]] && basename`, which is what this was
+            # and which broke `show` outright: under `set -e` the loop takes
+            # the status of its last command, so a final directory without a
+            # cursors/ subdirectory made the whole function exit 1 and took
+            # the script with it. The last entry under /usr/share/icons here
+            # is `hicolor`, which never has one.
+            if [[ -d ${theme}cursors ]]; then
+                basename "$theme"
+            fi
+        done
+    done | sort -u
+}
+
+# ---------------------------------------------------------------------------
+# Applying
+
+# Hyprland wants a float here and bash has kept hundredths, so the decimal
+# point is put back by hand. printf and not bc: one is in the shell, the other
+# is a dependency.
+sensitivity_float() {
+    local hundredths sign
+    hundredths=$(current sensitivity)
+    sign=""
+    (( hundredths < 0 )) && { sign="-"; hundredths=$(( -hundredths )); }
+    printf '%s%d.%02d' "$sign" $(( hundredths / 100 )) $(( hundredths % 100 ))
+}
+
+# The Lua both halves send. Built once so the running compositor and the
+# generated file cannot drift apart -- which they would, given two copies of
+# this and one of them edited.
+config_lua() {
+    local natural="false"
+    [[ $(current natural-scroll) == 1 ]] && natural="true"
+
+    cat <<LUA
+hl.config({
+    general = {
+        gaps_in  = $(current gaps-in),
+        gaps_out = $(current gaps-out),
+        border_size = $(current border),
+    },
+    decoration = {
+        rounding = $(current rounding),
+    },
+    input = {
+        sensitivity    = $(sensitivity_float),
+        accel_profile  = "$(current accel)",
+        natural_scroll = $natural,
+        repeat_rate    = $(current repeat-rate),
+        repeat_delay   = $(current repeat-delay),
+    },
+})
+LUA
+}
+
+apply_live() {
+    hyprctl eval "$(config_lua)" >/dev/null || true
+
+    local theme size
+    theme=$(current cursor-theme)
+    size=$(current cursor-size)
+
+    if [[ -n $theme ]]; then
+        hyprctl setcursor "$theme" "$size" >/dev/null || true
+    fi
+
+    # GTK asks the settings portal, which reads these, and never asks the
+    # compositor -- so without this half the pointer changes everywhere except
+    # over GTK applications, which on this desktop is most of them.
+    if command -v gsettings >/dev/null; then
+        [[ -n $theme ]] && gsettings set org.gnome.desktop.interface cursor-theme "$theme" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface cursor-size "$size" 2>/dev/null || true
+    fi
+}
+
+generate() {
+    mkdir -p "$(dirname "$GENERATED")"
+
+    {
+        echo "-- GENERATED by hypr-tweak. Do not edit: it is rewritten whenever"
+        echo "-- a value changes in the settings window (SUPER + C) or from a"
+        echo "-- terminal. Delete it and the compositor goes back to whatever"
+        echo "-- hyprland.lua says."
+        echo "--"
+        echo "-- Read LAST by hyprland.lua, so everything here is an override."
+        echo
+        config_lua
+
+        local theme size
+        theme=$(current cursor-theme)
+        size=$(current cursor-size)
+
+        echo
+        if [[ -n $theme ]]; then
+            echo "hl.env(\"XCURSOR_THEME\", \"$theme\")"
+            echo "hl.env(\"HYPRCURSOR_THEME\", \"$theme\")"
+        fi
+        echo "hl.env(\"XCURSOR_SIZE\", \"$size\")"
+        echo "hl.env(\"HYPRCURSOR_SIZE\", \"$size\")"
+    } > "$GENERATED"
+}
+
+load
+
+case "${1:-show}" in
+    set)
+        [[ $# -eq 3 ]] || usage
+        validate "$2" "$3"
+        VALUES[$2]=$3
+        save
+        generate
+        apply_live
+        ;;
+
+    reset)
+        [[ $# -eq 2 ]] || usage
+        unset "VALUES[$2]"
+        save
+        generate
+        apply_live
+        ;;
+
+    apply)
+        generate
+        apply_live
+        ;;
+
+    clear)
+        VALUES=()
+        rm -f "$STATE_FILE" "$GENERATED"
+        # NOT re-applied. Clearing means "go back to hyprland.lua", and the
+        # only honest way to reach that state is the reload the message asks
+        # for -- eval'ing the defaults from here would put THIS script's idea
+        # of them into the compositor, which is not the same thing.
+        echo "Cleared. Run 'hyprctl reload' to go back to hyprland.lua's own values."
+        ;;
+
+    show)
+        printf '%-16s %-10s %s\n' KEY VALUE RANGE
+        local_keys=(gaps-in gaps-out rounding border sensitivity accel natural-scroll repeat-rate repeat-delay cursor-theme cursor-size)
+        for key in "${local_keys[@]}"; do
+            if [[ -n ${NUMERIC[$key]:-} ]]; then
+                IFS='|' read -r min max _ <<< "${NUMERIC[$key]}"
+                range="$min..$max"
+            elif [[ -n ${CHOICES[$key]:-} ]]; then
+                range="${CHOICES[$key]// /, }"
+            else
+                range="$(themes | tr '\n' ' ')"
+            fi
+            printf '%-16s %-10s %s\n' "$key" "$(current "$key")" "$range"
+        done
+        ;;
+
+    themes) themes ;;
+
+    *) usage ;;
+esac

@@ -81,12 +81,14 @@ systemd/.config/systemd/user/*.target.wants/
 # ---------------------------------------------------------------------------
 # Machine-local Hyprland pieces
 #
-# monitors.lua is written by the `hypr-monitor` script from the settings
-# window; local.lua is hand-written and holds whatever belongs to one machine
-# or one person (keyboard layout, extra binds, window rules). Neither may be
-# versioned: the repo is shared with another machine and another layout, and
-# a tracked personal file turns every pull over there into a conflict.
-# hyprland.lua loads both with pcall, so not having them is the normal case.
+# monitors.lua and tweaks.lua are written by the `hypr-monitor` and
+# `hypr-tweak` scripts from the settings window; local.lua is hand-written and
+# holds whatever belongs to one machine or one person (keyboard layout, extra
+# binds, window rules). None of them may be versioned: the repo is shared with
+# another machine and another layout, and a tracked personal file turns every
+# pull over there into a conflict. hyprland.lua loads all three with pcall, so
+# not having them is the normal case.
 # ---------------------------------------------------------------------------
 hypr/.config/hypr/monitors.lua
+hypr/.config/hypr/tweaks.lua
 hypr/.config/hypr/local.lua

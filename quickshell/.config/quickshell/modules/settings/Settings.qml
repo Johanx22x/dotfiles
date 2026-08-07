@@ -360,6 +360,7 @@ FloatingWindow {
                 NotificationsPage {}
                 DisplayPage {}
                 AudioPage {}
+                InputPage {}
                 NetworkPage {}
                 BluetoothPage {}
                 KeybindsPage {}

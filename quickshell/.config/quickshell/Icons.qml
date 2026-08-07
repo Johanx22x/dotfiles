@@ -141,6 +141,7 @@ Singleton {
     readonly property string battery: String.fromCodePoint(0xF0079)     // nf-md-battery
     readonly property string gaps: String.fromCodePoint(0xF004C)        // nf-md-arrow_expand_all
     readonly property string rounding: String.fromCodePoint(0xF0607)    // nf-md-rounded_corner
+    readonly property string swapVertical: String.fromCodePoint(0xF04E2) // nf-md-swap_vertical
 
     // ---------------- Session ----------------
     // The power menu's actions, alongside `power` above. Same Material Design
