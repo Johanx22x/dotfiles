@@ -70,7 +70,16 @@ Singleton {
         // mistake to guard against.
         nightLightScheduled: false,
         nightLightFrom: 20 * 60,
-        nightLightTo: 7 * 60
+        nightLightTo: 7 * 60,
+        // Every widget on by default: this is the bar as designed, and the
+        // switches below are for taking things away rather than for building
+        // it up from nothing.
+        barLogo: true,
+        barActiveWindow: true,
+        barTray: true,
+        barBattery: true,
+        barClock: true,
+        barSettingsButton: true
     })
 
     // Where the cross-application state files live. Not statePath(): that
@@ -353,6 +362,21 @@ Singleton {
     property alias use24Hour: adapter.use24Hour
     property alias showDate: adapter.showDate
 
+    // Which widgets the bar shows.
+    //
+    // NOT EVERY WIDGET IS HERE, and the ones missing are missing on purpose.
+    // The workspaces, the island and the power button have no switch: the
+    // first two are how you know where you are and what the desktop is doing,
+    // and the last is the only pointer-reachable way to end the session. A
+    // settings window that can hide the way out is a settings window that can
+    // strand somebody.
+    property alias barLogo: adapter.barLogo
+    property alias barActiveWindow: adapter.barActiveWindow
+    property alias barTray: adapter.barTray
+    property alias barBattery: adapter.barBattery
+    property alias barClock: adapter.barClock
+    property alias barSettingsButton: adapter.barSettingsButton
+
     // ---------------- Notifications ----------------
 
     // In SECONDS here, milliseconds at the point of use. The file is meant to
@@ -389,6 +413,12 @@ Singleton {
         adapter.nightLightScheduled = root.defaults.nightLightScheduled;
         adapter.nightLightFrom = root.defaults.nightLightFrom;
         adapter.nightLightTo = root.defaults.nightLightTo;
+        adapter.barLogo = root.defaults.barLogo;
+        adapter.barActiveWindow = root.defaults.barActiveWindow;
+        adapter.barTray = root.defaults.barTray;
+        adapter.barBattery = root.defaults.barBattery;
+        adapter.barClock = root.defaults.barClock;
+        adapter.barSettingsButton = root.defaults.barSettingsButton;
     }
 
     // ---------------- Persistence ----------------
@@ -422,6 +452,12 @@ Singleton {
             property bool nightLightScheduled: false
             property int nightLightFrom: 1200
             property int nightLightTo: 420
+            property bool barLogo: true
+            property bool barActiveWindow: true
+            property bool barTray: true
+            property bool barBattery: true
+            property bool barClock: true
+            property bool barSettingsButton: true
         }
     }
 }

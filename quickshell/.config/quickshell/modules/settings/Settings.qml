@@ -363,6 +363,7 @@ FloatingWindow {
                 InputPage {}
                 NetworkPage {}
                 BluetoothPage {}
+                AppsPage {}
                 KeybindsPage {}
                 AboutPage {}
 

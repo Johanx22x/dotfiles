@@ -179,9 +179,12 @@ tracked config standing instead of taking the desktop down.
 | File | Written by | Holds |
 |---|---|---|
 | `~/.config/hypr/monitors.lua` | **generated** — `hypr-monitor`, called by the settings window | mode, position, scale and rotation per monitor |
+| `~/.config/hypr/tweaks.lua` | **generated** — `hypr-tweak`, called by the settings window | gaps, corner rounding, border width, mouse, key repeat, cursor |
 | `~/.config/hypr/local.lua` | **you**, by hand | keyboard layout, extra binds, window rules |
 
-Both are in `.gitignore`. Neither is required.
+All three are in `.gitignore`. None is required. `tweaks.lua` is read **last**,
+after everything tracked and before `local.lua`: a value set from the settings
+window beats `hyprland.lua`, and a hand-written local file still beats both.
 
 **`monitors.lua`** is a pure override layer: `hyprland.lua` declares the
 monitors it was written for, and this file is `dofile`'d at the end of that
@@ -237,7 +240,8 @@ single file that one script writes and everything else reads:
 | `desktop-opacity` | `desktop-opacity` | Quickshell, `hyprland.lua`, kitty (`opacity.conf`), Zen (`opacity.css`) |
 | `desktop-font` | `desktop-font` | Quickshell, kitty (`font.conf`) |
 | `hypr-monitors` | `hypr-monitor` | `hypr-monitor` itself, to regenerate `monitors.lua` |
-| `hypr-border` | `hypr-border` | Quickshell, `hyprland.lua` |
+| `hypr-tweaks` | `hypr-tweak` | Quickshell, and `hypr-tweak` itself to regenerate `tweaks.lua` |
+| `night-light` | `night-light` | Quickshell |
 | `wallpaper-dir` | `wallpaper-switch dir` | Quickshell, `wallpaper-switch` |
 
 ```sh
@@ -245,8 +249,18 @@ desktop-opacity          # print the current value
 desktop-opacity 0.75     # set it (0.40 - 1.00)
 desktop-font             # print size and family
 desktop-font 12          # set the size (8 - 16)
-hypr-border              # print the window border width
-hypr-border 0            # remove it (0 - 6 px)
+hypr-tweak               # print every compositor value and its range
+hypr-tweak set gaps-in 8 # gaps, rounding, border, mouse, key repeat, cursor
+hypr-tweak reset border  # put one back to its default
+hypr-tweak clear         # forget the lot, then `hyprctl reload`
+
+night-light on           # blue light filter on
+night-light temp 3200    # how warm (2500 - 6000 K)
+night-light off
+
+default-apps             # print every role and its handler
+default-apps candidates image
+default-apps set image org.gnome.Loupe.desktop
 
 desktop-avatar           # print the profile picture, or "none"
 desktop-avatar pick      # choose one in a file dialog
@@ -301,7 +315,7 @@ The **settings window** (`SUPER + C`, or the gear on the bar) is an ordinary
 window inside the shell process, not a second `qs` instance — the state path is
 hashed per entry point, so two processes would write two files and read
 neither. Its pages: User, Appearance, Wallpaper, Bar, Notifications, Display,
-Sound, Network, Bluetooth, Keybinds, About.
+Sound, Input, Network, Bluetooth, Apps, Keybinds, About.
 
 Three of those are worth knowing about before you go looking for a button that
 isn't there. **Display** writes through `hypr-monitor`, so a change made there

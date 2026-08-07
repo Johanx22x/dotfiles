@@ -146,6 +146,8 @@ PanelWindow {
 
             Logo {
                 anchors.verticalCenter: parent.verticalCenter
+
+                visible: Config.barLogo
             }
 
             Group {
@@ -159,6 +161,7 @@ PanelWindow {
             ActiveWindow {
                 anchors.verticalCenter: parent.verticalCenter
 
+                visible: Config.barActiveWindow
                 barScreen: bar.modelData
             }
         }
@@ -223,6 +226,7 @@ PanelWindow {
             Tray {
                 anchors.verticalCenter: parent.verticalCenter
 
+                visible: Config.barTray
                 popout: barPopout
             }
 
@@ -232,12 +236,22 @@ PanelWindow {
             // dropped among the controls reads as one of them.
             Group {
                 anchors.verticalCenter: parent.verticalCenter
-                visible: peripheralBattery.hasAny
+                visible: Config.barBattery && peripheralBattery.hasAny
+
+                // The pill itself carries the warning when there is only one
+                // thing to warn about -- see alertingAlone in the widget. The
+                // fallback repeats Group's own default because assigning here
+                // replaces its binding rather than adding to it.
+                color: peripheralBattery.alertingAlone
+                    ? Qt.alpha(Theme.critical, 0.18)
+                    : Theme.glass(Theme.surfaceContainerHigh)
 
                 PeripheralBattery {
                     id: peripheralBattery
 
                     anchors.verticalCenter: parent.verticalCenter
+
+                    popout: barPopout
                 }
             }
 
@@ -246,6 +260,8 @@ PanelWindow {
             // then stops mattering belongs -- see modules/island.
             Group {
                 anchors.verticalCenter: parent.verticalCenter
+
+                visible: Config.barClock
 
                 Clock {
                     anchors.verticalCenter: parent.verticalCenter
@@ -269,6 +285,8 @@ PanelWindow {
 
                 SettingsButton {
                     anchors.verticalCenter: parent.verticalCenter
+
+                    visible: Config.barSettingsButton
                 }
 
                 // LAST, and it stays last. The bar ends in the one control
