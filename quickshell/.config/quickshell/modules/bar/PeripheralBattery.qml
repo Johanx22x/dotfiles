@@ -33,6 +33,7 @@
 // because the eye learns to skip the place where it lives.
 
 import Quickshell
+import Quickshell.Bluetooth
 import Quickshell.Io
 import Quickshell.Services.UPower
 import QtQuick
@@ -203,7 +204,20 @@ Row {
             });
         }
 
-        if (root.airpods) {
+        // AND ONLY WHILE THEY ARE ACTUALLY CONNECTED. The file is written by a
+        // script on a three-minute timer, so on its own it is up to three
+        // minutes stale -- and the way that showed up was earphones put back
+        // in their case with their charge still sitting on the bar, which is
+        // a reading that says "connected" when they are not. The script now
+        // deletes the file, and this is the other half: BlueZ knows the
+        // instant they go, so the row goes with them and the file catches up
+        // whenever it likes.
+        //
+        // Matched on the NAME because that is all there is to match on:
+        // Quickshell's BluetoothDevice exposes no UUID list, so the AAP
+        // vendor UUID the script identifies them by is not reachable from
+        // here. Both strings come from BlueZ's own Alias, so they agree.
+        if (root.airpods && root.airpodsConnected) {
             // THE BAR CARRIES THE LOWER EARPHONE. One number has to stand for
             // three, and the useful one is the one that runs out first --
             // saying 80% while the other bud is at 20% is worse than saying
@@ -234,6 +248,17 @@ Row {
         }
 
         return out.sort((a, b) => a.charge - b.charge);
+    }
+
+    readonly property bool airpodsConnected: {
+        if (!root.airpods)
+            return false;
+
+        // Read so the binding re-evaluates when something connects or goes.
+        Bluetooth.devices.values.length;
+
+        return Bluetooth.devices.values.some(d => d.connected
+            && (d.name === root.airpods.name || d.deviceName === root.airpods.name));
     }
 
     // A PLAIN PROPERTY AND NOT `visible` FOR THE PARENT TO READ. The pill

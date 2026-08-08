@@ -241,9 +241,16 @@ def main():
 
     devices = connected_airpods()
     if not devices:
-        # NOT an error and NOT a reason to delete the file. AirPods that are
-        # in their case are simply not connected, and the last known charge is
-        # still the most useful thing anybody can be told about them.
+        # THE FILE GOES, and the first version of this kept it on the argument
+        # that the last known charge is still useful. It is not: the only
+        # reader is a bar indicator, and a battery sitting on the bar for
+        # earphones that are in their case says they are connected when they
+        # are not. Stale data presented as live is worse than no data.
+        try:
+            os.remove(STATE_FILE)
+        except FileNotFoundError:
+            pass
+
         if argument == "show":
             print("No AirPods connected.")
         return 0

@@ -357,6 +357,59 @@ Singleton {
         }
     }
 
+    // ---------------- How often the wallpaper rotates ----------------
+    //
+    // In MINUTES, and the file is written by `wallpaper-interval`, which owns
+    // the systemd drop-in that actually changes the timer. Same shape as
+    // everything else here: a flat file one script writes and this reads, so
+    // a value set from a terminal moves the row in the settings window.
+    //
+    // The default repeats the one in wallpaper-rotate.timer. Two copies of a
+    // number is a cost, and the alternative is worse -- parsing a systemd unit
+    // from QML to find out what the shell should draw before the script has
+    // ever run.
+    readonly property int wallpaperIntervalDefault: 30
+
+    property int wallpaperInterval: root.wallpaperIntervalDefault
+
+    function setWallpaperInterval(minutes: int): void {
+        root.wallpaperInterval = minutes;
+        intervalPushTimer.restart();
+    }
+
+    Timer {
+        id: intervalPushTimer
+
+        // Longer than the 150ms the other steppers use: this one ends in a
+        // systemd daemon-reload, which is heavier than writing a number to a
+        // file, and nobody holds this stepper down looking for a specific
+        // value the way they do with the opacity.
+        interval: 300
+        onTriggered: Quickshell.execDetached(["wallpaper-interval", String(root.wallpaperInterval)])
+    }
+
+    FileView {
+        id: intervalFile
+
+        path: `${root.stateDir}/wallpaper-interval`
+        watchChanges: true
+        // Absent until the interval has been changed once, which is the normal
+        // state: the timer's own value is in force and the default above says
+        // so.
+        printErrors: false
+
+        onFileChanged: reload()
+        onLoaded: {
+            if (intervalPushTimer.running)
+                return;
+
+            const parsed = parseInt(intervalFile.text());
+            if (!isNaN(parsed) && parsed >= 5 && parsed <= 10080)
+                root.wallpaperInterval = parsed;
+        }
+        onLoadFailed: root.wallpaperInterval = root.wallpaperIntervalDefault
+    }
+
     // ---------------- Bar ----------------
 
     property alias use24Hour: adapter.use24Hour
