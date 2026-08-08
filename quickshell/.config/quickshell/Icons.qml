@@ -139,6 +139,9 @@ Singleton {
     // with a visible outline.
     readonly property string cursor: String.fromCodePoint(0xF01BF)      // nf-md-cursor_default_outline
     readonly property string battery: String.fromCodePoint(0xF0079)     // nf-md-battery
+    readonly property string batteryCharging: String.fromCodePoint(0xF0084) // nf-md-battery_charging
+    readonly property string batteryAlert: String.fromCodePoint(0xF0083)    // nf-md-battery_alert
+    readonly property string brightness: String.fromCodePoint(0xF00DF)      // nf-md-brightness_6
     readonly property string gaps: String.fromCodePoint(0xF004C)        // nf-md-arrow_expand_all
     readonly property string rounding: String.fromCodePoint(0xF0607)    // nf-md-rounded_corner
     readonly property string swapVertical: String.fromCodePoint(0xF04E2) // nf-md-swap_vertical

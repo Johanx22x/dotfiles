@@ -394,6 +394,16 @@ Item {
                             color: Theme.outlineVariant
                         }
 
+                        // ABOVE THE VOLUME AND WITH NO RULE BETWEEN THEM.
+                        // They are the same kind of control -- a value you set
+                        // by feel and stop thinking about -- so they read as
+                        // one block, and the rule below separates that block
+                        // from the toggles. On a desktop this collapses to
+                        // nothing and the pair is just the volume again.
+                        BrightnessControl {
+                            width: parent.width
+                        }
+
                         VolumeControl {
                             width: parent.width
                         }

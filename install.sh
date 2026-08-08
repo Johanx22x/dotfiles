@@ -241,6 +241,28 @@ if ask "Link them?"; then
 fi
 
 # ---------------------------------------------------------------------------
+# THE ONE QUESTION A TRACKED CONFIG CANNOT ANSWER FOR ITSELF. These dotfiles
+# are shared between a desktop and a laptop, and the two pieces of hardware
+# that differ most are a battery and a backlight. Detection alone is not
+# enough to decide: a desktop with a UPS reports a battery, and a laptop whose
+# driver has not loaded yet reports none, so the machine would grow and lose
+# widgets for reasons nobody asked for.
+#
+# Asked here rather than defaulted, and OFF unless answered. The widgets also
+# hide themselves when the hardware is genuinely absent, so a wrong answer
+# costs nothing -- it is the intention that is being recorded, not a guess.
+blue "== Laptop widgets =="
+echo "   A battery indicator on the bar and a brightness slider in the island."
+echo "   Off by default; they are only useful on a machine that has both."
+if ask "Is this a laptop?"; then
+  "$DOT/bin/.local/bin/laptop-modules" on >/dev/null
+  green "   on -- they appear once the shell restarts"
+else
+  "$DOT/bin/.local/bin/laptop-modules" off >/dev/null
+  echo "   off"
+fi
+
+# ---------------------------------------------------------------------------
 # Seeds: the files that CANNOT be symlinks, because the applications that own
 # them rewrite them. qt6ct rewrites qt6ct.conf in full on every save -- it has
 # already eaten the nine-line comment above color_scheme_path, URL-encoding it

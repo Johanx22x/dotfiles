@@ -234,6 +234,21 @@ PanelWindow {
             // sits before the clock rather than after: everything to the
             // right of here is either the time or a control, and a reading
             // dropped among the controls reads as one of them.
+            // The machine's own battery, on laptops. Its own pill rather than
+            // sharing the peripherals' one: they answer different questions --
+            // "go and charge that thing" against "save your work" -- and a
+            // shared pill would read as one list of interchangeable numbers.
+            Group {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: systemBattery.present
+
+                SystemBattery {
+                    id: systemBattery
+
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+
             Group {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: Config.barBattery && peripheralBattery.hasAny
