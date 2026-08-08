@@ -174,8 +174,16 @@ hl.on("hyprland.start", function ()
     -- what is playing now lives in the island in the centre of the bar. The
     -- script is still in ~/.local/bin if it is ever wanted back.
 
-    -- Wallpaper daemon + restore the last one used
-    hl.exec_cmd("awww-daemon")
+    -- Restore the last wallpaper used. The script starts whichever backend it
+    -- needs -- awww for a still, mpvpaper for a video -- so there is no
+    -- awww-daemon line here any more.
+    --
+    -- Removing it was not tidying. The two ran concurrently, and on a video
+    -- wallpaper the script kills awww to keep one surface on the background
+    -- layer: started side by side, the kill could land before the daemon had
+    -- finished coming up and leave it running with a still image over the
+    -- video. Starting the daemon on demand, from the one place that knows
+    -- which backend the wallpaper actually needs, cannot race with itself.
     hl.exec_cmd(wallpaperSwitch .. " reapply")
 
     -- On Wayland the clipboard is not stored anywhere central: it is owned
@@ -477,8 +485,16 @@ hl.config({
 
 hl.config({
     misc = {
-        force_default_wallpaper = -1,    -- Set to 0 or 1 to disable the anime mascot wallpapers
-        disable_hyprland_logo   = false, -- If true disables the random hyprland logo / anime girl background. :(
+        -- NOTHING OF HYPRLAND'S OWN BEHIND THE WALLPAPER. What the compositor
+        -- draws here is only ever visible when the wallpaper backend has not
+        -- got a surface up yet -- the first second of a session, or the gap
+        -- while switching between awww and mpvpaper. wallpaper-switch closes
+        -- that gap by overlapping the two backends, and this makes the
+        -- remaining cases black instead of the mascot: an instant of nothing
+        -- reads as the desktop still arriving, an instant of somebody else's
+        -- artwork reads as a glitch.
+        force_default_wallpaper = 0,
+        disable_hyprland_logo   = true,
     },
 })
 

@@ -336,19 +336,27 @@ SettingsPage {
         command: ["wallpaper-switch", "dir", "pick"]
     }
 
-    // The same five extensions and the same sort as the launcher's picker,
-    // which are the ones wallpaper-switch itself looks for.
+    // The same extensions and the same sort as the launcher's picker. Both
+    // read the list off Config now rather than spelling it out, which is what
+    // stops this grid and that strip from disagreeing about what counts as a
+    // wallpaper.
     FolderListModel {
         id: folder
 
         folder: `file://${root.folderPath}`
-        nameFilters: ["*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp"]
+        nameFilters: Config.wallpaperNameFilters
         showDirs: false
         sortField: FolderListModel.Name
 
         // The model fills asynchronously, so the current wallpaper cannot be
         // found in it until it reports a count.
-        onCountChanged: Qt.callLater(root.revealCurrent)
+        //
+        // Also where a video added to the folder mid-session gets its frame
+        // extracted -- see the note on refreshWallpaperThumbs.
+        onCountChanged: {
+            Qt.callLater(root.revealCurrent);
+            Config.refreshWallpaperThumbs();
+        }
     }
 
     // Scroll the applied wallpaper into view. At two columns this folder is
@@ -610,10 +618,29 @@ SettingsPage {
                         id: picture
 
                         anchors.fill: parent
-                        source: `file://${cell.filePath}`
+
+                        // For a still this is the wallpaper itself; for a
+                        // video it is the frame wallpaper-switch extracted,
+                        // since an Image cannot decode an mp4.
+                        //
+                        // The bare reference to the revision is not dead code:
+                        // it is what puts this binding on the list of things
+                        // to re-evaluate once the extraction finishes. A video
+                        // added to the folder is listed here before ffmpeg has
+                        // pulled a frame out of it, and a plain function call
+                        // would never be asked again.
+                        source: {
+                            Config.wallpaperThumbsRevision;
+                            return Config.wallpaperThumbUrl(cell.filePath);
+                        }
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         smooth: true
+
+                        // Qt caches the fact that a URL failed to load. The
+                        // re-evaluation above would otherwise be handed that
+                        // same failure instead of going back to disk.
+                        cache: false
 
                         // Decoded at the size it is drawn at: these are 4K
                         // wallpapers and a grid holds a lot more of them at

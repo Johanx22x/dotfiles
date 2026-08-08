@@ -9,3 +9,15 @@ Type=oneshot
 ExecStart=%h/.local/bin/wallpaper-switch random
 # The script needs to talk to Hyprland and to awww
 Environment=XDG_RUNTIME_DIR=%t
+
+# THE DAEMONS THE SCRIPT STARTS HAVE TO OUTLIVE IT. A oneshot deactivates the
+# moment ExecStart returns, and the default KillMode then takes the whole
+# control group down with it -- which includes the mpvpaper the script just
+# forked for a video wallpaper, and the awww-daemon it starts when none is
+# running. Measured here: with the default the child is dead within seconds,
+# with this line it survives.
+#
+# Safe because ExecStart is the script and nothing else: there is no long-lived
+# main process being left unsupervised, only the wallpaper backend, which is
+# meant to keep running exactly as if it had been started from a terminal.
+KillMode=process

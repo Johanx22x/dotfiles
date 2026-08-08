@@ -79,9 +79,11 @@ MPVPAPER_OUTPUT="${MPVPAPER_OUTPUT:-ALL}"
 # backend dispatch. It was two copies of five extensions inside two `find`
 # calls, which is exactly the kind of thing that gets updated in one place.
 #
-# KEEP IN STEP with nameFilters in modules/launcher/WallpaperPicker.qml and
-# modules/settings/pages/WallpaperPage.qml. Those two read the folder
-# themselves through Qt and cannot ask this script what it accepts.
+# KEEP IN STEP with wallpaperStillExtensions / wallpaperVideoExtensions in
+# ~/.config/quickshell/Config.qml, which is the same list on the other side.
+# The shell reads the folder itself through Qt and has no way to ask a script
+# what it accepts, so the duplication is down to two copies and not four --
+# the launcher's strip and the settings grid both read Config's.
 STILL_EXT=(jpg jpeg png webp bmp gif)
 VIDEO_EXT=(mp4 webm mkv)
 
@@ -230,12 +232,34 @@ mapfile -t WALLPAPERS < <(collect "$WALLPAPER_DIR")
 # next` on a keybind has to be instant.
 if [[ "$MODE" == "thumbs" ]]; then
     MADE=0
+    KEEP=()
     for W in "${WALLPAPERS[@]}"; do
         is_video "$W" || continue
+        KEEP+=("$(frame_path "$W")")
         [[ -f "$(frame_path "$W")" && "$(frame_path "$W")" -nt "$W" ]] && continue
         frame_for "$W" >/dev/null && MADE=$(( MADE + 1 ))
     done
-    echo "wallpaper thumbnails: $MADE extracted"
+
+    # ---- Sweep ----
+    # A frame is named after the video it came from, so renaming or deleting a
+    # video orphans its frame and nothing would ever collect it. Rename a few
+    # downloads and the cache keeps a copy of each old name for good.
+    #
+    # ONLY inside FRAME_CACHE and only *.png, and only files this run did not
+    # just vouch for. The directory belongs to this script alone -- it is not
+    # somewhere the user keeps anything -- but a delete loop deserves the
+    # narrow version regardless of who owns the folder.
+    GONE=0
+    if [[ -d "$FRAME_CACHE" ]]; then
+        while IFS= read -r -d '' CACHED; do
+            for K in ${KEEP[@]+"${KEEP[@]}"}; do
+                [[ "$CACHED" == "$K" ]] && continue 2
+            done
+            rm -f -- "$CACHED" && GONE=$(( GONE + 1 ))
+        done < <(find "$FRAME_CACHE" -maxdepth 1 -type f -name '*.png' -print0)
+    fi
+
+    echo "wallpaper thumbnails: $MADE extracted, $GONE stale removed"
     exit 0
 fi
 
@@ -300,19 +324,53 @@ fi
 # ---------------------------------------------------------------
 # 4. Set the wallpaper
 # ---------------------------------------------------------------
-# ONLY ONE BACKEND IS EVER ALIVE. awww and mpvpaper both put a surface on the
-# background layer, and which of two surfaces on one layer ends up on top is
-# the compositor's business, not ours. Killing the other one first costs a
-# daemon restart and buys never having to debug a video that plays perfectly
-# behind an opaque still.
+# ONLY ONE BACKEND IS LEFT ALIVE, but the order is BRING UP THEN TEAR DOWN and
+# never the other way round.
 #
-# The visible price is on the way back: awww starts with nothing to fade FROM,
-# so video -> image arrives without a transition. Worth it.
+# The first version killed first, and it was wrong in a way that shows: for the
+# moment between the two there is no surface at all on the background layer, so
+# Hyprland fills it with its own default wallpaper. Every switch into or out of
+# a video flashed the anime mascot.
+#
+# Overlapping them is safe. Whichever of the two the compositor decides to put
+# on top, both are showing A wallpaper, and the one underneath is gone a moment
+# later -- so the worst case is that the new one appears a few frames late,
+# instead of a hole in the middle of the transition.
+
+# The pids owning a layer-shell surface under this namespace, one per line.
+layer_pids() {
+    hyprctl layers 2>/dev/null \
+        | grep "namespace: $1" \
+        | sed -n 's/.*pid: \([0-9]*\).*/\1/p' \
+        | sort -u
+}
+
+# Wait until $1 has a surface belonging to a pid that is NOT in $2, a
+# space-separated list of the ones that were there before.
+#
+# Waiting on the NAMESPACE alone is not enough, and the difference is the whole
+# video-to-video case: the outgoing mpvpaper already answers to that name, so a
+# plain "is there an mpvpaper surface" is true from the start and the old video
+# gets killed the instant the new process exists -- long before it has drawn
+# anything. Measured that way: 600ms of the compositor's own background.
+#
+# The pid is also why this asks the compositor rather than the process table.
+# mpvpaper is alive well before it has a surface, and a pid is only proof of a
+# surface when it came out of the surface list.
+wait_for_new_layer() {
+    local ns="$1" old=" $2 " pid _
+    for _ in {1..80}; do
+        while read -r pid; do
+            [[ -n "$pid" && "$old" != *" $pid "* ]] && return 0
+        done < <(layer_pids "$ns")
+        sleep 0.05
+    done
+    return 1
+}
 
 stop_video() {
-    pkill -x mpvpaper 2>/dev/null || return 0
-    # Wait for the surface to actually go away. Without this the new awww
-    # image races a dying mpvpaper for the layer.
+    pgrep -x mpvpaper >/dev/null || return 0
+    pkill -x mpvpaper 2>/dev/null
     for _ in {1..20}; do
         pgrep -x mpvpaper >/dev/null || break
         sleep 0.05
@@ -320,8 +378,6 @@ stop_video() {
 }
 
 apply_image() {
-    stop_video
-
     # The daemon takes a moment to come up the first time.
     if ! awww query >/dev/null 2>&1; then
         awww-daemon >/dev/null 2>&1 &
@@ -339,19 +395,37 @@ apply_image() {
         --transition-bezier "$TRANSITION_BEZIER" \
         --transition-fps 165 \
         || die "awww could not apply the wallpaper"
+
+    # Only once the still is up. awww img has returned by here, so the image
+    # is on the layer and the video can go without leaving a hole.
+    stop_video
 }
 
 apply_video() {
     command -v mpvpaper >/dev/null || die "mpvpaper is not installed (yay -S mpvpaper)"
 
-    stop_video
-    awww kill >/dev/null 2>&1
+    # Noted, NOT killed. Going from one video to another, this is the only
+    # thing on screen, and stopping it here is what put the compositor's
+    # default wallpaper on the screen for half a second.
+    local old_pids
+    old_pids="$(pgrep -x mpvpaper 2>/dev/null | tr '\n' ' ')"
 
     # -f forks: this script is run from keybinds and from a systemd timer, and
     # neither has a terminal to hold the process open.
     # shellcheck disable=SC2086  # both are lists of flags, deliberately split
     mpvpaper -f $MPVPAPER_FLAGS -o "$MPV_OPTIONS" "$MPVPAPER_OUTPUT" "$1" \
         || die "mpvpaper could not play the video"
+
+    # Nothing is torn down until the new video is genuinely on the layer. If it
+    # never gets there, both the old backends are left exactly as they were:
+    # a wallpaper that did not change is a better failure than a black screen.
+    if wait_for_new_layer mpvpaper "$old_pids"; then
+        awww kill >/dev/null 2>&1
+        # shellcheck disable=SC2086  # a pid list, deliberately split
+        [[ -n "${old_pids// /}" ]] && kill $old_pids 2>/dev/null
+    fi
+
+    return 0
 }
 
 if is_video "$TARGET"; then

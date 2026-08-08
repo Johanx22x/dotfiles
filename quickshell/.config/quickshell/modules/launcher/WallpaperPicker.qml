@@ -55,12 +55,28 @@ Item {
     function rebuild(): void {
         const out = [];
         for (let i = 0; i < folder.count; i++) {
+            const path = folder.get(i, "filePath");
             out.push({
                 name: folder.get(i, "fileName"),
-                path: folder.get(i, "filePath")
+                path: path,
+                // For a still this is the wallpaper itself. For a video it is
+                // the frame wallpaper-switch pulled out with ffmpeg, because
+                // an Image cannot decode an mp4.
+                thumbUrl: Config.wallpaperThumbUrl(path)
             });
         }
         root.allEntries = out;
+    }
+
+    // A video listed before its frame has been extracted has nothing to draw.
+    // Rebuilding on the bump replaces the entry objects, which is what gets
+    // the delegates to ask for the file a second time.
+    Connections {
+        target: Config
+
+        function onWallpaperThumbsRevisionChanged() {
+            root.rebuild();
+        }
     }
     readonly property int thumbWidth: 190
     readonly property int thumbHeight: 108
@@ -94,14 +110,24 @@ Item {
         // and that folder is a setting now -- a copy of the path in each of
         // them is how one of the two silently stops agreeing with the other.
         folder: `file://${Config.wallpaperDir}`
-        // The same extensions wallpaper-switch looks for.
-        nameFilters: ["*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp"]
+        // The same extensions wallpaper-switch looks for, and from Config for
+        // the same reason the folder is: the settings grid lists this folder
+        // too, and one of the two quietly accepting a different set of files
+        // is the half-working outcome that property exists to prevent.
+        nameFilters: Config.wallpaperNameFilters
         showDirs: false
         sortField: FolderListModel.Name
 
         // The model fills asynchronously, so the array is built when it
         // reports how many files it found rather than at construction.
-        onCountChanged: root.rebuild()
+        //
+        // A changed count is also how a video dropped into the folder while
+        // the shell is running gets a thumbnail: it has none until ffmpeg has
+        // been past it, and this is the moment we learn it is there.
+        onCountChanged: {
+            root.rebuild();
+            Config.refreshWallpaperThumbs();
+        }
     }
 
     ListView {
@@ -160,7 +186,7 @@ Item {
                     id: picture
 
                     anchors.fill: parent
-                    source: `file://${thumb.modelData.path}`
+                    source: thumb.modelData.thumbUrl
                     fillMode: Image.PreserveAspectCrop
                     // Decoded at the size it is drawn at: these are 4K
                     // wallpapers and ten of them at full size is a lot of
@@ -169,6 +195,11 @@ Item {
                     sourceSize.height: root.thumbHeight
                     asynchronous: true
                     smooth: true
+                    // Qt remembers that a URL failed to load and will not go
+                    // back to disk for it. A video's frame is written after
+                    // the strip has already asked for it once, so without this
+                    // the retry above would find the same cached failure.
+                    cache: false
 
                     visible: false
                     layer.enabled: true
