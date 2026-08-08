@@ -13,7 +13,7 @@ DOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # not linked, see seeds/README.md and the seed step below. There is no `qt` or
 # `xdg` package any more either: qt6ct.conf and mimeapps.list were all they
 # held, and both are seeds now.
-PACKAGES=(zsh hypr quickshell kitty matugen shell gtk media openrgb systemd bin ranger icons zen)
+PACKAGES=(zsh hypr quickshell kitty matugen shell gtk media openrgb systemd bin ranger icons zen gaming)
 
 blue()  { printf '\033[1;34m%s\033[0m\n' "$*"; }
 green() { printf '\033[1;32m%s\033[0m\n' "$*"; }

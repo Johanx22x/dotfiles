@@ -134,6 +134,9 @@ args+=( --expose-wayland )
 # silently ("gamemodeauto: dlopen failed" in the Steam log). Since gamescope
 # is a host process and gamemode's changes are system-wide (CPU governor,
 # priorities), the effect on the game is the same.
+#
+# One gamemode feature has to stay off for games to survive this: core pinning.
+# See gamemode.ini, which sets pin_cores=no and explains why.
 outer=()
 if [[ ${GS_GAMEMODE:-1} == 1 ]] && command -v gamemoderun >/dev/null; then
     outer+=( gamemoderun )
