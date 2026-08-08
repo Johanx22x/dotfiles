@@ -142,8 +142,9 @@ shell/      .config/                 btop, starship (two profiles), cship
 gtk/        .config/                 gtk-3.0 and gtk-4.0 settings.ini
 media/      .config/mpv/             + a wireplumber rule for the capture card
 openrgb/    .config/OpenRGB/
-systemd/    .config/systemd/user/    wallpaper rotation service + timer
-bin/        .local/bin/              11 scripts + the capture-card desktop entry
+systemd/    .config/systemd/user/    wallpaper rotation + AirPods battery,
+                                     each a service and a timer
+bin/        .local/bin/              15 scripts + the capture-card desktop entry
 ranger/     .config/ranger/          rc.conf, scope.sh, tokyonight colorscheme
 icons/      .local/share/icons/      an icon that does not ship with its app
 zen/        .zen/rice/               user.js + userChrome.css (Zen browser)
@@ -180,6 +181,7 @@ tracked config standing instead of taking the desktop down.
 |---|---|---|
 | `~/.config/hypr/monitors.lua` | **generated** — `hypr-monitor`, called by the settings window | mode, position, scale and rotation per monitor |
 | `~/.config/hypr/tweaks.lua` | **generated** — `hypr-tweak`, called by the settings window | gaps, corner rounding, border width, mouse, key repeat, cursor |
+| `~/.config/systemd/user/wallpaper-rotate.timer.d/interval.conf` | **generated** — `wallpaper-interval` | how often the wallpaper rotates |
 | `~/.config/hypr/local.lua` | **you**, by hand | keyboard layout, extra binds, window rules |
 
 All three are in `.gitignore`. None is required. `tweaks.lua` is read **last**,
@@ -242,6 +244,7 @@ single file that one script writes and everything else reads:
 | `hypr-monitors` | `hypr-monitor` | `hypr-monitor` itself, to regenerate `monitors.lua` |
 | `hypr-tweaks` | `hypr-tweak` | Quickshell, and `hypr-tweak` itself to regenerate `tweaks.lua` |
 | `night-light` | `night-light` | Quickshell |
+| `wallpaper-interval` | `wallpaper-interval` | Quickshell, and the script itself to regenerate the timer drop-in |
 | `airpods-battery` | `airpods-battery`, on a systemd timer | Quickshell |
 | `wallpaper-dir` | `wallpaper-switch dir` | Quickshell, `wallpaper-switch` |
 
@@ -258,6 +261,10 @@ hypr-tweak clear         # forget the lot, then `hyprctl reload`
 night-light on           # blue light filter on
 night-light temp 3200    # how warm (2500 - 6000 K)
 night-light off
+
+wallpaper-interval       # how often the wallpaper rotates, in minutes
+wallpaper-interval 90    # every hour and a half (5 - 10080)
+wallpaper-interval clear # back to the timer's own 30
 
 airpods-battery show     # the charge in each bud and the case
 default-apps             # print every role and its handler

@@ -229,6 +229,45 @@ SettingsPage {
         }
     }
 
+    // ---------------- How often ----------------
+    //
+    // The values worth offering, in minutes. Not a range: see the note on the
+    // stepper that walks them.
+    readonly property var intervals: [5, 10, 15, 30, 45, 60, 90, 120, 180, 360, 720, 1440]
+
+    // THE NEAREST ONE, not an exact match. `wallpaper-interval` accepts any
+    // number of minutes between 5 and 10080, so a value typed into a terminal
+    // -- or left over from a version of this list that had different entries
+    // -- has no index of its own. Snapping to the closest keeps the stepper on
+    // a real position instead of collapsing to the first one.
+    readonly property int intervalIndex: {
+        let best = 0;
+        let distance = Infinity;
+
+        for (let i = 0; i < root.intervals.length; i++) {
+            const gap = Math.abs(root.intervals[i] - Config.wallpaperInterval);
+            if (gap < distance) {
+                distance = gap;
+                best = i;
+            }
+        }
+
+        return best;
+    }
+
+    // Minutes below an hour, hours above it, and a day at the top. "1440 min"
+    // is arithmetic somebody has to do; "1 day" is the thing they meant.
+    function intervalLabel(minutes: int): string {
+        if (minutes < 60)
+            return `${minutes} min`;
+        if (minutes === 1440)
+            return "1 day";
+
+        const hours = Math.floor(minutes / 60);
+        const rest = minutes % 60;
+        return rest === 0 ? `${hours} h` : `${hours} h ${rest}`;
+    }
+
     // ---------------- The folder ----------------
     //
     // WHERE THE COLLECTION LIVES IS NOT THIS FILE'S TO DECIDE. It used to be:
@@ -358,6 +397,35 @@ SettingsPage {
             label: "Change automatically"
             checked: root.rotating
             onToggled: value => root.setRotation(value)
+        }
+
+        // A STEPPER OVER A LIST AND NOT OVER MINUTES. The useful intervals are
+        // not evenly spaced -- the difference between 5 and 10 minutes is a
+        // different desktop, the difference between 700 and 705 is nothing --
+        // so stepping in minutes would be a control you hold down for a
+        // minute and a half to get from half an hour to a day. The stepper
+        // walks the list; `display` is what the note in StepperRow.qml calls a
+        // value that is not read as a number.
+        //
+        // Dimmed while rotation is off. The interval is still stored and still
+        // applies the moment it goes back on, but a frequency for something
+        // that is not happening is a number with nothing to be true about.
+        StepperRow {
+            glyph: Icons.clock
+            label: "Change every"
+            enabled: root.rotating
+
+            value: root.intervalIndex
+            from: 0
+            to: root.intervals.length - 1
+            step: 1
+            display: root.intervalLabel(root.intervals[root.intervalIndex])
+
+            onMoved: index => Config.setWallpaperInterval(root.intervals[index])
+
+            hint: "Every change regenerates the whole palette with matugen — "
+                + "ten template renders and a reload in four applications — "
+                + "which is why the shortest offered is five minutes."
         }
 
         Text {
