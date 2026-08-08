@@ -88,6 +88,12 @@ Singleton {
     // bottom of this file.
     readonly property string stateDir: Quickshell.env("XDG_STATE_HOME") || `${Quickshell.env("HOME")}/.local/state`
 
+    // Same idea for the caches wallpaper-switch writes. Kept beside stateDir
+    // rather than spelled out where it is used, for the same reason: a script
+    // and this shell have to agree on the path or neither finds the other's
+    // files.
+    readonly property string cacheDir: Quickshell.env("XDG_CACHE_HOME") || `${Quickshell.env("HOME")}/.cache`
+
     // ---------------- Appearance ----------------
 
     // The transparency of the whole desktop, not just of this shell: the bar
@@ -355,6 +361,49 @@ Singleton {
             const value = (text() || "").trim();
             root.wallpaperDir = value !== "" ? value : root.wallpaperDirDefault;
         }
+    }
+
+    // ---------------- What a wallpaper can be ----------------
+    //
+    // Here for the same reason wallpaperDir is: the launcher's strip and the
+    // settings grid each had their own copy of five extensions, so adding
+    // videos would have been two lists to keep in step and one of them
+    // eventually not being.
+    //
+    // The stills include gif on purpose. awww animates a GIF by itself, so it
+    // is a moving wallpaper that still goes down the image path and keeps the
+    // transitions; only real video needs the other backend.
+    //
+    // The remaining copy of this list is in wallpaper-switch, which cannot ask
+    // a running shell what it accepts. Change one, change the other.
+    readonly property var wallpaperStillExtensions: ["jpg", "jpeg", "png", "webp", "bmp", "gif"]
+    readonly property var wallpaperVideoExtensions: ["mp4", "webm", "mkv"]
+
+    // Ready to hand to a FolderListModel.
+    readonly property var wallpaperNameFilters: [...root.wallpaperStillExtensions, ...root.wallpaperVideoExtensions].map(e => `*.${e}`)
+
+    function isWallpaperVideo(path: string): bool {
+        const dot = path.lastIndexOf(".");
+        if (dot < 0)
+            return false;
+
+        return root.wallpaperVideoExtensions.includes(path.slice(dot + 1).toLowerCase());
+    }
+
+    // What to point an Image at for a given wallpaper. An Image cannot decode
+    // an mp4, so a video entry would draw as an empty rectangle -- in a picker
+    // whose whole job is choosing by looking, that is the same as not being
+    // there. wallpaper-switch extracts a frame per video and this reproduces
+    // the name it files it under: the source path with its slashes flattened,
+    // which is what keeps two `loop.mp4` in different subfolders apart.
+    //
+    // Returns a path and not a URL. The callers already build their own
+    // file:// prefix and doing it here would leave them with two.
+    function wallpaperThumb(path: string): string {
+        if (!root.isWallpaperVideo(path))
+            return path;
+
+        return `${root.cacheDir}/wallpaper-frames/${path.replace(/^\//, "").replace(/\//g, "_")}.png`;
     }
 
     // ---------------- How often the wallpaper rotates ----------------

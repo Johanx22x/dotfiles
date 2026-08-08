@@ -8,12 +8,26 @@
 #   wallpaper-switch reapply  reapply the current one (handy after editing templates)
 #   wallpaper-switch dir      print the collection's folder
 #   wallpaper-switch dir PATH use a different folder from now on
+#   wallpaper-switch thumbs   pre-extract the still frame of every video
 #
 # The collection lives in ~/Pictures/wallpapers unless told otherwise. WHERE
 # THAT IS TOLD is a state file, ~/.local/state/wallpaper-dir, and not this
 # script: the folder is one person's answer on one machine, and this file is
 # shared with another. The WALLPAPER_DIR environment variable still wins over
 # both, for a one-off run against some other folder.
+#
+# ---- Two backends, one entry point ----
+# A still goes to awww and a video goes to mpvpaper, and which one runs is
+# decided here from the file extension rather than by the caller. Every way of
+# changing the wallpaper -- the keybinds, the rotation timer, the launcher's
+# strip, the settings grid -- already goes through this script because it is
+# what regenerates the palette as well; making the caller also pick a backend
+# would have been four places to teach about videos instead of one.
+#
+# Animated GIFs are NOT videos here. awww decodes them itself ("Sends an image
+# (or animated gif)", per its own --help), so they take the still path and keep
+# the transitions, and matugen reads a GIF directly -- verified, unlike mp4,
+# which makes it panic on an unsupported format.
 
 set -uo pipefail
 
@@ -42,9 +56,113 @@ TRANSITION_DURATION="${TRANSITION_DURATION:-1.4}"
 # For a linear dissolve use 0.0,0.0,1.0,1.0
 TRANSITION_BEZIER="${TRANSITION_BEZIER:-.42,0,.58,1}"
 
+# ---- Video ----
+# Options handed to mpv. no-audio is not a preference: a wallpaper that makes
+# noise is a wallpaper nobody keeps. panscan=1.0 crops to fill the screen,
+# which is what awww does by default for stills, so a video and an image frame
+# the same way. hwdec=auto puts the decoding on the GPU -- the whole reason for
+# a separate process instead of decoding inside the shell.
+MPV_OPTIONS="${MPV_OPTIONS:---no-audio --loop-file=inf --panscan=1.0 --hwdec=auto}"
+
+# -p pauses when the wallpaper is covered and -a FULL extends that to any
+# fullscreen window. FULL and not MAX because this is a tiling compositor: MAX
+# also triggers on maximized windows, which here is most windows most of the
+# time, and a wallpaper paused whenever you are using the computer is a still
+# image with extra steps.
+MPVPAPER_FLAGS="${MPVPAPER_FLAGS:--p -a FULL}"
+
+# Every monitor. Named outputs go here if the two ever want different videos.
+MPVPAPER_OUTPUT="${MPVPAPER_OUTPUT:-ALL}"
+
+# ---- What counts as a wallpaper ----
+# One list, used by the collection scan, by the folder count and by the
+# backend dispatch. It was two copies of five extensions inside two `find`
+# calls, which is exactly the kind of thing that gets updated in one place.
+#
+# KEEP IN STEP with nameFilters in modules/launcher/WallpaperPicker.qml and
+# modules/settings/pages/WallpaperPage.qml. Those two read the folder
+# themselves through Qt and cannot ask this script what it accepts.
+STILL_EXT=(jpg jpeg png webp bmp gif)
+VIDEO_EXT=(mp4 webm mkv)
+
+# A still frame per video, extracted once and reused: matugen needs one to
+# build the palette, and the QML pickers need one to draw a thumbnail. Two
+# consumers, one cache, so a video is never decoded twice for the same frame.
+FRAME_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-frames"
+
 mkdir -p "$(dirname "$STATE_FILE")"
 
 die() { echo "wallpaper-switch: $*" >&2; exit 1; }
+
+# The find expression for every accepted extension: -iname a -o -iname b ...
+# Built rather than written out so the arrays above stay the only list.
+find_expr() {
+    local ext first=1
+    for ext in "${STILL_EXT[@]}" "${VIDEO_EXT[@]}"; do
+        (( first )) || printf '%s\0' "-o"
+        printf '%s\0%s\0' "-iname" "*.$ext"
+        first=0
+    done
+}
+
+# Everything in a folder that this script would accept, sorted.
+collect() {
+    local -a expr
+    mapfile -d '' -t expr < <(find_expr)
+    find -L "$1" -maxdepth 2 -type f \( "${expr[@]}" \) | sort
+}
+
+is_video() {
+    local ext="${1##*.}"
+    ext="${ext,,}"
+    local v
+    for v in "${VIDEO_EXT[@]}"; do
+        [[ "$ext" == "$v" ]] && return 0
+    done
+    return 1
+}
+
+# Path of the cached still frame for a video. The whole source path with its
+# slashes flattened, not the basename: the collection is scanned two levels
+# deep, so two folders can hold a "loop.mp4" and one thumbnail would end up
+# standing for both.
+frame_path() {
+    local flat="${1#/}"
+    printf '%s/%s.png' "$FRAME_CACHE" "${flat//\//_}"
+}
+
+# Extract that frame if it is missing or older than the video, and print where
+# it is. Seeks two seconds in because videos so often open on black or on a
+# fade -- a palette built from the first frame comes out grey for a wallpaper
+# that is not. Falls back to the very beginning for anything shorter.
+frame_for() {
+    local src="$1" out
+    out="$(frame_path "$src")"
+
+    if [[ -f "$out" && "$out" -nt "$src" ]]; then
+        printf '%s\n' "$out"
+        return 0
+    fi
+
+    command -v ffmpeg >/dev/null || return 1
+    mkdir -p "$FRAME_CACHE"
+
+    # Both attempts are checked for a non-empty FILE and not for an exit code.
+    # Seeking past the end of a short clip is not an error to ffmpeg: it exits
+    # 0, having written nothing, and a bare `||` chain would take that for
+    # success and never try the second seek.
+    local seek
+    for seek in 2 0; do
+        ffmpeg -y -loglevel error -ss "$seek" -i "$src" -frames:v 1 \
+            -vf 'scale=1280:-2' "$out" >/dev/null 2>&1
+        [[ -s "$out" ]] && { printf '%s\n' "$out"; return 0; }
+    done
+
+    # Leave no empty file behind: it would be newer than the video and so pass
+    # the freshness check above forever.
+    rm -f "$out"
+    return 1
+}
 
 # ---------------------------------------------------------------
 # The folder itself, handled before anything looks inside it: asking where the
@@ -83,27 +201,43 @@ if [[ "$MODE" == "dir" ]]; then
     mkdir -p "$(dirname "$DIR_STATE")"
     printf '%s\n' "$NEW_DIR" > "$DIR_STATE"
 
-    COUNT=$(find -L "$NEW_DIR" -maxdepth 2 -type f \
-        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
-           -o -iname '*.webp' -o -iname '*.bmp' \) | wc -l)
+    COUNT=$(collect "$NEW_DIR" | wc -l)
 
     echo "Wallpaper folder: $NEW_DIR"
     # Said rather than treated as an error: an empty folder is a perfectly
     # reasonable thing to point at just before filling it.
-    echo "  $COUNT image(s) found"
+    echo "  $COUNT wallpaper(s) found"
     exit 0
 fi
 
 # ---------------------------------------------------------------
 # 1. Gather the collection
 # ---------------------------------------------------------------
-mapfile -t WALLPAPERS < <(
-    find -L "$WALLPAPER_DIR" -maxdepth 2 -type f \
-        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
-           -o -iname '*.webp' -o -iname '*.bmp' \) | sort
-)
+mapfile -t WALLPAPERS < <(collect "$WALLPAPER_DIR")
 
-(( ${#WALLPAPERS[@]} == 0 )) && die "no images in $WALLPAPER_DIR"
+(( ${#WALLPAPERS[@]} == 0 )) && die "no wallpapers in $WALLPAPER_DIR"
+
+# ---------------------------------------------------------------
+# 1b. Thumbnails, on request
+# ---------------------------------------------------------------
+# The QML pickers draw a thumbnail with an Image, and an Image cannot decode an
+# mp4 -- a video entry would be a blank rectangle in the strip, which for a
+# picker whose entire job is choosing by LOOKING is the same as not listing it.
+# So they run this first and then point at frame_path() themselves.
+#
+# A separate mode and not something every run does in passing: extracting
+# frames for a folder of videos is seconds of ffmpeg, and `wallpaper-switch
+# next` on a keybind has to be instant.
+if [[ "$MODE" == "thumbs" ]]; then
+    MADE=0
+    for W in "${WALLPAPERS[@]}"; do
+        is_video "$W" || continue
+        [[ -f "$(frame_path "$W")" && "$(frame_path "$W")" -nt "$W" ]] && continue
+        frame_for "$W" >/dev/null && MADE=$(( MADE + 1 ))
+    done
+    echo "wallpaper thumbnails: $MADE extracted"
+    exit 0
+fi
 
 CURRENT=""
 [[ -r "$STATE_FILE" ]] && CURRENT="$(<"$STATE_FILE")"
@@ -142,7 +276,7 @@ case "$MODE" in
         [[ -f "$CURRENT" ]] || die "no current wallpaper to reapply"
         TARGET="$CURRENT"
         ;;
-    *) die "unknown mode '$MODE' (use next|prev|random|set|reapply)" ;;
+    *) die "unknown mode '$MODE' (use next|prev|random|set|reapply|dir|thumbs)" ;;
 esac
 
 # ---------------------------------------------------------------
@@ -166,33 +300,84 @@ fi
 # ---------------------------------------------------------------
 # 4. Set the wallpaper
 # ---------------------------------------------------------------
-# The daemon takes a moment to come up the first time.
-if ! awww query >/dev/null 2>&1; then
-    awww-daemon >/dev/null 2>&1 &
-    for _ in {1..20}; do
-        awww query >/dev/null 2>&1 && break
-        sleep 0.15
-    done
-fi
+# ONLY ONE BACKEND IS EVER ALIVE. awww and mpvpaper both put a surface on the
+# background layer, and which of two surfaces on one layer ends up on top is
+# the compositor's business, not ours. Killing the other one first costs a
+# daemon restart and buys never having to debug a video that plays perfectly
+# behind an opaque still.
+#
+# The visible price is on the way back: awww starts with nothing to fade FROM,
+# so video -> image arrives without a transition. Worth it.
 
-# 165 fps = the real refresh rate of both monitors. Any less and the
-# transition looks choppy even when the effect itself is right.
-awww img "$TARGET" \
-    --transition-type "$TRANSITION_TYPE" \
-    --transition-duration "$TRANSITION_DURATION" \
-    --transition-bezier "$TRANSITION_BEZIER" \
-    --transition-fps 165 \
-    || die "awww could not apply the wallpaper"
+stop_video() {
+    pkill -x mpvpaper 2>/dev/null || return 0
+    # Wait for the surface to actually go away. Without this the new awww
+    # image races a dying mpvpaper for the layer.
+    for _ in {1..20}; do
+        pgrep -x mpvpaper >/dev/null || break
+        sleep 0.05
+    done
+}
+
+apply_image() {
+    stop_video
+
+    # The daemon takes a moment to come up the first time.
+    if ! awww query >/dev/null 2>&1; then
+        awww-daemon >/dev/null 2>&1 &
+        for _ in {1..20}; do
+            awww query >/dev/null 2>&1 && break
+            sleep 0.15
+        done
+    fi
+
+    # 165 fps = the real refresh rate of both monitors. Any less and the
+    # transition looks choppy even when the effect itself is right.
+    awww img "$1" \
+        --transition-type "$TRANSITION_TYPE" \
+        --transition-duration "$TRANSITION_DURATION" \
+        --transition-bezier "$TRANSITION_BEZIER" \
+        --transition-fps 165 \
+        || die "awww could not apply the wallpaper"
+}
+
+apply_video() {
+    command -v mpvpaper >/dev/null || die "mpvpaper is not installed (yay -S mpvpaper)"
+
+    stop_video
+    awww kill >/dev/null 2>&1
+
+    # -f forks: this script is run from keybinds and from a systemd timer, and
+    # neither has a terminal to hold the process open.
+    # shellcheck disable=SC2086  # both are lists of flags, deliberately split
+    mpvpaper -f $MPVPAPER_FLAGS -o "$MPV_OPTIONS" "$MPVPAPER_OUTPUT" "$1" \
+        || die "mpvpaper could not play the video"
+}
+
+if is_video "$TARGET"; then
+    apply_video "$TARGET"
+else
+    apply_image "$TARGET"
+fi
 
 echo "$TARGET" > "$STATE_FILE"
 
 # ---------------------------------------------------------------
 # 5. Regenerate the palette
 # ---------------------------------------------------------------
+# matugen takes an image and only an image: handed an mp4 it does not fail
+# politely, it panics on "Unsupported(PathExtension)". So a video is coloured
+# from the frame extracted above -- the same cached file the pickers draw.
+PALETTE_SOURCE="$TARGET"
+if is_video "$TARGET"; then
+    PALETTE_SOURCE="$(frame_for "$TARGET")" \
+        || die "could not extract a frame from $(basename "$TARGET") (is ffmpeg installed?)"
+fi
+
 # --prefer is mandatory: with no interactive terminal matugen cannot tell
 # which colour to pick when the image has several candidates.
 # saturation gives accents with more character than darkness/lightness.
-matugen image "$TARGET" --mode dark --prefer saturation --quiet \
+matugen image "$PALETTE_SOURCE" --mode dark --prefer saturation --quiet \
     || die "matugen failed"
 
 # ---------------------------------------------------------------
