@@ -110,7 +110,21 @@ Singleton {
     // It is not the only gate. Both widgets ALSO hide themselves when the
     // hardware is not reported -- see their headers. This flag is the
     // intention; that is the check that the intention is possible.
-    property bool laptopModules: false
+    // TWO KEYS, because they are two widgets in two places and somebody may
+    // want one without the other. install.sh sets both together -- at that
+    // moment it is asking one question -- and the settings window then treats
+    // them apart, which is what the rows in it are for.
+    property bool laptopBattery: false
+    property bool laptopBrightness: false
+
+    function setLaptopModule(key: string, on: bool): void {
+        if (key === "battery")
+            root.laptopBattery = on;
+        else
+            root.laptopBrightness = on;
+
+        Quickshell.execDetached(["laptop-modules", key, on ? "on" : "off"]);
+    }
 
     FileView {
         id: laptopFile
@@ -120,8 +134,26 @@ Singleton {
         printErrors: false
 
         onFileChanged: reload()
-        onLoaded: root.laptopModules = (laptopFile.text() || "").trim() === "1"
-        onLoadFailed: root.laptopModules = false
+        onLoaded: root.adoptLaptopModules()
+        onLoadFailed: {
+            root.laptopBattery = false;
+            root.laptopBrightness = false;
+        }
+    }
+
+    // Tab-separated, one key per line, the same shape hypr-tweaks uses.
+    function adoptLaptopModules(): void {
+        const parsed = ({});
+
+        for (const line of (laptopFile.text() || "").split("\n")) {
+            const at = line.indexOf("\t");
+            if (at < 0)
+                continue;
+            parsed[line.slice(0, at)] = line.slice(at + 1).trim();
+        }
+
+        root.laptopBattery = parsed["battery"] === "1";
+        root.laptopBrightness = parsed["brightness"] === "1";
     }
 
     // ---------------- Appearance ----------------

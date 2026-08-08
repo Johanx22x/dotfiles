@@ -24,7 +24,8 @@ SettingsPage {
     title: "Bar"
     glyph: Icons.windowTiles
     keywords: ["bar", "clock", "time", "date", "panel", "24 hour",
-        "widgets", "tray", "logo", "title", "battery", "hide"]
+        "widgets", "tray", "logo", "title", "battery", "hide",
+        "laptop", "brightness", "backlight"]
 
     SettingsSection {
         width: parent.width
@@ -71,6 +72,57 @@ SettingsPage {
             label: "Settings button"
             checked: Config.barSettingsButton
             onToggled: value => Config.barSettingsButton = value
+        }
+
+        // ---------------- Laptop ----------------
+        //
+        // SHOWN ON EVERY MACHINE, INCLUDING THE ONES THEY DO NOTHING ON, and
+        // that is a deliberate exception to the rule the rest of this shell
+        // follows about not drawing readings with nothing to say. install.sh
+        // asks the question once at install time; without these rows the
+        // answer would be unreachable forever after, and a feature nobody can
+        // find is a feature that does not exist. They carry a line saying what
+        // they need, so an inert switch on a desktop is explained rather than
+        // mysterious.
+        //
+        // THE BRIGHTNESS ONE IS NOT A BAR WIDGET. It sits in the island's
+        // dashboard next to the volume, where a value you set by feel belongs.
+        // It is here because this is the page about what the shell shows, and
+        // an "Island" page for one row would be worse than a slightly wide
+        // reading of "Bar".
+        ToggleRow {
+            glyph: Icons.laptop
+            label: "Laptop battery"
+            checked: Config.laptopBattery
+            onToggled: value => Config.setLaptopModule("battery", value)
+        }
+
+        ToggleRow {
+            glyph: Icons.brightness
+            label: "Brightness slider"
+            checked: Config.laptopBrightness
+            onToggled: value => Config.setLaptopModule("brightness", value)
+        }
+
+        Text {
+            visible: Config.laptopBattery || Config.laptopBrightness
+
+            x: Theme.groupPadding
+            width: parent.width - Theme.groupPadding * 2
+            bottomPadding: 6
+
+            text: "These two need the hardware as well as the switch: the "
+                + "battery needs one UPower reports, and the slider needs a "
+                + "backlight under /sys/class/backlight. On a machine without "
+                + "them they stay hidden and leave no gap."
+            wrapMode: Text.WordWrap
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize - 2
+            color: Theme.textOnSurfaceVariant
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
+            }
         }
 
         // The one switch that can hide its own way back, so it says where the

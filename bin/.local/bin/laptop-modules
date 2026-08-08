@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
-# laptop-modules -- whether this machine gets the battery and brightness
-# widgets.
+# laptop-modules -- whether this machine gets the battery indicator and the
+# brightness slider.
 #
 # OFF UNLESS SOMEBODY SAYS OTHERWISE. These dotfiles are shared between a
 # desktop and a laptop, and the two pieces of hardware that differ most are
 # exactly these: a battery and a backlight. A tracked config cannot know which
 # machine it landed on, so this is the one answer that has to be given per
-# machine -- install.sh asks it, and this file is where the answer lives.
+# machine -- install.sh asks it once, and this file is where the answer lives.
+#
+# TWO KEYS AND NOT ONE, because they are two widgets in two places and a
+# person may well want one without the other: a desktop with a DDC-capable
+# monitor could grow brightness one day, and a laptop docked to a screen may
+# want the battery and nothing else. install.sh sets both together because at
+# that moment it is asking one question ("is this a laptop?"); the settings
+# window then treats them separately, which is what the rows in it are for.
 #
 # WHY NOT DETECT IT. Detection is what the widgets ALREADY do: the battery one
 # hides when UPower reports no laptop battery, the brightness one hides when
@@ -16,9 +23,8 @@
 # one bar and take it off another for reasons nobody asked for. The flag is
 # the intention; the detection is the check that the intention is possible.
 #
-# WHY NOT Config.qml's JSON. That file is rewritten by the settings window
-# whenever a switch is flipped, and install.sh runs before the shell has ever
-# started -- it would be writing a file the shell is about to create. A flat
+# WHY NOT Config.qml's JSON. install.sh runs before the shell has ever
+# started, so it would be writing a file the shell is about to create. A flat
 # file in the state directory is what every other cross-program value here
 # uses, and it is readable from a script, from QML and by hand.
 
@@ -27,42 +33,73 @@ set -euo pipefail
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
 STATE_FILE="$STATE_DIR/laptop-modules"
 
+readonly KEYS=(battery brightness)
+
 usage() {
     cat >&2 <<'EOF'
 Usage:
-  laptop-modules          print "on" or "off"
-  laptop-modules on       show the battery and brightness widgets
-  laptop-modules off      hide them (the default)
+  laptop-modules                    print both keys
+  laptop-modules on | off           set both at once (install.sh does this)
+  laptop-modules battery on|off     the bar's battery indicator
+  laptop-modules brightness on|off  the island's brightness slider
 
-They also hide themselves when the hardware is not there, so turning them
-on for a machine without a battery or a backlight shows nothing.
+Both are off unless set. They also hide themselves when the hardware is not
+there, so turning one on for a machine without a battery or a backlight
+shows nothing.
 EOF
     exit 2
 }
 
-state() {
-    [[ -r $STATE_FILE ]] || { printf 'off'; return; }
+declare -A VALUES=()
 
-    local value
-    read -r value < "$STATE_FILE" || value=""
-    [[ $value == 1 ]] && printf 'on' || printf 'off'
+load() {
+    [[ -r $STATE_FILE ]] || return 0
+
+    local key value
+    while IFS=$'\t' read -r key value; do
+        [[ -n ${key:-} ]] || continue
+        VALUES[$key]=$value
+    done < "$STATE_FILE"
 }
+
+save() {
+    mkdir -p "$STATE_DIR"
+
+    local key
+    for key in "${KEYS[@]}"; do
+        printf '%s\t%s\n' "$key" "${VALUES[$key]:-0}"
+    done > "$STATE_FILE"
+}
+
+set_key() {
+    case "$2" in
+        on)  VALUES[$1]=1 ;;
+        off) VALUES[$1]=0 ;;
+        *)   usage ;;
+    esac
+}
+
+load
 
 case "${1:-show}" in
     show)
-        echo "$(state)"
+        for key in "${KEYS[@]}"; do
+            [[ ${VALUES[$key]:-0} == 1 ]] && state=on || state=off
+            printf '%-11s %s\n' "$key" "$state"
+        done
         ;;
 
-    on)
-        mkdir -p "$STATE_DIR"
-        printf '1\n' > "$STATE_FILE"
-        echo "on"
+    on|off)
+        for key in "${KEYS[@]}"; do
+            set_key "$key" "$1"
+        done
+        save
         ;;
 
-    off)
-        mkdir -p "$STATE_DIR"
-        printf '0\n' > "$STATE_FILE"
-        echo "off"
+    battery|brightness)
+        [[ $# -eq 2 ]] || usage
+        set_key "$1" "$2"
+        save
         ;;
 
     *) usage ;;

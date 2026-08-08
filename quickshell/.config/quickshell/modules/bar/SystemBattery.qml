@@ -10,9 +10,10 @@
 // flat means "save your work". They deserve different thresholds and
 // different words, and they do not belong side by side in one list.
 //
-// OFF UNLESS THIS MACHINE SAID IT IS A LAPTOP. See Config.laptopModules --
-// install.sh asks once and `laptop-modules` records the answer, because a
-// tracked configuration cannot know which of two machines it landed on.
+// OFF UNLESS THIS MACHINE SAID IT IS A LAPTOP. See Config.laptopBattery --
+// install.sh asks once, `laptop-modules` records the answer and the Bar page
+// can change it afterwards, because a tracked configuration cannot know
+// which of two machines it landed on.
 //
 // AND OFF ANYWAY WHEN THERE IS NO BATTERY. The flag is the intention; this is
 // the check that the intention is possible. A desktop where somebody answered
@@ -31,7 +32,7 @@ Rectangle {
     // measured here, where it also carries icon-name battery-missing-symbolic.
     readonly property var device: UPower.displayDevice
 
-    readonly property bool present: Config.laptopModules
+    readonly property bool present: Config.laptopBattery
         && (root.device?.isLaptopBattery ?? false)
         && (root.device?.isPresent ?? false)
 
