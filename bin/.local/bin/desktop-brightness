@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# desktop-brightness -- the backlight, for the machines that have one.
+#
+# A thin wrapper over brightnessctl, which already owns this. What it adds is
+# the part a shell and a keybind both need and neither should reimplement:
+# picking the right device, clamping to a floor, and printing the sysfs path
+# so the shell can watch it.
+#
+# WHY THE SHELL READS SYSFS DIRECTLY AND ONLY WRITES THROUGH HERE. The
+# brightness file is world-readable, so the shell can watch it and follow the
+# value the instant a laptop's own Fn keys move it -- no polling and no state
+# file to keep in step. Writing is the half that needs a group membership,
+# which is what brightnessctl's udev rule grants, so writes go through it.
+#
+# THE FLOOR IS NOT TASTE. brightnessctl will happily set 0, and on most panels
+# 0 is a black screen with no backlight at all -- including the backlight
+# behind whatever you would use to turn it back up. Five percent is dim enough
+# to be useful in the dark and bright enough to find the keys.
+#
+# NOT THE ONLY WRITER, AND THAT IS DELIBERATE. hyprland.lua binds
+# XF86MonBrightnessUp/Down straight to `brightnessctl -e4 -n2`, and those binds
+# are older than this script and better at what they do: -e4 steps along a
+# perceptual curve, so each press feels like the same amount of change, which
+# a linear percentage does not. This script is linear because it serves a
+# SLIDER, and a slider whose handle lands somewhere other than where it was
+# dropped is broken.
+#
+# So the two coexist and neither has to know about the other: both end at the
+# same sysfs file, and the shell watches that file rather than either of them.
+# The keys have their own floor (-n2). The cost is that a keypress and a drag
+# do not step by the same amount, which nobody has ever noticed on a laptop.
+#
+# Those binds also assumed a package that was never declared: brightnessctl
+# was not in packages/pacman.txt until this went in, so on a fresh install the
+# brightness keys did nothing at all.
+
+set -euo pipefail
+
+readonly MIN_PERCENT=5
+
+# Overridable so this can be exercised on a machine that has no backlight --
+# which is most of the machines these dotfiles are edited on. Point it at a
+# directory holding `brightness` and `max_brightness` and every reading path
+# below works; only the WRITE goes through brightnessctl and therefore still
+# needs real hardware.
+BACKLIGHT_ROOT="${BACKLIGHT_ROOT:-/sys/class/backlight}"
+
+usage() {
+    cat >&2 <<'EOF'
+Usage:
+  desktop-brightness              print the current percentage
+  desktop-brightness set <5-100>  set it
+  desktop-brightness up [step]    raise it (default 5)
+  desktop-brightness down [step]  lower it
+  desktop-brightness device       print the sysfs directory, for watching
+EOF
+    exit 2
+}
+
+# THE FIRST ONE, and on a laptop there is exactly one. A machine with none --
+# every desktop -- has an empty directory here rather than a missing one, so
+# the glob has to be checked rather than trusted.
+device() {
+    local candidate
+    for candidate in "$BACKLIGHT_ROOT"/*/; do
+        [[ -r ${candidate}brightness ]] || continue
+        printf '%s' "${candidate%/}"
+        return 0
+    done
+    return 1
+}
+
+percent() {
+    local dir=$1 current max
+    read -r current < "$dir/brightness"
+    read -r max < "$dir/max_brightness"
+    (( max > 0 )) || { printf '0'; return; }
+    # Rounded rather than truncated: with max_brightness values like 96, plain
+    # integer division turns 95% into 94% and a stepper walks downwards on its
+    # own as the value is read back and written again.
+    printf '%s' $(( (current * 100 + max / 2) / max ))
+}
+
+apply() {
+    local wanted=$1
+    (( wanted < MIN_PERCENT )) && wanted=$MIN_PERCENT
+    (( wanted > 100 )) && wanted=100
+
+    command -v brightnessctl >/dev/null || {
+        echo "desktop-brightness: brightnessctl is not installed." >&2
+        exit 1
+    }
+
+    brightnessctl --quiet set "${wanted}%" || {
+        echo "desktop-brightness: brightnessctl refused the write." >&2
+        echo "  Its udev rule puts the backlight in the 'video' group; check" >&2
+        echo "  that you are in it with 'id -nG'." >&2
+        exit 1
+    }
+}
+
+dir="$(device || true)"
+
+if [[ -z $dir ]]; then
+    # NOT AN ERROR. Every desktop lands here, and the shell asks this script
+    # on every machine because it cannot know in advance which it is on.
+    case "${1:-show}" in
+        device) exit 1 ;;
+        *) echo "none"; exit 0 ;;
+    esac
+fi
+
+case "${1:-show}" in
+    show)   percent "$dir"; echo ;;
+    device) echo "$dir" ;;
+
+    set)
+        [[ $# -eq 2 && $2 =~ ^[0-9]+$ ]] || usage
+        apply "$2"
+        ;;
+
+    up)
+        step=${2:-5}
+        [[ $step =~ ^[0-9]+$ ]] || usage
+        apply $(( $(percent "$dir") + step ))
+        ;;
+
+    down)
+        step=${2:-5}
+        [[ $step =~ ^[0-9]+$ ]] || usage
+        apply $(( $(percent "$dir") - step ))
+        ;;
+
+    *) usage ;;
+esac

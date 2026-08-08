@@ -10,6 +10,7 @@ bat
 blueman
 bluez
 bluez-utils
+brightnessctl
 btop
 btrfs-progs
 cava

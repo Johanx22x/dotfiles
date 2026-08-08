@@ -144,7 +144,8 @@ media/      .config/mpv/             + a wireplumber rule for the capture card
 openrgb/    .config/OpenRGB/
 systemd/    .config/systemd/user/    wallpaper rotation + AirPods battery,
                                      each a service and a timer
-bin/        .local/bin/              15 scripts + the capture-card desktop entry
+bin/        .local/bin/              17 scripts
+            .local/share/applications/  the capture-card desktop entry
 ranger/     .config/ranger/          rc.conf, scope.sh, tokyonight colorscheme
 icons/      .local/share/icons/      an icon that does not ship with its app
 zen/        .zen/rice/               user.js + userChrome.css (Zen browser)
@@ -245,6 +246,7 @@ single file that one script writes and everything else reads:
 | `hypr-tweaks` | `hypr-tweak` | Quickshell, and `hypr-tweak` itself to regenerate `tweaks.lua` |
 | `night-light` | `night-light` | Quickshell |
 | `wallpaper-interval` | `wallpaper-interval` | Quickshell, and the script itself to regenerate the timer drop-in |
+| `laptop-modules` | `laptop-modules`, called by `install.sh` | Quickshell |
 | `airpods-battery` | `airpods-battery`, on a systemd timer | Quickshell |
 | `wallpaper-dir` | `wallpaper-switch dir` | Quickshell, `wallpaper-switch` |
 
@@ -261,6 +263,13 @@ hypr-tweak clear         # forget the lot, then `hyprctl reload`
 night-light on           # blue light filter on
 night-light temp 3200    # how warm (2500 - 6000 K)
 night-light off
+
+laptop-modules           # "on" or "off" for the battery and brightness widgets
+laptop-modules on        # install.sh asks this; off unless answered
+
+desktop-brightness       # the backlight percentage, or "none"
+desktop-brightness set 60
+desktop-brightness up 10
 
 wallpaper-interval       # how often the wallpaper rotates, in minutes
 wallpaper-interval 90    # every hour and a half (5 - 10080)

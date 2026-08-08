@@ -94,6 +94,36 @@ Singleton {
     // files.
     readonly property string cacheDir: Quickshell.env("XDG_CACHE_HOME") || `${Quickshell.env("HOME")}/.cache`
 
+    // ---------------- Is this a laptop ----------------
+    //
+    // ONE ANSWER, GIVEN ONCE PER MACHINE, and the only thing in this file that
+    // is about hardware rather than taste. These dotfiles are shared between a
+    // desktop and a laptop, and the two things that differ most are a battery
+    // and a backlight -- so install.sh asks, `laptop-modules` writes the
+    // answer, and the two widgets read it here.
+    //
+    // OFF WHEN THE FILE IS ABSENT, which is every machine that has never been
+    // asked. A bar that grows a battery indicator on a desktop is worse than
+    // one that never had it: the number would be wrong and there would be
+    // nothing to check it against.
+    //
+    // It is not the only gate. Both widgets ALSO hide themselves when the
+    // hardware is not reported -- see their headers. This flag is the
+    // intention; that is the check that the intention is possible.
+    property bool laptopModules: false
+
+    FileView {
+        id: laptopFile
+
+        path: `${root.stateDir}/laptop-modules`
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: reload()
+        onLoaded: root.laptopModules = (laptopFile.text() || "").trim() === "1"
+        onLoadFailed: root.laptopModules = false
+    }
+
     // ---------------- Appearance ----------------
 
     // The transparency of the whole desktop, not just of this shell: the bar
@@ -405,6 +435,31 @@ Singleton {
 
         return `${root.cacheDir}/wallpaper-frames/${path.replace(/^\//, "").replace(/\//g, "_")}.png`;
     }
+
+    // Those frames have to exist before anything asks for one, and the two
+    // views cannot each run the extraction: they would race over the same
+    // output files the first time a folder of videos is opened. So it runs
+    // once, here, on startup and whenever the collection moves.
+    //
+    // Cheap to repeat -- the script skips any video whose frame is already
+    // newer than it is -- which is what makes running it on every folder
+    // change acceptable rather than something that needs to be smart.
+    property int wallpaperThumbsRevision: 0
+
+    Process {
+        id: wallpaperThumbsProcess
+
+        command: ["wallpaper-switch", "thumbs"]
+
+        // The bump is what tells the pickers to look again. Until ffmpeg has
+        // finished, a video's thumbnail file does not exist, and an Image
+        // pointed at a missing file does not retry on its own.
+        onExited: root.wallpaperThumbsRevision++
+    }
+
+    onWallpaperDirChanged: wallpaperThumbsProcess.running = true
+
+    Component.onCompleted: wallpaperThumbsProcess.running = true
 
     // ---------------- How often the wallpaper rotates ----------------
     //
