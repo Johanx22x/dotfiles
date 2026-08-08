@@ -51,6 +51,21 @@ Singleton {
         if (value === root.enabled)
             return;
 
+        root.applyEnabled(value);
+    }
+
+    // The same thing WITHOUT the equality guard, for the schedule to use.
+    //
+    // `enabled` is what this shell believes, and belief is not the screen.
+    // hyprsunset cannot be asked what it is doing -- see the long note at the
+    // top of the `night-light` script about `hyprctl hyprsunset temperature`
+    // reporting the last temperature it was handed rather than the one in
+    // effect -- so there is no reading that would let us tell a stale belief
+    // from a true one. The only repair available is to say it again.
+    //
+    // setEnabled keeps its guard because it runs off a switch a person is
+    // holding; this one runs twice a day and when the schedule is turned on.
+    function applyEnabled(value: bool): void {
         root.enabled = value;
         Quickshell.execDetached(["night-light", value ? "on" : "off"]);
     }
@@ -163,10 +178,21 @@ Singleton {
     // that starts in the evening and ends in the morning, so `from` is
     // usually GREATER than `to` and the window is the two ends of the day
     // rather than the middle of it.
+    // PURELY A QUESTION ABOUT THE CLOCK. It used to answer false whenever the
+    // schedule was off, which folded two different questions -- "is it evening"
+    // and "are we obeying the schedule" -- into one property, and that is what
+    // broke re-enabling the schedule inside its own window.
+    //
+    // With the switch in it, turning the schedule off pushed this to false and
+    // turning it back on pushed it to true, so applying the schedule depended
+    // on the order QML happened to deliver two changes derived from a single
+    // assignment: the handler on `scheduled` could read a `dueNow` that had not
+    // caught up yet, decide the filter was not due, and leave the evening
+    // untinted until the next boundary hours later.
+    //
+    // Now the window is the window whatever the switch says, `scheduled` is
+    // checked once in followSchedule, and nothing depends on that ordering.
     readonly property bool dueNow: {
-        if (!root.scheduled)
-            return false;
-
         // Nothing decided until the clock has been read. See minuteOfDay.
         if (root.minuteOfDay < 0)
             return false;
@@ -179,10 +205,13 @@ Singleton {
             : root.minuteOfDay >= root.from || root.minuteOfDay < root.to;
     }
 
-    // The policy, and the only place it is applied. A Binding rather than a
-    // handler on `dueNow`, so that turning the schedule ON also settles the
-    // filter immediately instead of waiting for the next boundary -- a switch
-    // that does nothing for four hours reads as broken.
+    // The policy, and the only place it is applied. Turning the schedule ON
+    // settles the filter immediately instead of waiting for the next boundary
+    // -- a switch that does nothing for four hours reads as broken.
+    //
+    // Turning it OFF deliberately changes nothing on screen. The filter stays
+    // where it was and the manual switch, live again, is how it moves; a
+    // schedule one stops obeying is not a schedule that says "off".
     onDueNowChanged: root.followSchedule()
     onScheduledChanged: root.followSchedule()
 
@@ -190,7 +219,11 @@ Singleton {
         if (!root.scheduled)
             return;
 
-        root.setEnabled(root.dueNow);
+        // applyEnabled and not setEnabled: this has to hold when the answer
+        // has not changed. Re-enabling the schedule at nine in the evening
+        // asks for exactly the state the shell already thinks it is in, and
+        // the guarded version reads that as nothing to do.
+        root.applyEnabled(root.dueNow);
     }
 
     // "20:30" out of 1230. Kept here rather than in the settings page because
