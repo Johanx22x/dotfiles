@@ -23,6 +23,7 @@ efibootmgr
 eza
 fastfetch
 fd
+ffmpeg
 ffmpegthumbnailer
 ffmpegthumbs
 fzf

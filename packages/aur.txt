@@ -1,2 +1,3 @@
 brave-bin
+mpvpaper
 yay

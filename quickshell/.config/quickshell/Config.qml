@@ -459,8 +459,6 @@ Singleton {
     // the name it files it under: the source path with its slashes flattened,
     // which is what keeps two `loop.mp4` in different subfolders apart.
     //
-    // Returns a path and not a URL. The callers already build their own
-    // file:// prefix and doing it here would leave them with two.
     function wallpaperThumb(path: string): string {
         if (!root.isWallpaperVideo(path))
             return path;
@@ -468,14 +466,25 @@ Singleton {
         return `${root.cacheDir}/wallpaper-frames/${path.replace(/^\//, "").replace(/\//g, "_")}.png`;
     }
 
+    // The same thing as a URL, which is what an Image actually wants.
+    //
+    // Encoded segment by segment rather than pasted behind `file://`. These
+    // names come off the internet -- "sunset (4k) #2.mp4" is an ordinary thing
+    // to download -- and a raw `#` in a URL starts a fragment, so the Image
+    // would look for a file whose name stops at the hash. Splitting on the
+    // separator first is what keeps the slashes as slashes.
+    function wallpaperThumbUrl(path: string): string {
+        return `file://${root.wallpaperThumb(path).split("/").map(encodeURIComponent).join("/")}`;
+    }
+
     // Those frames have to exist before anything asks for one, and the two
     // views cannot each run the extraction: they would race over the same
     // output files the first time a folder of videos is opened. So it runs
-    // once, here, on startup and whenever the collection moves.
+    // once, here, and the views ask for it rather than doing it.
     //
     // Cheap to repeat -- the script skips any video whose frame is already
-    // newer than it is -- which is what makes running it on every folder
-    // change acceptable rather than something that needs to be smart.
+    // newer than it is -- which is what makes calling it on every change
+    // acceptable rather than something that needs to be smart.
     property int wallpaperThumbsRevision: 0
 
     Process {
@@ -489,9 +498,23 @@ Singleton {
         onExited: root.wallpaperThumbsRevision++
     }
 
-    onWallpaperDirChanged: wallpaperThumbsProcess.running = true
+    // ON THE CONTENTS CHANGING, not only on the folder moving. That was the
+    // first version and it left a video added to the collection showing an
+    // empty rectangle for the rest of the session: the shell had already run
+    // the extraction at startup, the file arrived afterwards, the Image asked
+    // for a frame that did not exist yet, and nothing ever asked again.
+    //
+    // Guarded because both views call it and they see the same new file at
+    // roughly the same moment. Re-entering a running extraction would restart
+    // it and lose the work it had already done.
+    function refreshWallpaperThumbs(): void {
+        if (!wallpaperThumbsProcess.running)
+            wallpaperThumbsProcess.running = true;
+    }
 
-    Component.onCompleted: wallpaperThumbsProcess.running = true
+    onWallpaperDirChanged: root.refreshWallpaperThumbs()
+
+    Component.onCompleted: root.refreshWallpaperThumbs()
 
     // ---------------- How often the wallpaper rotates ----------------
     //
