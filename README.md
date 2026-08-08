@@ -264,8 +264,9 @@ night-light on           # blue light filter on
 night-light temp 3200    # how warm (2500 - 6000 K)
 night-light off
 
-laptop-modules           # "on" or "off" for the battery and brightness widgets
-laptop-modules on        # install.sh asks this; off unless answered
+laptop-modules              # print both keys
+laptop-modules on           # both; install.sh asks this, off unless answered
+laptop-modules battery off  # or one at a time, as the Bar page does
 
 desktop-brightness       # the backlight percentage, or "none"
 desktop-brightness set 60
@@ -379,7 +380,31 @@ template, then `wallpaper-switch reapply`. They all carry a
 ```sh
 wallpaper-switch next | prev | random | reapply
 wallpaper-switch set /path/to/image.jpg
+wallpaper-switch set /path/to/video.mp4
+wallpaper-switch thumbs           # pre-extract a still frame per video
 ```
+
+### Animated wallpapers
+
+A wallpaper can be a video. `jpg jpeg png webp bmp gif` go to **awww** and
+`mp4 webm mkv` go to **mpvpaper**, decided from the extension inside the
+script — every caller (keybinds, the rotation timer, the launcher strip, the
+settings grid) already goes through it, so none of them has to know.
+
+Animated GIFs stay on the awww side: it decodes them itself, which keeps the
+transitions, and matugen reads a GIF directly where an mp4 makes it panic.
+
+Only one backend runs at a time — both draw on the background layer, and the
+script kills the other rather than trusting the compositor to stack two
+surfaces the way we happen to want. Coming back to a still therefore has no
+crossfade: awww starts with nothing to fade from.
+
+Videos get one still frame extracted into `~/.cache/wallpaper-frames`, which
+matugen uses for the palette and both pickers use for a thumbnail. Playback is
+`--hwdec=auto`, which picks **nvdec** here, and `-p -a FULL` pauses it when the
+wallpaper is covered or anything goes fullscreen.
+
+Overridable per run: `MPV_OPTIONS`, `MPVPAPER_FLAGS`, `MPVPAPER_OUTPUT`.
 
 `zathurarc` and `fastfetch/config.jsonc` are generated *whole*, not just their
 colours: neither application can include a separate colour file, so the

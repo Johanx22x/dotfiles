@@ -33,7 +33,7 @@ Item {
     property int raw: 0
     property int maximum: 0
 
-    readonly property bool present: Config.laptopModules && root.device !== "" && root.maximum > 0
+    readonly property bool present: Config.laptopBrightness && root.device !== "" && root.maximum > 0
 
     readonly property int percent: root.maximum > 0
         // Rounded, not truncated -- the same arithmetic the script uses. With

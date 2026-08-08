@@ -141,6 +141,11 @@ Singleton {
     readonly property string battery: String.fromCodePoint(0xF0079)     // nf-md-battery
     readonly property string batteryCharging: String.fromCodePoint(0xF0084) // nf-md-battery_charging
     readonly property string batteryAlert: String.fromCodePoint(0xF0083)    // nf-md-battery_alert
+    // For the SETTINGS ROW and not for the widget: the row above it is the
+    // peripherals' battery and would otherwise carry the same glyph, so this
+    // one says which machine's battery is meant rather than repeating that it
+    // is a battery.
+    readonly property string laptop: String.fromCodePoint(0xF0322)          // nf-md-laptop
     readonly property string brightness: String.fromCodePoint(0xF00DF)      // nf-md-brightness_6
     readonly property string gaps: String.fromCodePoint(0xF004C)        // nf-md-arrow_expand_all
     readonly property string rounding: String.fromCodePoint(0xF0607)    // nf-md-rounded_corner
