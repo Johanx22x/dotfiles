@@ -534,6 +534,17 @@ hl.device({
     sensitivity = -0.5,
 })
 
+-- The kernel's hid-playstation driver exposes the DualSense touchpad as a
+-- real pointer device (its own evdev node with POINTER + BUTTONPAD), so the
+-- cursor jumps around whenever a thumb brushes the pad while playing. This
+-- has nothing to do with Steam: it happens with Steam closed too. Steam Input
+-- maps the pad to a mouse on its own as well, but that is a separate layer
+-- and is turned off from Steam's controller settings, not from here.
+hl.device({
+    name    = "sony-interactive-entertainment-dualsense-wireless-controller-touchpad",
+    enabled = false,
+})
+
 
 ---------------------
 ---- KEYBINDINGS ----
