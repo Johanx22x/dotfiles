@@ -38,7 +38,9 @@ set -euo pipefail
 [[ ${1:-} == "--" ]] && shift
 
 if [[ $# -eq 0 || ${1:-} == "--help" || ${1:-} == "-h" ]]; then
-    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+    # Up to the closing rule rather than to a hardcoded line number, which
+    # silently swallowed the last variables as soon as one was added above.
+    sed -n '2,/^# =\+$/p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
 fi
 
