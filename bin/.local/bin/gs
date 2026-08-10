@@ -117,7 +117,24 @@ fi
 
 # Lets native games speak Wayland directly instead of going through
 # XWayland inside gamescope.
-args+=( --expose-wayland )
+#
+# It is INCOMPATIBLE with the HUD: mangoapp is an X11 client, so under
+# --expose-wayland it segfaults in libX11 the instant it starts. gamescope's
+# reaper then restarts it, and it crashes again, about four times a second for
+# as long as the game runs -- each crash writing a 2.8 MB core dump to
+# /var/lib/systemd/coredump. One session left 10716 of them behind. That I/O
+# storm runs alongside the game and stutters it, so the overlay meant to
+# diagnose stuttering was causing it. Upstream:
+# https://github.com/flightlessmango/MangoHud/issues/1741
+#
+# Nothing is lost by dropping it when the HUD is on: games under Proton run
+# through XWayland inside gamescope either way, so --expose-wayland only ever
+# mattered for native Wayland games.
+if [[ ${GS_HUD:-0} == 1 ]]; then
+    echo "gs: HUD on, skipping --expose-wayland (mangoapp needs X11)" >&2
+else
+    args+=( --expose-wayland )
+fi
 
 [[ ${GS_VRR:-0}  == 1 ]] && args+=( --adaptive-sync )
 # --force-grab-cursor is NOT on by default. It forces relative mouse mode
