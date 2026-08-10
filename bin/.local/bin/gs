@@ -21,6 +21,9 @@
 #                         E.g. GS_W=1920 GS_H=1080 -> renders at 1080p and
 #                         scales to 1440p. A good trick for heavy games.
 #    GS_FSR               Scaling filter: fsr | nis | linear | nearest
+#    GS_FPS               Framerate cap, applied by gamescope rather than the
+#                         game. Must divide GS_HZ evenly, e.g.
+#                         GS_HZ=120 GS_FPS=60.
 #    GS_HUD=1             FPS overlay (MangoHud inside gamescope)
 #    GS_VRR=1             Enables adaptive sync / FreeSync
 #    GS_GRAB=1            Forces permanent relative mouse mode. Only if the
@@ -134,6 +137,20 @@ if [[ ${GS_HUD:-0} == 1 ]]; then
     echo "gs: HUD on, skipping --expose-wayland (mangoapp needs X11)" >&2
 else
     args+=( --expose-wayland )
+fi
+
+# Hands frame pacing to gamescope instead of the game. Some engines -- Elden
+# Ring is the notorious one -- have a frame limiter that misbehaves whenever a
+# frame comes in under 16.67 ms, throwing frametime spikes even with the
+# in-game vsync switched off. Capping outside the game keeps it away from that
+# path.
+#
+# CAREFUL: gamescope's --framerate-limit is a DIVISOR of the refresh rate, not
+# a free-form cap. It only reaches rates that divide the output evenly, so the
+# output rate has to be chosen to suit: GS_HZ=120 GS_FPS=60 gives an exact 60,
+# while asking for 60 out of a 165 Hz output cannot be expressed.
+if [[ -n ${GS_FPS:-} ]]; then
+    args+=( --framerate-limit "$GS_FPS" )
 fi
 
 [[ ${GS_VRR:-0}  == 1 ]] && args+=( --adaptive-sync )
