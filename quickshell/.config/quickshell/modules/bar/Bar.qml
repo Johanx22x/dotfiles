@@ -270,6 +270,27 @@ PanelWindow {
                 }
             }
 
+            // The keyboard layout, between the readings and the clock.
+            //
+            // ITS OWN PILL, and the position is the argument: it is not one of
+            // the readings before it -- it is a mode, and the only widget on
+            // this side that answers to a click other than the shell's own
+            // controls at the far end. Sharing the batteries' pill would file
+            // it as another number about the hardware; joining the controls
+            // pill would file it as part of the shell. It is neither, so it
+            // stands between them.
+            //
+            // Hidden with one layout configured: see the widget's own note.
+            Group {
+                anchors.verticalCenter: parent.verticalCenter
+
+                visible: Config.barKeyboardLayout && Config.keyboardLayouts.length > 1
+
+                KeyboardLayout {
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+
             // Volume used to sit here. It moved into the island in the
             // centre, which is where a value that changes for two seconds and
             // then stops mattering belongs -- see modules/island.

@@ -25,7 +25,8 @@ SettingsPage {
     glyph: Icons.windowTiles
     keywords: ["bar", "clock", "time", "date", "panel", "24 hour",
         "widgets", "tray", "logo", "title", "battery", "hide",
-        "laptop", "brightness", "backlight"]
+        "laptop", "brightness", "backlight", "keyboard", "layout",
+        "language", "indicator"]
 
     SettingsSection {
         width: parent.width
@@ -58,6 +59,40 @@ SettingsPage {
             label: "Peripheral battery"
             checked: Config.barBattery
             onToggled: value => Config.barBattery = value
+        }
+
+        // The switch is here; WHICH layouts it cycles through is on the Input
+        // page, next to everything else about the keyboard. Turning this off
+        // does not turn the layouts off -- SUPER + K still works -- it only
+        // takes the reading off the bar, which is what this page is about.
+        //
+        // With one layout configured the pill is hidden whatever this says.
+        // The row stays, and the line under it explains why nothing appeared.
+        ToggleRow {
+            glyph: Icons.keyboard
+            label: "Keyboard layout"
+            checked: Config.barKeyboardLayout
+            onToggled: value => Config.barKeyboardLayout = value
+        }
+
+        Text {
+            visible: Config.barKeyboardLayout && Config.keyboardLayouts.length < 2
+
+            x: Theme.groupPadding
+            width: parent.width - Theme.groupPadding * 2
+            bottomPadding: 6
+
+            text: "Only one layout is configured, so there is nothing to "
+                + "show and nothing to switch to. Add a second one under "
+                + "Input and the indicator appears."
+            wrapMode: Text.WordWrap
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize - 1
+            color: Theme.textOnSurfaceVariant
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
+            }
         }
 
         ToggleRow {

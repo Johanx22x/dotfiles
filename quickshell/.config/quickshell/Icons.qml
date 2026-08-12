@@ -336,6 +336,10 @@ Singleton {
         case "Shell":      return root.widgets;
         case "Look":       return root.palette;
         case "Media":      return root.music;
+        // The one category whose glyph is also the fallback below. Spelled
+        // out anyway: the next category to be added would otherwise inherit
+        // a keyboard by accident and look deliberate.
+        case "Input":      return root.keyboard;
         default:           return root.keyboard;
         }
     }
