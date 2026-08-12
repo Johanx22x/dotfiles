@@ -160,7 +160,29 @@ hl.window_rule({
 
 
 ---------------------------------------------------------------
--- 7. SHORTCUTS
+-- 7. RETROARCH
+---------------------------------------------------------------
+-- RetroArch runs as a native Wayland client and identifies itself with the
+-- app_id "com.libretro.RetroArch" (not "retroarch": that is the X11 WM_CLASS,
+-- which we never see because there is no XWayland here).
+--
+-- Its menu is designed around a 16:9 canvas and tiling squashes it into
+-- whatever slot the layout has free, so it always floats. Fullscreen still
+-- works on top of this: floating only decides how the window sits when it is
+-- NOT fullscreen, which is exactly the menu and the windowed play mode.
+
+hl.window_rule({
+    name  = "retroarch-float",
+    match = { class = "^com\\.libretro\\.RetroArch$" },
+
+    float   = true,
+    center  = true,
+    monitor = MONITOR_MAIN,
+})
+
+
+---------------------------------------------------------------
+-- 8. SHORTCUTS
 ---------------------------------------------------------------
 
 -- SUPER + F  : force fullscreen on the active window.
