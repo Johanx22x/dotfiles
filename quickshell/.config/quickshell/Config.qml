@@ -78,6 +78,7 @@ Singleton {
         barActiveWindow: true,
         barTray: true,
         barBattery: true,
+        barKeyboardLayout: true,
         barClock: true,
         barSettingsButton: true
     })
@@ -322,6 +323,94 @@ Singleton {
     readonly property string cursorTheme: root.tweaks["cursor-theme"] ?? ""
     readonly property int cursorSize: root.tweakInt("cursor-size", 24)
 
+    // ---------------- Keyboard layouts ----------------
+    //
+    // THE LIST IS THE STATE AND THE FIRST ENTRY IS THE ACTIVE LAYOUT. There is
+    // no index anywhere: switching rotates the cycle, so "us,latam" becomes
+    // "latam,us" and back. The argument for that shape is in hypr-tweak's
+    // header -- the short version is that Hyprland's own active-layout index
+    // is session-only and is reset by anything that re-applies the input
+    // block, including changing the mouse speed on the same settings page.
+    //
+    // So this is the whole truth about what the keyboard is doing, and both
+    // the bar's indicator and the settings page read it from here.
+    readonly property var keyboardLayouts: (root.tweaks["layouts"] ?? "us")
+        .split(",").map(code => code.trim()).filter(code => code !== "")
+
+    readonly property string keyboardLayout: root.keyboardLayouts[0] ?? "us"
+
+    // Four, and it is xkb's limit rather than a choice: a keymap has four
+    // groups and a fifth layout is parsed, accepted and then never reached.
+    // The script refuses it; this is the copy the settings window uses to stop
+    // offering what would be refused.
+    readonly property int keyboardLayoutMax: 4
+
+    // Change WHICH layouts exist, keeping the order given -- the first one
+    // becomes the active one. Debounced through setTweak like every other
+    // value on that page.
+    function setKeyboardLayouts(codes: var): void {
+        root.setTweak("layouts", codes.join(","));
+    }
+
+    // Change which of them is active, and step the cycle. Both go through the
+    // script rather than rotating the array here, and that is deliberate:
+    // SUPER + K runs the same command, and one implementation of "rotate" is
+    // what keeps the keybind and the window from disagreeing about the order.
+    // The new value comes back through the file watcher below.
+    function useKeyboardLayout(code: string): void {
+        Quickshell.execDetached(["hypr-tweak", "layout", code]);
+    }
+
+    function cycleKeyboardLayout(): void {
+        Quickshell.execDetached(["hypr-tweak", "layout", "next"]);
+    }
+
+    // ---------------- What the layout codes mean ----------------
+    //
+    // `latam` is what the compositor takes and "Spanish (Latin American)" is
+    // what a person is looking for, so the settings list needs both. Ninety-
+    // nine of them, read out of xkb's own rules file by the script.
+    //
+    // LOADED ON DEMAND AND ONCE. Nothing at startup needs it -- the bar shows
+    // the code -- so the process runs the first time something asks: opening
+    // the Input page, or hovering the pill for its tooltip. Both call
+    // ensureLayoutNames(); whichever gets there first pays for it.
+    property var layoutNames: ({})
+
+    function ensureLayoutNames(): void {
+        if (!layoutNamesProcess.running && Object.keys(root.layoutNames).length === 0)
+            layoutNamesProcess.running = true;
+    }
+
+    // The English name for a code, or the code itself. Falling back to the
+    // code is not a placeholder: before the table has loaded, and on a system
+    // whose rules file is missing, the code is a true answer and "Unknown" is
+    // not.
+    function layoutName(code: string): string {
+        return root.layoutNames[code] ?? code;
+    }
+
+    Process {
+        id: layoutNamesProcess
+
+        command: ["hypr-tweak", "layouts"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const parsed = ({});
+
+                for (const line of (text || "").split("\n")) {
+                    const at = line.indexOf("\t");
+                    if (at < 0)
+                        continue;
+                    parsed[line.slice(0, at)] = line.slice(at + 1).trim();
+                }
+
+                root.layoutNames = parsed;
+            }
+        }
+    }
+
     function tweakInt(key: string, fallback: int): int {
         const parsed = parseInt(root.tweaks[key]);
         return isNaN(parsed) ? fallback : parsed;
@@ -371,10 +460,19 @@ Singleton {
         onLoaded: root.adoptTweaks()
     }
 
+    // WHAT IS PENDING WINS, KEY BY KEY -- it does not skip the whole file.
+    // This used to return early while the push timer was running, which was
+    // right when the settings window was the only writer: the file could only
+    // be a moment behind our own values. It stopped being right when the
+    // layout arrived, because `hypr-tweak layout next` writes the file
+    // WITHOUT going through the timer, and a rotation landing inside the
+    // 150ms after some other row was touched was thrown away -- the bar kept
+    // showing the old layout until something else happened to change.
+    //
+    // Overlaying the pending keys keeps the original guarantee (a stepper
+    // being held does not fight the file it is writing) without discarding
+    // everything else the file has to say.
     function adoptTweaks(): void {
-        if (tweakPushTimer.running)
-            return;
-
         const parsed = ({});
 
         for (const line of (tweaksFile.text() || "").split("\n")) {
@@ -389,6 +487,9 @@ Singleton {
 
             parsed[line.slice(0, at)] = line.slice(at + 1);
         }
+
+        for (const key in root.pendingTweaks)
+            parsed[key] = root.pendingTweaks[key];
 
         root.tweaks = parsed;
     }
@@ -586,6 +687,7 @@ Singleton {
     property alias barActiveWindow: adapter.barActiveWindow
     property alias barTray: adapter.barTray
     property alias barBattery: adapter.barBattery
+    property alias barKeyboardLayout: adapter.barKeyboardLayout
     property alias barClock: adapter.barClock
     property alias barSettingsButton: adapter.barSettingsButton
 
@@ -629,6 +731,7 @@ Singleton {
         adapter.barActiveWindow = root.defaults.barActiveWindow;
         adapter.barTray = root.defaults.barTray;
         adapter.barBattery = root.defaults.barBattery;
+        adapter.barKeyboardLayout = root.defaults.barKeyboardLayout;
         adapter.barClock = root.defaults.barClock;
         adapter.barSettingsButton = root.defaults.barSettingsButton;
     }
@@ -668,6 +771,7 @@ Singleton {
             property bool barActiveWindow: true
             property bool barTray: true
             property bool barBattery: true
+            property bool barKeyboardLayout: true
             property bool barClock: true
             property bool barSettingsButton: true
         }

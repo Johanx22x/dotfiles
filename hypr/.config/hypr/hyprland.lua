@@ -505,9 +505,21 @@ hl.config({
 
 hl.config({
     input = {
+        -- THE FALLBACK AND NOT THE ANSWER. `hypr-tweak` writes the layout
+        -- cycle into tweaks.lua, which is read after this file, so what is
+        -- here is what a machine gets before anybody has chosen anything --
+        -- and it is deliberately the plainest possible choice rather than
+        -- this machine's, because the repository is shared with another one.
+        -- The cycle is edited in the settings window (SUPER + C, Input) and
+        -- stepped with SUPER + K.
         kb_layout  = "us",
         kb_variant = "",
         kb_model   = "",
+        -- NOT grp:alt_shift_toggle or any of xkb's own group switchers. They
+        -- move the same session-only index `switchxkblayout` does, which the
+        -- next reload throws away and which nothing outside the compositor can
+        -- read -- so the bar would have no way of knowing what you are typing
+        -- in. SUPER + K goes through hypr-tweak instead.
         kb_options = "",
         kb_rules   = "",
 
@@ -660,6 +672,22 @@ hl.bind(mainMod .. " + SHIFT + M", hl.dsp.window.move({ workspace = "special:mag
 -- window borders).
 hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd(wallpaperSwitch .. " next"), { description = "Look: next wallpaper" })
 hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd(wallpaperSwitch .. " random"), { description = "Look: random wallpaper" })
+
+-- The keyboard layout, one step along the cycle configured in the settings
+-- window (SUPER + C, Input). K for keyboard, and it was free.
+--
+-- NOT `switchxkblayout`, which is the dispatcher this looks like it should be.
+-- That moves an index that lives only in the running compositor: it is reset
+-- by `hyprctl reload`, and also every time anything else on that settings page
+-- is applied, because the whole input block is re-evaluated and the keymaps
+-- are rebuilt. `hypr-tweak layout next` rotates the stored list instead, so
+-- the layout you are typing in survives both -- see that script's header.
+--
+-- Going through the script is also what keeps the bar's indicator honest: the
+-- state file is the one place that knows which layout is active, and the
+-- shell reads it. A bind that talked to the compositor directly would leave
+-- the pill on the bar saying US while you typed in Spanish.
+hl.bind(mainMod .. " + K", hl.dsp.exec_cmd("hypr-tweak layout next"), { description = "Input: next keyboard layout" })
 
 -- Screenshots: hyprshot (a wrapper over grim/slurp that also asks hyprctl
 -- for window and monitor geometry) plus satty for annotating. The whole
