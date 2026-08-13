@@ -35,6 +35,24 @@ PanelWindow {
 
     screen: modelData
 
+    // WHICH BAR THIS IS, in the spelling Config stores its per-monitor
+    // exceptions under. There can be one of these per monitor now, and each
+    // reads its own widget set: the seven switches on the Bar page are the base
+    // every bar shows, and a monitor may disagree about any of them.
+    //
+    // A FUNCTION USED INSIDE `visible:` BINDINGS, which is reactive and not a
+    // one-off read: the engine records every QML property touched while a
+    // binding evaluates, including inside the functions it calls, and both the
+    // base switches and the overrides map are properties on Config. Flipping
+    // one re-runs these. That is also why Config assigns barOverrides whole
+    // instead of writing into the object it already holds -- a mutation in
+    // place changes nothing the engine is watching.
+    readonly property string screenKey: Config.screenKey(bar.modelData)
+
+    function widget(name: string): bool {
+        return Config.barWidget(bar.screenKey, name);
+    }
+
     // The namespace Hyprland matches on for the blur, see the
     // blur-quickshell rule in hyprland.lua.
     WlrLayershell.namespace: "quickshell-bar"
@@ -147,7 +165,7 @@ PanelWindow {
             Logo {
                 anchors.verticalCenter: parent.verticalCenter
 
-                visible: Config.barLogo
+                visible: bar.widget("logo")
             }
 
             Group {
@@ -161,7 +179,7 @@ PanelWindow {
             ActiveWindow {
                 anchors.verticalCenter: parent.verticalCenter
 
-                visible: Config.barActiveWindow
+                visible: bar.widget("activeWindow")
                 barScreen: bar.modelData
             }
         }
@@ -176,9 +194,21 @@ PanelWindow {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
 
+            // Switchable per monitor, which is what it is for: a second island
+            // on a second bar narrates the same desktop twice. SUPER + D still
+            // opens the dashboard with the island gone -- see the note on
+            // Config.barWidgets about why this one may be switched off and the
+            // power button may not.
+            //
+            // THE TWO BADGES SURVIVE IT. They anchor to this Row's edges rather
+            // than to the island, so with the island hidden the Row is zero
+            // wide at the centre of the bar and they simply meet there, one on
+            // each side -- still a pair, still centred, still saying what they
+            // said.
             Island {
                 anchors.verticalCenter: parent.verticalCenter
 
+                visible: bar.widget("island")
                 popout: barPopout
             }
         }
@@ -226,7 +256,7 @@ PanelWindow {
             Tray {
                 anchors.verticalCenter: parent.verticalCenter
 
-                visible: Config.barTray
+                visible: bar.widget("tray")
                 popout: barPopout
             }
 
@@ -251,7 +281,7 @@ PanelWindow {
 
             Group {
                 anchors.verticalCenter: parent.verticalCenter
-                visible: Config.barBattery && peripheralBattery.hasAny
+                visible: bar.widget("battery") && peripheralBattery.hasAny
 
                 // The pill itself carries the warning when there is only one
                 // thing to warn about -- see alertingAlone in the widget. The
@@ -284,7 +314,7 @@ PanelWindow {
             Group {
                 anchors.verticalCenter: parent.verticalCenter
 
-                visible: Config.barKeyboardLayout && Config.keyboardLayouts.length > 1
+                visible: bar.widget("keyboardLayout") && Config.keyboardLayouts.length > 1
 
                 KeyboardLayout {
                     anchors.verticalCenter: parent.verticalCenter
@@ -297,7 +327,7 @@ PanelWindow {
             Group {
                 anchors.verticalCenter: parent.verticalCenter
 
-                visible: Config.barClock
+                visible: bar.widget("clock")
 
                 Clock {
                     anchors.verticalCenter: parent.verticalCenter
@@ -322,7 +352,7 @@ PanelWindow {
                 SettingsButton {
                     anchors.verticalCenter: parent.verticalCenter
 
-                    visible: Config.barSettingsButton
+                    visible: bar.widget("settingsButton")
                 }
 
                 // LAST, and it stays last. The bar ends in the one control

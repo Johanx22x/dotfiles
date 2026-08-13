@@ -22,12 +22,23 @@
 #      hypr-monitor set <desc> <mode> <position> <scale> <transform>
 #      hypr-monitor forget <desc>          drop one override
 #      hypr-monitor clear                  drop them all
+#      hypr-monitor main <desc>            make that monitor the main one
+#      hypr-monitor main                   print the choice, empty if none
+#      hypr-monitor main --clear           back to hyprland.lua's own value
 #      hypr-monitor                        show what is overridden
 #
 #  <desc> is the monitor's EDID description WITHOUT the "desc:" prefix -- the
 #  same string hyprland.lua puts in MONITOR_MAIN. Descriptions and not
 #  connector names, for the reason written at the top of that file: connector
 #  names are assigned by the kernel and change across kernel versions.
+#
+#  `main` is the odd one out and it overrides a VARIABLE, not a monitor.
+#  hyprland.lua hard-codes MONITOR_MAIN near the top and gaming.lua reads it
+#  when it builds its window rules, so "which screen do games open on" is
+#  decided by a global that only the file it lives in can normally change. The
+#  shell has its own idea of which monitor is the main one (the bar, the
+#  settings window), and the two disagreeing is a desktop that behaves as if it
+#  had two fronts. This is how the Hyprland side is told.
 #
 #  The settings window calls this after you confirm a change you can see. It
 #  is equally usable by hand, which is the point of it being a script.
@@ -40,6 +51,16 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
 # from a table is safe, and editing Lua in place with sed is how generated
 # configs get corrupted.
 STATE_FILE="$STATE_DIR/hypr-monitors"
+# The main-monitor choice, in a FILE OF ITS OWN, and that is the whole reason
+# it is a second file: the store above is a table where every line has the same
+# five columns and is keyed by its first one, and this is not a row of that
+# table -- it is a pointer AT one, and one that may name a monitor with no
+# override at all. Squeezing it in there would mean either a fake description
+# ("!main<tab>...") that the upsert's `grep -v` and generate's `read` would both
+# have to learn to step around, or a line with a different column count in a
+# file whose entire reliability comes from every line having the same shape.
+# Separate files cannot collide, and no code has to remember why.
+MAIN_FILE="$STATE_DIR/hypr-monitor-main"
 OUT_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/monitors.lua"
 
 die() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; exit 1; }
@@ -50,6 +71,20 @@ note() { printf '  %s\n' "$*"; }
 # up with a syntax error in it.
 lua_escape() { printf '%s' "${1//\'/\\\'}"; }
 
+# The saved main-monitor description, or nothing at all when there is none --
+# so callers can test it with [[ -n ]] and the `main` query can print it raw.
+# First line only, and via `read` rather than "$(<file)": the file is written
+# by this script and should always hold exactly one line, but a truncated write
+# or a stray hand edit would otherwise turn into a multi-line Lua string
+# literal, which is a config that does not parse rather than a choice that got
+# lost. `|| true` because read reports EOF on a last line with no newline.
+read_main() {
+  [[ -s "$MAIN_FILE" ]] || return 0
+  local line
+  IFS= read -r line < "$MAIN_FILE" || true
+  printf '%s' "$line"
+}
+
 generate() {
   # LOCAL, and the reason is a bug this had for exactly one run: `read` in the
   # loop below assigns to the caller's scope unless told otherwise, so after
@@ -57,6 +92,8 @@ generate() {
   # follows went out with a blank monitor description. The file was correct,
   # the screen did not move, and nothing said why.
   local desc mode position scale transform
+  local main
+  main="$(read_main)"
 
   mkdir -p "$(dirname "$OUT_FILE")"
 
@@ -69,6 +106,24 @@ generate() {
     echo "-- Applied AFTER that block, so every entry here is an override."
     echo ""
 
+    # WHY A PLAIN REASSIGNMENT IS ENOUGH, and it is worth spelling out because
+    # it looks like it should be too late to matter. hyprland.lua sets
+    # MONITOR_MAIN at the top, dofile()s this file at the end of its monitor
+    # section, and only much further down does require("gaming") run -- and
+    # gaming.lua's window rules are built at that point, reading MONITOR_MAIN
+    # as it stands then. So a global assigned here lands in between: after the
+    # hand-written value, before the only code that reads it. Nothing has to be
+    # patched and hyprland.lua keeps its own literal for the day this file is
+    # deleted.
+    #
+    # No `local`, deliberately: dofile runs this as its own chunk, so a local
+    # would be scoped to it and would leave the real global untouched.
+    if [[ -n "$main" ]]; then
+      echo "-- Which monitor games open on, as chosen from the settings window."
+      echo "-- Read by gaming.lua's window rules, which run after this file."
+      printf "MONITOR_MAIN = 'desc:%s'\n\n" "$(lua_escape "$main")"
+    fi
+
     if [[ -s "$STATE_FILE" ]]; then
       while IFS=$'\t' read -r desc mode position scale transform; do
         [[ -n "$desc" ]] || continue
@@ -80,7 +135,10 @@ generate() {
         printf '    transform = %s,\n' "$transform"
         printf '})\n\n'
       done < "$STATE_FILE"
-    else
+    elif [[ -z "$main" ]]; then
+      # Only when BOTH are empty. A file that said "nothing overridden" above a
+      # MONITOR_MAIN line would be a generated comment contradicting the
+      # generated code three lines under it.
       echo "-- Nothing overridden."
     fi
   } > "$OUT_FILE"
@@ -102,17 +160,106 @@ apply_live() {
   })" >/dev/null
 }
 
+# The same push for the main-monitor choice, and HALF OF IT IS A NO-OP TODAY.
+# What is true: `hyprctl eval` runs in the config's own Lua state and not in a
+# fresh one, and a global assigned by one eval is still there for the next.
+# Both measured rather than hoped for, by sending an eval that calls error() if
+# the global is not what it should be -- eval does not print return values, but
+# a failure comes back as "error: ..." and exit 7, so that is the only way to
+# ask it a question. So after this the running config agrees with the file
+# about which monitor is the main one.
+#
+# What is NOT true: nothing re-reads it. gaming.lua's window rules copied the
+# string when they were built, at config parse time; reassigning the variable
+# now does not walk back into rules that already exist, and Hyprland has no way
+# to ask it to. Games keep opening where the old value pointed until
+# `hyprctl reload` re-runs the config -- hyprland.lua, then this file, then
+# gaming.lua building its rules from the new value.
+#
+# It is done anyway because leaving the live state stale is its own bug: any
+# other eval that reads MONITOR_MAIN before the next reload would answer with
+# the value this command was called to replace. The commands below say plainly
+# that a reload is what moves the games.
+apply_main_live() {
+  hyprctl eval "MONITOR_MAIN = 'desc:$(lua_escape "$1")'" >/dev/null
+}
+
 case "${1:-show}" in
   show)
+    main="$(read_main)"
+
     if [[ -s "$STATE_FILE" ]]; then
       while IFS=$'\t' read -r desc mode position scale transform; do
         [[ -n "$desc" ]] || continue
         printf '%s\n    %s at %s, scale %s, transform %s\n' \
           "$desc" "$mode" "$position" "$scale" "$transform"
       done < "$STATE_FILE"
-    else
+    elif [[ -z "$main" ]]; then
       echo "No monitor overrides. hyprland.lua stands on its own."
     fi
+
+    # LAST, and that placement is load-bearing. The settings window parses this
+    # output by indentation: an unindented line is a monitor's description and
+    # the indented line under it holds that monitor's values. Down here the
+    # line can only be read as a description with nothing under it, which that
+    # parser drops. Anywhere else it would be a description with somebody
+    # else's values pinned to it.
+    if [[ -n "$main" ]]; then
+      printf 'Main monitor: %s\n' "$main"
+    fi
+    ;;
+
+  main)
+    (( $# <= 2 )) || die "Usage: hypr-monitor main [<desc>|--clear]"
+
+    # No argument is a QUERY, and it prints the bare description with nothing
+    # around it -- no label, no sentence, nothing at all when unset. Every
+    # other subcommand here prints for a person; this one exists so the
+    # settings window can read the answer back with $(hypr-monitor main)
+    # instead of parsing prose, which is the complaint it already has about
+    # the `show` output.
+    if (( $# == 1 )); then
+      main="$(read_main)"
+      [[ -z "$main" ]] || printf '%s\n' "$main"
+      exit 0
+    fi
+
+    if [[ "$2" == "--clear" ]]; then
+      rm -f "$MAIN_FILE"
+      generate
+      # NOT pushed live, for the same reason `forget` is not: going back means
+      # restoring whatever hyprland.lua hard-codes, and this script does not
+      # know that value. Reading it would mean parsing the hand-written config,
+      # which is the one thing this whole arrangement exists to avoid.
+      echo "Main-monitor choice dropped."
+      note "run 'hyprctl reload' to go back to the value in hyprland.lua"
+      exit 0
+    fi
+
+    desc="$2"
+
+    # Guarded rather than trusted, because a wrong value here fails SILENTLY:
+    # a description that matches no monitor does not error, it just leaves
+    # gaming.lua's rules matching nothing, and the symptom is a game opening
+    # in the wrong place weeks later with nothing pointing back at this.
+    [[ -n "${desc//[[:space:]]/}" ]] || die "Not a description: empty"
+    [[ "$desc" != *$'\n'* && "$desc" != *$'\t'* ]] \
+      || die "Not a description: it contains a tab or a newline"
+    # The prefix belongs to the Lua that is generated from this, not to the
+    # value: everything stored here is bare, and 'desc:desc:ASR ...' would
+    # match nothing while looking almost right in every message that echoes it.
+    [[ "$desc" != desc:* ]] \
+      || die "Drop the 'desc:' prefix: hypr-monitor main '${desc#desc:}'"
+
+    mkdir -p "$STATE_DIR"
+    printf '%s\n' "$desc" > "$MAIN_FILE"
+
+    generate
+    apply_main_live "$desc"
+
+    printf 'Main monitor: %s\n' "$desc"
+    note "written to ${OUT_FILE/#$HOME/\~}, and set live in the config's Lua"
+    note "run 'hyprctl reload' to move the game window rules onto it"
     ;;
 
   set)
@@ -169,12 +316,18 @@ case "${1:-show}" in
 
   clear)
     : > "$STATE_FILE"
+    # The main-monitor choice goes too. It lives in its own file and survives
+    # `forget`, but `clear` is the "as if this script had never run" command,
+    # and leaving a MONITOR_MAIN line standing in a file whose only other
+    # content is now the words "Nothing overridden" would make both the report
+    # and the generated file wrong at once.
+    rm -f "$MAIN_FILE"
     generate
-    echo "All monitor overrides dropped."
+    echo "All monitor overrides dropped, main-monitor choice included."
     note "run 'hyprctl reload' to go back to the values in hyprland.lua"
     ;;
 
   *)
-    die "Unknown command: '$1' (expected set, forget, clear or show)"
+    die "Unknown command: '$1' (expected set, forget, clear, main or show)"
     ;;
 esac
