@@ -14,6 +14,12 @@
 // the same fillet that carries the bar into the sides of the screen carries
 // it into this.
 //
+// WITH NO BAR UNDER IT that shape is wrong rather than merely unnecessary, so
+// it comes apart: no fillet, no sheet behind the cards, corners kept. What is
+// left is the notification and nothing else, which is roughly what dunst drew.
+// See `undocked` -- it happens over a fullscreen window, and it happens on a
+// main monitor that was never given a bar.
+//
 // The window takes input only where the panel is, so the area it spans while
 // empty does not swallow clicks meant for the window underneath.
 
@@ -52,6 +58,20 @@ PanelWindow {
         }
         return false;
     }
+
+    // NO BAR TO WELD TO, for either of the two reasons there can be one: it is
+    // covered by a fullscreen window, or this monitor simply has no bar --
+    // which became possible when the bar stopped being on every screen the
+    // shell lives on. The shell's screen and the bar's screens are two
+    // different lists now (see Screens.qml), and this panel follows the first
+    // one: notifications belong on the monitor you are told to look at, which
+    // is the main one, whether or not it happens to carry a bar.
+    //
+    // Everything below reads this rather than barCovered. The distinction the
+    // drawing cares about is not WHY there is no bar, it is whether there is
+    // one -- and a fillet welded to a bar that was never there looks exactly
+    // as wrong as one welded to a bar a game is covering.
+    readonly property bool undocked: root.barCovered || !Screens.hasBar(root.modelData)
 
     screen: modelData
 
@@ -186,7 +206,7 @@ PanelWindow {
     // events. Moving to Overlay for as long as the bar is covered settles it,
     // and costs nothing -- over a fullscreen window there is no menu to lose
     // to anyway.
-    WlrLayershell.layer: root.barCovered ? WlrLayer.Overlay : WlrLayer.Top
+    WlrLayershell.layer: root.undocked ? WlrLayer.Overlay : WlrLayer.Top
 
     anchors {
         top: true
@@ -246,7 +266,7 @@ PanelWindow {
 
         // Only when there is a bar to weld to. Over a fullscreen window this
         // fillet is a wedge of panel colour joined to nothing.
-        visible: !root.barCovered
+        visible: !root.undocked
     }
 
 
@@ -273,9 +293,9 @@ PanelWindow {
         // straight -- but only when the bar is there. Over a fullscreen window
         // it sits where it is and keeps all four corners, which is what a card
         // floating over a game should look like anyway.
-        anchors.topMargin: root.barCovered ? 0 : -Theme.barCornerRadius
+        anchors.topMargin: root.undocked ? 0 : -Theme.barCornerRadius
 
-        height: root.panelHeight + (root.barCovered ? 0 : Theme.barCornerRadius)
+        height: root.panelHeight + (root.undocked ? 0 : Theme.barCornerRadius)
 
         radius: Theme.barCornerRadius
         antialiasing: true
@@ -286,7 +306,7 @@ PanelWindow {
         // game, and NotificationCard already carries its own background and
         // rounding. Undocked, what is left is the notification and nothing
         // else -- which is what dunst looked like.
-        color: root.barCovered ? "transparent" : Theme.glass(Theme.surface)
+        color: root.undocked ? "transparent" : Theme.glass(Theme.surface)
 
         // The panel grows and shrinks as notifications come and go; animating
         // the height is what makes it read as one thing expanding rather than
