@@ -34,6 +34,13 @@
 #                         cursor look stuck while the game loads.
 #    GS_GAMEMODE=0        Disables gamemoderun
 #    GS_OFF=1             Skips gamescope entirely (native Wayland game)
+#    GS_OVERLAY=1         Lets the Steam overlay load inside gamescope too.
+#                         Off by default: it cannot draw there and it is what
+#                         makes long sessions turn to treacle (gamescope #697).
+#    GS_WALLPAPER=1       Keeps a video wallpaper playing while you play. By
+#                         default it is frozen to a still frame for the length
+#                         of the game and restored on exit: the picture stays,
+#                         the ~2 GB of VRAM its decoder holds does not.
 # =============================================================
 set -euo pipefail
 
@@ -59,17 +66,97 @@ export PROTON_ENABLE_NVAPI=1
 # Ray tracing in DX12 games.
 export VKD3D_CONFIG="${VKD3D_CONFIG:-dxr11,dxr}"
 
+# ---- VRAM: the video wallpaper stands down while the game runs ----
+# mpvpaper decodes into video memory and holds about 1.9 GB of it for as long
+# as it lives -- 16% of the 12 GB on this card, spent on something no one can
+# see behind a fullscreen game. It is not idle either: -p and -a FULL pause the
+# PLAYBACK when a fullscreen window covers it, and a paused decoder still owns
+# every buffer it allocated.
+#
+# That margin is not spare. Measured on 2026-08-13 with Kingdom Come:
+# Deliverance 2 at 1440p, VRAM sat at 10697 of 12227 MiB with the game alone
+# asking for 7013. When a game crosses what is left, the driver starts moving
+# buffers out to system RAM over PCIe and the GPU spends its frames waiting on
+# DMA instead of drawing: utilisation collapses to ~30% at ~88 W with no
+# thermal or power throttling, and the game stutters while every sensor says
+# the card is idle. Push a little further and allocation simply fails --
+# fourteen "Failed to allocate NVKMS memory for GEM object" in the kernel log,
+# then gamescope aborts on an assert in vulkan_remake_output_images() and takes
+# the game down with it.
+#
+# FROZEN TO A STILL FRAME, not paused and not blanked.
+#
+# Pausing does nothing for the only thing being asked for here. Measured on
+# 2026-08-13: mpvpaper held 2045 MiB while running, 2045 MiB under SIGSTOP with
+# the process in state T, and 2045 MiB again once resumed. The buffers belong
+# to the decoder, not to playback, and the process has to EXIT to give them up.
+#
+# Blanking would work and is still wrong: gamescope covers ONE monitor, so the
+# portrait screen is in view for the whole session and would sit there empty.
+# Freezing keeps exactly the same picture on it for no video memory at all.
+#
+# Both halves go through wallpaper-switch, which owns the backends and the
+# frame cache: `still` swaps the video for its own cached frame under awww, and
+# `reapply` puts the video back. A second copy of that logic in here would be
+# one more thing to keep in step for no gain.
+WALLPAPER_FROZEN=0
+
+freeze_video_wallpaper() {
+    [[ ${GS_WALLPAPER:-0} == 1 ]] && return 0
+    pgrep -x mpvpaper >/dev/null 2>&1 || return 0
+
+    "$HOME/.local/bin/wallpaper-switch" still >/dev/null 2>&1 || {
+        echo "gs: could not freeze the video wallpaper, leaving it alone" >&2
+        return 0
+    }
+    WALLPAPER_FROZEN=1
+
+    # Wait for the process to be gone before handing the card to the game.
+    # awww is already up by the time `still` returns, but mpvpaper exiting is
+    # what releases the memory, and a game that starts a moment early measures
+    # a card that is still 2 GB short of what it is about to be given.
+    for _ in {1..20}; do
+        pgrep -x mpvpaper >/dev/null 2>&1 || break
+        sleep 0.05
+    done
+
+    echo "gs: video wallpaper frozen to a still, freeing its VRAM (GS_WALLPAPER=1 keeps it playing)" >&2
+}
+
+restore_video_wallpaper() {
+    (( WALLPAPER_FROZEN )) || return 0
+    WALLPAPER_FROZEN=0
+    "$HOME/.local/bin/wallpaper-switch" reapply >/dev/null 2>&1 || true
+}
+
+# EXIT alone is not enough. Steam stops a game by signalling the process tree,
+# so without INT and TERM the video would come back when you quit from the
+# game's own menu and stay frozen when you stop it from the library.
+trap restore_video_wallpaper EXIT INT TERM
+
+# Every path out of this script goes through here instead of exec'ing.
+# exec REPLACES this shell, which drops the trap along with it: the wallpaper
+# would be frozen on the way in and never restored. The cost of staying alive
+# is one sleeping bash process per game, which is nothing.
+launch() {
+    freeze_video_wallpaper
+    "$@"
+}
+
 # ---- Exit without gamescope (native games that already behave) ----
 if [[ ${GS_OFF:-0} == 1 ]]; then
     if [[ ${GS_GAMEMODE:-1} == 1 ]] && command -v gamemoderun >/dev/null; then
-        exec gamemoderun "$@"
+        launch gamemoderun "$@"
+        exit
     fi
-    exec "$@"
+    launch "$@"
+    exit
 fi
 
 if ! command -v gamescope >/dev/null; then
     echo "gs: gamescope is not installed, launching the game as is" >&2
-    exec "$@"
+    launch "$@"
+    exit
 fi
 
 # If Steam is already running inside a gamescope session (steam-gamescope),
@@ -79,9 +166,11 @@ fi
 if [[ -n ${GAMESCOPE_WAYLAND_DISPLAY:-} ]]; then
     echo "gs: already inside gamescope, not nesting another one" >&2
     if [[ ${GS_GAMEMODE:-1} == 1 ]] && command -v gamemoderun >/dev/null; then
-        exec gamemoderun "$@"
+        launch gamemoderun "$@"
+        exit
     fi
-    exec "$@"
+    launch "$@"
+    exit
 fi
 
 # ---- Building the gamescope command line ----
@@ -185,6 +274,54 @@ fi
 [[ ${GS_GRAB:-0} == 1 ]] && args+=( --force-grab-cursor )
 [[ ${GS_HUD:-0}  == 1 ]] && args+=( --mangoapp )
 
+# ---- The Steam overlay does not belong inside gamescope ----
+# Steam preloads gameoverlayrenderer.so into whatever it launches, and what it
+# launches here is THIS SCRIPT, so the overlay ends up inside gamescope. It can
+# only draw itself in a process that presents through a Vulkan swapchain, which
+# gamescope is not, so it never draws anything -- it just stays resident,
+# driving its interposed Xlib event hooks against gamescope's nested Xwayland
+# for as long as the game runs. That is the long-standing "everything turns to
+# treacle after half an hour" bug, gamescope #697, open since 2022 and fixed
+# upstream on 2026-08-13 by commit e399345 (PR #2308), whose own message names
+# it as "building into the stutter reported after half an hour of play".
+#
+# Confirmed here rather than assumed: gameoverlayrenderer.so was mapped four
+# times in a running gamescope, and its LD_PRELOAD read
+#   libgamemodeauto.so.0:.../ubuntu12_32/gameoverlayrenderer.so
+#                        :.../ubuntu12_64/gameoverlayrenderer.so
+#
+# Arch ships 3.16.25, which predates the fix, so it is done here instead --
+# same idea as upstream's: strip the overlay from what gamescope inherits and
+# hand the original value back to the game, where the overlay works properly.
+#
+# THE IN-GAME OVERLAY SURVIVES THIS, and for Proton games it would survive even
+# without the env below: pressure-vessel injects the overlay into the container
+# itself with its own --ld-preload flags, which owe nothing to gamescope's
+# environment. Verified the same way -- four mappings inside the game process.
+# The env is there for native games, which have no container to re-add it.
+#
+# This is why the blunt LD_PRELOAD="" workaround costs people Steam Input,
+# recording and the overlay: it strips the library from the whole chain instead
+# of only from the process that cannot use it.
+GAME_LD_PRELOAD="${LD_PRELOAD:-}"
+inner=()
+
+if [[ ${GS_OVERLAY:-0} != 1 && -n $GAME_LD_PRELOAD ]]; then
+    # Entries are colon-separated, but the loader also accepts spaces, so both
+    # are treated as separators here.
+    stripped=$(printf '%s' "$GAME_LD_PRELOAD" \
+        | tr ': ' '\n\n' \
+        | grep -v 'gameoverlayrenderer\.so$' \
+        | grep -v '^$' \
+        | paste -sd: -)
+
+    if [[ $stripped != "$GAME_LD_PRELOAD" ]]; then
+        export LD_PRELOAD="$stripped"
+        inner=( env "LD_PRELOAD=$GAME_LD_PRELOAD" )
+        echo "gs: Steam overlay kept out of gamescope, handed to the game (gamescope #697)" >&2
+    fi
+fi
+
 # ---- gamemode ----
 # gamemoderun goes OUTSIDE, wrapping gamescope. Put inside, it ends up in the
 # pressure-vessel container, where it cannot find libgamemode.so and fails
@@ -199,4 +336,5 @@ if [[ ${GS_GAMEMODE:-1} == 1 ]] && command -v gamemoderun >/dev/null; then
     outer+=( gamemoderun )
 fi
 
-exec "${outer[@]}" gamescope "${args[@]}" -- "$@"
+# shellcheck disable=SC2086  # inner may be empty, hence the +expansion guard
+launch "${outer[@]}" gamescope "${args[@]}" -- ${inner[@]+"${inner[@]}"} "$@"
