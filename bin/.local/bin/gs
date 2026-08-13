@@ -307,13 +307,24 @@ GAME_LD_PRELOAD="${LD_PRELOAD:-}"
 inner=()
 
 if [[ ${GS_OVERLAY:-0} != 1 && -n $GAME_LD_PRELOAD ]]; then
+    # Filtered in the shell rather than through `tr | grep | paste`, and the
+    # difference is not style. THE COMMON CASE STRIPS EVERY ENTRY: what Steam
+    # hands this script is the two gameoverlayrenderer.so paths and nothing
+    # else, so grep matched nothing, exited 1, and under `set -o pipefail`
+    # with `set -e` that killed gs before it launched anything -- silently,
+    # since a game that never starts prints no error of its own. The first
+    # version survived testing only because every LD_PRELOAD it was given also
+    # held libgamemodeauto.so.0, which outlived the filter and kept grep at 0.
+    #
     # Entries are colon-separated, but the loader also accepts spaces, so both
-    # are treated as separators here.
-    stripped=$(printf '%s' "$GAME_LD_PRELOAD" \
-        | tr ': ' '\n\n' \
-        | grep -v 'gameoverlayrenderer\.so$' \
-        | grep -v '^$' \
-        | paste -sd: -)
+    # are separators here.
+    stripped=""
+    IFS=': ' read -ra preload_entries <<< "$GAME_LD_PRELOAD"
+    for entry in ${preload_entries[@]+"${preload_entries[@]}"}; do
+        [[ -z $entry ]] && continue
+        [[ $entry == *gameoverlayrenderer.so ]] && continue
+        stripped+="${stripped:+:}$entry"
+    done
 
     if [[ $stripped != "$GAME_LD_PRELOAD" ]]; then
         export LD_PRELOAD="$stripped"
