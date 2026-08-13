@@ -18,8 +18,10 @@
 // So the screen is CHOSEN, by a rule that lands on the right one here and on a
 // sensible one anywhere:
 //
-//   1. `preferredModel` below, if it is set and present. The escape hatch, for
-//      two identical monitors where the rule cannot know which you meant.
+//   1. `Config.mainMonitor`, if it is set and that monitor is plugged in. The
+//      answer given in the settings window, which beats any rule: the rule can
+//      only guess from size and shape, and two identical monitors defeat it
+//      entirely.
 //   2. One screen: that one. The single-monitor case, which is most people.
 //   3. The largest LANDSCAPE screen. Landscape first because a portrait panel
 //      is a side monitor in every setup that has one -- it is here, and a
@@ -35,14 +37,16 @@
 pragma Singleton
 
 import Quickshell
+import "root:/"
 
 Singleton {
     id: root
 
-    // Set to a monitor model (as `hyprctl monitors -j` reports `model`, e.g.
-    // "PG32QF2B") to pin the shell to it. Empty means "work it out", which is
-    // what every machine but a two-identical-monitor one wants.
-    readonly property string preferredModel: ""
+    // Every screen the compositor is driving, in a stable order. Sorted by
+    // connector so the settings window lists them the same way twice running --
+    // Quickshell reports them in the order they were announced, which is not
+    // an order, it is a history.
+    readonly property var all: [...Quickshell.screens].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
 
     // Bigger is better, and equal areas fall back to the name so the answer is
     // the same on every boot.
@@ -60,18 +64,20 @@ Singleton {
     }
 
     readonly property var main: {
-        const screens = Quickshell.screens;
+        const screens = root.all;
 
         if (screens.length === 0)
             return null;
 
-        if (root.preferredModel) {
+        if (Config.mainMonitor) {
             for (const screen of screens)
-                if (screen.model === root.preferredModel)
+                if (Config.screenKey(screen) === Config.mainMonitor)
                     return screen;
-            // Falls through on purpose: a preferred model that is not plugged
-            // in right now should not cost you the whole shell.
-            console.warn(`Screens: no monitor with model "${root.preferredModel}", choosing automatically`);
+            // Falls through on purpose: a monitor that is chosen but unplugged
+            // right now -- a laptop away from its dock, a KVM on the other
+            // input -- should not cost you the whole shell. The setting stays
+            // put, so plugging it back in puts the bar back where it was.
+            console.warn(`Screens: chosen monitor "${Config.mainMonitor}" is not connected, choosing automatically`);
         }
 
         if (screens.length === 1)
@@ -103,4 +109,38 @@ Singleton {
     // there is no screen at all. Variants takes a list, and this keeps the
     // filtering out of shell.qml.
     readonly property var mainOnly: root.main ? [root.main] : []
+
+    // The main screen's key, for the settings window and for anything that has
+    // to say "this one" in the same spelling Config stores.
+    readonly property string mainKey: Config.screenKey(root.main)
+
+    // The screens carrying a bar. NOT the same filter as mainOnly: the bar is
+    // the one surface here that can exist several times over, because it is the
+    // only one that never takes a keyboard grab. The launcher, the power menu
+    // and the cheatsheet all do, and two of those on two monitors would be two
+    // surfaces fighting over the keyboard -- see the header.
+    //
+    // Falls back to the main screen when the chosen monitors are all
+    // disconnected. Coming back from an undocked laptop, or from a monitor that
+    // died, should leave you a bar to work with rather than a bare desktop and
+    // no visible way to open the settings window that fixes it.
+    readonly property var barScreens: {
+        const chosen = Config.barMonitors ?? [];
+
+        // Nothing chosen is not "nowhere", it is the arrangement this shell
+        // shipped with: one bar, on the main monitor.
+        if (chosen.length === 0)
+            return root.mainOnly;
+
+        const on = root.all.filter(screen => chosen.includes(Config.screenKey(screen)));
+        return on.length > 0 ? on : root.mainOnly;
+    }
+
+    // Whether a given screen ends up with a bar, answered from barScreens
+    // rather than from the stored list, so the fallbacks above are part of the
+    // answer: a settings window reading the raw list would show every monitor
+    // switched off on a machine that plainly has a bar.
+    function hasBar(screen: var): bool {
+        return root.barScreens.some(candidate => candidate.name === (screen?.name ?? ""));
+    }
 }

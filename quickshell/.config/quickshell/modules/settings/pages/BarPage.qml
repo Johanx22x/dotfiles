@@ -26,39 +26,132 @@ SettingsPage {
     keywords: ["bar", "clock", "time", "date", "panel", "24 hour",
         "widgets", "tray", "logo", "title", "battery", "hide",
         "laptop", "brightness", "backlight", "keyboard", "layout",
-        "language", "indicator"]
+        "language", "indicator", "monitor", "monitors", "screen",
+        "display", "second monitor", "per monitor"]
+
+    // WHICH BAR THE WIDGET SWITCHES ARE EDITING. Empty is the base -- what
+    // every bar shows unless its monitor says otherwise -- and a screen key is
+    // one monitor's exceptions to it. See Config's monitor section for why the
+    // shape is a base plus exceptions rather than one set per screen.
+    property string editing: ""
+
+    // How many of the connected monitors are carrying a bar. Used to keep the
+    // last one from being switched off: an empty selection means "the main
+    // monitor" rather than "nowhere" (see Screens.barScreens), so taking the
+    // last bar away would put the bar back on the main monitor rather than
+    // leaving none -- a switch that turns itself back on. Refusing the last one
+    // is the honest reading, and it keeps a settings window from being the
+    // thing that hides the settings button.
+    readonly property int barCount: Screens.barScreens.length
+
+    function screenLabel(screen: var): string {
+        return `${screen.model || screen.name}${screen.model ? ` (${screen.name})` : ""}`;
+    }
+
+    // Unplugging the monitor being edited drops back to the base, rather than
+    // leaving the switches pointed at a screen that is not there writing
+    // exceptions nothing can show.
+    Connections {
+        target: Screens
+
+        function onAllChanged(): void {
+            if (root.editing && !Screens.all.some(screen => Config.screenKey(screen) === root.editing))
+                root.editing = "";
+        }
+    }
+
+    // ---------------- Monitors ----------------
+    //
+    // HIDDEN ON A SINGLE-MONITOR MACHINE, which is the one place in this window
+    // where hiding a control is right: with one screen every row here answers a
+    // question that cannot come up -- where the bar goes, and which bar these
+    // switches mean -- and the answer would be the same whatever you pressed.
+    SettingsSection {
+        width: parent.width
+        visible: Screens.all.length > 1
+        glyph: Icons.monitor
+        title: "Monitors"
+
+        Repeater {
+            model: Screens.all
+
+            ToggleRow {
+                required property var modelData
+
+                glyph: Icons.monitor
+                label: `Bar on ${root.screenLabel(modelData)}`
+                checked: Screens.hasBar(modelData)
+                // The last remaining bar cannot be switched off; see barCount.
+                enabled: !checked || root.barCount > 1
+                onToggled: value => Config.setBarOnScreen(Config.screenKey(modelData), value, Screens.mainKey)
+            }
+        }
+
+        // The segments are the monitors plus "All", so this stays inside
+        // ChoiceRow's four-option ceiling up to three screens. Past that the
+        // control is the wrong one and this becomes a list -- worth knowing
+        // before somebody plugs in a fourth.
+        ChoiceRow {
+            glyph: Icons.windowTiles
+            label: "These switches change"
+            hint: "\"All\" is what every bar shows. Pick a monitor to give that "
+                + "one an exception; the rest keep following All."
+            options: [{ label: "All", value: "" },
+                ...Screens.all.map(screen => ({ label: screen.name, value: Config.screenKey(screen) }))]
+            value: root.editing
+            onChosen: value => root.editing = value
+        }
+
+        // Only when there is something to undo, and it says what it would undo:
+        // "reset" on a monitor that never disagreed is a button that does
+        // nothing, and one that has been clicked once with no visible result is
+        // one nobody trusts again.
+        ActionRow {
+            visible: Config.barHasOverride(root.editing)
+
+            glyph: Icons.restore
+            label: "This monitor's exceptions"
+            description: "Drop them and follow All again."
+            actionText: "Reset"
+            actionGlyph: Icons.restore
+            onTriggered: Config.resetBarOverride(root.editing)
+        }
+    }
 
     SettingsSection {
         width: parent.width
         glyph: Icons.windowTiles
-        title: "Widgets"
+        // Says which bar is being edited, because the switches below look
+        // identical either way and a change landing on the wrong monitor is
+        // invisible from here -- the other screen is behind this window.
+        title: root.editing ? "Widgets on this monitor" : "Widgets"
 
         ToggleRow {
             glyph: Icons.arch
             label: "Distribution logo"
-            checked: Config.barLogo
-            onToggled: value => Config.barLogo = value
+            checked: Config.barWidget(root.editing, "logo")
+            onToggled: value => Config.setBarWidget(root.editing, "logo", value)
         }
 
         ToggleRow {
             glyph: Icons.window
             label: "Focused window title"
-            checked: Config.barActiveWindow
-            onToggled: value => Config.barActiveWindow = value
+            checked: Config.barWidget(root.editing, "activeWindow")
+            onToggled: value => Config.setBarWidget(root.editing, "activeWindow", value)
         }
 
         ToggleRow {
             glyph: Icons.apps
             label: "System tray"
-            checked: Config.barTray
-            onToggled: value => Config.barTray = value
+            checked: Config.barWidget(root.editing, "tray")
+            onToggled: value => Config.setBarWidget(root.editing, "tray", value)
         }
 
         ToggleRow {
             glyph: Icons.battery
             label: "Peripheral battery"
-            checked: Config.barBattery
-            onToggled: value => Config.barBattery = value
+            checked: Config.barWidget(root.editing, "battery")
+            onToggled: value => Config.setBarWidget(root.editing, "battery", value)
         }
 
         // The switch is here; WHICH layouts it cycles through is on the Input
@@ -71,12 +164,12 @@ SettingsPage {
         ToggleRow {
             glyph: Icons.keyboard
             label: "Keyboard layout"
-            checked: Config.barKeyboardLayout
-            onToggled: value => Config.barKeyboardLayout = value
+            checked: Config.barWidget(root.editing, "keyboardLayout")
+            onToggled: value => Config.setBarWidget(root.editing, "keyboardLayout", value)
         }
 
         Text {
-            visible: Config.barKeyboardLayout && Config.keyboardLayouts.length < 2
+            visible: Config.barWidget(root.editing, "keyboardLayout") && Config.keyboardLayouts.length < 2
 
             x: Theme.groupPadding
             width: parent.width - Theme.groupPadding * 2
@@ -98,15 +191,15 @@ SettingsPage {
         ToggleRow {
             glyph: Icons.clock
             label: "Clock"
-            checked: Config.barClock
-            onToggled: value => Config.barClock = value
+            checked: Config.barWidget(root.editing, "clock")
+            onToggled: value => Config.setBarWidget(root.editing, "clock", value)
         }
 
         ToggleRow {
             glyph: Icons.settings
             label: "Settings button"
-            checked: Config.barSettingsButton
-            onToggled: value => Config.barSettingsButton = value
+            checked: Config.barWidget(root.editing, "settingsButton")
+            onToggled: value => Config.setBarWidget(root.editing, "settingsButton", value)
         }
 
         // ---------------- Laptop ----------------
@@ -165,7 +258,7 @@ SettingsPage {
         // who has just made the gear disappear is looking at this row, not at
         // that page.
         Text {
-            visible: !Config.barSettingsButton
+            visible: !Config.barWidget(root.editing, "settingsButton")
 
             x: Theme.groupPadding
             width: parent.width - Theme.groupPadding * 2
