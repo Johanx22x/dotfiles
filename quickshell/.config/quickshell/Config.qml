@@ -71,6 +71,13 @@ Singleton {
         nightLightScheduled: false,
         nightLightFrom: 20 * 60,
         nightLightTo: 7 * 60,
+        // Empty means "work it out", which is what Screens.qml did on its own
+        // before this was a choice, and what every single-monitor machine
+        // wants. An empty bar list means "the main monitor only", which is
+        // where the bar has always been.
+        mainMonitor: "",
+        barMonitors: [],
+        barOverrides: ({}),
         // Every widget on by default: this is the bar as designed, and the
         // switches below are for taking things away rather than for building
         // it up from nothing.
@@ -80,7 +87,8 @@ Singleton {
         barBattery: true,
         barKeyboardLayout: true,
         barClock: true,
-        barSettingsButton: true
+        barSettingsButton: true,
+        barIsland: true
     })
 
     // Where the cross-application state files live. Not statePath(): that
@@ -670,6 +678,68 @@ Singleton {
         onLoadFailed: root.wallpaperInterval = root.wallpaperIntervalDefault
     }
 
+    // ---------------- Which monitor is which ----------------
+    //
+    // HOW A MONITOR IS NAMED IN THIS FILE, and it is not the connector. "DP-3"
+    // is assigned by the kernel and moves between kernel versions -- this
+    // machine's main panel was DP-4 a week ago -- so a setting written against
+    // one silently applies to the wrong monitor after an update. The rest of
+    // this desktop already solved that: hyprland.lua matches monitors by their
+    // EDID description and hypr-monitor keys its overrides by the same string.
+    //
+    // This uses MODEL + SERIAL, which is that same description minus the
+    // manufacturer. Not a second convention, a shorter spelling of the one
+    // convention: Quickshell's ShellScreen exposes `model` and `serialNumber`
+    // and no description, and the serial is what makes it unique -- it is the
+    // one field that tells two identical monitors apart, which is the case the
+    // connector name cannot survive either.
+    //
+    // Falls back to the connector when a screen reports neither, which happens
+    // with virtual outputs and with a KVM in between. A key that is wrong after
+    // a kernel update beats no key at all: the failure is a bar on the wrong
+    // monitor, not a shell with no bar.
+    function screenKey(screen: var): string {
+        if (!screen)
+            return "";
+
+        const key = `${screen.model ?? ""} ${screen.serialNumber ?? ""}`.trim();
+        return key || (screen.name ?? "");
+    }
+
+    // Which monitor the shell lives on -- the bar's default home, and the one
+    // the launcher, the notifications, the power menu and the cheatsheet are
+    // pinned to. Empty means Screens.qml chooses, see its header for the rule.
+    property alias mainMonitor: adapter.mainMonitor
+
+    // The monitors carrying a bar, as screenKey() strings. EMPTY MEANS THE MAIN
+    // ONE ALONE, which is where the bar has always been and therefore what a
+    // machine that has never opened this page must keep doing -- pulling this
+    // change should not grow bars on screens nobody asked about. It is also not
+    // "none": there is no state here that leaves a desktop with no bar at all.
+    //
+    // WHICH SCREENS THAT ACTUALLY MEANS is Screens.qml's answer and not this
+    // file's, because resolving it needs to know which screen is the main one
+    // and Screens is the singleton that decides that -- it already imports this
+    // one, and the reverse would be a cycle. Config stores the choice; Screens
+    // reads it. See Screens.barScreens and Screens.hasBar.
+    property alias barMonitors: adapter.barMonitors
+
+    function setBarOnScreen(key: string, on: bool, mainKey: string): void {
+        // The empty list means "main only", so the first change has to spell
+        // that out before it can add to it or take from it -- otherwise
+        // switching the second monitor on would produce ["<second>"], which
+        // reads as "and not the main one".
+        const current = (root.barMonitors ?? []).length > 0 ? root.barMonitors.slice() : (mainKey ? [mainKey] : []);
+
+        const at = current.indexOf(key);
+        if (on && at < 0)
+            current.push(key);
+        else if (!on && at >= 0)
+            current.splice(at, 1);
+
+        root.barMonitors = current;
+    }
+
     // ---------------- Bar ----------------
 
     property alias use24Hour: adapter.use24Hour
@@ -678,11 +748,18 @@ Singleton {
     // Which widgets the bar shows.
     //
     // NOT EVERY WIDGET IS HERE, and the ones missing are missing on purpose.
-    // The workspaces, the island and the power button have no switch: the
-    // first two are how you know where you are and what the desktop is doing,
-    // and the last is the only pointer-reachable way to end the session. A
-    // settings window that can hide the way out is a settings window that can
-    // strand somebody.
+    // The workspaces and the power button have no switch: the first is how you
+    // know where you are, and the last is the only pointer-reachable way to end
+    // the session. A settings window that can hide the way out is a settings
+    // window that can strand somebody.
+    //
+    // THE ISLAND USED TO BE ON THAT LIST and no longer is, because the argument
+    // for it stopped holding when the bar could repeat. It was "this is how you
+    // know what the desktop is doing", which is true of HAVING one and not of
+    // having one per monitor -- a second copy narrating the same desktop
+    // beside the first is noise. It is also not a way out of anywhere:
+    // SUPER + D opens the dashboard whether or not the island is drawn, which
+    // is the test the power button fails and this passes.
     property alias barLogo: adapter.barLogo
     property alias barActiveWindow: adapter.barActiveWindow
     property alias barTray: adapter.barTray
@@ -690,6 +767,132 @@ Singleton {
     property alias barKeyboardLayout: adapter.barKeyboardLayout
     property alias barClock: adapter.barClock
     property alias barSettingsButton: adapter.barSettingsButton
+    property alias barIsland: adapter.barIsland
+
+    // ---------------- ...and which of them, on which monitor ----------------
+    //
+    // A BASE PLUS EXCEPTIONS, not one independent set per monitor. The seven
+    // switches above stay what every bar shows; barOverrides holds only where a
+    // given monitor disagrees. Two things follow from that shape and both are
+    // the reason for it: plugging in a monitor gives you the bar you already
+    // designed rather than an empty one to rebuild, and changing your mind
+    // about the tray moves every bar that never had an opinion about trays.
+    //
+    // So an override is stored only for the widgets actually touched on that
+    // monitor. `{}` and "same as the base" are the same state, which is what
+    // makes "reset this monitor" a deletion rather than a copy of the base.
+    readonly property var barWidgets: ["logo", "activeWindow", "island", "tray",
+        "battery", "keyboardLayout", "clock", "settingsButton"]
+
+    property alias barOverrides: adapter.barOverrides
+
+    // The base value. A switch statement and not string-built property names:
+    // `root["bar" + capitalise(widget)]` would work until a widget is renamed,
+    // and then it would fail at runtime on one monitor rather than at load.
+    function barBase(widget: string): bool {
+        switch (widget) {
+        case "logo":
+            return root.barLogo;
+        case "activeWindow":
+            return root.barActiveWindow;
+        case "tray":
+            return root.barTray;
+        case "battery":
+            return root.barBattery;
+        case "keyboardLayout":
+            return root.barKeyboardLayout;
+        case "clock":
+            return root.barClock;
+        case "settingsButton":
+            return root.barSettingsButton;
+        case "island":
+            return root.barIsland;
+        }
+
+        return false;
+    }
+
+    function setBarBase(widget: string, on: bool): void {
+        switch (widget) {
+        case "logo":
+            root.barLogo = on;
+            break;
+        case "activeWindow":
+            root.barActiveWindow = on;
+            break;
+        case "tray":
+            root.barTray = on;
+            break;
+        case "battery":
+            root.barBattery = on;
+            break;
+        case "keyboardLayout":
+            root.barKeyboardLayout = on;
+            break;
+        case "clock":
+            root.barClock = on;
+            break;
+        case "settingsButton":
+            root.barSettingsButton = on;
+            break;
+        case "island":
+            root.barIsland = on;
+            break;
+        }
+    }
+
+    // What a given bar actually shows. An empty key is the base itself, which
+    // is what the settings page passes while it is on "All monitors".
+    function barWidget(key: string, widget: string): bool {
+        const over = key ? root.barOverrides?.[key] : null;
+
+        if (over && over[widget] !== undefined)
+            return over[widget] === true;
+
+        return root.barBase(widget);
+    }
+
+    function setBarWidget(key: string, widget: string, on: bool): void {
+        if (!key) {
+            root.setBarBase(widget, on);
+            return;
+        }
+
+        // Assigned whole rather than mutated in place: JsonAdapter watches the
+        // property, and writing through a nested object it already holds
+        // changes the value without ever telling it to save.
+        const next = Object.assign({}, root.barOverrides);
+        const forScreen = Object.assign({}, next[key]);
+
+        // Agreeing with the base is stored as "no opinion", so a monitor that
+        // has been switched back and forth ends up inheriting again instead of
+        // carrying a frozen copy of whatever the base said at the time.
+        if (on === root.barBase(widget))
+            delete forScreen[widget];
+        else
+            forScreen[widget] = on;
+
+        if (Object.keys(forScreen).length === 0)
+            delete next[key];
+        else
+            next[key] = forScreen;
+
+        root.barOverrides = next;
+    }
+
+    function barHasOverride(key: string): bool {
+        const over = key ? root.barOverrides?.[key] : null;
+        return !!over && Object.keys(over).length > 0;
+    }
+
+    function resetBarOverride(key: string): void {
+        if (!root.barHasOverride(key))
+            return;
+
+        const next = Object.assign({}, root.barOverrides);
+        delete next[key];
+        root.barOverrides = next;
+    }
 
     // ---------------- Notifications ----------------
 
@@ -734,6 +937,15 @@ Singleton {
         adapter.barKeyboardLayout = root.defaults.barKeyboardLayout;
         adapter.barClock = root.defaults.barClock;
         adapter.barSettingsButton = root.defaults.barSettingsButton;
+        adapter.barIsland = root.defaults.barIsland;
+        // Back to one bar on the monitor the rule picks, with no monitor
+        // holding an opinion of its own. The Hyprland side is deliberately NOT
+        // reset from here: hypr-monitor owns that file, and a "restore
+        // defaults" in this window that silently moved the compositor's game
+        // rules would be reaching a long way outside the shell.
+        adapter.mainMonitor = root.defaults.mainMonitor;
+        adapter.barMonitors = root.defaults.barMonitors;
+        adapter.barOverrides = ({});
     }
 
     // ---------------- Persistence ----------------
@@ -767,6 +979,11 @@ Singleton {
             property bool nightLightScheduled: false
             property int nightLightFrom: 1200
             property int nightLightTo: 420
+            // See the monitor section above for what goes in these three and
+            // why the empty values mean "decide for me" rather than "nothing".
+            property string mainMonitor: ""
+            property var barMonitors: []
+            property var barOverrides: ({})
             property bool barLogo: true
             property bool barActiveWindow: true
             property bool barTray: true
@@ -774,6 +991,7 @@ Singleton {
             property bool barKeyboardLayout: true
             property bool barClock: true
             property bool barSettingsButton: true
+            property bool barIsland: true
         }
     }
 }

@@ -37,14 +37,15 @@ ShellRoot {
         Component.onCompleted: ReplayState.armed
     }
 
-    // One Bar on the shell's main screen; see Screens.qml for how that one is
-    // chosen and why it is no longer a model name written out five times.
+    // A Bar on each screen that is meant to have one -- the main screen alone
+    // until the Bar page says otherwise. See Screens.qml for how the main one
+    // is chosen and why it is no longer a model name written out five times.
     //
-    // Variants is still what would make this scale to every monitor on the day
-    // that is wanted: `model: Quickshell.screens` and each screen gets its own
-    // bar with its own `modelData`. Workspaces.qml is already written for it.
+    // THE ONLY SURFACE HERE THAT REPEATS, and the four below explain why: they
+    // all take an exclusive keyboard grab and the bar never does. Each Bar gets
+    // its own screen through `modelData` and reads its own widget set from it.
     Variants {
-        model: Screens.mainOnly
+        model: Screens.barScreens
 
         Bar {}
     }
