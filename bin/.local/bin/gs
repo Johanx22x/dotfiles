@@ -117,11 +117,30 @@ export VKD3D_CONFIG="${VKD3D_CONFIG:-dxr11,dxr}"
 # transition when both would have fired.
 WALLPAPER_FROZEN=0
 
+# STEAM'S LOADER ENVIRONMENT HAS TO GO before calling anything on the host.
+# Steam exports its own LD_LIBRARY_PATH into everything it launches, this script
+# included, and its pinned libraries shadow the system ones. mpvpaper does not
+# survive it -- verified on 2026-08-13:
+#
+#   $ env LD_LIBRARY_PATH="$STEAM_LD_LIBRARY_PATH" mpvpaper --help
+#   mpvpaper: .../steam-runtime/pinned_libs_64/libcurl.so.4: version
+#   `CURL_OPENSSL_4' not found (required by /usr/lib/libsixel.so.1)
+#   exit 1
+#
+# This is what left the desktop stuck on the still frame: the freeze worked,
+# because awww and hyprctl come through that environment unharmed, and then the
+# restore silently could not start mpvpaper. It also hid itself from testing --
+# run gs from a normal shell and everything passes, because the poison only
+# exists when Steam is the one launching it.
+wallpaper_switch() {
+    env -u LD_LIBRARY_PATH -u LD_PRELOAD "$HOME/.local/bin/wallpaper-switch" "$@"
+}
+
 freeze_video_wallpaper() {
     [[ ${GS_WALLPAPER:-0} == 1 ]] && return 0
     pgrep -x mpvpaper >/dev/null 2>&1 || return 0
 
-    "$HOME/.local/bin/wallpaper-switch" still >/dev/null 2>&1 || {
+    wallpaper_switch still >/dev/null 2>&1 || {
         echo "gs: could not freeze the video wallpaper, leaving it alone" >&2
         return 0
     }
@@ -131,7 +150,8 @@ freeze_video_wallpaper() {
     # only tests whether the pid is still there; it sends nothing.
     setsid -f bash -c '
         while kill -0 '"$$"' 2>/dev/null; do sleep 1; done
-        exec "$HOME/.local/bin/wallpaper-switch" reapply
+        exec env -u LD_LIBRARY_PATH -u LD_PRELOAD \
+            "$HOME/.local/bin/wallpaper-switch" reapply
     ' >/dev/null 2>&1 || {
         echo "gs: could not start the wallpaper watchdog" >&2
     }
