@@ -99,17 +99,62 @@ export VKD3D_CONFIG="${VKD3D_CONFIG:-dxr11,dxr}"
 # frame cache: `still` swaps the video for its own cached frame under awww, and
 # `reapply` puts the video back. A second copy of that logic in here would be
 # one more thing to keep in step for no gain.
+#
+# THE RESTORE MUST NOT DEPEND ON THIS SCRIPT LIVING TO SEE IT. The first version
+# used `trap restore EXIT INT TERM`, and it left the desktop stuck on the still
+# frame for good on 2026-08-13. Two ways that happens, both real here:
+#
+#   - A trap cannot run on SIGKILL, and Steam tears a game down by signalling
+#     the whole process tree. gs is in that tree.
+#   - Even when the trap does run, the mpvpaper it forks is in the same process
+#     group, so a group-wide kill arriving a moment later takes the new
+#     wallpaper with it. The symptom is identical and hides the first cause.
+#
+# So the restore is handed to a WATCHDOG detached with `setsid` before the game
+# starts. Its own session means no group-wide kill reaches it; it waits for this
+# script's pid to disappear, however it disappears, and only then restores. One
+# restorer and no trap, so there is no second path to keep in step and no double
+# transition when both would have fired.
 WALLPAPER_FROZEN=0
+
+# STEAM'S LOADER ENVIRONMENT HAS TO GO before calling anything on the host.
+# Steam exports its own LD_LIBRARY_PATH into everything it launches, this script
+# included, and its pinned libraries shadow the system ones. mpvpaper does not
+# survive it -- verified on 2026-08-13:
+#
+#   $ env LD_LIBRARY_PATH="$STEAM_LD_LIBRARY_PATH" mpvpaper --help
+#   mpvpaper: .../steam-runtime/pinned_libs_64/libcurl.so.4: version
+#   `CURL_OPENSSL_4' not found (required by /usr/lib/libsixel.so.1)
+#   exit 1
+#
+# This is what left the desktop stuck on the still frame: the freeze worked,
+# because awww and hyprctl come through that environment unharmed, and then the
+# restore silently could not start mpvpaper. It also hid itself from testing --
+# run gs from a normal shell and everything passes, because the poison only
+# exists when Steam is the one launching it.
+wallpaper_switch() {
+    env -u LD_LIBRARY_PATH -u LD_PRELOAD "$HOME/.local/bin/wallpaper-switch" "$@"
+}
 
 freeze_video_wallpaper() {
     [[ ${GS_WALLPAPER:-0} == 1 ]] && return 0
     pgrep -x mpvpaper >/dev/null 2>&1 || return 0
 
-    "$HOME/.local/bin/wallpaper-switch" still >/dev/null 2>&1 || {
+    wallpaper_switch still >/dev/null 2>&1 || {
         echo "gs: could not freeze the video wallpaper, leaving it alone" >&2
         return 0
     }
     WALLPAPER_FROZEN=1
+
+    # $$ is this script's pid, read inside the watchdog's own quoting. `kill -0`
+    # only tests whether the pid is still there; it sends nothing.
+    setsid -f bash -c '
+        while kill -0 '"$$"' 2>/dev/null; do sleep 1; done
+        exec env -u LD_LIBRARY_PATH -u LD_PRELOAD \
+            "$HOME/.local/bin/wallpaper-switch" reapply
+    ' >/dev/null 2>&1 || {
+        echo "gs: could not start the wallpaper watchdog" >&2
+    }
 
     # Wait for the process to be gone before handing the card to the game.
     # awww is already up by the time `still` returns, but mpvpaper exiting is
@@ -123,21 +168,11 @@ freeze_video_wallpaper() {
     echo "gs: video wallpaper frozen to a still, freeing its VRAM (GS_WALLPAPER=1 keeps it playing)" >&2
 }
 
-restore_video_wallpaper() {
-    (( WALLPAPER_FROZEN )) || return 0
-    WALLPAPER_FROZEN=0
-    "$HOME/.local/bin/wallpaper-switch" reapply >/dev/null 2>&1 || true
-}
-
-# EXIT alone is not enough. Steam stops a game by signalling the process tree,
-# so without INT and TERM the video would come back when you quit from the
-# game's own menu and stay frozen when you stop it from the library.
-trap restore_video_wallpaper EXIT INT TERM
-
-# Every path out of this script goes through here instead of exec'ing.
-# exec REPLACES this shell, which drops the trap along with it: the wallpaper
-# would be frozen on the way in and never restored. The cost of staying alive
-# is one sleeping bash process per game, which is nothing.
+# Every path out of this script goes through here instead of exec'ing, so that
+# the freeze happens once, in one place, whichever way the game is launched.
+# The watchdog waits on this script's pid, so gs staying alive as the parent is
+# what defines "the game is over" -- it exits when gamescope does, and it dies
+# with it if the whole tree is killed. Cost: one sleeping bash process per game.
 launch() {
     freeze_video_wallpaper
     "$@"
