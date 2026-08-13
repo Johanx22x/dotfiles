@@ -25,6 +25,9 @@
 #                         game. Must divide GS_HZ evenly, e.g.
 #                         GS_HZ=120 GS_FPS=60.
 #    GS_HUD=1             FPS overlay (MangoHud inside gamescope)
+#    GS_WAYLAND=1         Native Wayland games talk to gamescope directly
+#                         (--expose-wayland). Off by default: it breaks screen
+#                         sharing and the HUD. See the note further down.
 #    GS_VRR=1             Enables adaptive sync / FreeSync
 #    GS_GRAB=1            Forces permanent relative mouse mode. Only if the
 #                         mouse escapes to the other monitor. It makes the
@@ -120,25 +123,43 @@ if [[ -n ${GS_W:-} && -n ${GS_H:-} ]]; then
     args+=( -w "$GS_W" -h "$GS_H" -F "${GS_FSR:-fsr}" )
 fi
 
-# Lets native games speak Wayland directly instead of going through
-# XWayland inside gamescope.
+# --expose-wayland lets native Wayland games talk to gamescope directly instead
+# of going through the XWayland inside it. It is OPT-IN, and it used to be the
+# default. Two separate things make it a bad default:
 #
-# It is INCOMPATIBLE with the HUD: mangoapp is an X11 client, so under
-# --expose-wayland it segfaults in libX11 the instant it starts. gamescope's
-# reaper then restarts it, and it crashes again, about four times a second for
-# as long as the game runs -- each crash writing a 2.8 MB core dump to
-# /var/lib/systemd/coredump. One session left 10716 of them behind. That I/O
-# storm runs alongside the game and stutters it, so the overlay meant to
-# diagnose stuttering was causing it. Upstream:
-# https://github.com/flightlessmango/MangoHud/issues/1741
+# 1. It BREAKS SCREEN SHARING. With --expose-wayland, sharing the screen through
+#    the desktop portal (Discord, a browser, OBS) makes the game stick on your
+#    own monitor: either a frozen frame pasted over the live game with a narrow
+#    strip still repainting, or the whole thing crawling as if it ran at 1 fps
+#    while the game is really pushing 165. Stopping the share clears it
+#    instantly. Found on 2026-08-12 with Kingdom Come: Deliverance 2, after
+#    ruling out, each by measurement: direct scanout (directScanoutTo read 0
+#    while already frozen), the portal's own settings (both force_shm and
+#    monitor-vs-window capture change nothing), damage tracking
+#    (debug:damage_tracking = 0 changes nothing), the sdl backend (worse), and
+#    gpu-screen-recorder, which captures the same monitor non-stop over KMS and
+#    never triggers it. There is no upstream report of this and no fix; dropping
+#    the flag is the fix.
 #
-# Nothing is lost by dropping it when the HUD is on: games under Proton run
-# through XWayland inside gamescope either way, so --expose-wayland only ever
-# mattered for native Wayland games.
-if [[ ${GS_HUD:-0} == 1 ]]; then
-    echo "gs: HUD on, skipping --expose-wayland (mangoapp needs X11)" >&2
-else
-    args+=( --expose-wayland )
+# 2. It is INCOMPATIBLE with the HUD: mangoapp is an X11 client, so under
+#    --expose-wayland it segfaults in libX11 the instant it starts. gamescope's
+#    reaper then restarts it, and it crashes again, about four times a second
+#    for as long as the game runs -- each crash writing a 2.8 MB core dump to
+#    /var/lib/systemd/coredump. One session left 10716 of them behind. That I/O
+#    storm runs alongside the game and stutters it, so the overlay meant to
+#    diagnose stuttering was causing it. Upstream:
+#    https://github.com/flightlessmango/MangoHud/issues/1741
+#
+# Almost nothing is lost by leaving it off: games under Proton run through
+# XWayland inside gamescope either way, so it only ever mattered for native
+# Wayland games. Turn it on per game with GS_WAYLAND=1 if one of those needs it,
+# and do not share your screen while it is on.
+if [[ ${GS_WAYLAND:-0} == 1 ]]; then
+    if [[ ${GS_HUD:-0} == 1 ]]; then
+        echo "gs: HUD on, ignoring GS_WAYLAND (mangoapp needs X11)" >&2
+    else
+        args+=( --expose-wayland )
+    fi
 fi
 
 # Hands frame pacing to gamescope instead of the game. Some engines -- Elden
