@@ -587,6 +587,92 @@ SettingsPage {
         copiedReset.restart();
     }
 
+    // ---------------- Which monitor is the main one ----------------
+    //
+    // TWO SPELLINGS OF THE SAME MONITOR MEET HERE, and this page is the only
+    // place that can introduce them. The shell keys its choice by model +
+    // serial (Config.screenKey, off Quickshell's ShellScreen, which has no
+    // description); Hyprland matches on the full EDID description, which is
+    // what hyprland.lua and hypr-monitor already use everywhere. Both are read
+    // off the same monitor here, so neither side has to guess at the other's.
+    //
+    // The bridge between the two lists is the CONNECTOR, which is safe for
+    // exactly this: it is unstable across kernel versions and perfectly stable
+    // within one running session, and both lists are being read right now.
+    // What gets STORED is the stable spelling on each side.
+    function screenFor(mon: var): var {
+        return Screens.all.find(screen => screen.name === (mon.name ?? "")) ?? null;
+    }
+
+    // Whether this is where the shell lives -- which is a different question
+    // from whether it was CHOSEN. With nothing chosen, Screens.qml still picks
+    // one, and saying "main: automatic" on it is the answer to the question
+    // somebody opening this page is actually asking.
+    function isMainMonitor(mon: var): bool {
+        return Screens.mainName !== "" && Screens.mainName === (mon.name ?? "");
+    }
+
+    function mainChosen(mon: var): bool {
+        const screen = root.screenFor(mon);
+        return !!screen && Config.mainMonitor !== "" && Config.screenKey(screen) === Config.mainMonitor;
+    }
+
+    // BOTH SIDES IN ONE CLICK, because a main monitor the shell and the
+    // compositor disagree about is worse than either answer on its own: the
+    // bar would be on one screen and the game rules pointed at the other.
+    //
+    // The shell's half is immediate -- assigning the property moves the bar,
+    // the launcher and the notifications as the bindings re-evaluate. The
+    // compositor's half is a rewrite of the generated monitors.lua, and what
+    // that does and does not apply before the next reload is the script's
+    // sentence to write, not this page's to guess at.
+    function makeMain(mon: var): void {
+        const screen = root.screenFor(mon);
+        if (!screen)
+            return;
+
+        Config.mainMonitor = Config.screenKey(screen);
+
+        mainSetter.command = ["hypr-monitor", "main", mon.description ?? ""];
+        root.mainNoticeFor = mon.name;
+        root.mainNotice = "";
+        mainSetter.running = true;
+    }
+
+    // Back to Screens.qml's rule and to the MONITOR_MAIN written by hand in
+    // hyprland.lua. Not the same as "no main monitor": there is always one,
+    // this only stops it being pinned.
+    function clearMain(mon: var): void {
+        Config.mainMonitor = "";
+
+        mainSetter.command = ["hypr-monitor", "main", "--clear"];
+        root.mainNoticeFor = mon.name;
+        root.mainNotice = "";
+        mainSetter.running = true;
+    }
+
+    // The script's own words about what a reload will and will not change,
+    // shown verbatim under the monitor they were about -- the same arrangement
+    // as forgetNotice, and for the same reason: one copy of that sentence,
+    // living in the script that knows it.
+    property string mainNotice: ""
+    property string mainNoticeFor: ""
+
+    Process {
+        id: mainSetter
+
+        stdout: StdioCollector {
+            onStreamFinished: root.mainNotice = text.trim()
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.trim() !== "")
+                    root.mainNotice = text.trim();
+            }
+        }
+    }
+
     // ---------------- Re-reading ----------------
     //
     // THE PAGE'S OWN `visible`, which is the only honest signal here: the
@@ -1889,6 +1975,9 @@ SettingsPage {
             // every monitor is in until somebody keeps a change.
             readonly property var saved: root.savedOf(card.mon)
 
+            readonly property bool isMain: root.isMainMonitor(card.mon)
+            readonly property bool mainIsChosen: root.mainChosen(card.mon)
+
             width: root.width
             glyph: Icons.monitor
             title: root.monitorTitle(card.mon)
@@ -1937,6 +2026,18 @@ SettingsPage {
                 label: "Focus"
                 value: card.mon.focused ? "has the keyboard" : "—"
                 tone: card.mon.focused ? Theme.primary : Theme.textOnSurfaceVariant
+            }
+
+            // WHERE THE SHELL LIVES, and it distinguishes chosen from worked
+            // out. Both are "yes" to the question the bar answers, and they
+            // behave differently the moment a monitor is unplugged or rotated:
+            // an automatic pick moves, a chosen one waits for its screen to
+            // come back. Somebody surprised by the bar moving is reading this
+            // row to find out which of the two they have.
+            Reading {
+                label: "Main monitor"
+                value: card.isMain ? (card.mainIsChosen ? "yes — chosen" : "yes — picked automatically") : "—"
+                tone: card.isMain ? Theme.primary : Theme.textOnSurfaceVariant
             }
 
             // WHAT IS ON DISK, and it is a seventh fact about this monitor
@@ -2157,6 +2258,25 @@ SettingsPage {
                         onActivated: root.copyConfig(card.mon)
                     }
 
+                    // Moving the shell here, or letting the rule pick again.
+                    // Hidden on a single-monitor machine: with one screen it is
+                    // already the main one and the chip could only re-state
+                    // that.
+                    //
+                    // NOT LOCKED BY `card.locked`, unlike the mode controls
+                    // next to it. That lock is about provisional changes a
+                    // countdown is about to undo, and this is not one of them:
+                    // nothing here can leave a screen black, so there is
+                    // nothing to confirm and nothing to revert.
+                    Chip {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: Screens.all.length > 1
+                        label: card.mainIsChosen ? "Unset main" : "Make main"
+                        glyph: card.mainIsChosen ? Icons.restore : Icons.monitor
+                        enabled: !mainSetter.running && (card.mainIsChosen || !card.isMain || Config.mainMonitor !== "")
+                        onActivated: card.mainIsChosen ? root.clearMain(card.mon) : root.makeMain(card.mon)
+                    }
+
                     // HIDDEN AND NOT DIMMED, which is the one place this page
                     // departs from the rule written on Chip. A disabled chip
                     // says "not now"; this one would be saying "not until you
@@ -2172,6 +2292,29 @@ SettingsPage {
                         enabled: !card.locked && !forgetter.running
                         onActivated: root.forget(card.mon)
                     }
+                }
+            }
+
+            // What the main-monitor write left behind, in the script's words.
+            // The shell half of that click is already visible -- the bar moved
+            // as it was pressed -- so anything worth printing here is about the
+            // compositor half, which is the half that may be waiting on a
+            // reload.
+            Text {
+                visible: root.mainNoticeFor === card.mon.name && root.mainNotice !== ""
+
+                x: Theme.groupPadding
+                width: parent.width - Theme.groupPadding * 2
+                bottomPadding: 6
+
+                text: root.mainNotice
+                wrapMode: Text.WordWrap
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize - 1
+                color: Theme.warning
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
                 }
             }
 
