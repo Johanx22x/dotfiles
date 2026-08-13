@@ -24,7 +24,13 @@
 #    GS_FPS               Framerate cap, applied by gamescope rather than the
 #                         game. Must divide GS_HZ evenly, e.g.
 #                         GS_HZ=120 GS_FPS=60.
-#    GS_HUD=1             FPS overlay (MangoHud inside gamescope)
+#    GS_HUD               The MangoHud overlay, which is ALWAYS loaded and
+#                         starts hidden. Press Shift_R+F12 in game to show or
+#                         hide it (toggle_hud in MangoHud.conf).
+#                           GS_HUD=1    start with it already visible
+#                           GS_HUD=off  do not load it at all. Needed before
+#                                       GS_WAYLAND=1 can work, since mangoapp
+#                                       is an X11 client.
 #    GS_WAYLAND=1         Native Wayland games talk to gamescope directly
 #                         (--expose-wayland). Off by default: it breaks screen
 #                         sharing and the HUD. See the note further down.
@@ -278,9 +284,13 @@ fi
 # XWayland inside gamescope either way, so it only ever mattered for native
 # Wayland games. Turn it on per game with GS_WAYLAND=1 if one of those needs it,
 # and do not share your screen while it is on.
+#
+# It is also incompatible with mangoapp, which now runs for every game (see the
+# HUD section below), so GS_WAYLAND is the one that gives way: a native Wayland
+# game that needs it can turn the HUD off with GS_HUD=off.
 if [[ ${GS_WAYLAND:-0} == 1 ]]; then
-    if [[ ${GS_HUD:-0} == 1 ]]; then
-        echo "gs: HUD on, ignoring GS_WAYLAND (mangoapp needs X11)" >&2
+    if [[ ${GS_HUD:-0} != off ]]; then
+        echo "gs: mangoapp needs X11, ignoring GS_WAYLAND (use GS_HUD=off to force it)" >&2
     else
         args+=( --expose-wayland )
     fi
@@ -307,7 +317,25 @@ fi
 # captured but nothing draws it: it looks stuck until the game menu appears.
 # Only turn it on if the mouse escapes to the portrait monitor in some game.
 [[ ${GS_GRAB:-0} == 1 ]] && args+=( --force-grab-cursor )
-[[ ${GS_HUD:-0}  == 1 ]] && args+=( --mangoapp )
+
+# ---- The HUD is always loaded, and starts hidden ----
+# mangoapp runs for EVERY game now, because MangoHud's toggle_hud keybind can
+# only show something that is already running -- with mangoapp launched on
+# demand there was nothing for Shift_R+F12 to toggle, and seeing the frametimes
+# meant quitting, editing the launch options and starting the game again.
+#
+# It comes up invisible: `no_display` lives in MangoHud.conf, so the default
+# costs a hidden process and nothing on screen. GS_HUD=1 starts it visible,
+# through MANGOHUD_CONFIG rather than a second config file, since MangoHud
+# takes `some_parameter=0` to switch an on/off parameter back off.
+#
+# GS_HUD=off is the escape hatch: no mangoapp at all, which is what a native
+# Wayland game needs before GS_WAYLAND=1 can do anything.
+if [[ ${GS_HUD:-0} != off ]]; then
+    args+=( --mangoapp )
+    [[ ${GS_HUD:-0} == 1 ]] && \
+        export MANGOHUD_CONFIG="${MANGOHUD_CONFIG:+$MANGOHUD_CONFIG,}no_display=0"
+fi
 
 # ---- The Steam overlay does not belong inside gamescope ----
 # Steam preloads gameoverlayrenderer.so into whatever it launches, and what it
