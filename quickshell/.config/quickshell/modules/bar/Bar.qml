@@ -194,9 +194,21 @@ PanelWindow {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
 
+            // Switchable per monitor, which is what it is for: a second island
+            // on a second bar narrates the same desktop twice. SUPER + D still
+            // opens the dashboard with the island gone -- see the note on
+            // Config.barWidgets about why this one may be switched off and the
+            // power button may not.
+            //
+            // THE TWO BADGES SURVIVE IT. They anchor to this Row's edges rather
+            // than to the island, so with the island hidden the Row is zero
+            // wide at the centre of the bar and they simply meet there, one on
+            // each side -- still a pair, still centred, still saying what they
+            // said.
             Island {
                 anchors.verticalCenter: parent.verticalCenter
 
+                visible: bar.widget("island")
                 popout: barPopout
             }
         }

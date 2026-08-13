@@ -87,7 +87,8 @@ Singleton {
         barBattery: true,
         barKeyboardLayout: true,
         barClock: true,
-        barSettingsButton: true
+        barSettingsButton: true,
+        barIsland: true
     })
 
     // Where the cross-application state files live. Not statePath(): that
@@ -747,11 +748,18 @@ Singleton {
     // Which widgets the bar shows.
     //
     // NOT EVERY WIDGET IS HERE, and the ones missing are missing on purpose.
-    // The workspaces, the island and the power button have no switch: the
-    // first two are how you know where you are and what the desktop is doing,
-    // and the last is the only pointer-reachable way to end the session. A
-    // settings window that can hide the way out is a settings window that can
-    // strand somebody.
+    // The workspaces and the power button have no switch: the first is how you
+    // know where you are, and the last is the only pointer-reachable way to end
+    // the session. A settings window that can hide the way out is a settings
+    // window that can strand somebody.
+    //
+    // THE ISLAND USED TO BE ON THAT LIST and no longer is, because the argument
+    // for it stopped holding when the bar could repeat. It was "this is how you
+    // know what the desktop is doing", which is true of HAVING one and not of
+    // having one per monitor -- a second copy narrating the same desktop
+    // beside the first is noise. It is also not a way out of anywhere:
+    // SUPER + D opens the dashboard whether or not the island is drawn, which
+    // is the test the power button fails and this passes.
     property alias barLogo: adapter.barLogo
     property alias barActiveWindow: adapter.barActiveWindow
     property alias barTray: adapter.barTray
@@ -759,6 +767,7 @@ Singleton {
     property alias barKeyboardLayout: adapter.barKeyboardLayout
     property alias barClock: adapter.barClock
     property alias barSettingsButton: adapter.barSettingsButton
+    property alias barIsland: adapter.barIsland
 
     // ---------------- ...and which of them, on which monitor ----------------
     //
@@ -772,8 +781,8 @@ Singleton {
     // So an override is stored only for the widgets actually touched on that
     // monitor. `{}` and "same as the base" are the same state, which is what
     // makes "reset this monitor" a deletion rather than a copy of the base.
-    readonly property var barWidgets: ["logo", "activeWindow", "tray", "battery",
-        "keyboardLayout", "clock", "settingsButton"]
+    readonly property var barWidgets: ["logo", "activeWindow", "island", "tray",
+        "battery", "keyboardLayout", "clock", "settingsButton"]
 
     property alias barOverrides: adapter.barOverrides
 
@@ -796,6 +805,8 @@ Singleton {
             return root.barClock;
         case "settingsButton":
             return root.barSettingsButton;
+        case "island":
+            return root.barIsland;
         }
 
         return false;
@@ -823,6 +834,9 @@ Singleton {
             break;
         case "settingsButton":
             root.barSettingsButton = on;
+            break;
+        case "island":
+            root.barIsland = on;
             break;
         }
     }
@@ -923,6 +937,7 @@ Singleton {
         adapter.barKeyboardLayout = root.defaults.barKeyboardLayout;
         adapter.barClock = root.defaults.barClock;
         adapter.barSettingsButton = root.defaults.barSettingsButton;
+        adapter.barIsland = root.defaults.barIsland;
         // Back to one bar on the monitor the rule picks, with no monitor
         // holding an opinion of its own. The Hyprland side is deliberately NOT
         // reset from here: hypr-monitor owns that file, and a "restore
@@ -976,6 +991,7 @@ Singleton {
             property bool barKeyboardLayout: true
             property bool barClock: true
             property bool barSettingsButton: true
+            property bool barIsland: true
         }
     }
 }
