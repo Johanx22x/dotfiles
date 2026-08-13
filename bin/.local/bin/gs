@@ -34,6 +34,9 @@
 #                         cursor look stuck while the game loads.
 #    GS_GAMEMODE=0        Disables gamemoderun
 #    GS_OFF=1             Skips gamescope entirely (native Wayland game)
+#    GS_OVERLAY=1         Lets the Steam overlay load inside gamescope too.
+#                         Off by default: it cannot draw there and it is what
+#                         makes long sessions turn to treacle (gamescope #697).
 #    GS_WALLPAPER=1       Keeps a video wallpaper playing while you play. By
 #                         default it is frozen to a still frame for the length
 #                         of the game and restored on exit: the picture stays,
@@ -271,6 +274,54 @@ fi
 [[ ${GS_GRAB:-0} == 1 ]] && args+=( --force-grab-cursor )
 [[ ${GS_HUD:-0}  == 1 ]] && args+=( --mangoapp )
 
+# ---- The Steam overlay does not belong inside gamescope ----
+# Steam preloads gameoverlayrenderer.so into whatever it launches, and what it
+# launches here is THIS SCRIPT, so the overlay ends up inside gamescope. It can
+# only draw itself in a process that presents through a Vulkan swapchain, which
+# gamescope is not, so it never draws anything -- it just stays resident,
+# driving its interposed Xlib event hooks against gamescope's nested Xwayland
+# for as long as the game runs. That is the long-standing "everything turns to
+# treacle after half an hour" bug, gamescope #697, open since 2022 and fixed
+# upstream on 2026-08-13 by commit e399345 (PR #2308), whose own message names
+# it as "building into the stutter reported after half an hour of play".
+#
+# Confirmed here rather than assumed: gameoverlayrenderer.so was mapped four
+# times in a running gamescope, and its LD_PRELOAD read
+#   libgamemodeauto.so.0:.../ubuntu12_32/gameoverlayrenderer.so
+#                        :.../ubuntu12_64/gameoverlayrenderer.so
+#
+# Arch ships 3.16.25, which predates the fix, so it is done here instead --
+# same idea as upstream's: strip the overlay from what gamescope inherits and
+# hand the original value back to the game, where the overlay works properly.
+#
+# THE IN-GAME OVERLAY SURVIVES THIS, and for Proton games it would survive even
+# without the env below: pressure-vessel injects the overlay into the container
+# itself with its own --ld-preload flags, which owe nothing to gamescope's
+# environment. Verified the same way -- four mappings inside the game process.
+# The env is there for native games, which have no container to re-add it.
+#
+# This is why the blunt LD_PRELOAD="" workaround costs people Steam Input,
+# recording and the overlay: it strips the library from the whole chain instead
+# of only from the process that cannot use it.
+GAME_LD_PRELOAD="${LD_PRELOAD:-}"
+inner=()
+
+if [[ ${GS_OVERLAY:-0} != 1 && -n $GAME_LD_PRELOAD ]]; then
+    # Entries are colon-separated, but the loader also accepts spaces, so both
+    # are treated as separators here.
+    stripped=$(printf '%s' "$GAME_LD_PRELOAD" \
+        | tr ': ' '\n\n' \
+        | grep -v 'gameoverlayrenderer\.so$' \
+        | grep -v '^$' \
+        | paste -sd: -)
+
+    if [[ $stripped != "$GAME_LD_PRELOAD" ]]; then
+        export LD_PRELOAD="$stripped"
+        inner=( env "LD_PRELOAD=$GAME_LD_PRELOAD" )
+        echo "gs: Steam overlay kept out of gamescope, handed to the game (gamescope #697)" >&2
+    fi
+fi
+
 # ---- gamemode ----
 # gamemoderun goes OUTSIDE, wrapping gamescope. Put inside, it ends up in the
 # pressure-vessel container, where it cannot find libgamemode.so and fails
@@ -285,4 +336,5 @@ if [[ ${GS_GAMEMODE:-1} == 1 ]] && command -v gamemoderun >/dev/null; then
     outer+=( gamemoderun )
 fi
 
-launch "${outer[@]}" gamescope "${args[@]}" -- "$@"
+# shellcheck disable=SC2086  # inner may be empty, hence the +expansion guard
+launch "${outer[@]}" gamescope "${args[@]}" -- ${inner[@]+"${inner[@]}"} "$@"
