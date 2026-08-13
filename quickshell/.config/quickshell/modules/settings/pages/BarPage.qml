@@ -8,10 +8,14 @@
 // question, and one with no right answer: a tray is essential to somebody
 // running Discord and clutter to somebody who is not.
 //
-// THREE OF THEM HAVE NO SWITCH, deliberately. The workspaces and the island
-// are how you know where you are and what the desktop is doing; the power
-// button is the only pointer-reachable way to end the session. A settings
-// window able to hide the way out is one that can strand somebody.
+// TWO OF THEM HAVE NO SWITCH, deliberately. The workspaces are how you know
+// where you are; the power button is the only pointer-reachable way to end the
+// session. A settings window able to hide the way out is one that can strand
+// somebody.
+//
+// The island was a third until the bar could appear on more than one monitor.
+// "This is how you know what the desktop is doing" argues for having an island,
+// not for having one per screen, and SUPER + D opens the dashboard either way.
 
 import QtQuick
 import "root:/"
@@ -138,6 +142,42 @@ SettingsPage {
             label: "Focused window title"
             checked: Config.barWidget(root.editing, "activeWindow")
             onToggled: value => Config.setBarWidget(root.editing, "activeWindow", value)
+        }
+
+        // The island, and this is the row the second bar is for: the pill in
+        // the middle saying what is playing, what changed and what is being
+        // captured. One of them is the desktop talking; two of them is the same
+        // sentence twice.
+        ToggleRow {
+            glyph: Icons.widgets
+            label: "Island"
+            checked: Config.barWidget(root.editing, "island")
+            onToggled: value => Config.setBarWidget(root.editing, "island", value)
+        }
+
+        // Same shape as the note under the settings button: a switch that can
+        // hide a way in says where the other one is. The badges either side of
+        // it stay -- they are anchored to the middle of the bar, not to the
+        // island -- which is worth saying before somebody reads their staying
+        // as the switch not having worked.
+        Text {
+            visible: !Config.barWidget(root.editing, "island")
+
+            x: Theme.groupPadding
+            width: parent.width - Theme.groupPadding * 2
+            bottomPadding: 6
+
+            text: "SUPER + D still opens the dashboard. The do-not-disturb "
+                + "and capture badges stay: they belong to the middle of the "
+                + "bar rather than to the island."
+            wrapMode: Text.WordWrap
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize - 2
+            color: Theme.textOnSurfaceVariant
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
+            }
         }
 
         ToggleRow {
