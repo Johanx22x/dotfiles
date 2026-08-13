@@ -6,6 +6,7 @@
 #   wallpaper-switch random   a random one (different from the current)
 #   wallpaper-switch set PATH a specific one
 #   wallpaper-switch reapply  reapply the current one (handy after editing templates)
+#   wallpaper-switch still    freeze the current one to a still frame (see below)
 #   wallpaper-switch dir      print the collection's folder
 #   wallpaper-switch dir PATH use a different folder from now on
 #   wallpaper-switch thumbs   pre-extract the still frame of every video
@@ -300,7 +301,11 @@ case "$MODE" in
         [[ -f "$CURRENT" ]] || die "no current wallpaper to reapply"
         TARGET="$CURRENT"
         ;;
-    *) die "unknown mode '$MODE' (use next|prev|random|set|reapply|dir|thumbs)" ;;
+    still)
+        [[ -f "$CURRENT" ]] || die "no current wallpaper to freeze"
+        TARGET="$CURRENT"
+        ;;
+    *) die "unknown mode '$MODE' (use next|prev|random|set|reapply|still|dir|thumbs)" ;;
 esac
 
 # ---------------------------------------------------------------
@@ -427,6 +432,42 @@ apply_video() {
 
     return 0
 }
+
+# ---------------------------------------------------------------
+# 4b. still -- the same wallpaper, minus the decoder
+# ---------------------------------------------------------------
+# The screen keeps showing what it was showing; what goes away is mpvpaper.
+# It exists for gs, which runs it before a game and `reapply` after.
+#
+# The point is VIDEO MEMORY, and only exiting gives that back. mpvpaper already
+# pauses playback on its own when a fullscreen window covers it (-p -a FULL),
+# and measured here on 2026-08-13 it still held 2045 MiB while paused --
+# SIGSTOP does not move that figure either, because the buffers belong to the
+# decoder and not to playback. On a 12 GB card shared with a game that wants 7,
+# those 2 GB are the difference between playing and watching the driver page
+# textures over PCIe. See the note in gs.
+#
+# Freezing rather than blanking because gamescope only covers ONE monitor: the
+# portrait one stays in view for the whole session, and killing the wallpaper
+# outright leaves it empty.
+#
+# STATE_FILE is deliberately NOT written: the video is still the current
+# wallpaper, it is only off screen for a while, and `reapply` has to bring back
+# the video and not the frame. Nor is the palette regenerated -- it was built
+# from this very frame, so there is nothing to recompute.
+if [[ "$MODE" == "still" ]]; then
+    if is_video "$TARGET"; then
+        FRAME="$(frame_for "$TARGET")" \
+            || die "could not extract a frame from $(basename "$TARGET") (is ffmpeg installed?)"
+        # apply_image brings awww up FIRST and only then stops mpvpaper, so the
+        # background layer is never empty in between.
+        apply_image "$FRAME"
+        echo "wallpaper: $(basename "$TARGET") frozen to a still frame"
+    else
+        echo "wallpaper: $(basename "$TARGET") is already a still, nothing to freeze"
+    fi
+    exit 0
+fi
 
 if is_video "$TARGET"; then
     apply_video "$TARGET"
