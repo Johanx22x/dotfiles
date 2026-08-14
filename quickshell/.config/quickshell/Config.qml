@@ -77,6 +77,10 @@ Singleton {
         // where the bar has always been.
         mainMonitor: "",
         barMonitors: [],
+        // And an empty replay monitor means nobody has chosen one yet, which
+        // leaves the buffer on whichever screen the shell is on -- where it has
+        // always been pointed.
+        replayMonitor: "",
         barOverrides: ({}),
         // Every widget on by default: this is the bar as designed, and the
         // switches below are for taking things away rather than for building
@@ -740,6 +744,32 @@ Singleton {
         root.barMonitors = current;
     }
 
+    // Which monitor the instant replay buffer keeps, as a screenKey() string.
+    //
+    // EMPTY IS "NOBODY HAS SAID YET" AND NOT AN ANSWER OF ITS OWN. The
+    // dashboard offers monitors and only monitors -- there is no "automatic"
+    // to pick, because an automatic answer nobody gave and nobody could see is
+    // the exact failure this setting was written to end. What empty gets you is
+    // what the buffer did before it was a choice: the shell's own screen, so a
+    // fresh clone and a single-monitor machine both record something sensible
+    // without being asked. The first click writes a real monitor here and it
+    // never goes back to empty on its own.
+    //
+    // A SEPARATE CHOICE FROM `mainMonitor` AND NOT AN ALIAS OF IT, because the
+    // two answer different questions. The main monitor is where the shell
+    // lives; this is what is worth keeping the last minute of, and the second
+    // is a game on the big panel while the bar sits on the small one. Tying
+    // them together would mean moving the bar to change what gets recorded.
+    //
+    // WHY THIS EXISTS AT ALL: the buffer was pointed at the shell's monitor
+    // and nothing said which that was. The recorder resolves the connector
+    // name once, when it starts, and the name it resolved is invisible from
+    // the desk -- so a buffer that came up holding the wrong screen went on
+    // holding it, and every clip saved from it was of the wrong screen. The
+    // resolution now happens live and it is on the dashboard, next to the
+    // switch. See ReplayState.monitor.
+    property alias replayMonitor: adapter.replayMonitor
+
     // ---------------- Bar ----------------
 
     property alias use24Hour: adapter.use24Hour
@@ -946,6 +976,11 @@ Singleton {
         adapter.mainMonitor = root.defaults.mainMonitor;
         adapter.barMonitors = root.defaults.barMonitors;
         adapter.barOverrides = ({});
+        // Back to recording whatever screen the shell ends up on. This one
+        // restarts the replay buffer as it lands -- see ReplayState.monitor --
+        // which costs the seconds it was holding, and that is the same cost
+        // changing the buffer length has always had.
+        adapter.replayMonitor = root.defaults.replayMonitor;
     }
 
     // ---------------- Persistence ----------------
@@ -983,6 +1018,7 @@ Singleton {
             // why the empty values mean "decide for me" rather than "nothing".
             property string mainMonitor: ""
             property var barMonitors: []
+            property string replayMonitor: ""
             property var barOverrides: ({})
             property bool barLogo: true
             property bool barActiveWindow: true
