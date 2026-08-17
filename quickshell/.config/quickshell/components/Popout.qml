@@ -52,18 +52,26 @@ PanelWindow {
     // IS THE BAR ACTUALLY THERE?
     //
     // This panel is welded to the bar's underside: square top corners and a
-    // concave fillet on each side. A fullscreen window covers the bar -- it is
-    // on the Top layer and fullscreen windows draw over that -- so the weld
-    // ends up joining the panel to nothing, and what is left is a card with
-    // two square corners floating in the middle of a game.
+    // concave fillet on each side. With no bar to weld to, what is left is a
+    // card with two square corners hanging off the top of the screen -- so it
+    // stops pretending, detaches, drops its fillets and rounds all four corners
+    // like the free-floating thing it has become.
     //
-    // So when the bar is hidden the panel stops pretending: it detaches, drops
-    // its fillets and rounds all four corners like the free-floating thing it
-    // has become.
-    // Answered through wlr-foreign-toplevel rather than through either
-    // compositor's IPC, so it works the same on both -- see the note on
+    // TWO WAYS FOR THE BAR NOT TO BE THERE, and only one of them used to be
+    // checked. A fullscreen window covers it -- the bar is on the Top layer and
+    // fullscreen draws over that -- but a monitor can also simply not HAVE one:
+    // the bar is per screen and which screens carry it is a setting.
+    //
+    // Only testing for fullscreen meant that on a monitor without a bar this
+    // panel still welded itself to one: square top corners and a fillet on each
+    // side, joined to nothing, hanging off the top edge of the screen. Which is
+    // exactly what it looked like.
+    //
+    // The fullscreen half is answered through wlr-foreign-toplevel rather than
+    // either compositor's IPC, so it reads the same on both -- see
     // hasFullscreenOn in CompositorBackend.qml.
-    readonly property bool barVisible: !Compositor.hasFullscreenOn(root.screen?.name ?? "")
+    readonly property bool barVisible: Screens.hasBar(root.screen)
+        && !Compositor.hasFullscreenOn(root.screen?.name ?? "")
 
 
     function openAt(x: real, component: Component): void {
