@@ -97,3 +97,10 @@ hypr/.config/hypr/local.lua
 # drop-in overriding the tracked unit's interval. Machine-local, like
 # monitors.lua and tweaks.lua.
 systemd/.config/systemd/user/wallpaper-rotate.timer.d/
+
+# The niri flavor's machine-local overrides. Same role local.lua plays for
+# Hyprland -- keyboard layout, extra binds, and (until this flavor grows a
+# generated override layer of its own) the output blocks that name THIS
+# machine's monitors. config.kdl is tracked and includes this file at the end
+# with optional=true, so not having one is the normal case.
+niri/.config/niri/local.kdl

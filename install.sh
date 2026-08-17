@@ -9,11 +9,12 @@
 set -euo pipefail
 
 DOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Every stow package. seeds/ is deliberately NOT one of them -- it is copied,
-# not linked, see seeds/README.md and the seed step below. There is no `qt` or
-# `xdg` package any more either: qt6ct.conf and mimeapps.list were all they
-# held, and both are seeds now.
-PACKAGES=(zsh hypr quickshell kitty matugen shell gtk media openrgb systemd bin ranger icons zen gaming)
+# Every stow package EXCEPT the compositor's, which is chosen below and
+# appended. seeds/ is deliberately NOT one of them -- it is copied, not linked,
+# see seeds/README.md and the seed step below. There is no `qt` or `xdg` package
+# any more either: qt6ct.conf and mimeapps.list were all they held, and both are
+# seeds now.
+PACKAGES=(zsh quickshell kitty matugen shell gtk media openrgb systemd bin ranger icons zen gaming)
 
 blue()  { printf '\033[1;34m%s\033[0m\n' "$*"; }
 green() { printf '\033[1;32m%s\033[0m\n' "$*"; }
@@ -27,6 +28,58 @@ ask() {
 
 [[ -f /etc/arch-release ]] || { red "This is for Arch Linux."; exit 1; }
 [[ $EUID -eq 0 ]] && { red "Do not run it as root. It asks for sudo when it needs it."; exit 1; }
+
+# ---------------------------------------------------------------------------
+# THE COMPOSITOR. Asked first because it decides two later steps -- which
+# packages get installed and which configuration gets linked -- and asking it
+# halfway down would mean backtracking.
+#
+# Hyprland is the default and the one everything else in this repo was built
+# against. niri is a second flavor: the same keybinds, the same shell, the same
+# scripts, on a scrollable-tiling compositor instead of a dynamic-tiling one.
+# See niri/.config/niri/config.kdl for what is identical and what cannot be.
+#
+# BOTH IS A REAL ANSWER AND NOT A HEDGE. The two stow packages touch different
+# directories (~/.config/hypr and ~/.config/niri), the two sessions appear
+# separately in the display manager, and neither knows the other exists -- so
+# "both" costs one extra directory and buys the ability to try the second one
+# without dismantling the first. That is the only way to answer the question
+# these dotfiles cannot answer for anybody: whether scrollable tiling suits the
+# hands attached to this keyboard.
+#
+# Answered with a number rather than y/N because there are three of them, and
+# read with a default so a bare Enter is the safe path -- the same shape yay
+# uses for its own prompts, which is where the muscle memory already is.
+blue "== Compositor =="
+echo "   1) Hyprland  (default)"
+echo "   2) niri"
+echo "   3) Both"
+echo
+COMPOSITOR=""
+while [[ -z $COMPOSITOR ]]; do
+  read -rp "$(printf '\033[1;33m==> Choose one [1]: \033[0m')" choice
+  # A bare Enter is 1. Anything unrecognised asks again instead of guessing:
+  # this decides what gets linked into $HOME, and a typo that silently meant
+  # "both" would leave a session in the display manager nobody asked for.
+  case "${choice:-1}" in
+    1) COMPOSITOR="hyprland" ;;
+    2) COMPOSITOR="niri" ;;
+    3) COMPOSITOR="both" ;;
+    *) red "   Not one of 1, 2 or 3." ;;
+  esac
+done
+
+case "$COMPOSITOR" in
+  hyprland) PACKAGES+=(hypr) ;;
+  niri)     PACKAGES+=(niri) ;;
+  both)     PACKAGES+=(hypr niri) ;;
+esac
+green "   $COMPOSITOR"
+
+# Used by the steps below to ask "is this flavor in play?" without repeating
+# the case statement four times.
+want_hyprland() { [[ $COMPOSITOR == hyprland || $COMPOSITOR == both ]]; }
+want_niri()     { [[ $COMPOSITOR == niri     || $COMPOSITOR == both ]]; }
 
 # ---------------------------------------------------------------------------
 # pacman aborts the WHOLE transaction over a single package it cannot find, so
@@ -75,9 +128,44 @@ install_list() {
 
 blue "== 1/6  Packages from the official repos =="
 echo "   $(wc -l < "$DOT/packages/pacman.txt") packages in packages/pacman.txt"
+
+# THE COMPOSITOR'S OWN PACKAGES LIVE IN THEIR OWN LISTS, and only the chosen
+# one is installed. pacman.txt used to carry hyprland, hyprsunset, uwsm and
+# xdg-desktop-portal-hyprland, so a machine that answered "niri" would have
+# pulled in the whole other compositor to leave it sitting there unused.
+#
+# The two portal backends, on the other hand, coexist happily and BOTH are
+# installed under "both" -- checked rather than assumed: each compositor ships
+# its own /usr/share/xdg-desktop-portal/<name>-portals.conf and xdg-desktop-
+# portal picks the file by XDG_CURRENT_DESKTOP, so hyprland-portals.conf routes
+# ScreenCast to hyprland in one session and niri-portals.conf routes it to
+# gnome in the other, with nothing to switch by hand.
+#
+# WHICH IS WHY xdg-desktop-portal-gnome IS IN THE NIRI LIST. niri implements
+# Mutter's D-Bus screencast API rather than a wlroots one, and xdp-gnome is the
+# backend that speaks it. Without it a niri session has no ScreenCast at all --
+# no Discord screen share, no OBS window capture -- and nothing says why.
+#
+# What stayed in the shared list is the hypr* software that is NOT tied to
+# Hyprland: hyprpicker and hyprshot speak layer-shell and wlr-screencopy,
+# hyprpolkitagent is a plain D-Bus agent, and all three work under niri. The
+# ones that moved are the ones that cannot: hyprsunset drives the blue light
+# filter through hyprland-ctm-control-v1, a protocol only Hyprland implements,
+# which is why the niri list carries wlsunset instead -- same function, and it
+# works because niri does implement wlr-gamma-control.
+COMPOSITOR_LISTS=()
+want_hyprland && COMPOSITOR_LISTS+=("hyprland")
+want_niri     && COMPOSITOR_LISTS+=("niri")
+for name in "${COMPOSITOR_LISTS[@]}"; do
+  echo "   $(wc -l < "$DOT/packages/$name.txt") in packages/$name.txt"
+done
+
 if ask "Install them (plus stow)?"; then
   sudo pacman -S --needed --noconfirm stow
   install_list "$DOT/packages/pacman.txt" "core"
+  for name in "${COMPOSITOR_LISTS[@]}"; do
+    install_list "$DOT/packages/$name.txt" "$name"
+  done
 fi
 
 # --- 32-bit libraries and Steam -------------------------------------------
@@ -230,13 +318,31 @@ if ask "Link them?"; then
   fi
   # Best-effort on their own lines: these units belong to packages, which are
   # not there if step 1 was skipped.
+  # The polkit agent is a plain D-Bus service and belongs to neither flavor:
+  # it works the same under both.
   systemctl --user enable --now hyprpolkitagent.service 2>/dev/null || true
+
   # The blue light filter's daemon. Shipped by the hyprsunset package and
   # bound to graphical-session.target, so it comes and goes with the session;
   # the `night-light` script only talks to it. Enabled here rather than
   # started from hyprland.lua because the unit already exists and already
   # knows when to run -- see the note at the top of that script.
-  systemctl --user enable --now hyprsunset.service 2>/dev/null || true
+  #
+  # ONLY UNDER HYPRLAND, and not because it would fail loudly otherwise: it
+  # would come up perfectly and do nothing at all. hyprsunset changes the
+  # colour temperature through hyprland-ctm-control-v1, and under niri that
+  # protocol simply is not there, so the daemon sits running with no effect
+  # while `night-light` reports success. Enabling it in a niri session would
+  # buy a unit that lies.
+  if want_hyprland; then
+    systemctl --user enable --now hyprsunset.service 2>/dev/null || true
+  fi
+  if want_niri; then
+    # wlsunset is the replacement and it ships no unit of its own, so there is
+    # nothing to enable here. `night-light` does not know about it yet -- that
+    # is tracked with the rest of the niri flavor's loose ends.
+    echo "   niri: the blue light filter needs wlsunset wiring up, see the README"
+  fi
   green "   done"
 fi
 
@@ -426,12 +532,47 @@ fi
 # neither names still lights up -- the fallback rule at the end of the block
 # gives it preferred mode and automatic position -- it just sits wherever
 # Hyprland decided to put it, at whatever refresh rate.
+#
+# UNDER NIRI THE CHECK BELOW DOES NOT APPLY AT ALL, and it is not a matter of
+# swapping hyprctl for `niri msg`. The two compositors build a monitor's name
+# from the same three EDID fields and do NOT produce the same string: Hyprland
+# normalises the manufacturer and niri does not, so this machine's portrait
+# screen is "GIGA-BYTE TECHNOLOGY CO. LTD. GS27FA ..." in one and
+# "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA ..." -- with the comma -- in the other.
+# A check that compared one compositor's names against the other's config would
+# report every screen as unconfigured, and, far worse, somebody copying the line
+# across would get a monitor that silently keeps its preferred mode and no
+# rotation. So niri gets its own branch that prints what niri itself reports.
 echo
 blue "== Monitors =="
 HYPR_CONF="$HOME/.config/hypr/hyprland.lua"
 HYPR_OVERRIDES="$HOME/.config/hypr/monitors.lua"
-if ! command -v hyprctl >/dev/null || ! hyprctl monitors -j >/dev/null 2>&1; then
-  echo "   Hyprland is not running, so the monitors cannot be read."
+NIRI_CONF="$HOME/.config/niri/config.kdl"
+
+if command -v niri >/dev/null && [[ -n ${NIRI_SOCKET:-} ]]; then
+  # In a live niri session. There is no monitors.kdl override layer yet -- the
+  # `hypr-monitor` equivalent for this flavor does not exist -- so config.kdl is
+  # the only file that names screens, and it is TRACKED. Which means the advice
+  # here cannot be "record it": editing a tracked file is what leaves a clone
+  # permanently dirty. It is printed and left to the person.
+  if [[ ! -f $NIRI_CONF ]]; then
+    echo "   $NIRI_CONF not found — run step 3 (stow) first."
+  else
+    echo "   Every output as niri reports it right now:"
+    echo
+    niri msg outputs | sed 's/^/     /'
+    echo
+    echo "   Those names go in the output blocks of config.kdl. Copy them from"
+    echo "   the line above and NOT from hyprland.lua: the two compositors spell"
+    echo "   the same monitor differently and the mismatch fails silently."
+    echo
+    echo "   config.kdl is tracked, so a second machine editing it will conflict"
+    echo "   on every pull. Until this flavor grows its own override layer, put"
+    echo "   machine-local output blocks in ~/.config/niri/local.kdl, which the"
+    echo "   config includes at the end and .gitignore keeps out of the repo."
+  fi
+elif ! command -v hyprctl >/dev/null || ! hyprctl monitors -j >/dev/null 2>&1; then
+  echo "   No compositor is running, so the monitors cannot be read."
   echo "   Log in and re-run this script, or run 'hypr-monitor' by hand."
 elif ! command -v jq >/dev/null; then
   # Everything below reads hyprctl's JSON through jq. Said here rather than
