@@ -97,15 +97,26 @@ input {
 // the name from the same three EDID fields, but Hyprland NORMALISES the
 // manufacturer and niri does not:
 //
+//   Hyprland  desc:ASR PG32QF2B G5VL0A003533
+//   niri          "PNP(ASR) PG32QF2B G5VL0A003533"
+//                   ^^^^ niri keeps the PNP vendor id; Hyprland strips it
+//
 //   Hyprland  desc:GIGA-BYTE TECHNOLOGY CO. LTD. GS27FA 24476B001914
-//   niri          "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA 24476B001914"
-//                                        ^ the comma survives here
+//   niri          "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA 24476B001914 "
+//                                        ^ comma kept              ^ and a
+//                                                 TRAILING SPACE, straight out
+//                                                 of the EDID serial
+//
+// Both of these were read off the running compositor with `niri msg -j outputs`
+// once the first session had come up -- and the guess made from Hyprland's own
+// strings was wrong on BOTH monitors. Which is the point of this note: the
+// failure is silent, so the names are worth reading rather than deriving.
 //
 // Copying the line across would leave this monitor unrotated and at its
 // preferred refresh rate with nothing on screen to say why -- the same class of
 // silent failure the connector names caused. To read the real ones:
 //   niri msg outputs
-output "ASR PG32QF2B G5VL0A003533" {
+output "PNP(ASR) PG32QF2B G5VL0A003533" {
     // Main: ASR PG32QF2B 1440p, on the right.
     // Y = 240 centers it vertically against the portrait monitor: (1920-1440)/2
     mode "2560x1440@165.001"
@@ -121,7 +132,7 @@ output "ASR PG32QF2B G5VL0A003533" {
     variable-refresh-rate on-demand=true
 }
 
-output "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA 24476B001914" {
+output "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA 24476B001914 " {
     // Secondary: Gigabyte GS27FA 1080p, rotated to portrait, on the left.
     // Rotated it takes 1080x1920, which is why the main one starts at X = 1080.
     mode "1920x1080@164.999"
@@ -697,7 +708,7 @@ window-rule {
     match app-id=r#"^(gamescope|steam_app_.*|.*\.exe|hl2_linux|cs2)$"#
 
     // ALWAYS on the landscape 1440p monitor, never on the portrait one.
-    open-on-output "ASR PG32QF2B G5VL0A003533"
+    open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
     open-fullscreen true
 
     // No compositor decoration in the way.
@@ -714,7 +725,7 @@ window-rule {
 // Big Picture: fullscreen on the main monitor.
 window-rule {
     match app-id=r#"^steam$"# title=r#"^Steam Big Picture Mode$"#
-    open-on-output "ASR PG32QF2B G5VL0A003533"
+    open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
     open-fullscreen true
 }
 
@@ -733,7 +744,7 @@ window-rule {
 window-rule {
     match app-id=r#"^capture-card$"#
     open-floating true
-    open-on-output "ASR PG32QF2B G5VL0A003533"
+    open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
     default-column-width { fixed 1920; }
     default-window-height { fixed 1080; }
     geometry-corner-radius 0
@@ -749,7 +760,7 @@ window-rule {
 window-rule {
     match app-id=r#"^com\.libretro\.RetroArch$"#
     open-floating true
-    open-on-output "ASR PG32QF2B G5VL0A003533"
+    open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
 }
 
 // --- The four rules that did NOT come across, and why ---
