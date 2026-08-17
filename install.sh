@@ -151,8 +151,11 @@ echo "   $(wc -l < "$DOT/packages/pacman.txt") packages in packages/pacman.txt"
 # hyprpolkitagent is a plain D-Bus agent, and all three work under niri. The
 # ones that moved are the ones that cannot: hyprsunset drives the blue light
 # filter through hyprland-ctm-control-v1, a protocol only Hyprland implements,
-# which is why the niri list carries wlsunset instead -- same function, and it
-# works because niri does implement wlr-gamma-control.
+# so under niri it would run perfectly and do nothing. Its replacement is
+# wl-gammarelay-rs, which is in packages/aur.txt rather than here because it is
+# not in the official repos -- it was chosen over wlsunset because it is the
+# only one that takes a temperature imperatively, which is what the slider in
+# the settings window needs; wlsunset 0.4.0 can only be told a schedule.
 COMPOSITOR_LISTS=()
 want_hyprland && COMPOSITOR_LISTS+=("hyprland")
 want_niri     && COMPOSITOR_LISTS+=("niri")
@@ -338,10 +341,13 @@ if ask "Link them?"; then
     systemctl --user enable --now hyprsunset.service 2>/dev/null || true
   fi
   if want_niri; then
-    # wlsunset is the replacement and it ships no unit of its own, so there is
-    # nothing to enable here. `night-light` does not know about it yet -- that
-    # is tracked with the rest of the niri flavor's loose ends.
-    echo "   niri: the blue light filter needs wlsunset wiring up, see the README"
+    # NOTHING TO ENABLE, and that is deliberate rather than missing.
+    # wl-gammarelay-rs ships no unit, and `night-light` starts it on demand as a
+    # transient systemd-run unit precisely so nothing binds it to
+    # graphical-session.target -- a unit that did would also come up under
+    # Hyprland, where it would fight hyprsunset for gamma control of the same
+    # outputs. It is in packages/aur.txt, so step 2 is what installs it.
+    echo "   niri: the blue light filter is wl-gammarelay-rs, started on demand"
   fi
   green "   done"
 fi
