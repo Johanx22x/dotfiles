@@ -42,9 +42,26 @@ PanelWindow {
     readonly property int columnGap: 30
     // The keys sit in a fixed-width gutter and are laid out RIGHT to left, so
     // the actual key is always the chip nearest its own description and every
-    // description in a column starts at the same x. Measured against the
-    // widest chord bound here, SUPER + SHIFT + Esc, with a little slack.
-    readonly property int keyGutter: 150
+    // description in a column starts at the same x.
+    //
+    // MEASURED, NOT GUESSED, and that changed the day this had to serve two
+    // compositors. It was 150, taken off the widest chord Hyprland bound --
+    // SUPER + SHIFT + Esc, three chips. niri needs four for the monitor binds
+    // (SUPER CTRL SHIFT Left), and a fixed number sized for the old worst case
+    // pushed those chips out of the card entirely, off the left edge.
+    //
+    // So the gutter asks the rows how wide they actually are and takes the
+    // largest, which is correct for whatever the compositor turns out to bind
+    // -- including a fifth modifier nobody has thought of yet. The floor keeps
+    // short lists looking the way they always did rather than letting a sheet
+    // of two-chip chords close up.
+    property int keyGutter: 150
+
+    // Reported by the rows as they measure themselves; see BindRow.
+    function noteGutter(width: int): void {
+        if (width > root.keyGutter)
+            root.keyGutter = width;
+    }
     readonly property int cardPadding: 30
 
     // Shape: [ { name: "Apps", binds: [ { keys: [...], text: "..." } ] } ]
@@ -414,6 +431,8 @@ PanelWindow {
                                             keys: modelData.keys
                                             label: modelData.text
                                             gutterWidth: root.keyGutter
+                                            onNaturalWidthChanged: root.noteGutter(naturalWidth)
+                                            Component.onCompleted: root.noteGutter(naturalWidth)
                                         }
                                     }
                                 }
