@@ -59,11 +59,11 @@ PanelWindow {
             glyph: Icons.logout,
             label: "Log out",
             accent: Theme.warning,
-            // The dispatcher first and loginctl as the safety net, the same
-            // pair the wofi script used. hyprctl evaluates Lua in Hyprland
-            // 0.5x, hence the hl.dsp.exit() form -- and this is the one
-            // action that needs a shell, for the `||`.
-            command: ["sh", "-c", "hyprctl dispatch 'hl.dsp.exit()' || loginctl terminate-user \"$USER\""]
+            // The ONE action that is not a command, because the right way to
+            // end a session depends on what is drawing it: each compositor
+            // backend asks its own first and falls back to logind, which works
+            // even on a compositor nothing here knows about.
+            perform: () => Compositor.logout()
         },
         {
             glyph: Icons.restart,
@@ -95,15 +95,20 @@ PanelWindow {
 
     function activate(): void {
         if (root.selected >= 0)
-            root.run(root.actions[root.selected].command);
+            root.run(root.actions[root.selected]);
     }
 
     // Close first: the menu should be gone before the compositor starts
     // tearing the session down, or the last frame on screen is a
     // half-dismissed sheet.
-    function run(command: var): void {
+    // Takes the ACTION rather than its command: one of them is a call into the
+    // compositor facade instead of a process to spawn.
+    function run(action: var): void {
         PowerMenuState.close();
-        Quickshell.execDetached(command);
+        if (action.perform)
+            action.perform();
+        else
+            Quickshell.execDetached(action.command);
     }
 
     screen: modelData
@@ -284,7 +289,7 @@ PanelWindow {
                         // Pointing at a card also arms it for the keyboard,
                         // so the two never disagree about which one is next.
                         onEntered: root.selected = card.index
-                        onClicked: root.run(card.modelData.command)
+                        onClicked: root.run(card.modelData)
                     }
                 }
             }

@@ -83,10 +83,10 @@ PanelWindow {
     // So when the bar is hidden the panel stops pretending: it detaches, drops
     // its fillets and rounds all four corners like the free-floating thing it
     // has become.
-    readonly property bool barVisible: {
-        const ws = Hyprland.workspaces.values.find(w => w.monitor?.name === root.screen?.name && w.active);
-        return !(ws?.hasFullscreen ?? false);
-    }
+    // Answered through wlr-foreign-toplevel in the compositor backend, so it
+    // reads the same on every flavor -- see hasFullscreenOn in
+    // compositor/CompositorBackend.qml.
+    readonly property bool barVisible: !Compositor.hasFullscreenOn(root.screen?.name ?? "")
 
 
     readonly property var commandResults: root.commandMode ? Commands.search(root.query.slice(1)) : []
