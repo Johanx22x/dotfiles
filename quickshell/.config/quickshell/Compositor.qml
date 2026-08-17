@@ -95,6 +95,10 @@ Singleton {
         backend?.focusWorkspace(id);
     }
 
+    function switchKeyboardLayout(): void {
+        backend?.switchKeyboardLayout();
+    }
+
     function logout(): void {
         backend?.logout();
     }

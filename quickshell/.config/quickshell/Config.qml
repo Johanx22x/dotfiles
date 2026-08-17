@@ -345,7 +345,31 @@ Singleton {
     readonly property var keyboardLayouts: (root.tweaks["layouts"] ?? "us")
         .split(",").map(code => code.trim()).filter(code => code !== "")
 
-    readonly property string keyboardLayout: root.keyboardLayouts[0] ?? "us"
+    // WHICH OF THEM IS ACTIVE, and the answer comes from two different places
+    // because the two compositors keep it in two different ones.
+    //
+    // Hyprland's own index is session-only and is thrown away by anything that
+    // re-applies the input block -- including changing the mouse speed on the
+    // same settings page -- so nothing outside the compositor can trust it. The
+    // list is rotated instead and the FIRST entry is the active one, which is
+    // the whole argument in hypr-tweak's header.
+    //
+    // niri publishes the index and keeps it: `niri msg -j keyboard-layouts`
+    // answers with the names and which one is current, and the shell watches
+    // that live. So there the list stays in the order it was written and the
+    // index says where in it we are -- no rotation, and the pill cannot drift
+    // from what the keyboard is doing because it is reading the keyboard.
+    readonly property int keyboardLayoutIndex: {
+        if (!Compositor.can("keyboardLayout"))
+            return 0;
+        const i = Compositor.keyboardLayouts.currentIndex ?? 0;
+        // Guarded: the compositor's list and this one come from different
+        // places and a config edit can leave them disagreeing for an instant.
+        return i < root.keyboardLayouts.length ? i : 0;
+    }
+
+    readonly property string keyboardLayout:
+        root.keyboardLayouts[root.keyboardLayoutIndex] ?? "us"
 
     // Four, and it is xkb's limit rather than a choice: a keymap has four
     // groups and a fifth layout is parsed, accepted and then never reached.
@@ -369,8 +393,17 @@ Singleton {
         Quickshell.execDetached(["hypr-tweak", "layout", code]);
     }
 
+    // STEPPING IT GOES TO WHOEVER OWNS THE ANSWER. Where the compositor keeps a
+    // readable index, ask the compositor to move it -- rotating the stored list
+    // there would fight the index and the two would disagree. Where it does
+    // not, the script rotates the list, which is the only place the answer can
+    // live. SUPER + K runs the same code path either way, so the keybind and
+    // the settings window cannot drift apart.
     function cycleKeyboardLayout(): void {
-        Quickshell.execDetached(["hypr-tweak", "layout", "next"]);
+        if (Compositor.can("keyboardLayout"))
+            Compositor.switchKeyboardLayout();
+        else
+            Quickshell.execDetached(["hypr-tweak", "layout", "next"]);
     }
 
     // ---------------- What the layout codes mean ----------------
