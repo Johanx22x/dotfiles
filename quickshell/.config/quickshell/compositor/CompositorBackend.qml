@@ -139,6 +139,35 @@ QtObject {
     // Keyboard layouts: names, and which one is current.
     property var keyboardLayouts: ({ names: [], currentIndex: 0 })
 
+    // ---- Keybindings -----------------------------------------------------
+    //
+    // What is bound, for the cheatsheet and the keybinds page. Empty where
+    // `bindsIntrospection` is false.
+    //
+    // ALREADY IN CHIPS, not in the compositor's own spelling: each entry is
+    //   { keys: ["SUPER","SHIFT","S"], category: "Capture",
+    //     description: "...", described: true }
+    // because the two compositors describe a chord in completely different
+    // terms -- one hands over an X11 modifier bitmask and an xkb keysym, the
+    // other a string like "Mod+Shift+S" -- and a cheatsheet should not have to
+    // know either. Translating on the way out is the same rule the workspace
+    // shape follows.
+    //
+    // The category is the part before ": " in the description, which is the
+    // convention both flavors already write their descriptions in.
+    //
+    // EVERY BIND IS LISTED, described or not, and `described` says which. The
+    // two consumers want different halves: the cheatsheet shows only what
+    // carries a description, because its job is the chords worth remembering,
+    // while the keybinds page lists everything the compositor is holding --
+    // including the media keys -- because its job is to answer "what is this
+    // chord doing". One source, filtered by whoever draws it.
+    property var binds: []
+
+    // Re-read what is bound. Called when the cheatsheet opens, since a config
+    // reload between two openings is exactly what a cached list gets wrong.
+    function refreshBinds(): void {}
+
     // ---- Implemented once, for everyone -----------------------------------
     //
     // WHAT BELONGS HERE RATHER THAN IN A BACKEND: anything answerable through a

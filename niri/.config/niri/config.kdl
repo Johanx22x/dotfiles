@@ -185,6 +185,20 @@ prefer-no-csd
 // LAYOUT
 // -----------------------------------------------------------------------------
 layout {
+    // TRANSPARENT, so ONE wallpaper serves both views.
+    //
+    // The wallpaper lives in the overview's backdrop (see the layer rule under
+    // GLASS), which is what makes the overview show it instead of a void. But
+    // the workspace draws its own background ON TOP of that backdrop, and while
+    // that background was opaque the wallpaper was only ever visible in the
+    // overview -- an empty workspace came up flat grey.
+    //
+    // Making it transparent lets the same surface show through in both places.
+    // One mpvpaper, one decoder, one lot of video memory: the alternative would
+    // be a second wallpaper surface for the backdrop, which is exactly the
+    // duplication this avoids.
+    background-color "transparent"
+
     // 6 and 10 are what hypr-tweak has written into tweaks.lua (gaps_in = 6,
     // gaps_out = 10). niri has ONE gap value rather than two: it is the space
     // between windows, and half of it is used against the screen edge, so a
@@ -200,8 +214,17 @@ layout {
         off
     }
 
+    // OFF, because `border_size` is 0 in tweaks.lua and this is the thing that
+    // draws in its place. niri has two separate edges -- a border that takes
+    // space inside the layout and a focus ring drawn outside the window -- and
+    // turning off only the border still leaves the ring painting a coloured
+    // outline around whatever is focused, which is exactly the border the other
+    // flavor does not have.
+    //
+    // The accent has nowhere else to go on a window, so it lives on the bar and
+    // in the shell instead, which is where it lives under Hyprland too.
     focus-ring {
-        width 2
+        off
 
         // The wallpaper accents, same gradient and same 45 degrees as
         // general.col.active_border in hyprland.lua.
@@ -289,17 +312,26 @@ include optional=true "~/.config/niri/colors.kdl"
 
 
 // -----------------------------------------------------------------------------
-// NAMED WORKSPACES
+// WORKSPACES
 // -----------------------------------------------------------------------------
-// NO EQUIVALENT: niri has no special workspace / scratchpad (upstream issue
-// #845, open since December 2024). The magic workspace from hyprland.lua is a
-// named workspace here instead, which is the closest thing that exists: it is
-// always available and it keeps its identity, but it is a place you GO TO
-// rather than an overlay that drops over what you were doing.
+// NO NAMED WORKSPACE HERE, and the reason is worth writing down because the
+// obvious thing is wrong.
 //
-// SUPER + M and SUPER + SHIFT + M keep pointing at it, so the chords survive
-// even though the feel does not.
-workspace "magic"
+// niri has no scratchpad (upstream issue #845), so the magic workspace was
+// mapped onto a NAMED workspace -- the closest thing that exists. Measured on a
+// real session, that costs more than it buys: a named workspace is permanent,
+// so it sat at index 1 of the main monitor whether or not anything was on it,
+// and pushed every other workspace up by one. SUPER+1 went to an empty
+// scratchpad, SUPER+2 to what used to be 1, and so on for the whole row.
+//
+// Dynamic workspaces are the niri way and the numbers only mean anything if
+// they are not being reserved. So the scratchpad is gone rather than faked, the
+// capability in the shell already says so, and SUPER+M does something useful
+// below instead of pointing at a hole.
+//
+// The trailing empty workspace on each monitor is niri's own and cannot be
+// turned off: it is what you scroll into to get a fresh one.
+
 
 
 // -----------------------------------------------------------------------------
@@ -426,7 +458,27 @@ hotkey-overlay {
 // artwork reads as a glitch. Same call hyprland.lua's force_default_wallpaper
 // makes.
 overview {
-    backdrop-color "#000000"
+    // The backdrop is what shows THROUGH the zoomed-out workspaces, and black
+    // made the overview a grid of windows floating in a void. The wallpaper goes
+    // in there instead, via the layer rule below -- this colour is only what is
+    // left where even that does not reach, so it is a dark neutral rather than
+    // pure black.
+    backdrop-color "#11121a"
+}
+
+// THE WALLPAPER, INSIDE THE OVERVIEW'S BACKDROP.
+//
+// Without this the wallpaper scrolls away with its workspace like any other
+// surface, and what is behind the zoomed-out grid is the backdrop colour and
+// nothing else. `place-within-backdrop` pins it to the backdrop instead, so
+// opening the overview reveals the wallpaper rather than a void.
+//
+// Both backends are matched: awww draws stills and mpvpaper draws videos, and
+// which one is up depends on the wallpaper rather than on anything configured
+// here -- see the wallpaper-switch script.
+layer-rule {
+    match namespace="^(awww|mpvpaper)$"
+    place-within-backdrop true
 }
 
 // Screenshots taken with niri's own action land here. strftime is expanded by
@@ -451,21 +503,21 @@ screenshot-path "~/Pictures/niri-%Y%m%d-%H%M%S.png"
 // argument is looked up as one executable name and silently does nothing.
 binds {
     // ---- Shell and applications (parity) --------------------------------
-    Mod+Return { spawn "kitty"; }
-    Mod+W { close-window; }
-    Mod+E { spawn "nautilus"; }
-    Mod+Space { spawn "qs" "ipc" "call" "launcher" "toggle"; }
-    Mod+V { spawn "qs" "ipc" "call" "launcher" "clipboard"; }
-    Mod+D { spawn "qs" "ipc" "call" "island" "dashboard"; }
-    Mod+N { spawn "qs" "ipc" "call" "dnd" "toggle"; }
-    Mod+Shift+N { spawn "qs" "ipc" "call" "island" "notifications"; }
-    Mod+C { spawn "qs" "ipc" "call" "settings" "toggle"; }
-    Mod+Slash { spawn "qs" "ipc" "call" "cheatsheet" "toggle"; }
-    Mod+Shift+Escape { spawn "qs" "ipc" "call" "powermenu" "toggle"; }
+    Mod+Return hotkey-overlay-title="Apps: open a terminal" { spawn "kitty"; }
+    Mod+W hotkey-overlay-title="Windows: close the focused window" { close-window; }
+    Mod+E hotkey-overlay-title="Apps: open the file manager" { spawn "nautilus"; }
+    Mod+Space hotkey-overlay-title="Apps: open the launcher" { spawn "qs" "ipc" "call" "launcher" "toggle"; }
+    Mod+V hotkey-overlay-title="Apps: clipboard history" { spawn "qs" "ipc" "call" "launcher" "clipboard"; }
+    Mod+D hotkey-overlay-title="Shell: open the dashboard" { spawn "qs" "ipc" "call" "island" "dashboard"; }
+    Mod+N hotkey-overlay-title="Shell: mute notifications (do not disturb)" { spawn "qs" "ipc" "call" "dnd" "toggle"; }
+    Mod+Shift+N hotkey-overlay-title="Shell: notification history" { spawn "qs" "ipc" "call" "island" "notifications"; }
+    Mod+C hotkey-overlay-title="Shell: settings" { spawn "qs" "ipc" "call" "settings" "toggle"; }
+    Mod+Slash hotkey-overlay-title="Shell: this cheatsheet" { spawn "qs" "ipc" "call" "cheatsheet" "toggle"; }
+    Mod+Shift+Escape hotkey-overlay-title="Shell: power menu" { spawn "qs" "ipc" "call" "powermenu" "toggle"; }
 
     // ---- Look (parity) --------------------------------------------------
-    Mod+Shift+W { spawn "sh" "-c" "$HOME/.local/bin/wallpaper-switch next"; }
-    Mod+Shift+A { spawn "sh" "-c" "$HOME/.local/bin/wallpaper-switch random"; }
+    Mod+Shift+W hotkey-overlay-title="Look: next wallpaper" { spawn "sh" "-c" "$HOME/.local/bin/wallpaper-switch next"; }
+    Mod+Shift+A hotkey-overlay-title="Look: random wallpaper" { spawn "sh" "-c" "$HOME/.local/bin/wallpaper-switch random"; }
 
     // The keyboard layout, one step along the cycle. Goes through the script
     // and not through niri's own switch-layout for the reason spelled out in
@@ -477,24 +529,24 @@ binds {
     // but the compositor does not, because the xkb layout above is a literal.
     // Until the script learns this flavor, SUPER + K changes what the bar says
     // and not what the keyboard does.
-    Mod+K { spawn "hypr-tweak" "layout" "next"; }
+    Mod+K hotkey-overlay-title="Input: next keyboard layout" { spawn "hypr-tweak" "layout" "next"; }
 
     // ---- Window focus (parity) ------------------------------------------
     // Left/right cross COLUMNS and up/down move inside one, which is the
     // scrollable-tiling reading of the same four arrows.
-    Mod+Left { focus-column-left; }
-    Mod+Right { focus-column-right; }
-    Mod+Up { focus-window-up; }
-    Mod+Down { focus-window-down; }
+    Mod+Left hotkey-overlay-title="Windows: move focus left" { focus-column-left; }
+    Mod+Right hotkey-overlay-title="Windows: move focus right" { focus-column-right; }
+    Mod+Up hotkey-overlay-title="Windows: move focus up" { focus-window-up; }
+    Mod+Down hotkey-overlay-title="Windows: move focus down" { focus-window-down; }
 
     // ---- Window state (parity) ------------------------------------------
-    Mod+T { toggle-window-floating; }
-    Mod+F { fullscreen-window; }
+    Mod+T hotkey-overlay-title="Windows: float or tile" { toggle-window-floating; }
+    Mod+F hotkey-overlay-title="Windows: fullscreen" { fullscreen-window; }
 
     // "Fake" fullscreen: the window believes it is still windowed but takes the
     // whole screen. Fixes games that minimise on alt-tab. Hyprland spells it
     // fullscreen_state({internal = 2, client = 0}).
-    Mod+Shift+F { toggle-windowed-fullscreen; }
+    Mod+Shift+F hotkey-overlay-title="Windows: fake fullscreen (for games that minimise)" { toggle-windowed-fullscreen; }
 
     // ---- Workspaces (parity) --------------------------------------------
     // CAREFUL, THE MEANING SHIFTED. In Hyprland workspace 3 is workspace 3
@@ -502,7 +554,7 @@ binds {
     // the Nth workspace OF THE MONITOR YOU ARE ON, and the Nth is not always
     // the same set of windows. The chord is preserved; the identity is not,
     // and it cannot be -- see the note on named workspaces above.
-    Mod+1 { focus-workspace 1; }
+    Mod+1 hotkey-overlay-title="Workspaces: go to workspace 1-10" { focus-workspace 1; }
     Mod+2 { focus-workspace 2; }
     Mod+3 { focus-workspace 3; }
     Mod+4 { focus-workspace 4; }
@@ -513,7 +565,7 @@ binds {
     Mod+9 { focus-workspace 9; }
     Mod+0 { focus-workspace 10; }
 
-    Mod+Shift+1 { move-column-to-workspace 1; }
+    Mod+Shift+1 hotkey-overlay-title="Workspaces: send the window to workspace 1-10" { move-column-to-workspace 1; }
     Mod+Shift+2 { move-column-to-workspace 2; }
     Mod+Shift+3 { move-column-to-workspace 3; }
     Mod+Shift+4 { move-column-to-workspace 4; }
@@ -524,9 +576,15 @@ binds {
     Mod+Shift+9 { move-column-to-workspace 9; }
     Mod+Shift+0 { move-column-to-workspace 10; }
 
-    // The scratchpad's chords, pointed at the named workspace declared above.
-    Mod+M { focus-workspace "magic"; }
-    Mod+Shift+M { move-column-to-workspace "magic"; }
+    // WAS: the magic scratchpad. There is nothing to point these at any more --
+    // see the WORKSPACES note above for why faking one was worse than not having
+    // it -- so they take the nearest useful thing instead.
+    //
+    // Back-and-forth is what a scratchpad was mostly used for anyway: put this
+    // away for a second, do something else, come back. It just returns to where
+    // you were rather than to one fixed place.
+    Mod+M hotkey-overlay-title="Workspaces: back to the previous workspace" { focus-workspace-previous; }
+    Mod+Shift+M hotkey-overlay-title="Workspaces: send the window one workspace down" { move-column-to-workspace-down; }
 
     // Scroll through workspaces with the modifier held, as in hyprland.lua.
     // cooldown-ms keeps one flick of a free-spinning wheel from crossing six
@@ -539,21 +597,21 @@ binds {
     // which speak the generic protocols niri implements. -z freezes the image
     // while you select, without which dropdowns and tooltips vanish as you drag
     // -- it needs hyprpicker, which is also generic and also works.
-    Mod+S { spawn "hyprshot" "-m" "region" "-z" "--clipboard-only"; }
-    Mod+Shift+S { spawn "sh" "-c" "hyprshot -m region -z --raw | satty --filename - --copy-command wl-copy --early-exit --output-filename $HOME/Pictures/satty-%Y%m%d-%H%M%S.png"; }
+    Mod+S hotkey-overlay-title="Capture: region to the clipboard" { spawn "hyprshot" "-m" "region" "-z" "--clipboard-only"; }
+    Mod+Shift+S hotkey-overlay-title="Capture: region, then annotate it" { spawn "sh" "-c" "hyprshot -m region -z --raw | satty --filename - --copy-command wl-copy --early-exit --output-filename $HOME/Pictures/satty-%Y%m%d-%H%M%S.png"; }
 
     // These two do NOT go through hyprshot, and they are the only capture binds
     // that changed hands. `hyprshot -m window` and `-m output` ask hyprctl for
     // the geometry, which is exactly the part that has no meaning here, so they
     // would fail rather than degrade. niri has both built in and needs no
     // helper: the file lands in screenshot-path above.
-    Mod+Ctrl+S { screenshot-window; }
-    Mod+Alt+S { screenshot-screen; }
+    Mod+Ctrl+S hotkey-overlay-title="Capture: the focused window to a file" { screenshot-window; }
+    Mod+Alt+S hotkey-overlay-title="Capture: the whole monitor to a file" { screenshot-screen; }
 
     // Instant replay. ALT + Z with no SUPER, because it is pressed in the
     // middle of whatever was worth keeping -- and that is also the caveat: it
     // takes ALT+Z away from every application that wanted it.
-    Alt+Z { spawn "qs" "ipc" "call" "replay" "save"; }
+    Alt+Z hotkey-overlay-title="Capture: save the last 30 seconds" { spawn "qs" "ipc" "call" "replay" "save"; }
 
     // ---- NO EQUIVALENT: the four Hyprland actions niri does not have -----
     // Their chords are reused rather than left dead, each for the nearest thing
@@ -561,52 +619,52 @@ binds {
 
     // Was: pseudotile. Now: cycle the column through the preset widths. Both
     // answer "make this window a different shape without dragging anything".
-    Mod+P { switch-preset-column-width; }
-    Mod+Shift+P { switch-preset-window-height; }
+    Mod+P hotkey-overlay-title="Windows: cycle the column width" { switch-preset-column-width; }
+    Mod+Shift+P hotkey-overlay-title="Windows: cycle the window height" { switch-preset-window-height; }
 
     // Was: togglesplit (dwindle only). Now: stack the column as tabs. Both
     // answer "change how this group of windows is arranged".
-    Mod+J { toggle-column-tabbed-display; }
+    Mod+J hotkey-overlay-title="Windows: stack the column as tabs" { toggle-column-tabbed-display; }
 
     // Was: pin a floating window to every workspace -- niri has no sticky
     // windows (upstream issue #932). Now: jump between the floating layer and
     // the tiled one, which keeps the chord inside the same subject as SUPER + T.
-    Mod+Shift+T { switch-focus-between-floating-and-tiling; }
+    Mod+Shift+T hotkey-overlay-title="Windows: jump between floating and tiled" { switch-focus-between-floating-and-tiling; }
 
     // ---- NATIVE: what niri can do and Hyprland cannot -------------------
     // All on chords that were free in hyprland.lua.
 
     // The overview: every workspace and every window at once, zoomed out.
-    Mod+O { toggle-overview; }
+    Mod+O hotkey-overlay-title="Workspaces: the overview" { toggle-overview; }
 
     // Move the focused column or window, mirroring the focus arrows above.
-    Mod+Shift+Left { move-column-left; }
-    Mod+Shift+Right { move-column-right; }
-    Mod+Shift+Up { move-window-up; }
-    Mod+Shift+Down { move-window-down; }
+    Mod+Shift+Left hotkey-overlay-title="Windows: move the column left" { move-column-left; }
+    Mod+Shift+Right hotkey-overlay-title="Windows: move the column right" { move-column-right; }
+    Mod+Shift+Up hotkey-overlay-title="Windows: move the window up" { move-window-up; }
+    Mod+Shift+Down hotkey-overlay-title="Windows: move the window down" { move-window-down; }
 
     // Columns are the unit niri is built around: pull the neighbour in, push
     // the current one out. Comma and period are the idiom the project uses.
-    Mod+Comma { consume-or-expel-window-left; }
-    Mod+Period { consume-or-expel-window-right; }
+    Mod+Comma hotkey-overlay-title="Windows: pull the neighbour into this column" { consume-or-expel-window-left; }
+    Mod+Period hotkey-overlay-title="Windows: push this window out of the column" { consume-or-expel-window-right; }
 
     // Ends of the strip.
-    Mod+Home { focus-column-first; }
-    Mod+End { focus-column-last; }
+    Mod+Home hotkey-overlay-title="Windows: first column" { focus-column-first; }
+    Mod+End hotkey-overlay-title="Windows: last column" { focus-column-last; }
 
     // Width without presets: fill what is free, or centre what is there.
     // Distinct from SUPER + F, which is real fullscreen -- a maximised column
     // still lives on the strip and still scrolls.
-    Mod+R { maximize-column; }
-    Mod+Shift+R { expand-column-to-available-width; }
-    Mod+X { center-column; }
+    Mod+R hotkey-overlay-title="Windows: maximize the column" { maximize-column; }
+    Mod+Shift+R hotkey-overlay-title="Windows: fill the free width" { expand-column-to-available-width; }
+    Mod+X hotkey-overlay-title="Windows: centre the column" { center-column; }
 
     // Monitors. Hyprland has focusmonitor and movewindowtomonitor but neither
     // was ever bound, so these are new rather than parity.
-    Mod+Ctrl+Left { focus-monitor-left; }
-    Mod+Ctrl+Right { focus-monitor-right; }
-    Mod+Ctrl+Shift+Left { move-column-to-monitor-left; }
-    Mod+Ctrl+Shift+Right { move-column-to-monitor-right; }
+    Mod+Ctrl+Left hotkey-overlay-title="Monitors: focus the one to the left" { focus-monitor-left; }
+    Mod+Ctrl+Right hotkey-overlay-title="Monitors: focus the one to the right" { focus-monitor-right; }
+    Mod+Ctrl+Shift+Left hotkey-overlay-title="Monitors: send the column left" { move-column-to-monitor-left; }
+    Mod+Ctrl+Shift+Right hotkey-overlay-title="Monitors: send the column right" { move-column-to-monitor-right; }
 
     // ---- Multimedia keys (parity) ---------------------------------------
     // NO DESCRIPTIONS ANYWHERE IN THIS FILE, unlike hyprland.lua: niri has no
@@ -632,7 +690,7 @@ binds {
     // The power menu on SUPER + SHIFT + ESCAPE is the way out, same as in
     // Hyprland. This is the escape hatch for when the shell is not running,
     // which is the one case that bind cannot cover.
-    Mod+Ctrl+Shift+Escape { quit; }
+    Mod+Ctrl+Shift+Escape hotkey-overlay-title="Session: exit niri" { quit; }
 }
 
 
@@ -652,6 +710,15 @@ binds {
 // catch-all comes first and the specific rules below inherit it.
 window-rule {
     geometry-corner-radius 10
+
+    // THE GLOBAL `blur` BLOCK ONLY SETS THE PARAMETERS. Nothing is blurred until
+    // a rule asks for it, which is the opposite of Hyprland, where
+    // decoration.blur applies behind every translucent window on its own. So
+    // this catch-all is what actually turns the glass on, and the block at the
+    // top is how it looks.
+    background-effect {
+        blur true
+    }
 
     // WITHOUT THIS THE RADIUS IS DECORATION ONLY. niri rounds the focus ring
     // and the border to the radius above, but the WINDOW keeps its square

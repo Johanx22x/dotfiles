@@ -9,6 +9,7 @@
 
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import QtQuick
 
 CompositorBackend {
@@ -159,6 +160,76 @@ CompositorBackend {
 
     function logout(): void {
         Hyprland.dispatch("hl.dsp.exit()");
+    }
+
+    // ---- Keybindings ------------------------------------------------------
+    //
+    // `hyprctl binds -j`, asked fresh rather than cached. It reports the
+    // compositor's live state, so a bind added by a reload shows up without the
+    // shell knowing a reload happened.
+    //
+    // CAREFUL, THE DISPATCHER IS USELESS HERE. With a Lua config every bind
+    // comes back as `"dispatcher": "__lua"` with no readable argument, so the
+    // only thing worth reading is the description this setup attaches by hand.
+    // A bind with no description is deliberately invisible, which is what keeps
+    // the sheet to the chords worth remembering.
+    function refreshBinds(): void {
+        bindQuery.running = true;
+    }
+
+    // The X11 modifier bits. Hyprland reports the mask raw; only these four are
+    // ever bound by hand, and the rest (caps, numlock) would be noise on a chip
+    // even when set.
+    function modifierNames(mask: int): var {
+        const out = [];
+        if (mask & 64) out.push("SUPER");
+        if (mask & 8) out.push("ALT");
+        if (mask & 4) out.push("CTRL");
+        if (mask & 1) out.push("SHIFT");
+        return out;
+    }
+
+    property Process bindQuery: Process {
+        command: ["hyprctl", "binds", "-j"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let parsed;
+                try {
+                    parsed = JSON.parse(text || "[]");
+                } catch (e) {
+                    console.warn("Hyprland: could not parse hyprctl binds --", e.message);
+                    return;
+                }
+
+                const out = [];
+                for (const bind of parsed) {
+                    const description = (bind.description ?? "").trim();
+                    // has_description AND a non-empty string: hyprctl reports
+                    // the flag and the text separately and a bind can carry an
+                    // empty one.
+                    const described = !!bind.has_description && description !== "";
+                    const colon = description.indexOf(": ");
+                    // A bind written by keycode has no keysym for hyprctl to
+                    // report, and an empty chip reads as a row that failed to
+                    // load rather than as a key nobody named.
+                    const key = (bind.key ?? "") !== "" ? bind.key
+                        : bind.keycode ? `code ${bind.keycode}` : "?";
+
+                    out.push({
+                        keys: root.modifierNames(bind.modmask).concat([key]),
+                        category: !described ? "Undescribed"
+                            : colon < 0 ? "Other" : description.slice(0, colon),
+                        description: !described ? ""
+                            : colon < 0 ? description : description.slice(colon + 2),
+                        described: described,
+                        submap: bind.submap ?? "",
+                        nonConsuming: !!bind.non_consuming
+                    });
+                }
+                root.binds = out;
+            }
+        }
     }
 
     // Screen capture, announced on Hyprland's own event socket, so there is
