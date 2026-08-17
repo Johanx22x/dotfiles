@@ -71,11 +71,38 @@ QtObject {
         // cheatsheet and the keybinds settings page.
         bindsIntrospection: false,
         // Can monitors be configured through the shell (the display page)?
+        // Answered by `desktop-monitors`, which is the one thing the page talks
+        // to: it lists what is connected, applies a provisional change and
+        // writes a confirmed one, in whatever language the compositor reads.
         monitorConfig: false,
+        // Can a monitor's settings be handed over as a block to paste into a
+        // HAND-WRITTEN config? A separate question from the one above, and the
+        // answer is no more often than it looks: it needs a file the person
+        // maintains and the shell does not. Hyprland has one -- hyprland.lua
+        // declares the monitors and the generated file merely overrides it. Under
+        // niri the generated file IS the declaration, because an `output` block
+        // in an include is ignored when the main config names the same monitor,
+        // so a block pasted into config.kdl would not add a setting: it would
+        // shadow the settings page for good.
+        monitorConfigCopy: false,
+        // NO nightLight FLAG, deliberately, and it is worth saying because the
+        // display page draws one. The blue-light filter is not a compositor
+        // feature here: `night-light` picks a daemon per session (hyprsunset on
+        // Hyprland, wl-gammarelay-rs on niri) and the page asks THAT script what
+        // it found. A capability would be a second answer to a question the
+        // script already answers better -- it knows whether the daemon is
+        // installed, which no backend can.
         // Can input settings be changed through the shell (the input page)?
         inputConfig: false,
         // Is there a scratchpad / special workspace to send a window to?
         scratchpad: false,
+        // Can the on-screen rectangle of every visible window be read?
+        //
+        // It is what lets the recorder hand slurp a list of boxes to snap to,
+        // so "record a window" means clicking the window rather than dragging a
+        // rectangle around it by eye. Without it that mode still works, it just
+        // stops snapping.
+        windowGeometry: false,
         // Does a layer surface holding an exclusive keyboard grab receive keys
         // NO MATTER WHICH MONITOR the user is focused on?
         //

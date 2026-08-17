@@ -99,6 +99,10 @@ Two flavors, chosen at install time and switched at the display manager. They
 are not exclusive: answer **both** and each session appears separately in SDDM,
 so one can be tried without dismantling the other.
 
+Built and tested against **Hyprland 0.56** and **niri 26.04**. Where a version
+matters — and it does more than once, because both move fast — the config says
+so next to the line that depends on it.
+
 | | Hyprland | niri |
 |---|---|---|
 | Model | dynamic tiling (dwindle) | scrollable tiling (columns) |
@@ -107,14 +111,30 @@ so one can be tried without dismantling the other.
 | Session | `uwsm` | `niri-session` |
 | Portal | `xdg-desktop-portal-hyprland` | `xdg-desktop-portal-gnome` |
 
+| Workspaces | numbered, permanent | dynamic, renumbered as they empty |
+| Blur | global, behind anything translucent | per window, asked for by a rule |
+| Blue light | `hyprsunset` | `wl-gammarelay-rs` |
+
 **Every keybind is the same in both.** Four Hyprland actions have no niri
-equivalent, so their chords were given to the nearest thing niri does rather
-than left dead — pseudotile becomes cycling the preset column widths,
-togglesplit becomes tabbed columns, pin becomes jumping between the floating and
-tiled layers, and the magic scratchpad becomes a named workspace. What niri can
-do and Hyprland cannot is bound on chords that were free: the overview, moving
-and consuming columns, the ends of the strip, monitor focus. Each one is marked
-in `niri/.config/niri/config.kdl`, which is where the reasoning lives.
+equivalent, and rather than leave those chords dead each went to the nearest
+thing niri actually does: pseudotile cycles the preset column widths,
+togglesplit stacks the column as tabs, pin jumps between the floating and tiled
+layers, and the magic scratchpad — niri has none, and faking one cost a
+permanent workspace — became "back to the previous workspace".
+
+What niri can do and Hyprland cannot is bound on chords that were free: the
+overview on `SUPER + Tab`, moving and consuming columns, the ends of the strip,
+monitor focus. Every one of those decisions is written next to the bind it
+belongs to in `niri/.config/niri/config.kdl`.
+
+**Workspaces behave differently and that is not configurable.** niri creates
+them as you need them and renumbers when one empties, so `SUPER + 3` is the
+third workspace *at that moment*. Ten named, permanent ones were built to fix
+that and then taken out again: named workspaces exist whether or not anything is
+on them, so the overview always showed ten slots with nine empty. The bar can
+filter empties; the compositor's overview cannot. Stable numbers or an honest
+overview — there is no third option, and the trade-off is written into the
+config.
 
 ### Adding a third one
 
@@ -147,11 +167,43 @@ than in a backend — fullscreen detection goes through
 `wlr-foreign-toplevel`, and logout falls back to logind — so a new compositor
 gets those for free.
 
-**What the niri flavor does not do yet.** `hypr-monitor` and `hypr-tweak` still
-only write Lua, so monitor and input settings are Hyprland-only (their pages
-hide themselves elsewhere). The keybinds page and the cheatsheet need a KDL
-parser to come back. And there is no per-device input configuration in niri at
-all, so the DualSense touchpad quirk has no home yet.
+**Settings reach both flavors through one script.** `desktop-tweak` — the old
+`hypr-tweak`, renamed once it stopped being about one compositor — keeps a
+single state file and writes an override layer per flavor: `tweaks.lua` for
+Hyprland, `tweaks.kdl` for niri, both gitignored and both read last by their
+config. Applying differs and nothing else does: Hyprland is told with `hyprctl
+eval`, while niri watches the files it includes, so writing one is what applies
+it.
+
+`desktop-monitors` — the old `hypr-monitor` — does the same for the display page:
+it lists what is connected in one shape whichever compositor answered, applies a
+provisional change, and writes the confirmed one into `monitors.lua` or
+`monitors.kdl`. The one thing that is **not** symmetric is what that file is.
+Under Hyprland it is an override layer on top of the monitor block in
+`hyprland.lua`; under niri it is the only declaration of any output there is,
+because an `output` block in an included file is ignored when the including file
+names the same monitor. So `config.kdl` declares none and includes the generated
+file first — and the display page's *Copy config* chip, which hands you a block
+to paste into the tracked config, is not offered there: pasting one in would
+shadow the generated file for good.
+
+### What niri cannot do
+
+Not a to-do list — these were each tried, measured and written down:
+
+| | |
+|---|---|
+| **Per-device input** | niri has none at all, so the DualSense touchpad quirk has no home. The equivalent is a libinput rule in `/etc`, which `install.sh` does not touch |
+| **Window geometry** | `tile_pos_in_workspace_view` is null even for visible windows, so *record a window* cannot snap to one and falls back to a free drag |
+| **Make main** | only moves the shell. Which monitor games open on is an `open-on-output` on their window rules, and a generated copy of that would go out of step |
+| **Shared workspaces** | a workspace belongs to one monitor. Focusing one that lives on the other moves focus there, which is as close as it gets |
+
+And for gaming, unchanged by any of this: niri has no explicit sync, no
+tearing control, Steam Input does not move the cursor, and Alt+Tab shrinks
+fullscreen Steam games. Those are upstream.
+
+One mapping is close rather than exact: Hyprland has two gap values and niri
+has one, so the inner gap maps directly and the outer becomes a strut.
 
 ## Layout
 
@@ -188,9 +240,10 @@ wallpaper-switch dir pick            # move the collection somewhere else
 ## Per-machine
 
 No tracked file names a home directory. What belongs to one machine stays out of
-git: `hypr/monitors.lua`, written by `hypr-monitor` or the settings window, and
-the state files under `~/.local/state` that the scripts and the shell share — so
-a value set from a terminal moves the switch in the settings window, and back.
+git: `hypr/monitors.lua` and `niri/monitors.kdl`, written by `desktop-monitors` or
+the settings window, and the state files under `~/.local/state` that the scripts
+and the shell share — so a value set from a terminal moves the switch in the
+settings window, and back.
 
 ## Keybinds
 

@@ -18,13 +18,18 @@ REAL_UID=$(id -u "$REAL_USER")
 
 # Run a command as the real user, with their Wayland session environment.
 asuser() {
-    local his
+    local his sock
     his=$(ls -t "/run/user/$REAL_UID/hypr" 2>/dev/null | head -1)
+    # The other flavor's announcement, found the same way: a socket in the
+    # runtime directory, because a root check has no session environment to
+    # inherit either variable from.
+    sock=$(find "/run/user/$REAL_UID" -maxdepth 1 -name 'niri.*.sock' 2>/dev/null | head -1)
     if [[ $EUID -eq 0 ]]; then
         runuser -u "$REAL_USER" -- env \
             XDG_RUNTIME_DIR="/run/user/$REAL_UID" \
             WAYLAND_DISPLAY="wayland-1" \
             HYPRLAND_INSTANCE_SIGNATURE="$his" \
+            NIRI_SOCKET="$sock" \
             "$@" 2>/dev/null
     else
         "$@" 2>/dev/null
@@ -89,12 +94,48 @@ else
     bad "vulkan-tools is not installed"
 fi
 
-hdr "Hyprland"
-errs=$(asuser hyprctl configerrors | tr -d '[:space:]')
-[[ -z $errs ]] && ok "config has no errors" || bad "errors: $errs"
-printf '   direct_scanout: %s\n' "$(asuser hyprctl getoption render:direct_scanout | head -1)"
-printf '   vrr:            %s\n' "$(asuser hyprctl getoption misc:vrr | head -1)"
-[[ -f $REAL_HOME/.config/hypr/gaming.lua ]] && ok "gaming.lua present" || bad "gaming.lua is missing"
+# WHICHEVER COMPOSITOR IS ANSWERING, and the checks are not the same three
+# questions asked twice: each one is asked wherever that compositor keeps the
+# answer, which is a different place on each.
+hdr "Compositor"
+BIN_DIR="$(dirname "$(readlink -f "$0")")"
+case "$(asuser "$BIN_DIR/compositor" 2>/dev/null)" in
+    hyprland)
+        printf '   flavor:         Hyprland\n'
+        errs=$(asuser hyprctl configerrors | tr -d '[:space:]')
+        [[ -z $errs ]] && ok "config has no errors" || bad "errors: $errs"
+        printf '   direct_scanout: %s\n' "$(asuser hyprctl getoption render:direct_scanout | head -1)"
+        printf '   vrr:            %s\n' "$(asuser hyprctl getoption misc:vrr | head -1)"
+        [[ -f $REAL_HOME/.config/hypr/gaming.lua ]] && ok "gaming.lua present" || bad "gaming.lua is missing"
+        ;;
+    niri)
+        printf '   flavor:         niri\n'
+        # `niri validate` and not a live query: niri has no getoption and no
+        # configerrors over IPC, but it will parse the file on demand, which is
+        # the same question asked of the same text the compositor loaded.
+        if asuser niri validate --config "$REAL_HOME/.config/niri/config.kdl" >/dev/null 2>&1; then
+            ok "config parses"
+        else
+            bad "config does not parse -- run: niri validate"
+        fi
+        # VRR is reported PER OUTPUT and as reality rather than as intent, which
+        # is better than the other flavor's single configured number: this says
+        # whether it is actually on right now.
+        asuser niri msg -j outputs 2>/dev/null \
+            | jq -r 'to_entries[] | "   vrr \(.key):     supported=\(.value.vrr_supported) enabled=\(.value.vrr_enabled)"' \
+            || printf '   vrr:            could not ask niri\n'
+        # Direct scanout has no query at all: it is on unless the debug block
+        # turns it off, so the config is the only thing that can be read.
+        if grep -q "disable-direct-scanout" "$REAL_HOME/.config/niri/config.kdl" 2>/dev/null; then
+            warn "direct scanout is disabled in the config"
+        else
+            ok "direct scanout not disabled"
+        fi
+        ;;
+    *)
+        warn "no compositor is answering, so its settings cannot be checked"
+        ;;
+esac
 
 hdr "Launcher"
 [[ -x $REAL_HOME/.local/bin/gs ]] && ok "gs is executable" || bad "~/.local/bin/gs is missing"

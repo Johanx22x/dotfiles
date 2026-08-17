@@ -4,7 +4,7 @@
 # The rotation itself is wallpaper-rotate.timer, which is a TRACKED file in
 # this repository. This does not touch it. It writes a systemd DROP-IN, which
 # is systemd's own answer to "override one setting without editing the unit",
-# and is the same boundary hypr-tweak draws against hyprland.lua: the shell
+# and is the same boundary desktop-tweak draws against hyprland.lua: the shell
 # owns the generated fragment, the person owns the unit.
 #
 #   ~/.config/systemd/user/wallpaper-rotate.timer.d/interval.conf
