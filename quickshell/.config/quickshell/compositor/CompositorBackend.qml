@@ -96,6 +96,13 @@ QtObject {
         inputConfig: false,
         // Is there a scratchpad / special workspace to send a window to?
         scratchpad: false,
+        // Can the on-screen rectangle of every visible window be read?
+        //
+        // It is what lets the recorder hand slurp a list of boxes to snap to,
+        // so "record a window" means clicking the window rather than dragging a
+        // rectangle around it by eye. Without it that mode still works, it just
+        // stops snapping.
+        windowGeometry: false,
         // Does a layer surface holding an exclusive keyboard grab receive keys
         // NO MATTER WHICH MONITOR the user is focused on?
         //

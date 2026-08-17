@@ -46,6 +46,8 @@ CompositorBackend {
         monitorConfigCopy: true,
         inputConfig: true,
         scratchpad: true,
+        // `hyprctl clients` reports .at and .size for every window.
+        windowGeometry: true,
         // One keyboard focus for the whole session, so a grabbing surface is
         // heard from any monitor.
         globalKeyboardGrab: true,
