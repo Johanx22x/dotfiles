@@ -33,9 +33,9 @@
 pragma Singleton
 
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 import QtQuick
+import "root:/"
 
 Singleton {
     id: root
@@ -54,28 +54,17 @@ Singleton {
 
     // ---------------- Level 2: screen capture ----------------
     //
-    // Hyprland announces this on its event socket, so there is nothing to
-    // poll and no portal to talk to:
+    // WHO is capturing and HOW MANY are doing it comes from the compositor
+    // backend, which is where the differences live: one flavor announces the
+    // transition on an event socket, the other publishes the list of live
+    // casts. See compositor/ for both, and for why a count beats a bool.
     //
-    //   screencast>>1,monitor            started
-    //   screencastv2>>1,monitor,DP-3     started, and what is being taken
-    //   screencastv2>>0,monitor,DP-3     stopped
-    //
-    // v2 is used for the target name; v1 carries the same state without it,
-    // so listening to both would double-count.
-    //
-    // Verified by listening on .socket2.sock while capturing -- the events
-    // above are copied from that capture, not from documentation.
-
-    // A COUNT and not a bool. Two applications can hold a capture at once
-    // (a call sharing a window while OBS records the screen), and with a bool
-    // whichever stops first would clear the indicator while the other is
-    // still going.
-    property int captureSessions: 0
+    // What is left here is the part that belongs to this indicator.
+    readonly property int captureSessions: Compositor.captureCount
 
     // "monitor" or "window", and which one.
-    property string captureOwner: ""
-    property string captureTarget: ""
+    readonly property string captureOwner: Compositor.captureOwner
+    readonly property string captureTarget: Compositor.captureTarget
 
     // A screenshot is a capture too, and the number here comes from MEASURING
     // one rather than guessing. Timestamped on Hyprland's event socket, a
@@ -99,29 +88,20 @@ Singleton {
         onTriggered: root.captureSettled = true
     }
 
+    // Counting, and telling monitor from window, is the compositor's business
+    // and now lives in its backend -- including the note on where those event
+    // lines came from. What stays here is the GRACE PERIOD, which is a decision
+    // about this indicator rather than a fact about any compositor.
     Connections {
-        target: Hyprland
+        target: Compositor
 
-        function onRawEvent(event): void {
-            if (event.name !== "screencastv2")
-                return;
-
-            // state, owner, name
-            const args = event.parse(3);
-            if (args[0] === "1") {
-                root.captureOwner = args[1] ?? "";
-                root.captureTarget = args[2] ?? "";
-                root.captureSessions += 1;
-                if (root.captureSessions === 1)
+        function onCaptureCountChanged(): void {
+            if (Compositor.captureCount > 0) {
+                if (!captureGraceTimer.running && !root.captureSettled)
                     captureGraceTimer.restart();
             } else {
-                // Clamped at zero: a session that was already running when the
-                // shell started is stopped without ever having been counted.
-                root.captureSessions = Math.max(0, root.captureSessions - 1);
-                if (root.captureSessions === 0) {
-                    captureGraceTimer.stop();
-                    root.captureSettled = false;
-                }
+                captureGraceTimer.stop();
+                root.captureSettled = false;
             }
         }
     }

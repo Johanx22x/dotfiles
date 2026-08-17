@@ -171,9 +171,14 @@ PanelWindow {
             if (!CheatsheetState.isOpen)
                 return;
 
-            // Re-read on every open. A `hyprctl reload` between two openings
-            // is exactly the case a cached list would get wrong.
-            binds.running = true;
+            // Re-read on every open. A config reload between two openings is
+            // exactly the case a cached list would get wrong.
+            //
+            // Only where the compositor can be asked at all -- otherwise the
+            // sheet says so instead, below, and running the query would just
+            // spawn a process to fail.
+            if (Compositor.can("bindsIntrospection"))
+                binds.running = true;
             sheet.forceActiveFocus();
         }
     }
@@ -312,8 +317,34 @@ PanelWindow {
                     }
                 }
 
+                // ---------------- Nothing to list ----------------
+                //
+                // A sheet whose whole job is to explain the keys, opened on a
+                // compositor that cannot be asked what is bound, must not come
+                // up blank: an empty panel reads as a broken shell rather than
+                // as a missing feature. It says which it is.
+                Text {
+                    visible: !Compositor.can("bindsIntrospection")
+                    width: parent.width
+
+                    text: "This compositor cannot report what is bound to what.\n\n"
+                        + "The bindings are still there -- they are in the compositor's own\n"
+                        + "configuration file, which is where they were written."
+                    horizontalAlignment: Text.AlignHCenter
+
+                    font.family: Theme.fontFamily
+                    font.pointSize: Theme.fontSize
+                    font.weight: Theme.fontWeight
+                    color: Theme.textOnSurfaceVariant
+
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.recolorDuration }
+                    }
+                }
+
                 // ---------------- The columns ----------------
                 Row {
+                    visible: Compositor.can("bindsIntrospection")
                     spacing: root.columnGap
 
                     Repeater {

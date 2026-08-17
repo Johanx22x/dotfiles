@@ -20,16 +20,20 @@
 #                  changes before the terminal does.
 #    kitty         ~/.config/kitty/opacity.conf, included last by kitty.conf.
 #                  SIGUSR1 makes running windows re-read it. INSTANT.
-#    Nautilus      a Hyprland windowrule for new windows plus setprop for the
-#                  ones already open. INSTANT.
+#    Nautilus      a window rule, and how it is delivered is the one thing that
+#                  depends on the compositor: Hyprland takes it through
+#                  `hyprctl eval`, niri takes it as ~/.config/niri/opacity.kdl,
+#                  which it reloads on save. Either way it applies to windows
+#                  opened from then on.
 #    Zen           ~/.zen/rice/chrome/opacity.css, imported by userChrome.css.
 #                  NEEDS A RESTART: userChrome is read once at startup, and
 #                  fx-autoconfig -- the way to get live reload -- was
 #                  deliberately not installed. See the top of userChrome.css.
 #
-#  NONE of the three generated files is in the dotfiles repo. They are
-#  generated state, same as kitty's colors.conf and the shell's colors.json,
-#  and the config files that read them are the ones under version control.
+#  NONE of the generated files is in the dotfiles repo -- kitty's opacity.conf,
+#  Zen's opacity.css and niri's opacity.kdl. They are generated state, same as
+#  kitty's colors.conf and the shell's colors.json, and the config files that
+#  include them are the ones under version control.
 # =============================================================
 set -euo pipefail
 
@@ -37,6 +41,17 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
 STATE_FILE="$STATE_DIR/desktop-opacity"
 KITTY_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/kitty/opacity.conf"
 ZEN_FILE="$HOME/.zen/rice/chrome/opacity.css"
+NIRI_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/niri/opacity.kdl"
+
+# Found NEXT TO THIS SCRIPT and not through $PATH: this is called by the
+# settings window in Quickshell, whose environment is the compositor's rather
+# than a login shell's, and ~/.local/bin is not always on it. readlink resolves
+# the stow symlink back into the repo, so the helper is found whether this was
+# started from ~/.local/bin or straight out of the checkout -- and a
+# `compositor` that could not be run would look exactly like "no compositor",
+# which is the silent failure this whole helper exists to stop.
+BIN_DIR="$(dirname "$(readlink -f "$0")")"
+compositor() { "$BIN_DIR/compositor" "$@"; }
 
 # The floor is not taste, it is legibility: below 0.40 small text over a bright
 # wallpaper stops being readable however much blur is behind it. 1.00 is fully
@@ -46,9 +61,17 @@ MAX=1.00
 DEFAULT=0.85
 
 # Windows whose transparency belongs to the compositor rather than to
-# themselves. Regexes as Hyprland spells them, and the same class the rule in
-# hyprland.lua matches -- the two have to agree or a rule added here would
-# stack on top of that one instead of replacing it.
+# themselves: libadwaita paints its background opaque and user CSS cannot ask it
+# for an alpha, so somebody outside the application has to.
+#
+# ONE spelling for both compositors, which works out only because neither needs
+# escaping the other does not: these go into a Hyprland rule and into a niri KDL
+# raw string, and a raw string is verbatim. Hyprland calls the field `class` and
+# niri calls it `app-id`; the value is the same regex.
+#
+# They have to keep matching what hyprland.lua and niri/config.kdl already
+# match, or the rule written here would stack on top of that one instead of
+# replacing it.
 GTK_CLASSES=(
   '^org\.gnome\.Nautilus$'
 )
@@ -133,11 +156,19 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------
-# Hyprland
+# The compositor
 #
-# THROUGH `eval`, AND ONLY THROUGH `eval`. The first version of this used
-# `hyprctl keyword windowrule ...` plus `hyprctl setprop ... alpha`, which is
-# what every guide on the internet says, and NEITHER works on this machine:
+# Asked as a CAPABILITY and not by name -- `window-rules` means "rules can be
+# changed in the running compositor", which is the thing this branch actually
+# depends on. The niri branch below is the exception the helper's own header
+# allows: it is not asking whether it can do something, it is asking which file
+# to write, and only the name can answer that.
+#
+# ---- Hyprland: THROUGH `eval`, AND ONLY THROUGH `eval`.
+#
+# The first version of this used `hyprctl keyword windowrule ...` plus
+# `hyprctl setprop ... alpha`, which is what every guide on the internet says,
+# and NEITHER works on this machine:
 #
 #   $ hyprctl keyword general:border_size 2
 #   keyword can't work with non-legacy parsers. Use eval.
@@ -155,7 +186,7 @@ fi
 # alpha it was mapped with. Reopening it, or `hyprctl reload` (which re-runs
 # hyprland.lua, and that reads the state file written above), picks up the new
 # value -- so nothing is lost, it just is not instant for that one case.
-if command -v hyprctl >/dev/null && hyprctl monitors >/dev/null 2>&1; then
+if compositor can window-rules && command -v hyprctl >/dev/null; then
   for class in "${GTK_CLASSES[@]}"; do
     # Doubled backslashes: the class regexes above are written for hyprlang,
     # and this passes them through a Lua string literal on the way.
@@ -167,4 +198,42 @@ if command -v hyprctl >/dev/null && hyprctl monitors >/dev/null 2>&1; then
     })" >/dev/null
   done
   note "Hyprland: rule set for ${#GTK_CLASSES[@]} class(es), applies to new windows"
+
+# ---- niri: BY WRITING THE FILE, because there is nothing to push it into.
+#
+# niri has no `hyprctl eval` and no runtime rule editing at all (which is why
+# `compositor can window-rules` says no for it). What it does have is a config
+# it watches, includes and all, so writing this file IS applying it -- there is
+# no reload step to forget, and adding one would only be a way to get it wrong.
+#
+# The file is pulled in by an `include` near the end of niri/config.kdl, placed
+# after every rule in it on purpose: niri applies all the rules that match and
+# the last one to set a property wins, so this has to be the last word on
+# opacity or the 0.82 literal in the Nautilus rule would beat it.
+#
+# TWO DIFFERENCES FROM THE HYPRLAND BRANCH ABOVE, both of them measured:
+#   - the regex goes in a KDL raw string, r#"..."#, which is verbatim. No
+#     doubled backslashes -- that is a Lua-literal problem and it does not
+#     exist here.
+#   - `opacity` takes ONE number. Hyprland's takes the active/inactive pair.
+elif compositor is niri; then
+  mkdir -p "$(dirname "$NIRI_FILE")"
+  {
+    printf '// Generated by desktop-opacity. Do not edit: the settings window\n'
+    printf '// rewrites it. Included from config.kdl, and niri watches every file\n'
+    printf '// it includes, so saving this is what applies it.\n'
+    for class in "${GTK_CLASSES[@]}"; do
+      printf '\nwindow-rule {\n'
+      printf '    match app-id=r#"%s"#\n' "$class"
+      printf '    opacity %s\n' "$value"
+      printf '}\n'
+    done
+  } > "$NIRI_FILE"
+  note "niri: rule written for ${#GTK_CLASSES[@]} app-id(s), applies to new windows"
+
+else
+  # Said out loud rather than skipped in silence: everything above this point
+  # applied, so the run looks like a success, and the one surface that needs a
+  # compositor listening would have been the only thing missing from it.
+  note "compositor: nothing to tell (none running, or one with no window rules)"
 fi

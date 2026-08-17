@@ -1,3 +1,4 @@
 brave-bin
 mpvpaper
+wl-gammarelay-rs
 yay

@@ -1,0 +1,854 @@
+// =============================================================================
+//  niri — the second compositor flavor of these dotfiles
+//
+//  Hyprland is the default one and lives in ~/.config/hypr/hyprland.lua. This
+//  file is its counterpart, and the two are meant to be interchangeable from
+//  the fingers' point of view: every chord that does something in Hyprland does
+//  the same thing here.
+//
+//  WHAT IS DELIBERATELY NOT THE SAME. niri is a scrollable-tiling compositor,
+//  not a dynamic-tiling one, and pretending otherwise would waste it. Four
+//  Hyprland binds have no equivalent at all (pseudotile, togglesplit, pin, and
+//  the special workspace), so their chords were handed to the nearest niri
+//  concept instead of being left dead -- each one is marked NO EQUIVALENT
+//  below with what took its place. Everything niri can do that Hyprland cannot
+//  is bound too, on chords that were free.
+//
+//  Which one starts is chosen at the display manager, per session. Nothing
+//  here is exclusive with the Hyprland flavor: both stow packages can be
+//  linked at once, and install.sh offers exactly that.
+//
+//  Config format: https://yalter.github.io/niri/  (the project moved to
+//  niri-wm/niri; the docs redirect). It is KDL, and it live-reloads on save --
+//  there is no `hyprctl reload` equivalent and none is needed. Check a change
+//  before trusting it with:  niri validate
+// =============================================================================
+
+
+// -----------------------------------------------------------------------------
+// INPUT
+// -----------------------------------------------------------------------------
+// The values here mirror what `hypr-tweak` writes into ~/.config/hypr/tweaks.lua
+// on this machine, not the deliberately-plain fallbacks at the top of
+// hyprland.lua's input block. There is no tweaks layer for niri yet, so these
+// are literals; when one arrives it goes in the include at the bottom.
+input {
+    keyboard {
+        xkb {
+            // NOT grp:alt_shift_toggle or any xkb group switcher, for the same
+            // reason the Hyprland config refuses them: they move an index that
+            // lives only inside the running compositor, nothing outside can
+            // read it, and the bar's layout pill would go stale. See the
+            // SUPER + K bind below for how the layout is actually stepped.
+            layout "us,latam"
+            options ""
+        }
+        repeat-delay 600
+        repeat-rate 25
+    }
+
+    mouse {
+        // Flat acceleration with a fixed speed, the same pair hypr-tweak
+        // writes (accel_profile = "flat", sensitivity = 0.75). niri's
+        // accel-speed uses libinput's -1.0..1.0 range, same as Hyprland's
+        // sensitivity, so the number carries over unchanged.
+        accel-profile "flat"
+        accel-speed 0.75
+    }
+
+    touchpad {
+        // natural-scroll is a flag in KDL: present means on. Hyprland has it
+        // false, so it is simply absent here.
+        tap
+        dwt
+    }
+
+    // Hyprland's follow_mouse = 1.
+    focus-follows-mouse
+
+    // NOT DONE YET, and this is the file anybody would open looking for it.
+    //
+    // The kernel's hid-playstation driver exposes the DualSense touchpad as a
+    // real pointer device (its own evdev node with POINTER + BUTTONPAD), so the
+    // cursor jumps around whenever a thumb brushes the pad while playing. This
+    // has nothing to do with Steam: it happens with Steam closed too.
+    //
+    // hyprland.lua switches it off with a per-device block, matching
+    // "sony-interactive-entertainment-dualsense-wireless-controller-touchpad"
+    // and setting enabled = false. niri has NO per-device input configuration
+    // at all, so there is nothing to write here -- the equivalent has to happen
+    // one layer down, as a libinput quirk in /etc, which is territory
+    // install.sh deliberately does not touch.
+    //
+    // Until that exists, a DualSense connected during a niri session will move
+    // the pointer. Unplugging it is the workaround.
+}
+
+
+// -----------------------------------------------------------------------------
+// OUTPUTS
+// -----------------------------------------------------------------------------
+// Matched by EDID, not by connector name, for the reason written at the top of
+// hyprland.lua: connector names are assigned by the kernel and they CHANGE
+// across kernels (linux-lts to mainline turned DP-4 into DP-3 and HDMI-A-3 into
+// HDMI-A-1, and every rule silently stopped applying).
+//
+// CAREFUL, THE STRINGS ARE NOT THE ONES IN hyprland.lua. Both compositors build
+// the name from the same three EDID fields, but Hyprland NORMALISES the
+// manufacturer and niri does not:
+//
+//   Hyprland  desc:GIGA-BYTE TECHNOLOGY CO. LTD. GS27FA 24476B001914
+//   niri          "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA 24476B001914"
+//                                        ^ the comma survives here
+//
+// Copying the line across would leave this monitor unrotated and at its
+// preferred refresh rate with nothing on screen to say why -- the same class of
+// silent failure the connector names caused. To read the real ones:
+//   niri msg outputs
+output "ASR PG32QF2B G5VL0A003533" {
+    // Main: ASR PG32QF2B 1440p, on the right.
+    // Y = 240 centers it vertically against the portrait monitor: (1920-1440)/2
+    mode "2560x1440@165.001"
+    position x=1080 y=240
+    scale 1
+
+    // VRR only while something is fullscreen, which is Hyprland's misc.vrr = 1.
+    // niri splits that decision in two: the output opts in on-demand here, and
+    // a window-rule further down says which windows are allowed to ask for it
+    // (the games rule). Never plain `variable-refresh-rate` with no argument on
+    // NVIDIA -- that is always-on, Hyprland's vrr = 2, and the desktop
+    // flickers.
+    variable-refresh-rate on-demand=true
+}
+
+output "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA 24476B001914" {
+    // Secondary: Gigabyte GS27FA 1080p, rotated to portrait, on the left.
+    // Rotated it takes 1080x1920, which is why the main one starts at X = 1080.
+    mode "1920x1080@164.999"
+    position x=0 y=0
+    scale 1
+    transform "270"
+}
+
+
+// -----------------------------------------------------------------------------
+// LAYOUT
+// -----------------------------------------------------------------------------
+layout {
+    // 6 and 10 are what hypr-tweak has written into tweaks.lua (gaps_in = 6,
+    // gaps_out = 10). niri has ONE gap value rather than two: it is the space
+    // between windows, and half of it is used against the screen edge, so a
+    // single number cannot reproduce both. 6 keeps the spacing between windows
+    // identical, which is the half that is looked at all day.
+    gaps 6
+
+    // Hyprland's border_size is 0 in tweaks.lua, so the coloured edge is off
+    // there. niri draws two separate things -- a focus ring OUTSIDE the window
+    // and a border that takes space INSIDE the layout -- and the ring is the
+    // one that behaves like Hyprland's active border without stealing pixels.
+    border {
+        off
+    }
+
+    focus-ring {
+        width 2
+
+        // The wallpaper accents, same gradient and same 45 degrees as
+        // general.col.active_border in hyprland.lua.
+        //
+        // THIS LINE IS THE FALLBACK, NOT THE VALUE. matugen renders
+        // ~/.config/niri/colors.kdl from templates/niri-colors.kdl on every
+        // wallpaper change, and the include at the bottom of this file
+        // overrides the gradient below -- included sections merge property by
+        // property, so width and inactive-color here survive untouched. What is
+        // written here is what the ring looks like on a fresh clone, before
+        // matugen has ever run.
+        //
+        // The "ee" is alpha, ~93%: it matches the rgba(<hex>ee) hyprland.lua
+        // uses and, more to the point, what the template generates -- so the
+        // fallback and the generated file do not differ in anything but hue.
+        active-gradient from="#96ccf8ee" to="#cfc0e8ee" angle=45
+        inactive-color "#595959"
+    }
+
+    shadow {
+        on
+        softness 4
+        spread 0
+        offset x=0 y=2
+        color "#1a1a1aee"
+    }
+
+    // The radius the applications already use. Measured on Zen's content area
+    // and shared with Quickshell's screenCornerRadius / barCornerRadius -- the
+    // three are one decision, see the long note in hyprland.lua's decoration
+    // block before changing any of them.
+    //
+    // NOT paired with clip-to-geometry here, and that is deliberate: niri issue
+    // #4281 has the two together dropping a 120 Hz external monitor to 30-40
+    // FPS with no GPU load. The rounding is the part that is wanted; the
+    // clipping is the part that costs.
+    //
+    // (niri applies this per window via window-rule; the global default lives
+    // in the catch-all rule at the bottom of the WINDOW RULES section.)
+
+    // Column widths cycled by SUPER + P. Hyprland has no equivalent -- its
+    // windows are resized freely -- so this is a niri concept with no history
+    // to honour, and these are the defaults the wiki suggests.
+    preset-column-widths {
+        proportion 0.33333
+        proportion 0.5
+        proportion 0.66667
+    }
+
+    default-column-width { proportion 0.5; }
+
+    // Keep the focused column where it is rather than yanking the view to
+    // centre it on every focus change. "on-overflow" only recentres when the
+    // column would not fit, which is the behaviour that reads closest to a
+    // tiling layout that does not move under you.
+    center-focused-column "on-overflow"
+
+    // The bar reserves its own space through layer-shell exclusive zones, so
+    // there is nothing to declare here.
+    struts { }
+}
+
+// --- The wallpaper accents ---
+// Written by matugen on every wallpaper change, from
+// matugen/templates/niri-colors.kdl. It carries one property, the focus ring's
+// active-gradient, and it is this flavor's answer to hypr/colors.lua.
+//
+// IMMEDIATELY AFTER THE LAYOUT BLOCK, AND THAT IS NOT COSMETIC. Three rules
+// have to line up for this to work at all, and getting any of them wrong fails
+// quietly rather than loudly:
+//
+//   - `layout` is a singleton: a second one in THIS file is a hard parse error
+//     ("duplicate node `layout`, single node expected"). An include is the only
+//     way to have one.
+//   - Included sections merge property by property, so the file overrides the
+//     gradient and leaves width, gaps, presets and the rest of the block alone.
+//   - Includes are positional: they override what came BEFORE them. Moved above
+//     the layout block this line would parse fine, validate fine, and do
+//     nothing -- the literal would win and the ring would simply never follow
+//     the wallpaper.
+//
+// optional=true because a fresh clone has not run matugen yet, and the literal
+// above is exactly the fallback for that.
+include optional=true "~/.config/niri/colors.kdl"
+
+
+// -----------------------------------------------------------------------------
+// NAMED WORKSPACES
+// -----------------------------------------------------------------------------
+// NO EQUIVALENT: niri has no special workspace / scratchpad (upstream issue
+// #845, open since December 2024). The magic workspace from hyprland.lua is a
+// named workspace here instead, which is the closest thing that exists: it is
+// always available and it keeps its identity, but it is a place you GO TO
+// rather than an overlay that drops over what you were doing.
+//
+// SUPER + M and SUPER + SHIFT + M keep pointing at it, so the chords survive
+// even though the feel does not.
+workspace "magic"
+
+
+// -----------------------------------------------------------------------------
+// STARTUP
+// -----------------------------------------------------------------------------
+// Same set as hyprland.lua's hl.on("hyprland.start"), and in the same order,
+// with one line dropped: `dbus-update-activation-environment` is not needed
+// because niri is started as a systemd session (niri --session), which imports
+// the environment into the user manager itself.
+
+// The shell: bar, island, notifications, launcher, power menu, settings.
+// --no-duplicate makes a second invocation exit instead of stacking a second
+// copy of every layer surface.
+//
+// CAVEAT, and it is a real one today: Quickshell's workspace pills, active
+// window title, popout click-outside-to-close and the cheatsheet all talk to
+// Hyprland's IPC (Quickshell.Hyprland, six QML files). Under niri the shell
+// comes up and everything that does not need the compositor works -- tray,
+// clock, notifications, media, the island -- while those four go quiet. Porting
+// them to niri's event stream is the next piece of work.
+spawn-at-startup "qs" "-d" "--no-duplicate"
+
+// Restore the last wallpaper. The script starts whichever backend it needs
+// (awww for a still, mpvpaper for a video), so there is no awww-daemon line.
+//
+// CAVEAT: wallpaper-switch pushes the new accent into the compositor with
+// `hyprctl eval` and finds the background layer with `hyprctl layers`. Both are
+// no-ops under niri, so the wallpaper is set and the palette is regenerated,
+// but the focus-ring gradient above stays where it is until the script learns
+// about this flavor.
+spawn-at-startup "sh" "-c" "$HOME/.local/bin/wallpaper-switch reapply"
+
+// On Wayland the clipboard is owned by the source application: close it and
+// whatever you copied is gone. Only "regular" -- the primary selection fights
+// with middle-click and causes rewrite loops.
+spawn-at-startup "wl-clip-persist" "--clipboard" "regular"
+
+// Clipboard history. Two watchers because wl-paste --watch filters by MIME type
+// and a single one would leave images out (screenshots among them).
+spawn-at-startup "sh" "-c" "wl-paste --type text --watch cliphist store"
+spawn-at-startup "sh" "-c" "wl-paste --type image --watch cliphist store"
+
+
+// -----------------------------------------------------------------------------
+// ENVIRONMENT
+// -----------------------------------------------------------------------------
+// CAREFUL: this block only reaches processes niri spawns. It does NOT propagate
+// into the systemd user environment, so anything started by a systemd unit --
+// timers, socket-activated services -- does not see it. Hyprland's hl.env has
+// the same limitation and works around it with dbus-update-activation-
+// environment in autostart; here the variables that genuinely need to be global
+// belong in ~/.config/environment.d/ instead.
+environment {
+    // Without this, Qt apps come up with the factory grey palette. Points at
+    // qt6ct, whose palette matugen generates from the wallpaper. It is ONE
+    // variable for every Qt version and here it only serves Qt6 -- see the long
+    // note in hyprland.lua before pointing it anywhere else.
+    QT_QPA_PLATFORMTHEME "qt6ct"
+
+    // Without this the "Open with" dialog of KDE apps comes up empty:
+    // archlinux-xdg-menu installs arch-applications.menu and KService needs the
+    // prefix to point at it. niri sets no prefix of its own (Hyprland sets
+    // "hyprland-", which nothing creates), so this is belt and braces rather
+    // than a fix -- but an empty prefix is not the same as the right one.
+    XDG_MENU_PREFIX "arch-"
+
+    // NVIDIA shader cache, persistent across sessions, and the direct backend
+    // for video acceleration. From gaming.lua.
+    __GL_SHADER_DISK_CACHE "1"
+    __GL_SHADER_DISK_CACHE_SKIP_CLEANUP "1"
+    NVD_BACKEND "direct"
+
+    // THESE TWO ARE NOT IN hyprland.lua AND STILL HAVE TO BE HERE, which is
+    // the kind of thing that is only found by looking. The Hyprland BINARY
+    // exports them itself -- they are compiled in, not configured -- so the
+    // Lua config never had to mention them and nothing on this machine
+    // records that they exist. niri exports neither.
+    //
+    // Verified rather than assumed, on both binaries:
+    //   strings /usr/bin/Hyprland | grep -x MOZ_ENABLE_WAYLAND   -> present
+    //   strings /usr/bin/niri     | grep -x MOZ_ENABLE_WAYLAND   -> absent
+    //
+    // Without the first, Firefox and Zen fall back to XWayland: blurry text on
+    // a fractional scale, no per-monitor refresh, and touchpad gestures gone.
+    // Without the second, Java Swing applications come up as a blank grey
+    // window -- the classic symptom, and one nobody connects to the compositor.
+    MOZ_ENABLE_WAYLAND "1"
+    _JAVA_AWT_WM_NONREPARENTING "1"
+
+    // Do NOT set SDL_VIDEODRIVER or QT_QPA_PLATFORM here. They break plenty of
+    // games using older SDL2; letting them fall back to XWayland is the right
+    // thing and gamescope handles the rest. Same rule as gaming.lua.
+    //
+    // Do NOT set GDK_BACKEND globally either -- niri's own documentation says
+    // it breaks the screencast portal.
+}
+
+
+// -----------------------------------------------------------------------------
+// CURSOR
+// -----------------------------------------------------------------------------
+cursor {
+    // XCURSOR_SIZE 24, as set by hl.env and hypr-tweak. hyprcursor is not
+    // available here: it needs the compositor to link libhyprcursor and niri
+    // falls back to XCursor, so the theme has to be an XCursor one.
+    xcursor-theme "Adwaita"
+    xcursor-size 24
+}
+
+
+// -----------------------------------------------------------------------------
+// MISC
+// -----------------------------------------------------------------------------
+// niri's built-in hotkey overlay would pop up on every session start. The
+// cheatsheet on SUPER + / is this desktop's answer to that question, so the
+// built-in one is off.
+hotkey-overlay {
+    skip-at-startup
+}
+
+// Nothing of the compositor's own behind the wallpaper: what niri draws here is
+// only visible while the wallpaper backend has no surface up yet. An instant of
+// nothing reads as the desktop still arriving; an instant of somebody else's
+// artwork reads as a glitch. Same call hyprland.lua's force_default_wallpaper
+// makes.
+overview {
+    backdrop-color "#000000"
+}
+
+// Screenshots taken with niri's own action land here. strftime is expanded by
+// niri, so there is no shell $(date) and nothing to escape -- the same
+// arrangement satty uses for the annotated ones.
+screenshot-path "~/Pictures/niri-%Y%m%d-%H%M%S.png"
+
+
+// -----------------------------------------------------------------------------
+// KEYBINDS
+// -----------------------------------------------------------------------------
+// Two layers, and the split is the whole point of this file:
+//
+//   PARITY   -- the chord and what it does are identical to hyprland.lua. If it
+//               is muscle memory in one flavor it is muscle memory in the other.
+//   NATIVE   -- niri concepts Hyprland does not have. These sit on chords that
+//               were free, plus the four the parity layer could not use because
+//               Hyprland's action does not exist here (marked NO EQUIVALENT).
+//
+// Actions that spawn a process take the command SPLIT INTO ARGUMENTS, not as
+// one string: `spawn "qs" "ipc" "call" ...`. A whole command line in a single
+// argument is looked up as one executable name and silently does nothing.
+binds {
+    // ---- Shell and applications (parity) --------------------------------
+    Mod+Return { spawn "kitty"; }
+    Mod+W { close-window; }
+    Mod+E { spawn "nautilus"; }
+    Mod+Space { spawn "qs" "ipc" "call" "launcher" "toggle"; }
+    Mod+V { spawn "qs" "ipc" "call" "launcher" "clipboard"; }
+    Mod+D { spawn "qs" "ipc" "call" "island" "dashboard"; }
+    Mod+N { spawn "qs" "ipc" "call" "dnd" "toggle"; }
+    Mod+Shift+N { spawn "qs" "ipc" "call" "island" "notifications"; }
+    Mod+C { spawn "qs" "ipc" "call" "settings" "toggle"; }
+    Mod+Slash { spawn "qs" "ipc" "call" "cheatsheet" "toggle"; }
+    Mod+Shift+Escape { spawn "qs" "ipc" "call" "powermenu" "toggle"; }
+
+    // ---- Look (parity) --------------------------------------------------
+    Mod+Shift+W { spawn "sh" "-c" "$HOME/.local/bin/wallpaper-switch next"; }
+    Mod+Shift+A { spawn "sh" "-c" "$HOME/.local/bin/wallpaper-switch random"; }
+
+    // The keyboard layout, one step along the cycle. Goes through the script
+    // and not through niri's own switch-layout for the reason spelled out in
+    // hyprland.lua: the compositor's index is session-only and the bar cannot
+    // read it, so the pill would say US while you typed in Spanish.
+    //
+    // CAVEAT: hypr-tweak rotates the list and then pushes it into Hyprland with
+    // `hyprctl eval`. Under niri the state file moves -- so the bar follows --
+    // but the compositor does not, because the xkb layout above is a literal.
+    // Until the script learns this flavor, SUPER + K changes what the bar says
+    // and not what the keyboard does.
+    Mod+K { spawn "hypr-tweak" "layout" "next"; }
+
+    // ---- Window focus (parity) ------------------------------------------
+    // Left/right cross COLUMNS and up/down move inside one, which is the
+    // scrollable-tiling reading of the same four arrows.
+    Mod+Left { focus-column-left; }
+    Mod+Right { focus-column-right; }
+    Mod+Up { focus-window-up; }
+    Mod+Down { focus-window-down; }
+
+    // ---- Window state (parity) ------------------------------------------
+    Mod+T { toggle-window-floating; }
+    Mod+F { fullscreen-window; }
+
+    // "Fake" fullscreen: the window believes it is still windowed but takes the
+    // whole screen. Fixes games that minimise on alt-tab. Hyprland spells it
+    // fullscreen_state({internal = 2, client = 0}).
+    Mod+Shift+F { toggle-windowed-fullscreen; }
+
+    // ---- Workspaces (parity) --------------------------------------------
+    // CAREFUL, THE MEANING SHIFTED. In Hyprland workspace 3 is workspace 3
+    // forever. niri's workspaces are dynamic and per-monitor, so these go to
+    // the Nth workspace OF THE MONITOR YOU ARE ON, and the Nth is not always
+    // the same set of windows. The chord is preserved; the identity is not,
+    // and it cannot be -- see the note on named workspaces above.
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+6 { focus-workspace 6; }
+    Mod+7 { focus-workspace 7; }
+    Mod+8 { focus-workspace 8; }
+    Mod+9 { focus-workspace 9; }
+    Mod+0 { focus-workspace 10; }
+
+    Mod+Shift+1 { move-column-to-workspace 1; }
+    Mod+Shift+2 { move-column-to-workspace 2; }
+    Mod+Shift+3 { move-column-to-workspace 3; }
+    Mod+Shift+4 { move-column-to-workspace 4; }
+    Mod+Shift+5 { move-column-to-workspace 5; }
+    Mod+Shift+6 { move-column-to-workspace 6; }
+    Mod+Shift+7 { move-column-to-workspace 7; }
+    Mod+Shift+8 { move-column-to-workspace 8; }
+    Mod+Shift+9 { move-column-to-workspace 9; }
+    Mod+Shift+0 { move-column-to-workspace 10; }
+
+    // The scratchpad's chords, pointed at the named workspace declared above.
+    Mod+M { focus-workspace "magic"; }
+    Mod+Shift+M { move-column-to-workspace "magic"; }
+
+    // Scroll through workspaces with the modifier held, as in hyprland.lua.
+    // cooldown-ms keeps one flick of a free-spinning wheel from crossing six
+    // workspaces at once.
+    Mod+WheelScrollDown cooldown-ms=150 { focus-workspace-down; }
+    Mod+WheelScrollUp cooldown-ms=150 { focus-workspace-up; }
+
+    // ---- Capture (parity, two of them rerouted) -------------------------
+    // hyprshot survives here: it is a wrapper over grim and slurp, both of
+    // which speak the generic protocols niri implements. -z freezes the image
+    // while you select, without which dropdowns and tooltips vanish as you drag
+    // -- it needs hyprpicker, which is also generic and also works.
+    Mod+S { spawn "hyprshot" "-m" "region" "-z" "--clipboard-only"; }
+    Mod+Shift+S { spawn "sh" "-c" "hyprshot -m region -z --raw | satty --filename - --copy-command wl-copy --early-exit --output-filename $HOME/Pictures/satty-%Y%m%d-%H%M%S.png"; }
+
+    // These two do NOT go through hyprshot, and they are the only capture binds
+    // that changed hands. `hyprshot -m window` and `-m output` ask hyprctl for
+    // the geometry, which is exactly the part that has no meaning here, so they
+    // would fail rather than degrade. niri has both built in and needs no
+    // helper: the file lands in screenshot-path above.
+    Mod+Ctrl+S { screenshot-window; }
+    Mod+Alt+S { screenshot-screen; }
+
+    // Instant replay. ALT + Z with no SUPER, because it is pressed in the
+    // middle of whatever was worth keeping -- and that is also the caveat: it
+    // takes ALT+Z away from every application that wanted it.
+    Alt+Z { spawn "qs" "ipc" "call" "replay" "save"; }
+
+    // ---- NO EQUIVALENT: the four Hyprland actions niri does not have -----
+    // Their chords are reused rather than left dead, each for the nearest thing
+    // this compositor actually does.
+
+    // Was: pseudotile. Now: cycle the column through the preset widths. Both
+    // answer "make this window a different shape without dragging anything".
+    Mod+P { switch-preset-column-width; }
+    Mod+Shift+P { switch-preset-window-height; }
+
+    // Was: togglesplit (dwindle only). Now: stack the column as tabs. Both
+    // answer "change how this group of windows is arranged".
+    Mod+J { toggle-column-tabbed-display; }
+
+    // Was: pin a floating window to every workspace -- niri has no sticky
+    // windows (upstream issue #932). Now: jump between the floating layer and
+    // the tiled one, which keeps the chord inside the same subject as SUPER + T.
+    Mod+Shift+T { switch-focus-between-floating-and-tiling; }
+
+    // ---- NATIVE: what niri can do and Hyprland cannot -------------------
+    // All on chords that were free in hyprland.lua.
+
+    // The overview: every workspace and every window at once, zoomed out.
+    Mod+O { toggle-overview; }
+
+    // Move the focused column or window, mirroring the focus arrows above.
+    Mod+Shift+Left { move-column-left; }
+    Mod+Shift+Right { move-column-right; }
+    Mod+Shift+Up { move-window-up; }
+    Mod+Shift+Down { move-window-down; }
+
+    // Columns are the unit niri is built around: pull the neighbour in, push
+    // the current one out. Comma and period are the idiom the project uses.
+    Mod+Comma { consume-or-expel-window-left; }
+    Mod+Period { consume-or-expel-window-right; }
+
+    // Ends of the strip.
+    Mod+Home { focus-column-first; }
+    Mod+End { focus-column-last; }
+
+    // Width without presets: fill what is free, or centre what is there.
+    // Distinct from SUPER + F, which is real fullscreen -- a maximised column
+    // still lives on the strip and still scrolls.
+    Mod+R { maximize-column; }
+    Mod+Shift+R { expand-column-to-available-width; }
+    Mod+X { center-column; }
+
+    // Monitors. Hyprland has focusmonitor and movewindowtomonitor but neither
+    // was ever bound, so these are new rather than parity.
+    Mod+Ctrl+Left { focus-monitor-left; }
+    Mod+Ctrl+Right { focus-monitor-right; }
+    Mod+Ctrl+Shift+Left { move-column-to-monitor-left; }
+    Mod+Ctrl+Shift+Right { move-column-to-monitor-right; }
+
+    // ---- Multimedia keys (parity) ---------------------------------------
+    // NO DESCRIPTIONS ANYWHERE IN THIS FILE, unlike hyprland.lua: niri has no
+    // description field on a bind, so the cheatsheet cannot be fed from here.
+    // What feeds it under this flavor is an open question and part of the same
+    // work as the workspace pills.
+    //
+    // allow-when-locked is niri's spelling of Hyprland's `locked = true`.
+    // -l 1.5 allows boosting up to 150%.
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "-l" "1.5" "@DEFAULT_AUDIO_SINK@" "5%+"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
+    XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "-e4" "-n2" "set" "5%+"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "-e4" "-n2" "set" "5%-"; }
+
+    XF86AudioNext allow-when-locked=true { spawn "playerctl" "next"; }
+    XF86AudioPause allow-when-locked=true { spawn "playerctl" "play-pause"; }
+    XF86AudioPlay allow-when-locked=true { spawn "playerctl" "play-pause"; }
+    XF86AudioPrev allow-when-locked=true { spawn "playerctl" "previous"; }
+
+    // ---- Session --------------------------------------------------------
+    // The power menu on SUPER + SHIFT + ESCAPE is the way out, same as in
+    // Hyprland. This is the escape hatch for when the shell is not running,
+    // which is the one case that bind cannot cover.
+    Mod+Ctrl+Shift+Escape { quit; }
+}
+
+
+// -----------------------------------------------------------------------------
+// WINDOW RULES
+// -----------------------------------------------------------------------------
+// Translated from hyprland.lua and gaming.lua. Four rules did not come across
+// and are listed at the end of this section with why -- they are absent because
+// niri does not need them, not because they were forgotten.
+//
+// Matching is by regex on app-id and title, same as Hyprland's class/title.
+// KDL raw strings (r#"..."#) mean the backslashes are written once instead of
+// doubled the way Lua needs them.
+
+// The corner radius every window gets. Hyprland sets it once in
+// decoration.rounding; niri has no global and applies it per window, so the
+// catch-all comes first and the specific rules below inherit it.
+window-rule {
+    geometry-corner-radius 10
+}
+
+// --- Helper apps kept out of the tiling ---
+// They are opened briefly and closed, and tiled they would reshuffle the rest
+// of the workspace on every launch. The app-ids are the ones the compositor
+// reports, NOT the StartupWMClass from the .desktop: the two do not always
+// match.
+
+// Nautilus, the graphical file manager (SUPER + E).
+//
+// Transparency is the only part of the look that does not come from GTK:
+// libadwaita paints its background opaque and there is no way to ask it for an
+// alpha from user CSS, so the compositor provides it.
+//
+// 0.82 is the FALLBACK, the same literal hyprland.lua carries, and it is what
+// applies on a machine where `desktop-opacity` has never been run. When it has,
+// the opacity.kdl included at the end of this section overrides this line with
+// the one dial the shell, kitty and Zen also read -- rules are applied in order
+// and the last one to set a property wins, which is why that include is last.
+//
+// CAREFUL: opacity affects the WHOLE window, text and icons included. Lower and
+// label text starts losing contrast over bright wallpapers.
+window-rule {
+    match app-id=r#"^org\.gnome\.Nautilus$"#
+    open-floating true
+    default-column-width { fixed 1400; }
+    default-window-height { fixed 850; }
+    opacity 0.82
+}
+
+// Loupe (images) and Celluloid (video). NO opacity on these two, unlike
+// Nautilus, and it is deliberate: opacity covers the content as well as the
+// chrome, and blending the wallpaper into the picture you are looking at means
+// goodbye blacks and any colour judgement.
+window-rule {
+    match app-id=r#"^org\.gnome\.Loupe$"#
+    open-floating true
+    default-column-width { fixed 1400; }
+    default-window-height { fixed 850; }
+}
+
+window-rule {
+    match app-id=r#"^io\.github\.celluloid_player\.Celluloid$"#
+    open-floating true
+    default-column-width { fixed 1280; }   // 16:9, so it does not letterbox
+    default-window-height { fixed 720; }
+}
+
+// The shell's own settings window (SUPER + C, or the gear on the bar).
+//
+// MATCHED BY TITLE AS WELL AS APP-ID. Every Quickshell window reports the same
+// app-id, org.quickshell -- the bar and the launcher would answer to an
+// app-id-only match if they were windows. They are layer surfaces, so today
+// they do not, but the day the shell grows a second window that rule would
+// start applying to it in silence. The title comes from FloatingWindow.title in
+// modules/settings/Settings.qml; the two have to stay in step.
+window-rule {
+    match app-id=r#"^org\.quickshell$"# title=r#"^Shell settings$"#
+    open-floating true
+    default-column-width { fixed 820; }
+    default-window-height { fixed 580; }
+}
+
+// zathura, the PDF reader. Fixed size with A4 portrait proportions
+// (850/1180 = 0.72, A4 is 0.707): measured, zathura does not request a size
+// matching the document, so without this a portrait PDF opens in a landscape
+// window. 1180 of height fits the 1440p monitor leaving room for the bar.
+window-rule {
+    match app-id=r#"^org\.pwmt\.zathura$"#
+    open-floating true
+    default-column-width { fixed 850; }
+    default-window-height { fixed 1180; }
+}
+
+// satty, the annotation editor SUPER+SHIFT+S pipes the screenshot into.
+//
+// No fixed size on purpose -- the window fits the screenshot, and forcing a
+// measure would distort the canvas. But a CAP is needed: satty asks for a
+// window the size of the image, so capturing a whole monitor pushes the buttons
+// at the bottom out of reach.
+window-rule {
+    match app-id=r#"^com\.gabm\.satty$"#
+    open-floating true
+    max-width 2400
+    max-height 1300
+}
+
+// --- Games (from gaming.lua) ---
+// gamescope      -> anything launched with the `gs` script
+// steam_app_<id> -> Steam games under XWayland without gamescope
+// .exe           -> some Proton games identify themselves this way
+window-rule {
+    match app-id=r#"^(gamescope|steam_app_.*|.*\.exe|hl2_linux|cs2)$"#
+
+    // ALWAYS on the landscape 1440p monitor, never on the portrait one.
+    open-on-output "ASR PG32QF2B G5VL0A003533"
+    open-fullscreen true
+
+    // No compositor decoration in the way.
+    geometry-corner-radius 0
+    focus-ring { off; }
+    border { off; }
+
+    // The other half of the on-demand VRR declared on the output above: this is
+    // what says a game is allowed to ask for it. Hyprland reaches the same
+    // place with a single misc.vrr = 1.
+    variable-refresh-rate true
+}
+
+// Big Picture: fullscreen on the main monitor.
+window-rule {
+    match app-id=r#"^steam$"# title=r#"^Steam Big Picture Mode$"#
+    open-on-output "ASR PG32QF2B G5VL0A003533"
+    open-fullscreen true
+}
+
+// Secondary Steam windows: float them instead of splitting the layout.
+window-rule {
+    match app-id=r#"^steam$"# title=r#"^(Friends List|Lista de amigos|Steam Settings|Configuraci.n|Special Offers|Steam - News|Steam Guard.*|Iniciar sesi.n en Steam|Sign in to Steam)$"#
+    open-floating true
+}
+
+// The capture card (PS5 / Switch 2 through the NZXT Signal HD60). The
+// `capture-card` script launches mpv with --wayland-app-id=capture-card, which
+// is how a rule can target it without affecting the rest of mpv.
+//
+// Floating at exactly 1920x1080, the native resolution of the card: no
+// rescaling. mpv's f key toggles fullscreen and comes back to this size.
+window-rule {
+    match app-id=r#"^capture-card$"#
+    open-floating true
+    open-on-output "ASR PG32QF2B G5VL0A003533"
+    default-column-width { fixed 1920; }
+    default-window-height { fixed 1080; }
+    geometry-corner-radius 0
+    focus-ring { off; }
+    border { off; }
+}
+
+// RetroArch runs as a native Wayland client and identifies itself with the
+// app-id com.libretro.RetroArch (not "retroarch": that is the X11 WM_CLASS).
+// Its menu is designed around a 16:9 canvas and tiling squashes it into
+// whatever slot is free, so it always floats. Fullscreen still works on top of
+// this -- floating only decides how the window sits when it is NOT fullscreen.
+window-rule {
+    match app-id=r#"^com\.libretro\.RetroArch$"#
+    open-floating true
+    open-on-output "ASR PG32QF2B G5VL0A003533"
+}
+
+// --- The four rules that did NOT come across, and why ---
+//
+// suppress-maximize-events  Hyprland ignores maximize requests from every app
+//                           because honouring them fights the tiling layout.
+//                           niri has no xdg maximize path that disturbs the
+//                           layout, so there is nothing to suppress.
+//
+// fix-xwayland-drags        Works around Hyprland's own XWayland integration
+//                           leaving empty unfocusable windows behind. niri has
+//                           no built-in XWayland at all -- X11 clients go
+//                           through xwayland-satellite, a separate process -- so
+//                           this rule has no subject here.
+//
+// steam-context-menus       Needs `stay_focused`, which niri does not have.
+//                           Steam's context menus have an empty title and close
+//                           when they lose focus; if that turns out to bite,
+//                           the workaround is Steam under gamescope, not a rule.
+//
+// no-gaps-fullscreen        Hyprland needs a workspace rule to drop gaps when a
+//                           window is fullscreen. niri already gives a
+//                           fullscreen window the whole output with no gaps.
+
+
+// --- The desktop's one transparency dial ---
+// Written by `desktop-opacity`, one window-rule per translucent application.
+// Under Hyprland that script pushes the rule in with `hyprctl eval`; there is
+// no such thing here, so it writes a file instead -- and since niri watches
+// every file it includes, writing it is what applies it.
+//
+// LAST IN THIS SECTION ON PURPOSE. niri applies every rule that matches and the
+// last one to set a property wins, so anywhere above this the generated opacity
+// would lose to the 0.82 literal in the Nautilus rule and the dial would look
+// broken. It still goes before local.kdl below, which keeps the final say.
+//
+// optional=true: a fresh clone has never run the script and has no such file,
+// which is the normal case rather than a parse error.
+include optional=true "~/.config/niri/opacity.kdl"
+
+
+// -----------------------------------------------------------------------------
+// LAYER RULES
+// -----------------------------------------------------------------------------
+// THE GLASS WORKS DIFFERENTLY HERE, AND THERE IS NOTHING TO WRITE FOR IT.
+//
+// Hyprland has no idea a client wants blur, so hyprland.lua tells it: a
+// layer_rule matching the quickshell-* namespaces, with blur, ignore_alpha
+// tuned just under the surfaces' own alpha, and xray so the bar and its popouts
+// composite over the same wallpaper and end up the same colour.
+//
+// niri inverts that. It implements ext-background-effect, a generic protocol
+// where the SURFACE asks for its own blur, and Quickshell 0.3.0 speaks it
+// (BackgroundEffect in Quickshell.Wayland). So the shell asks and niri answers,
+// and none of the three numbers above has anywhere to live in this file --
+// including xray, which has no equivalent because the question it answers does
+// not come up: the effect is per surface rather than a rectangle the compositor
+// blurs from outside.
+//
+// Which means the blur may well look different rather than identical, and that
+// is a thing to look at on screen rather than reason about here. If the popouts
+// come out a different colour from the bar the way they did under Hyprland
+// without xray, this comment is the place to start.
+//
+// The one layer rule niri would want is `place-within-backdrop` for the
+// wallpaper surface, so it stays put when the overview zooms out. awww and
+// mpvpaper set their own namespace and it is not stable across the two
+// backends, so that is left until the wallpaper script learns this flavor.
+
+
+// -----------------------------------------------------------------------------
+// ANIMATIONS
+// -----------------------------------------------------------------------------
+// niri's defaults are springs already and they are close to what hyprland.lua
+// tunes by hand (the `easy` spring: mass 1, stiffness 238, damping 24). Left
+// alone on purpose rather than transcribed badly: the two compositors do not
+// animate the same set of things, and a curve copied across without watching it
+// is worse than a sensible default.
+animations {
+    slowdown 1.0
+}
+
+
+// -----------------------------------------------------------------------------
+// LOCAL OVERRIDES
+// -----------------------------------------------------------------------------
+// The same escape hatch hyprland.lua ends with, and for the same reason: these
+// dotfiles are pulled by a second machine somebody else uses, with another
+// layout and another keyboard, and the moment something personal lands in a
+// tracked file every pull over there is a conflict.
+//
+// optional=true so a fresh clone with no such file is the normal case rather
+// than a parse error. Included files are watched too, so editing one live
+// reloads exactly like editing this one.
+//
+// CAREFUL, THE MERGE RULES ARE NOT UNIFORM -- and they are not the same as
+// Lua's "the later assignment wins" either. Most sections merge, but
+// window-rule, output and workspace are INSERTED positionally, so a second
+// `output` block for a monitor named above does not cleanly replace the first.
+// Until that is measured rather than assumed, treat this file as the place
+// monitors are declared and use the include for binds and rules.
+include optional=true "~/.config/niri/local.kdl"

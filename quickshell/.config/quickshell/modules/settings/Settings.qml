@@ -91,7 +91,11 @@ FloatingWindow {
             search.clear();
     }
 
-    readonly property var pages: pageHost.children
+    // Filled by pageHost below, once: the pages this machine actually offers,
+    // in rail order. NOT `pageHost.children` any more -- a page can opt out
+    // when the compositor cannot back it, and the rail, the title and search
+    // all have to agree on the shortened list.
+    property var pages: []
 
     Rectangle {
         anchors.fill: parent
@@ -372,8 +376,26 @@ FloatingWindow {
                     // whether it is the visible one. Done here rather than
                     // written into each file because a page should not have
                     // to know its own position in a list it is not holding.
-                    for (let i = 0; i < children.length; i++)
-                        children[i].index = i;
+                    //
+                    // PAGES THAT ARE NOT AVAILABLE ARE LEFT OUT ENTIRELY rather
+                    // than hidden -- see `available` in SettingsPage.qml. They
+                    // keep index -1, which no page can be current at, so they
+                    // never draw; and they are absent from root.pages, so they
+                    // take no rail entry and cannot be found by search.
+                    //
+                    // Computed ONCE and not bound, deliberately: what a page
+                    // depends on is what the compositor can do, and that cannot
+                    // change without the session ending. A binding here would
+                    // re-index the whole rail on any child change for an answer
+                    // that is fixed for the lifetime of the process.
+                    const shown = [];
+                    for (const page of children) {
+                        if (!page.available)
+                            continue;
+                        page.index = shown.length;
+                        shown.push(page);
+                    }
+                    root.pages = shown;
                 }
             }
         }

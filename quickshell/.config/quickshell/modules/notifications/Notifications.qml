@@ -25,7 +25,6 @@
 
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import Quickshell.Services.Notifications
 import QtQuick
 import "root:/"
@@ -47,17 +46,10 @@ PanelWindow {
     // while leaving this on Overlay, and the weld is left joining the panel to
     // nothing: a fillet hanging in mid air over the game.
     //
-    // Read off the workspace model and NOT off Hyprland.focusedMonitor, for
-    // the reason spelled out in modules/bar/Workspaces.qml: the IPC models are
-    // populated lazily and focusedMonitor stays frozen on whatever was focused
-    // at startup unless something subscribes to it.
-    readonly property bool barCovered: {
-        for (const ws of Hyprland.workspaces.values) {
-            if (ws.active && ws.monitor?.name === root.modelData?.name)
-                return ws.lastIpcObject?.hasfullscreen ?? false;
-        }
-        return false;
-    }
+    // Answered through wlr-foreign-toplevel in the compositor backend, so it
+    // reads the same on every flavor -- see hasFullscreenOn in
+    // compositor/CompositorBackend.qml.
+    readonly property bool barCovered: Compositor.hasFullscreenOn(root.modelData?.name ?? "")
 
     // NO BAR TO WELD TO, for either of the two reasons there can be one: it is
     // covered by a fullscreen window, or this monitor simply has no bar --
