@@ -116,13 +116,42 @@ do and Hyprland cannot is bound on chords that were free: the overview, moving
 and consuming columns, the ends of the strip, monitor focus. Each one is marked
 in `niri/.config/niri/config.kdl`, which is where the reasoning lives.
 
-**What the niri flavor does not do yet.** The shell comes up and everything that
-does not need the compositor works — tray, clock, notifications, media, the
-island — while four things go quiet, because they talk to Hyprland's IPC:
-workspace pills, the active window title, click-outside-to-close on popouts, and
-the cheatsheet. The wallpaper is set but its accent does not reach the focus
-ring, and `night-light` needs wiring to `wlsunset` (`hyprsunset` drives a
-Hyprland-only protocol and would run doing nothing).
+### Adding a third one
+
+The shell never asks which compositor is running. It asks what the running one
+**can do**, and draws accordingly — so a compositor that cannot report window
+counts, or has no way to grab focus, is a supported case rather than a broken
+one.
+
+```
+quickshell/Compositor.qml       the facade — the only file that knows there is
+                                more than one
+  compositor/
+    CompositorBackend.qml       the contract: every property has an empty
+                                default, every capability defaults to false
+    HyprlandBackend.qml
+    NiriBackend.qml
+bin/compositor                  the same idea for shell scripts:
+                                `compositor is niri`, `compositor can gamma`
+```
+
+A new backend is one file, one `Component` and one `case` in the detector.
+Nothing else changes, because every consumer already handles the "cannot"
+path — niri exercises it today. **An unknown compositor is supported too:** with
+no match the plain contract loads, so the bar, clock, tray and notifications
+come up while the compositor-dependent parts stay away, and the settings pages
+that need one are not offered at all.
+
+Anything answerable through a protocol everyone speaks lives in the base rather
+than in a backend — fullscreen detection goes through
+`wlr-foreign-toplevel`, and logout falls back to logind — so a new compositor
+gets those for free.
+
+**What the niri flavor does not do yet.** `hypr-monitor` and `hypr-tweak` still
+only write Lua, so monitor and input settings are Hyprland-only (their pages
+hide themselves elsewhere). The keybinds page and the cheatsheet need a KDL
+parser to come back. And there is no per-device input configuration in niri at
+all, so the DualSense touchpad quirk has no home yet.
 
 ## Layout
 
@@ -136,7 +165,8 @@ gtk   media   openrgb     systemd     bin    ranger   icons   zen
 
 `bin/` holds the scripts that own everything the shell can change at runtime —
 the wallpaper, the palette, the opacity, the monitors — so any of it can be
-driven from a terminal and the settings window follows.
+driven from a terminal and the settings window follows. `bin/compositor` is how
+those scripts find out what they are running under.
 
 ## Wallpapers and color
 
