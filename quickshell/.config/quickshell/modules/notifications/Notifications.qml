@@ -46,10 +46,12 @@ PanelWindow {
     // while leaving this on Overlay, and the weld is left joining the panel to
     // nothing: a fillet hanging in mid air over the game.
     //
-    // Answered through wlr-foreign-toplevel in the compositor backend, so it
-    // reads the same on every flavor -- see hasFullscreenOn in
-    // compositor/CompositorBackend.qml.
-    readonly property bool barCovered: Compositor.hasFullscreenOn(root.modelData?.name ?? "")
+    // IS THE BAR ABSENT, for either of the two reasons it can be. A fullscreen
+    // window covers it, and a monitor can also simply not carry one -- the bar
+    // is per screen and which screens have it is a setting. Both mean this
+    // panel has nothing to weld itself to.
+    readonly property bool barCovered: !Screens.hasBar(root.modelData)
+        || Compositor.hasFullscreenOn(root.modelData?.name ?? "")
 
     // NO BAR TO WELD TO, for either of the two reasons there can be one: it is
     // covered by a fullscreen window, or this monitor simply has no bar --
