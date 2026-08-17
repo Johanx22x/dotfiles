@@ -30,6 +30,24 @@ Column {
     // end up disagreeing.
     property int index: -1
 
+    // IS THIS PAGE WORTH OFFERING AT ALL on this machine?
+    //
+    // Four pages drive things through the compositor -- monitors, input,
+    // keybinds -- and there is no honest way to show them where the compositor
+    // cannot do it: every control would be dead, and a settings window full of
+    // switches that do nothing is worse than one that is shorter.
+    //
+    // So a page can opt out, and it does so by asking what the compositor CAN
+    // DO rather than which one it is -- `available: Compositor.can("...")`. A
+    // page that says nothing is available, which is the right default: most of
+    // this window is audio, network, wallpaper and appearance, and none of that
+    // cares what is drawing the screen.
+    //
+    // An unavailable page is not built differently and not hidden with a
+    // property: it is left out of the window's page list entirely, so it takes
+    // no rail entry, no index, and no place in search.
+    property bool available: true
+
     // ON SCREEN OR NOT, and this is the only honest answer to that question
     // in this window. Every page is built and kept alive so that none of them
     // forgets where you were, which means `visible` cannot be left to default

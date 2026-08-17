@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Which compositor is running, and what it can do -- for shell scripts.
+#
+# The counterpart of quickshell/Compositor.qml, and it follows the same rule:
+# a script should ask what the compositor CAN DO, not which one it is. That is
+# what keeps a third flavor from meaning a hunt through every script for
+# `if [[ $XDG_CURRENT_DESKTOP == Hyprland ]]`, with the ones that are missed
+# failing silently.
+#
+#   compositor              prints hyprland, niri or unknown
+#   compositor is niri      exit 0 if that is the one running
+#   compositor can tearing  exit 0 if the running one supports it
+#   compositor caps         lists every capability and its answer
+#
+# WHY THE SOCKET AND NOT XDG_CURRENT_DESKTOP
+# The desktop name comes from the session's .desktop file and is inherited by
+# everything the session starts, so it says what you logged into rather than
+# what is answering right now -- it survives into a nested compositor and into
+# a script run from a session that has since died. The socket variables are
+# published by the compositor itself, which makes them proof rather than
+# intention. HYPRLAND_INSTANCE_SIGNATURE is not always exported into systemd
+# user units, so its socket directory is checked as well.
+#
+# ADDING A THIRD COMPOSITOR: one branch in flavor() and one column in CAPS.
+set -euo pipefail
+
+flavor() {
+    if [[ -n ${NIRI_SOCKET:-} ]] && [[ -S ${NIRI_SOCKET:-/nonexistent} ]]; then
+        echo niri
+        return
+    fi
+    if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] ||
+       [[ -d ${XDG_RUNTIME_DIR:-/nonexistent}/hypr ]]; then
+        echo hyprland
+        return
+    fi
+    # A niri socket exists but the variable was not inherited: same trick the
+    # hypr branch above uses, and it matters for anything started by a systemd
+    # user unit, which gets a much thinner environment than a terminal.
+    if compgen -G "${XDG_RUNTIME_DIR:-/nonexistent}/niri.*.sock" >/dev/null 2>&1; then
+        echo niri
+        return
+    fi
+    echo unknown
+}
+
+# What each flavor can do. Only capabilities a SCRIPT here actually branches on
+# -- the same rule the QML side follows, and the reason this list is short.
+#
+#   live-config    can settings be pushed into the running compositor?
+#                  Hyprland: `hyprctl eval`. niri: no -- but it live-reloads its
+#                  config file, so writing the file IS applying it, which needs
+#                  no capability of its own.
+#   monitor-query  can the current mode of a monitor be read back?
+#   window-rules   can window rules be changed at runtime?
+#   gamma          does the compositor's own blue-light tool work here?
+#                  hyprsunset drives hyprland-ctm-control-v1 and does nothing at
+#                  all anywhere else -- silently, which is the dangerous part.
+#   binds-query    can the keybindings be listed back out of it?
+capability() {
+    local flavor="$1" feature="$2"
+    case "$flavor:$feature" in
+        hyprland:live-config)   return 0 ;;
+        hyprland:monitor-query) return 0 ;;
+        hyprland:window-rules)  return 0 ;;
+        hyprland:gamma)         return 0 ;;
+        hyprland:binds-query)   return 0 ;;
+
+        niri:live-config)       return 1 ;;
+        niri:monitor-query)     return 0 ;;
+        niri:window-rules)      return 1 ;;
+        niri:gamma)             return 1 ;;
+        niri:binds-query)       return 1 ;;
+
+        # An unknown compositor can do nothing, which is the conservative
+        # answer and the one that makes a caller degrade instead of throw.
+        *)                      return 1 ;;
+    esac
+}
+
+FEATURES=(live-config monitor-query window-rules gamma binds-query)
+
+case "${1:-}" in
+    ""|flavor)
+        flavor
+        ;;
+    is)
+        [[ $# -eq 2 ]] || { echo "usage: compositor is <flavor>" >&2; exit 2; }
+        [[ "$(flavor)" == "$2" ]]
+        ;;
+    can)
+        [[ $# -eq 2 ]] || { echo "usage: compositor can <feature>" >&2; exit 2; }
+        capability "$(flavor)" "$2"
+        ;;
+    caps)
+        f="$(flavor)"
+        echo "compositor: $f"
+        for feature in "${FEATURES[@]}"; do
+            if capability "$f" "$feature"; then
+                printf '  %-14s yes\n' "$feature"
+            else
+                printf '  %-14s no\n' "$feature"
+            fi
+        done
+        ;;
+    -h|--help|help)
+        sed -n '2,25p' "$0" | sed 's/^# \?//'
+        ;;
+    *)
+        echo "compositor: unknown command '$1' (try: flavor, is, can, caps)" >&2
+        exit 2
+        ;;
+esac

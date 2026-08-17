@@ -50,6 +50,10 @@ import "root:/modules/settings"
 SettingsPage {
     id: root
 
+    // Pointer speed, keyboard repeat and the layout cycle are all pushed into
+    // the compositor. No way to push them, no page.
+    available: Compositor.can("inputConfig")
+
     title: "Input"
     glyph: Icons.mouse
     // "spanish", "latam" and "español" are in here on purpose: somebody

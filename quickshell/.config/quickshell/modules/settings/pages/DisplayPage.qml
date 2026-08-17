@@ -81,6 +81,10 @@ import "root:/modules/settings"
 SettingsPage {
     id: root
 
+    // Every control here writes a monitor layout into the compositor. Where it
+    // cannot be driven, the page is not offered rather than shown dead.
+    available: Compositor.can("monitorConfig")
+
     title: "Display"
     glyph: Icons.monitor
     keywords: ["monitor", "screen", "display", "resolution", "refresh", "hz",
