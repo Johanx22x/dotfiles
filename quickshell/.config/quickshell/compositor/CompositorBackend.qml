@@ -23,6 +23,8 @@
 // whether it can be filled; there is no `supportsScrollableTiling`, because
 // nothing in the shell would do anything differently.
 
+import Quickshell
+import Quickshell.Wayland
 import QtQuick
 
 QtObject {
@@ -109,11 +111,60 @@ QtObject {
     // The monitor holding the keyboard, by name. Empty when unknown.
     property string focusedOutput: ""
 
-    // Somebody is recording or sharing the screen.
-    property bool casting: false
+    // ---- Screen capture ---------------------------------------------------
+    //
+    // A COUNT AND NOT A BOOL. Two applications can hold a capture at once -- a
+    // call sharing a window while OBS records the screen -- and with a bool
+    // whichever stops first would clear the indicator while the other is still
+    // going.
+    property int captureCount: 0
+
+    // "monitor" or "window", and which one. Best effort: not every compositor
+    // says, and an empty string means "capturing, but it did not tell us what".
+    // The indicator degrades to saying that something is being shared.
+    property string captureOwner: ""
+    property string captureTarget: ""
+
+    readonly property bool casting: captureCount > 0
 
     // Keyboard layouts: names, and which one is current.
     property var keyboardLayouts: ({ names: [], currentIndex: 0 })
+
+    // ---- Implemented once, for everyone -----------------------------------
+    //
+    // WHAT BELONGS HERE RATHER THAN IN A BACKEND: anything answerable through a
+    // protocol every compositor speaks. A backend may still override it if its
+    // own IPC does the job better, but nobody has to, and a compositor nobody
+    // has written a backend for gets it for free.
+    //
+    // Fullscreen detection is the first of these. wlr-foreign-toplevel carries
+    // a `fullscreen` flag and the screens a window is on, so this needs no
+    // compositor-specific help at all -- which is just as well, because niri's
+    // IPC does not report fullscreen on a window (its Window has ten fields and
+    // none of them is that) while Hyprland's does, and a facade whose answer
+    // depended on which one you were running would be exactly the kind of thing
+    // this layer exists to prevent.
+    property var toplevelManager: ToplevelManager
+
+    readonly property var fullscreenOutputs: {
+        const names = [];
+        for (const tl of ToplevelManager.toplevels.values) {
+            if (tl.fullscreen !== true)
+                continue;
+            for (const s of (tl.screens ?? [])) {
+                if (s?.name && !names.includes(s.name))
+                    names.push(s.name);
+            }
+        }
+        return names;
+    }
+
+    // Is something fullscreen on this monitor? Asked by every surface that is
+    // welded to the bar, since a fullscreen window covers the bar and leaves
+    // the weld joining a panel to nothing.
+    function hasFullscreenOn(outputName: string): bool {
+        return fullscreenOutputs.includes(outputName);
+    }
 
     // ---- Actions ---------------------------------------------------------
     //
@@ -123,7 +174,14 @@ QtObject {
 
     function focusWorkspace(id: var): void {}
 
-    function logout(): void {}
+    // Ending the session HAS a generic answer, unlike most of this file, so the
+    // default is a working one rather than a no-op: systemd-logind will close
+    // the session whatever is drawing it. A backend overrides this only to ask
+    // its compositor nicely first -- which is worth doing, because a compositor
+    // that exits on its own tears the session down in the order it wants to.
+    function logout(): void {
+        Quickshell.execDetached(["loginctl", "terminate-user", Quickshell.env("USER") ?? ""]);
+    }
 
     // Helper the bar uses to filter its own monitor's workspaces. Lives here
     // rather than in each backend because it is the same everywhere once the

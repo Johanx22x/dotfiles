@@ -10,14 +10,12 @@
 // widget was clicked and `contentComponent` swaps what it shows, so there is
 // a single window to position and a single place where the merge is drawn.
 //
-// It closes on a click anywhere outside itself. That is HyprlandFocusGrab:
-// the compositor hands this window the input grab and drops it the moment
-// the user clicks elsewhere, which is the only way to catch a click that
-// never reaches us.
+// It closes on a click anywhere outside itself, through FocusGrab, which picks
+// the best mechanism the running compositor offers -- an input grab where there
+// is one, a transparent full-screen catcher where there is not.
 
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import QtQuick
 import "root:/"
 
@@ -62,10 +60,10 @@ PanelWindow {
     // So when the bar is hidden the panel stops pretending: it detaches, drops
     // its fillets and rounds all four corners like the free-floating thing it
     // has become.
-    readonly property bool barVisible: {
-        const ws = Hyprland.workspaces.values.find(w => w.monitor?.name === root.screen?.name && w.active);
-        return !(ws?.hasFullscreen ?? false);
-    }
+    // Answered through wlr-foreign-toplevel rather than through either
+    // compositor's IPC, so it works the same on both -- see the note on
+    // hasFullscreenOn in CompositorBackend.qml.
+    readonly property bool barVisible: !Compositor.hasFullscreenOn(root.screen?.name ?? "")
 
 
     function openAt(x: real, component: Component): void {
@@ -164,13 +162,11 @@ PanelWindow {
         item: panel
     }
 
-    HyprlandFocusGrab {
+    FocusGrab {
+        window: root
+        targetScreen: root.screen
         active: root.isOpen
-        windows: [root]
-
-        // The grab is dropped by the compositor as soon as the user clicks
-        // outside, which is the signal to close.
-        onActiveChanged: if (!active && root.isOpen)
+        onDismissed: if (root.isOpen)
             root.close()
     }
 

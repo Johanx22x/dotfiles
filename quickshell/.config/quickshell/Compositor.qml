@@ -60,6 +60,9 @@ Singleton {
     readonly property var activeWindow: backend?.activeWindow ?? null
     readonly property string focusedOutput: backend?.focusedOutput ?? ""
     readonly property bool casting: backend?.casting ?? false
+    readonly property int captureCount: backend?.captureCount ?? 0
+    readonly property string captureOwner: backend?.captureOwner ?? ""
+    readonly property string captureTarget: backend?.captureTarget ?? ""
     readonly property var keyboardLayouts: backend?.keyboardLayouts ?? ({ names: [], currentIndex: 0 })
 
     // The question the shell should be asking. `Compositor.can("monitorConfig")`
@@ -71,6 +74,16 @@ Singleton {
 
     function workspacesOn(outputName: string): var {
         return workspaces.filter(ws => ws.output === outputName);
+    }
+
+    // Is something fullscreen on this monitor? Answered through
+    // wlr-foreign-toplevel in the base backend, so it works the same on every
+    // compositor -- but forwarded here like everything else, because the shell
+    // talks to this singleton and never to a backend directly.
+    readonly property var fullscreenOutputs: backend?.fullscreenOutputs ?? []
+
+    function hasFullscreenOn(outputName: string): bool {
+        return fullscreenOutputs.includes(outputName);
     }
 
     function focusWorkspace(id: var): void {

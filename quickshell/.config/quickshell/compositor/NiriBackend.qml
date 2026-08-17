@@ -124,9 +124,34 @@ CompositorBackend {
         return "";
     }
 
-    // State rather than an edge, which is better than Hyprland's screencast
-    // event: a shell that starts while a call is already running still knows.
-    casting: rawCasts.some(c => c.is_active)
+    // STATE RATHER THAN AN EDGE, which is where niri beats the other flavor: a
+    // shell that starts while a call is already running still knows, because
+    // the opening snapshot carries the live casts. Hyprland only announces the
+    // transition, so a restart mid-call loses it.
+    captureCount: rawCasts.filter(c => c.is_active).length
+
+    // `target` is a tagged enum -- {"Output": "DP-3"} or {"Window": <id>} -- so
+    // the owner is its key and the name is what is under it. Read defensively:
+    // this is the one shape in the whole backend that was NOT confirmed against
+    // a live cast, because reproducing one needs a real screencast session and
+    // the nested compositor had no portal. If it is wrong the indicator simply
+    // says "sharing" without naming what, which is the intended degradation.
+    captureOwner: {
+        const live = rawCasts.find(c => c.is_active);
+        if (!live?.target)
+            return "";
+        const key = Object.keys(live.target)[0] ?? "";
+        return key.toLowerCase();
+    }
+
+    captureTarget: {
+        const live = rawCasts.find(c => c.is_active);
+        if (!live?.target)
+            return "";
+        const key = Object.keys(live.target)[0];
+        const value = key ? live.target[key] : null;
+        return typeof value === "string" ? value : "";
+    }
 
     function countWindows(workspaceId: var): int {
         let n = 0;

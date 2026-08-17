@@ -135,19 +135,40 @@ CompositorBackend {
         Hyprland.dispatch("exit");
     }
 
-    // The screencast indicator. Hyprland reports this as an EDGE rather than as
-    // state, so a shell started while a call is already running does not know
-    // -- unlike niri, which exposes the list of active casts. Nothing to be
-    // done about that from here; it is the compositor's shape.
+    // Screen capture, announced on Hyprland's own event socket, so there is
+    // nothing to poll and no portal to talk to:
+    //
+    //   screencast>>1,monitor            started
+    //   screencastv2>>1,monitor,DP-3     started, and what is being taken
+    //   screencastv2>>0,monitor,DP-3     stopped
+    //
+    // v2 is used for the target name; v1 carries the same state without it, so
+    // listening to both would double-count. Verified by listening on
+    // .socket2.sock while capturing -- those lines are copied from that
+    // capture, not from documentation.
+    //
+    // AN EDGE RATHER THAN STATE, which is the one place niri is better: a shell
+    // started while a call is already running has no way to learn about it
+    // here, whereas niri publishes the list of live casts. Nothing to be done
+    // from this side; it is the shape of the event.
     property Connections castWatch: Connections {
         target: Hyprland
 
         function onRawEvent(event: var): void {
             if (event.name !== "screencastv2")
                 return;
-            // "<state> <owner>", state 1 while a capture is running.
+
+            // state, owner, name
             const args = event.parse(3);
-            root.casting = args[0] === "1";
+            if (args[0] === "1") {
+                root.captureOwner = args[1] ?? "";
+                root.captureTarget = args[2] ?? "";
+                root.captureCount += 1;
+            } else {
+                // Clamped at zero: a session already running when the shell
+                // started is stopped without ever having been counted.
+                root.captureCount = Math.max(0, root.captureCount - 1);
+            }
         }
     }
 }
