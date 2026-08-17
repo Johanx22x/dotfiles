@@ -60,6 +60,26 @@ post_hook = 'pkill -SIGUSR1 -x kitty || true'
 input_path = '~/.config/matugen/templates/hypr-colors.lua'
 output_path = '~/.config/hypr/colors.lua'
 
+# ---- niri ----
+# The same two accents for the other compositor flavor, and BOTH are rendered on
+# every wallpaper change regardless of which one is running. That is deliberate:
+# matugen has no idea what is on screen, and generating only the live flavor
+# would leave the other one showing the accent of whatever wallpaper was up the
+# last time it was booted. Two small files is the cheap way to have both
+# sessions agree.
+#
+# It is a whole `layout { focus-ring { ... } }` block rather than a bare list of
+# colours because KDL has no variables -- niri config IS the only format it
+# speaks. The rules that make that safe (layout is a singleton, includes merge
+# property by property and are positional) are written out in the template.
+#
+# No post_hook, and here that is a feature rather than a limitation: niri
+# watches its included files and reloads on its own, so writing the file is
+# applying it. Hyprland needs wallpaper-switch to push the change with hyprctl.
+[templates.niri]
+input_path = '~/.config/matugen/templates/niri-colors.kdl'
+output_path = '~/.config/niri/colors.kdl'
+
 # The Dunst template was here. Quickshell draws the notifications now and
 # reads the palette live from colors.json, so there is no file to regenerate
 # and no daemon to poke afterwards -- the post_hook called `dunstctl`, which

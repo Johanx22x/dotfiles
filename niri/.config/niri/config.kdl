@@ -154,12 +154,20 @@ layout {
         width 2
 
         // The wallpaper accents, same gradient and same 45 degrees as
-        // general.col.active_border in hyprland.lua. These are LITERALS for
-        // now: matugen renders hypr/colors.lua from a template and there is no
-        // niri template yet, so a wallpaper change does not move them. That is
-        // the one visible thing this flavor is missing, and it is tracked as
-        // the next piece of work rather than hidden here.
-        active-gradient from="#96ccf8" to="#cfc0e8" angle=45
+        // general.col.active_border in hyprland.lua.
+        //
+        // THIS LINE IS THE FALLBACK, NOT THE VALUE. matugen renders
+        // ~/.config/niri/colors.kdl from templates/niri-colors.kdl on every
+        // wallpaper change, and the include at the bottom of this file
+        // overrides the gradient below -- included sections merge property by
+        // property, so width and inactive-color here survive untouched. What is
+        // written here is what the ring looks like on a fresh clone, before
+        // matugen has ever run.
+        //
+        // The "ee" is alpha, ~93%: it matches the rgba(<hex>ee) hyprland.lua
+        // uses and, more to the point, what the template generates -- so the
+        // fallback and the generated file do not differ in anything but hue.
+        active-gradient from="#96ccf8ee" to="#cfc0e8ee" angle=45
         inactive-color "#595959"
     }
 
@@ -205,6 +213,29 @@ layout {
     // there is nothing to declare here.
     struts { }
 }
+
+// --- The wallpaper accents ---
+// Written by matugen on every wallpaper change, from
+// matugen/templates/niri-colors.kdl. It carries one property, the focus ring's
+// active-gradient, and it is this flavor's answer to hypr/colors.lua.
+//
+// IMMEDIATELY AFTER THE LAYOUT BLOCK, AND THAT IS NOT COSMETIC. Three rules
+// have to line up for this to work at all, and getting any of them wrong fails
+// quietly rather than loudly:
+//
+//   - `layout` is a singleton: a second one in THIS file is a hard parse error
+//     ("duplicate node `layout`, single node expected"). An include is the only
+//     way to have one.
+//   - Included sections merge property by property, so the file overrides the
+//     gradient and leaves width, gaps, presets and the rest of the block alone.
+//   - Includes are positional: they override what came BEFORE them. Moved above
+//     the layout block this line would parse fine, validate fine, and do
+//     nothing -- the literal would win and the ring would simply never follow
+//     the wallpaper.
+//
+// optional=true because a fresh clone has not run matugen yet, and the literal
+// above is exactly the fallback for that.
+include optional=true "~/.config/niri/colors.kdl"
 
 
 // -----------------------------------------------------------------------------
@@ -585,10 +616,11 @@ window-rule {
 // libadwaita paints its background opaque and there is no way to ask it for an
 // alpha from user CSS, so the compositor provides it.
 //
-// 0.82 is the literal from hyprland.lua's fallback. There it is read from
-// ~/.local/state/desktop-opacity so the shell, kitty, Zen and this window share
-// one dial; niri cannot read a file from its config, so this flavor holds a
-// fourth copy of the number until `desktop-opacity` learns to write here.
+// 0.82 is the FALLBACK, the same literal hyprland.lua carries, and it is what
+// applies on a machine where `desktop-opacity` has never been run. When it has,
+// the opacity.kdl included at the end of this section overrides this line with
+// the one dial the shell, kitty and Zen also read -- rules are applied in order
+// and the last one to set a property wins, which is why that include is last.
 //
 // CAREFUL: opacity affects the WHOLE window, text and icons included. Lower and
 // label text starts losing contrast over bright wallpapers.
@@ -741,6 +773,22 @@ window-rule {
 // no-gaps-fullscreen        Hyprland needs a workspace rule to drop gaps when a
 //                           window is fullscreen. niri already gives a
 //                           fullscreen window the whole output with no gaps.
+
+
+// --- The desktop's one transparency dial ---
+// Written by `desktop-opacity`, one window-rule per translucent application.
+// Under Hyprland that script pushes the rule in with `hyprctl eval`; there is
+// no such thing here, so it writes a file instead -- and since niri watches
+// every file it includes, writing it is what applies it.
+//
+// LAST IN THIS SECTION ON PURPOSE. niri applies every rule that matches and the
+// last one to set a property wins, so anywhere above this the generated opacity
+// would lose to the 0.82 literal in the Nautilus rule and the dial would look
+// broken. It still goes before local.kdl below, which keeps the final say.
+//
+// optional=true: a fresh clone has never run the script and has no such file,
+// which is the normal case rather than a parse error.
+include optional=true "~/.config/niri/opacity.kdl"
 
 
 // -----------------------------------------------------------------------------

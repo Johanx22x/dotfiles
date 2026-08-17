@@ -21,6 +21,7 @@
 # From the wallpaper, by matugen.
 kitty/.config/kitty/colors.conf
 hypr/.config/hypr/colors.lua
+niri/.config/niri/colors.kdl
 gtk/.config/gtk-3.0/gtk.css
 gtk/.config/gtk-4.0/gtk.css
 ranger/.config/ranger/accent
