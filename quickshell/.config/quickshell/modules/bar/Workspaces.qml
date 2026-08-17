@@ -58,7 +58,31 @@ Item {
 
     // This monitor's workspaces, in the compositor-neutral shape:
     // { id, number, name, output, active, focused, urgent, windows }
-    readonly property var list: Compositor.workspacesOn(barScreen.name)
+    //
+    // EMPTY ONES ARE NOT DRAWN, and which ones those are depends on the
+    // compositor rather than on this module. Hyprland creates a workspace when
+    // something opens on it and drops it when the last window closes, so the
+    // model only ever holds occupied ones and this filter changes nothing
+    // there. niri's are declared and permanent -- ten of them, so that
+    // workspace 3 is still workspace 3 tomorrow -- which means nine dots for
+    // nothing unless they are filtered here.
+    //
+    // THREE THINGS SURVIVE THE FILTER:
+    //   * anything with a window on it, which is the point;
+    //   * the ACTIVE one, empty or not, or the row would lose its indicator
+    //     the moment you scrolled onto a fresh workspace;
+    //   * an URGENT one, because something asking for attention from a
+    //     workspace you cannot see is exactly what the dot is for.
+    //
+    // And where occupancy is unknown -- `windows` is -1 on a compositor that
+    // cannot count them -- nothing is filtered at all. Showing a row that is
+    // too long beats hiding a workspace that has something on it.
+    readonly property var list: {
+        const all = Compositor.workspacesOn(barScreen.name);
+        if (!Compositor.can("workspaceOccupancy"))
+            return all;
+        return all.filter(ws => ws.windows !== 0 || ws.active || ws.urgent);
+    }
 
     // Does this screen have the keyboard? Straight from the facade, which
     // derives it from whichever workspace is focused -- one question, answered
