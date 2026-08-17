@@ -41,11 +41,9 @@ grub-btrfs
 gst-plugin-pipewire
 highlight
 htop
-hyprland
 hyprpicker
 hyprpolkitagent
 hyprshot
-hyprsunset
 i2c-tools
 inotify-tools
 intel-ucode
@@ -115,7 +113,6 @@ ttf-jetbrains-mono-nerd
 ttf-liberation
 ttf-nerd-fonts-symbols-mono
 unzip
-uwsm
 vulkan-tools
 wf-recorder
 wget
@@ -123,7 +120,6 @@ wireplumber
 wl-clip-persist
 wl-clipboard
 wpa_supplicant
-xdg-desktop-portal-hyprland
 xdg-utils
 zathura
 zathura-pdf-poppler

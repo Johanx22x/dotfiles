@@ -2,7 +2,7 @@
 
 # dotfiles
 
-**Arch Linux · Hyprland · Quickshell**
+**Arch Linux · Hyprland or niri · Quickshell**
 
 The accent palette is generated from the wallpaper.
 
@@ -18,7 +18,7 @@ The accent palette is generated from the wallpaper.
 
 | | |
 |---|---|
-| **Compositor** | Hyprland, configured in Lua |
+| **Compositor** | Hyprland in Lua, or niri in KDL — same keybinds either way |
 | **Shell** | Quickshell — bar, island, launcher, notifications, settings |
 | **Terminal** | kitty · zsh · starship |
 | **Editor** | Neovim |
@@ -45,11 +45,16 @@ git clone https://github.com/Johanx22x/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh
 ```
 
-Six steps, each asking before it acts:
+It opens by asking which compositor this machine gets — Hyprland, niri, or both
+— because that decides what gets installed and what gets linked. A bare Enter
+takes Hyprland, which is the default and the one everything here was built
+against. See [Compositors](#compositors) below.
+
+Then six steps, each asking before it acts:
 
 | | |
 |---|---|
-| **1 · Packages** | `packages/pacman.txt`, plus `packages/multilib.txt` if multilib is on |
+| **1 · Packages** | `packages/pacman.txt` and the chosen compositor's list, plus `packages/multilib.txt` if multilib is on |
 | **2 · AUR** | builds `yay` if missing, then `packages/aur.txt` |
 | **3 · Symlinks** | `stow` links the config into `$HOME` |
 | **4 · Seeds** | copies `seeds/` where nothing exists yet — never overwrites |
@@ -82,10 +87,42 @@ Nothing running picks the changes up on its own:
 
 ```sh
 hyprctl reload                                        # Hyprland
+                                                      # niri reloads on save
 qs kill && qs -d -p ~/.config/quickshell/shell.qml    # Quickshell
 ```
 
 `~/.config/nvim` is a separate repository and updates on its own.
+
+## Compositors
+
+Two flavors, chosen at install time and switched at the display manager. They
+are not exclusive: answer **both** and each session appears separately in SDDM,
+so one can be tried without dismantling the other.
+
+| | Hyprland | niri |
+|---|---|---|
+| Model | dynamic tiling (dwindle) | scrollable tiling (columns) |
+| Config | `hypr/` — Lua, `hyprctl reload` | `niri/` — KDL, reloads on save |
+| Packages | `packages/hyprland.txt` | `packages/niri.txt` |
+| Session | `uwsm` | `niri-session` |
+| Portal | `xdg-desktop-portal-hyprland` | `xdg-desktop-portal-gnome` |
+
+**Every keybind is the same in both.** Four Hyprland actions have no niri
+equivalent, so their chords were given to the nearest thing niri does rather
+than left dead — pseudotile becomes cycling the preset column widths,
+togglesplit becomes tabbed columns, pin becomes jumping between the floating and
+tiled layers, and the magic scratchpad becomes a named workspace. What niri can
+do and Hyprland cannot is bound on chords that were free: the overview, moving
+and consuming columns, the ends of the strip, monitor focus. Each one is marked
+in `niri/.config/niri/config.kdl`, which is where the reasoning lives.
+
+**What the niri flavor does not do yet.** The shell comes up and everything that
+does not need the compositor works — tray, clock, notifications, media, the
+island — while four things go quiet, because they talk to Hyprland's IPC:
+workspace pills, the active window title, click-outside-to-close on popouts, and
+the cheatsheet. The wallpaper is set but its accent does not reach the focus
+ring, and `night-light` needs wiring to `wlsunset` (`hyprsunset` drives a
+Hyprland-only protocol and would run doing nothing).
 
 ## Layout
 
@@ -93,8 +130,8 @@ Every top-level directory is a stow package mirroring its path under `$HOME`, so
 `stow hypr` links `~/.config/hypr/hyprland.lua` back into the repo.
 
 ```
-zsh   hypr    quickshell  kitty  matugen  shell  gtk
-media openrgb systemd     bin    ranger   icons  zen
+zsh   hypr    niri        quickshell  kitty  matugen  shell
+gtk   media   openrgb     systemd     bin    ranger   icons   zen
 ```
 
 `bin/` holds the scripts that own everything the shell can change at runtime —
