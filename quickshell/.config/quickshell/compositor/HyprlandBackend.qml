@@ -41,6 +41,9 @@ CompositorBackend {
         monitorConfig: true,
         inputConfig: true,
         scratchpad: true,
+        // One keyboard focus for the whole session, so a grabbing surface is
+        // heard from any monitor.
+        globalKeyboardGrab: true,
         logout: true
     })
 

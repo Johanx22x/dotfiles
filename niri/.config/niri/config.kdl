@@ -143,6 +143,45 @@ output "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA 24476B001914 " {
 
 
 // -----------------------------------------------------------------------------
+// GLASS
+// -----------------------------------------------------------------------------
+// Hyprland's decoration.blur, and it has to be here or translucent windows look
+// wrong rather than merely different: kitty at 0.70 and Nautilus at 0.85 are
+// tuned against a BLURRED backdrop, and without one the wallpaper comes through
+// them sharp, so every window reads as much more transparent than it does on
+// the other flavor.
+//
+// passes 2 AND NOT 3, the same figure and the same reason as hyprland.lua:
+// each pass halves the resolution the blur is computed at, and where a surface
+// has an antialiased curved edge the gradient that makes the curve look smooth
+// turns into steps. Measured there in intermediate pixels per row: passes 3 ->
+// 1.58, passes 1 -> 3.00, passes 2 -> 4.04.
+//
+// noise carries over unchanged. `offset` and `saturation` are niri's own
+// spelling of radius and vibrancy and have no exact counterpart, so they are
+// eyeballed against the Hyprland session rather than converted.
+blur {
+    on
+    passes 2
+    offset 3.0
+    noise 0.0117
+    saturation 1.2
+}
+
+// NO CLIENT-SIDE DECORATIONS.
+//
+// Under Hyprland this needs no saying: Qt offers to draw its own titlebar,
+// Hyprland answers that it will handle decorations server-side, and then draws
+// none -- which is why the settings window has no titlebar there. niri makes no
+// such offer, so Qt drew its own: a full titlebar with minimise, maximise and
+// close, on a window whose header is already its titlebar.
+//
+// This asks applications not to draw one. What niri puts there instead is the
+// focus ring, which is what every other window on this desktop already has.
+prefer-no-csd
+
+
+// -----------------------------------------------------------------------------
 // LAYOUT
 // -----------------------------------------------------------------------------
 layout {
@@ -613,6 +652,19 @@ binds {
 // catch-all comes first and the specific rules below inherit it.
 window-rule {
     geometry-corner-radius 10
+
+    // WITHOUT THIS THE RADIUS IS DECORATION ONLY. niri rounds the focus ring
+    // and the border to the radius above, but the WINDOW keeps its square
+    // corners underneath unless it is clipped to that geometry -- so the
+    // settings window came out square inside a rounded ring.
+    //
+    // Turned on knowing the cost, and it is a measured one from upstream rather
+    // than a guess: niri issue #4281 has clip-to-geometry plus a corner radius
+    // dropping a 120 Hz external monitor to 30-40 FPS with no GPU load. If the
+    // desktop ever feels inexplicably slow on one monitor, this line is the
+    // first thing to try turning off -- the cost of that is square corners, not
+    // a broken desktop.
+    clip-to-geometry true
 }
 
 // --- Helper apps kept out of the tiling ---
