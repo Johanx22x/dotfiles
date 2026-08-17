@@ -527,17 +527,20 @@ binds {
     Mod+Shift+W hotkey-overlay-title="Look: next wallpaper" { spawn "sh" "-c" "$HOME/.local/bin/wallpaper-switch next"; }
     Mod+Shift+A hotkey-overlay-title="Look: random wallpaper" { spawn "sh" "-c" "$HOME/.local/bin/wallpaper-switch random"; }
 
-    // The keyboard layout, one step along the cycle. Goes through the script
-    // and not through niri's own switch-layout for the reason spelled out in
-    // hyprland.lua: the compositor's index is session-only and the bar cannot
-    // read it, so the pill would say US while you typed in Spanish.
+    // The keyboard layout, one step along the cycle.
     //
-    // CAVEAT: hypr-tweak rotates the list and then pushes it into Hyprland with
-    // `hyprctl eval`. Under niri the state file moves -- so the bar follows --
-    // but the compositor does not, because the xkb layout above is a literal.
-    // Until the script learns this flavor, SUPER + K changes what the bar says
-    // and not what the keyboard does.
-    Mod+K hotkey-overlay-title="Input: next keyboard layout" { spawn "hypr-tweak" "layout" "next"; }
+    // NATIVE HERE, AND A SCRIPT ON THE OTHER FLAVOR, because the two keep the
+    // answer in different places. Hyprland's active-layout index is session-only
+    // and is thrown away by anything that re-applies the input block, so nothing
+    // outside the compositor can read it -- hence `hypr-tweak`, which rotates a
+    // stored list so the first entry is always the active one and the bar has
+    // something honest to read.
+    //
+    // niri publishes the index and keeps it: `niri msg -j keyboard-layouts`
+    // answers with the names and which is current, and the shell watches it
+    // live. So stepping it natively is correct here, and rotating a list on top
+    // would give two sources that disagree.
+    Mod+K hotkey-overlay-title="Input: next keyboard layout" { switch-layout "next"; }
 
     // ---- Window focus (parity) ------------------------------------------
     // Left/right cross COLUMNS and up/down move inside one, which is the
