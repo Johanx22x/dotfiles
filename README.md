@@ -147,11 +147,35 @@ than in a backend — fullscreen detection goes through
 `wlr-foreign-toplevel`, and logout falls back to logind — so a new compositor
 gets those for free.
 
-**What the niri flavor does not do yet.** `hypr-monitor` and `hypr-tweak` still
-only write Lua, so monitor and input settings are Hyprland-only (their pages
-hide themselves elsewhere). The keybinds page and the cheatsheet need a KDL
-parser to come back. And there is no per-device input configuration in niri at
-all, so the DualSense touchpad quirk has no home yet.
+**Settings reach both flavors through one script.** `desktop-tweak` — the old
+`hypr-tweak`, renamed once it stopped being about one compositor — keeps a
+single state file and writes an override layer per flavor: `tweaks.lua` for
+Hyprland, `tweaks.kdl` for niri, both gitignored and both read last by their
+config. Applying differs and nothing else does: Hyprland is told with `hyprctl
+eval`, while niri watches the files it includes, so writing one is what applies
+it.
+
+`desktop-monitors` — the old `hypr-monitor` — does the same for the display page:
+it lists what is connected in one shape whichever compositor answered, applies a
+provisional change, and writes the confirmed one into `monitors.lua` or
+`monitors.kdl`. The one thing that is **not** symmetric is what that file is.
+Under Hyprland it is an override layer on top of the monitor block in
+`hyprland.lua`; under niri it is the only declaration of any output there is,
+because an `output` block in an included file is ignored when the including file
+names the same monitor. So `config.kdl` declares none and includes the generated
+file first — and the display page's *Copy config* chip, which hands you a block
+to paste into the tracked config, is not offered there: pasting one in would
+shadow the generated file for good.
+
+**What the niri flavor does not do yet.** There is no per-device input
+configuration in niri at all, so the DualSense touchpad quirk has no home yet —
+the equivalent would be a libinput quirk in `/etc`, which `install.sh` does not
+touch. Hyprland's one gap value maps directly and its second becomes a strut,
+which is close rather than identical. And *Make main* only moves the shell
+there: which monitor games open on is `open-on-output` on the window rules in
+`config.kdl`, and overriding that from a generated file would mean repeating the
+app-id regex those rules match on — so the script says so instead of half doing
+it.
 
 ## Layout
 
@@ -188,9 +212,10 @@ wallpaper-switch dir pick            # move the collection somewhere else
 ## Per-machine
 
 No tracked file names a home directory. What belongs to one machine stays out of
-git: `hypr/monitors.lua`, written by `hypr-monitor` or the settings window, and
-the state files under `~/.local/state` that the scripts and the shell share — so
-a value set from a terminal moves the switch in the settings window, and back.
+git: `hypr/monitors.lua` and `niri/monitors.kdl`, written by `desktop-monitors` or
+the settings window, and the state files under `~/.local/state` that the scripts
+and the shell share — so a value set from a terminal moves the switch in the
+settings window, and back.
 
 ## Keybinds
 

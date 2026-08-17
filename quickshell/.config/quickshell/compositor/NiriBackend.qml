@@ -76,8 +76,34 @@ CompositorBackend {
         // Better than Hyprland's in one way worth noting: there, a Lua config
         // makes every bind report as "__lua" with no readable action at all.
         bindsIntrospection: true,
-        monitorConfig: false,
-        inputConfig: false,
+        // TRUE, and it took the output blocks moving out of config.kdl to get
+        // here. `desktop-monitors` speaks KDL as well as Lua now: it lists what is
+        // connected from `niri msg -j outputs`, applies a provisional change
+        // through `niri msg output` -- which niri itself calls temporary, which
+        // is exactly what a change waiting to be confirmed should be -- and
+        // writes the confirmed one into ~/.config/niri/monitors.kdl.
+        monitorConfig: true,
+        // FALSE, and it is the one thing on that page niri cannot be offered.
+        // The generated monitors.kdl is the only declaration of any output here,
+        // so there is no hand-written file to paste a block into -- and pasting
+        // one into config.kdl would be worse than useless: the main config wins
+        // over an include, and the display page would go silently dead.
+        monitorConfigCopy: false,
+        // TRUE SINCE `desktop-tweak` LEARNED THIS FLAVOR, and every row on the
+        // Input page reaches the compositor: the pointer speed, the
+        // acceleration profile, natural scrolling, the key repeat pair and the
+        // keyboard cycle all land in ~/.config/niri/tweaks.kdl, which config.kdl
+        // includes -- and niri watches what it includes, so writing that file is
+        // what applies it. There is nothing to push into a running session and
+        // nothing missing because of it; see `compositor can live-config`.
+        //
+        // The one input setting with NO equivalent here is per-device
+        // configuration: niri has none at all, and Hyprland's hl.device is what
+        // switches the DualSense's touchpad off. The page never offered it -- so
+        // nothing on it is dead under this flavor -- and the absence is written
+        // down in its header and in config.kdl's input block, which are the two
+        // places somebody would go looking.
+        inputConfig: true,
         // niri has no special workspace at all: upstream issue #845, open since
         // December 2024. The config maps the old scratchpad chords onto a named
         // workspace, which is a place you go to rather than an overlay.

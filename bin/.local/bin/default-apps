@@ -20,7 +20,7 @@
 # NOT THE TERMINAL, which is the one role a person would expect here and the
 # one this cannot set. There is no MIME type for it: the terminal is named in
 # hyprland.lua, a tracked file this must not rewrite -- see the header of
-# hypr-tweak for that boundary.
+# desktop-tweak for that boundary.
 
 set -euo pipefail
 
