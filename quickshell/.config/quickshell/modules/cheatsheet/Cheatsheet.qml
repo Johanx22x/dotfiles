@@ -47,9 +47,9 @@ PanelWindow {
     readonly property int keyGutter: 150
     readonly property int cardPadding: 30
 
-    // Parsed from hyprctl, see the Process at the bottom. Shape:
-    //   [ { name: "Apps", binds: [ { keys: [...], text: "..." } ] } ]
-    property var groups: []
+    // Shape: [ { name: "Apps", binds: [ { keys: [...], text: "..." } ] } ]
+    // Derived from Compositor.binds, at the bottom of this file.
+    readonly property var groups: root.groupedBinds
 
     // The order categories are shown in: roughly how often you reach for them,
     // with the shell's own controls last. A category not named here still
@@ -60,18 +60,6 @@ PanelWindow {
     ]
 
     // ---------------- Turning a bind into something readable ----------------
-
-    // The X11 modifier bits. Hyprland reports the mask raw; only these four
-    // are ever bound by hand, and the rest (caps, numlock) would be noise on a
-    // chip even when set.
-    function modifiers(mask: int): var {
-        const out = [];
-        if (mask & 64) out.push("SUPER");
-        if (mask & 8)  out.push("ALT");
-        if (mask & 4)  out.push("CTRL");
-        if (mask & 1)  out.push("SHIFT");
-        return out;
-    }
 
     // Hyprland's key names are xkb keysyms and mouse codes. Left alone they
     // read like config, not like the key under your finger.
@@ -178,7 +166,7 @@ PanelWindow {
             // sheet says so instead, below, and running the query would just
             // spawn a process to fail.
             if (Compositor.can("bindsIntrospection"))
-                binds.running = true;
+                Compositor.refreshBinds();
             sheet.forceActiveFocus();
         }
     }
@@ -437,58 +425,43 @@ PanelWindow {
         }
     }
 
-    Process {
-        id: binds
+    // WHERE THE LIST COMES FROM. Nothing here runs a command any more: each
+    // compositor backend produces the same shape -- keys already in chips, a
+    // category and a description -- from whatever source it has, which is a
+    // socket on one flavor and the config file on the other. This module only
+    // groups them and draws.
+    //
+    // Categories are collected in ARRIVAL order, which is the order they are
+    // written in the config, and only then sorted into categoryOrder. That is
+    // what gives an unlisted category a stable place at the end instead of one
+    // that moves around as binds are added.
+    readonly property var groupedBinds: {
+        const byName = {};
+        const seen = [];
 
-        command: ["hyprctl", "binds", "-j"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let parsed;
-                try {
-                    parsed = JSON.parse(text || "[]");
-                } catch (e) {
-                    console.warn("Cheatsheet: could not parse hyprctl binds --", e.message);
-                    return;
-                }
-
-                // Categories are collected in the order hyprctl reports them,
-                // which is the order of hyprland.lua, and only then sorted
-                // into categoryOrder. That is what gives an unlisted category
-                // a stable place at the end instead of one that moves.
-                const byName = {};
-                const seen = [];
-
-                for (const bind of parsed) {
-                    if (!bind.has_description || !bind.description)
-                        continue;
-
-                    const colon = bind.description.indexOf(": ");
-                    const name = colon < 0 ? "Other" : bind.description.slice(0, colon);
-                    const text = colon < 0 ? bind.description : bind.description.slice(colon + 2);
-
-                    if (!byName[name]) {
-                        byName[name] = { name: name, binds: [] };
-                        seen.push(name);
-                    }
-
-                    byName[name].binds.push({
-                        keys: root.modifiers(bind.modmask).concat([root.keyName(bind.key)]),
-                        text: text
-                    });
-                }
-
-                seen.sort((a, b) => {
-                    const ia = root.categoryOrder.indexOf(a);
-                    const ib = root.categoryOrder.indexOf(b);
-                    // Unlisted categories keep their arrival order, after the
-                    // listed ones.
-                    return (ia < 0 ? root.categoryOrder.length + seen.indexOf(a) : ia)
-                         - (ib < 0 ? root.categoryOrder.length + seen.indexOf(b) : ib);
-                });
-
-                root.groups = seen.map(name => byName[name]);
+        for (const bind of Compositor.binds) {
+            // Only what carries a description: a dedicated key prints its own
+            // function on the keycap, and a row saying the volume key changes
+            // the volume is one nobody would go looking for.
+            if (!bind.described)
+                continue;
+            if (!byName[bind.category]) {
+                byName[bind.category] = { name: bind.category, binds: [] };
+                seen.push(bind.category);
             }
+            byName[bind.category].binds.push({
+                keys: bind.keys.map(k => root.keyName(k)),
+                text: bind.description
+            });
         }
+
+        seen.sort((a, b) => {
+            const ia = root.categoryOrder.indexOf(a);
+            const ib = root.categoryOrder.indexOf(b);
+            return (ia < 0 ? root.categoryOrder.length + seen.indexOf(a) : ia)
+                 - (ib < 0 ? root.categoryOrder.length + seen.indexOf(b) : ib);
+        });
+
+        return seen.map(name => byName[name]);
     }
 }
