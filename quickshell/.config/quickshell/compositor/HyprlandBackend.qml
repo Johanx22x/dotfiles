@@ -127,12 +127,35 @@ CompositorBackend {
         return "";
     }
 
+    // ---- Dispatching, and the trap in it ----------------------------------
+    //
+    // THE CLASSIC DISPATCHER SYNTAX DOES NOT WORK HERE, AND FAILS SILENTLY.
+    //
+    // This setup configures Hyprland in Lua, and in 0.5x that changes what the
+    // dispatch socket accepts: it evaluates what it is given as Lua, so
+    // `dispatch("workspace 2")` is parsed as the expression `hl.dispatch(
+    // workspace 2)` and dies on a syntax error. Measured on 0.56.2:
+    //
+    //   dispatch exec true              -> "')' expected near 'true'"
+    //   dispatch centerwindow           -> "expected a dispatcher (e.g.
+    //                                       hl.dsp.window.close())"
+    //   dispatch hl.dsp.exec_cmd("true") -> ok
+    //
+    // AND ALL THREE EXIT 0. hyprctl reports success whatever happened, so
+    // nothing upstream can tell that the action was thrown away -- which is
+    // exactly how clicking a workspace dot came to do nothing at all without
+    // anyone noticing, and how the power menu's Log out entry stopped working.
+    //
+    // So every dispatch from here is written in the Lua form. If these dotfiles
+    // ever go back to a hyprlang config, this is the file that has to change,
+    // and the symptom will be buttons that quietly do nothing rather than an
+    // error anybody can see.
     function focusWorkspace(id: var): void {
-        Hyprland.dispatch(`workspace ${id}`);
+        Hyprland.dispatch(`hl.dsp.focus({workspace = ${id}})`);
     }
 
     function logout(): void {
-        Hyprland.dispatch("exit");
+        Hyprland.dispatch("hl.dsp.exit()");
     }
 
     // Screen capture, announced on Hyprland's own event socket, so there is
