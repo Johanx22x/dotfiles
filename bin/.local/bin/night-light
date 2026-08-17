@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # night-light -- the blue light filter, on or off and how warm.
 #
-# A thin wrapper over hyprsunset, which does the actual work: it owns the
-# colour matrix and Hyprland proxies commands to it over a socket. What this
-# adds is the one thing hyprsunset 0.4 does not have -- somewhere to remember
-# what was asked for.
+# A thin wrapper over whichever daemon owns the colour on this session. There
+# are two, one per compositor flavor (see BACKENDS below), and neither of them
+# has the one thing this script adds: somewhere to remember what was asked for.
 #
 # WHY THE STATE FILE IS NOT OPTIONAL. `hyprctl hyprsunset temperature` looks
 # like it answers "is the filter on", and it does not. Measured: set 4000,
 # then `identity` to turn the filter off, and it still reads back 4000. The
 # temperature it reports is the last one it was told, not the one on screen.
 # So a settings window trusting that reading would draw the switch as on with
-# the screen plainly untinted. The file below is the truth; hyprsunset is told
+# the screen plainly untinted. The file below is the truth; the daemon is told
 # what it says.
+#
+# That is also what keeps the two backends interchangeable: the shell's
+# NightLight.qml reads this file and calls `night-light on|off|temp N`, and it
+# has no idea which compositor is running or which daemon answered. Everything
+# flavor-specific stops at apply().
 #
 # TWO LINES, enabled then temperature, in the same shape desktop-font uses --
 # readable by hand, parsed with `read`, no JSON in a shell script.
@@ -33,6 +37,18 @@ STATE_FILE="$STATE_DIR/night-light"
 MIN_TEMP=2500
 MAX_TEMP=6000
 DEFAULT_TEMP=4000
+
+# "No filter" for wl-gammarelay-rs, and deliberately OUTSIDE the range above:
+# it is never written to the state file and never offered as a choice, it is
+# only what the daemon is told while the filter is off. See apply_gammarelay()
+# for why this exact number and not 6000.
+NEUTRAL_TEMP=6500
+
+# The daemon's well-known bus name and interface. Note they are spelled
+# differently on purpose -- a hyphen in the name, a dot in the interface -- and
+# swapping them gets "Unknown interface" rather than anything readable.
+GAMMARELAY_BUS=rs.wl-gammarelay
+GAMMARELAY_IFACE=rs.wl.gammarelay
 
 usage() {
     cat >&2 <<'EOF'
@@ -72,6 +88,59 @@ write_state() {
     printf '%s\n%s\n' "$enabled" "$temperature" > "$STATE_FILE"
 }
 
+# =============================================================================
+# BACKENDS
+# =============================================================================
+# Tinting the screen is not something a compositor lends out in a portable way,
+# so each flavor is served by a different daemon and this script picks one:
+#
+#   Hyprland -> hyprsunset, over hyprland-ctm-control-v1. That protocol has
+#               exactly one implementation, Hyprland's own. Started anywhere
+#               else hyprsunset comes up, accepts every command and tints
+#               nothing -- SILENTLY, which is the dangerous part and the whole
+#               reason `compositor can gamma` exists.
+#   niri     -> wl-gammarelay-rs, a D-Bus daemon driving
+#               wlr-gamma-control-unstable-v1 (verified in its source:
+#               src/wayland.rs uses ZwlrGammaControlManagerV1), which niri does
+#               implement. Chosen over wlsunset because it is the only one of
+#               the two that maps 1:1 onto a temperature slider -- wlsunset
+#               0.4.0 cannot be handed a temperature while running at all: it
+#               walks three fixed states on SIGUSR1 and refuses `-T X -t X`
+#               outright.
+#
+# NEVER BOTH AT ONCE. Hyprland implements wlr-gamma-control too, so
+# wl-gammarelay-rs would "work" there as well, and both flavors can be stowed
+# on the same machine -- which makes this a real thing to trip over rather than
+# a theoretical one. Two daemons each holding gamma control of the same outputs
+# means whichever uploaded a ramp last wins, and the loser's state file keeps
+# claiming otherwise. The dispatch below is what prevents it: exactly one
+# backend is ever reachable per session. If a session ever needs both installed,
+# only hyprsunset gets a systemd unit bound to graphical-session.target --
+# wl-gammarelay-rs is started on demand from here and only under niri.
+#
+# ADDING A THIRD FLAVOR: one branch in backend(), one apply_* function.
+
+# `can gamma` and not `is hyprland`, because the question this script is really
+# asking is whether the compositor's OWN filter works here -- that is what the
+# capability means and hyprsunset is that filter.
+#
+# niri is then matched by name rather than by a capability, and that is on
+# purpose: wlr-gamma-control is a generic protocol that other compositors speak
+# too, but `compositor` only carries capabilities some script here actually
+# branches on. The day a third flavor needs this branch, that is when it earns a
+# capability of its own instead of a second name in this case.
+backend() {
+    if compositor can gamma 2>/dev/null; then
+        echo hyprsunset
+    elif compositor is niri 2>/dev/null; then
+        echo gammarelay
+    else
+        echo none
+    fi
+}
+
+# ---- hyprsunset (Hyprland) --------------------------------------------------
+
 # hyprsunset has to be running before anything can be sent to it. The systemd
 # user unit ships with the package and is bound to graphical-session.target,
 # so this is normally a no-op -- it is here for the session where the unit was
@@ -80,7 +149,7 @@ write_state() {
 # NOT started with a bare `hyprsunset &`: a daemon spawned from whatever shell
 # happens to call this dies with it, and the filter would come off at a moment
 # unrelated to anything the user did.
-ensure_daemon() {
+ensure_hyprsunset() {
     pgrep -x hyprsunset >/dev/null && return 0
 
     systemctl --user start hyprsunset.service 2>/dev/null || return 1
@@ -95,8 +164,8 @@ ensure_daemon() {
     return 1
 }
 
-apply() {
-    if ! ensure_daemon; then
+apply_hyprsunset() {
+    if ! ensure_hyprsunset; then
         echo "night-light: hyprsunset is not running and could not be started." >&2
         echo "  Install it with 'sudo pacman -S hyprsunset', then" >&2
         echo "  'systemctl --user enable --now hyprsunset.service'." >&2
@@ -112,6 +181,121 @@ apply() {
         # between every application and the display.
         hyprctl hyprsunset identity >/dev/null
     fi
+}
+
+# ---- wl-gammarelay-rs (niri) ------------------------------------------------
+
+# WHY THIS IS A D-BUS QUESTION AND NOT A pgrep ONE. Two separate reasons, and
+# the first one is a trap rather than a preference:
+#
+#   - `pgrep -x wl-gammarelay-rs` can NEVER match. The name is 16 characters
+#     and the kernel caps comm at 15, so pgrep refuses the pattern outright --
+#     measured: "pattern that searches for process name longer than 15
+#     characters will result in zero matches", exit 1. Matching the truncated
+#     `wl-gammarelay-r` does work, and is exactly the kind of line nobody
+#     recognises as load-bearing six months later.
+#   - The process existing is not what has to be true anyway. A busctl call
+#     needs somebody to OWN the well-known name, which happens a moment after
+#     exec() -- the same gap the hyprsunset poll above exists for.
+#
+# NameHasOwner answers precisely that. CAREFUL WITH ITS EXIT STATUS: busctl
+# prints "b true" or "b false" and exits 0 for BOTH (measured), so the output is
+# what gets tested and never the status.
+gammarelay_running() {
+    local answer
+    answer="$(busctl --user call org.freedesktop.DBus /org/freedesktop/DBus \
+                  org.freedesktop.DBus NameHasOwner s "$GAMMARELAY_BUS" 2>/dev/null)" || return 1
+    [[ $answer == "b true" ]]
+}
+
+ensure_gammarelay() {
+    gammarelay_running && return 0
+
+    command -v wl-gammarelay-rs >/dev/null || return 1
+
+    # systemd-run rather than `wl-gammarelay-rs run &`, for the same reason the
+    # hyprsunset branch goes through systemctl: a daemon spawned from whatever
+    # shell called this dies with it, and the filter would come off at a moment
+    # unrelated to anything the user did.
+    #
+    # A TRANSIENT unit and not a shipped one because the package has no unit of
+    # its own, and because a unit bound to graphical-session.target would start
+    # the daemon under Hyprland too -- which is exactly the collision the note
+    # at the top of this section is about. Started from here it can only ever
+    # run in a session that reached the niri branch.
+    #
+    # --collect so a failed run does not linger in "failed" state, which would
+    # make the NEXT start fail with "unit already exists". The error is
+    # swallowed on purpose: a second caller racing this one gets that same
+    # message and is not a failure, so the poll below is the real answer.
+    systemd-run --user --quiet --collect \
+        --unit=wl-gammarelay-rs \
+        --description="Wayland gamma relay (night-light backend)" \
+        wl-gammarelay-rs run >/dev/null 2>&1 || true
+
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        gammarelay_running && return 0
+        sleep 0.1
+    done
+
+    return 1
+}
+
+apply_gammarelay() {
+    # Off with nothing running is already off. Starting a daemon just to tell it
+    # to do nothing would hand it gamma control of every output for no reason,
+    # and this is not a corner case: it is every single login where the filter
+    # is off, through the `apply` that autostart runs.
+    if (( ! enabled )) && ! gammarelay_running; then
+        return 0
+    fi
+
+    if ! ensure_gammarelay; then
+        echo "night-light: wl-gammarelay-rs is not running and could not be started." >&2
+        echo "  Install it from the AUR ('yay -S wl-gammarelay-rs'). It needs no" >&2
+        echo "  unit of its own -- this script starts it with systemd-run." >&2
+        return 1
+    fi
+
+    local target=$NEUTRAL_TEMP
+    (( enabled )) && target=$temperature
+
+    # 6500 K IS THE "identity" OF THE OTHER BRANCH, not an approximation of it,
+    # and that is why off does not stop the daemon here.
+    #
+    # wl-gammarelay-rs has no identity call: the only way to hand the ramps back
+    # to the compositor is to kill the process, which buys a restart and its
+    # race on every toggle and flashes the screen while it happens. 6500 costs
+    # neither, because in this daemon it is not merely the default -- it is the
+    # entry in its blackbody table that reads exactly 1.0, 1.0, 1.0 (verified in
+    # src/color.rs), so with gamma and brightness left at 1.0 the ramp it
+    # uploads is the identity ramp bar integer rounding. Off looks off.
+    #
+    # NOT 6000: that is MAX_TEMP, the top of the slider, and its table entry is
+    # 0.919, 1.0, 0.965 -- visibly warm. The two numbers answer different
+    # questions and must not be merged.
+    busctl --user set-property "$GAMMARELAY_BUS" / "$GAMMARELAY_IFACE" \
+        Temperature q "$target" >/dev/null
+}
+
+# ---- no backend -------------------------------------------------------------
+
+apply_none() {
+    # The state file was written before this ran and stays written, so nothing
+    # is lost: a later `night-light apply` under a session that does have a
+    # backend picks up exactly what was asked for here.
+    echo "night-light: no gamma backend for this session." >&2
+    echo "  Hyprland uses hyprsunset and niri uses wl-gammarelay-rs; the" >&2
+    echo "  compositor answering now ($(compositor 2>/dev/null || echo unknown)) is neither." >&2
+    return 1
+}
+
+apply() {
+    case "$(backend)" in
+        hyprsunset) apply_hyprsunset ;;
+        gammarelay) apply_gammarelay ;;
+        *)          apply_none ;;
+    esac
 }
 
 read_state
@@ -141,9 +325,28 @@ case "${1:-show}" in
     show)
         echo "enabled:     $enabled"
         echo "temperature: ${temperature}K"
-        pgrep -x hyprsunset >/dev/null \
-            && echo "hyprsunset:  running" \
-            || echo "hyprsunset:  not running"
+
+        # The daemon is named as well as its state, because "not running" means
+        # two very different things depending on which one it is -- and because
+        # a backend reading `none` is the first thing to look at when the switch
+        # does everything except tint the screen.
+        current_backend="$(backend)"
+        echo "backend:     $current_backend"
+        case "$current_backend" in
+            hyprsunset)
+                pgrep -x hyprsunset >/dev/null \
+                    && echo "daemon:      hyprsunset, running" \
+                    || echo "daemon:      hyprsunset, not running"
+                ;;
+            gammarelay)
+                gammarelay_running \
+                    && echo "daemon:      wl-gammarelay-rs, running" \
+                    || echo "daemon:      wl-gammarelay-rs, not running"
+                ;;
+            *)
+                echo "daemon:      none for this compositor"
+                ;;
+        esac
         ;;
 
     *) usage ;;

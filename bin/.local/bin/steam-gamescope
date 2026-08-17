@@ -26,12 +26,65 @@ set -uo pipefail
 # resolution the display cannot show, and the literals are wrong in a way you
 # only find out when a game comes up letterboxed or refuses the mode.
 #
-# The fallback keeps the old numbers for the case there is no compositor to
-# ask -- running this from a TTY, or from a session that is not Hyprland.
+# The same block as in `gs`, kept deliberately identical rather than shared:
+# these two scripts have no common file to put it in, and a copy that reads the
+# same is easier to keep honest than a third script sourced by both.
+#
+# The flavor is what is switched on rather than the `monitor-query` capability,
+# because knowing the answer is yes does not tell you which IPC to speak -- the
+# capability is for callers that only need to decide whether to bother asking.
+#
+# The fallback keeps the old numbers for the case there is nothing to ask --
+# running this from a TTY, or from a compositor that cannot be queried.
+
+# Found NEXT TO THIS SCRIPT and not through $PATH, same as in `gs`: readlink
+# resolves the stow symlink back into the repo, so the helper is found whether
+# this was started from ~/.local/bin or straight out of the checkout.
+BIN_DIR="$(dirname "$(readlink -f "$0")")"
+compositor() { host "$BIN_DIR/compositor" "$@"; }
+
+# ASKING THE COMPOSITOR HAS TO HAPPEN OUTSIDE STEAM'S LOADER ENVIRONMENT.
+# Steam exports its own LD_LIBRARY_PATH into everything it launches, this script
+# included, and its pinned libraries shadow the system ones. That is not a
+# hypothetical here: it is exactly what stopped mpvpaper from restarting and
+# left the desktop frozen on a still frame, and it hid from testing because the
+# poison only exists when Steam is the launcher.
+#
+# hyprctl happens to survive it. Whether `niri msg` does was never tested, and
+# the failure would be invisible -- an empty answer drops straight through to
+# the 2560x1440@165 fallback, so a 4K monitor would quietly get a 1440p
+# gamescope and nothing on screen would say why. Cheaper to strip the
+# environment than to find that out from a bug report.
+host() { env -u LD_LIBRARY_PATH -u LD_PRELOAD "$@"; }
+
 monitor_mode() {
-    hyprctl monitors -j 2>/dev/null \
-        | jq -r 'map(select(.focused))[0] // .[0]
-                 | "\(.width) \(.height) \(.refreshRate | round)"' 2>/dev/null
+    case "$(compositor 2>/dev/null)" in
+        hyprland)
+            host hyprctl monitors -j 2>/dev/null \
+                | jq -r 'map(select(.focused))[0] // .[0]
+                         | "\(.width) \(.height) \(.refreshRate | round)"' 2>/dev/null
+            ;;
+        niri)
+            # focused-output rather than `outputs`, and not only because it
+            # saves the picking: `niri msg -j outputs` answers with an OBJECT
+            # keyed by connector name, not an array, so `.[0]` and `map()` --
+            # the shape the Hyprland branch above uses -- do not apply to it.
+            #
+            # current_mode is an INDEX into modes and it is null while the
+            # output is asleep or off. Guarded here rather than left to throw:
+            # jq would exit non-zero, print nothing and drop through to the
+            # fallback, which is a defensible answer for a dark screen but an
+            # accidental one.
+            #
+            # refresh_rate is in MILLIHERTZ (165000 = 165 Hz), unlike
+            # Hyprland's refreshRate, which is already in Hz.
+            host niri msg -j focused-output 2>/dev/null \
+                | jq -r 'if .current_mode == null then empty else
+                             .modes[.current_mode]
+                             | "\(.width) \(.height) \(.refresh_rate / 1000 | round)"
+                         end' 2>/dev/null
+            ;;
+    esac
 }
 read -r DEF_W DEF_H DEF_HZ < <(monitor_mode) || true
 [[ ${DEF_W:-null} == null || -z ${DEF_W:-} ]] && { DEF_W=2560; DEF_H=1440; DEF_HZ=165; }

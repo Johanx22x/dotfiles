@@ -43,6 +43,10 @@ import "root:/modules/settings"
 SettingsPage {
     id: root
 
+    // This page LISTS what is bound, which means reading it back out of the
+    // compositor. Nothing to read, nothing to list.
+    available: Compositor.can("bindsIntrospection")
+
     title: "Keybinds"
     glyph: Icons.keyboard
     // "conflict" and "taken" are the questions this page answers that its own
