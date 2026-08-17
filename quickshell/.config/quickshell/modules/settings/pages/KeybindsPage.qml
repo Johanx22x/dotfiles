@@ -208,7 +208,26 @@ SettingsPage {
     // One record per bind, in the order hyprctl reported them. Filled by the
     // Process at the bottom; the two bindings under it are derived from this
     // and from nothing else.
-    property var entries: []
+    // WHERE THE LIST COMES FROM. No command is run here: each compositor backend
+    // produces the same shape from whatever source it has -- Hyprland's socket
+    // on one flavor, the config file on the other -- and this page turns it into
+    // rows. See compositor/CompositorBackend.qml.
+    //
+    // EVERY bind, described or not, unlike the cheatsheet: this page answers
+    // "what is this chord doing", so the media keys belong here even though they
+    // would be noise on a sheet of chords worth memorising.
+    readonly property var entries: Compositor.binds.map((bind, index) => ({
+        keys: bind.keys.map(k => root.keyName(k)),
+        category: bind.category,
+        text: bind.description,
+        described: bind.described,
+        submap: bind.submap,
+        nonConsuming: bind.nonConsuming,
+        // The index is enough to tell two identical-looking rows apart, and it
+        // is stable for as long as the list is.
+        id: `${bind.submap}\u0000${bind.keys.join("+")}\u0000${index}`,
+        search: `${bind.keys.join(" ")} ${bind.category} ${bind.description}`.toLowerCase()
+    }))
 
     // Lowercased once here rather than in the loop that uses it, which runs
     // over every bind on every keystroke typed into the field.
@@ -778,62 +797,23 @@ SettingsPage {
             reader.running = true;
     }
 
-    Process {
-        id: reader
+    // WHERE THE LIST COMES FROM. No command is run here any more: each
+    // compositor backend produces the same shape from whatever source it has --
+    // Hyprland's socket on one flavor, the config file on the other -- and this
+    // page turns it into rows. See compositor/CompositorBackend.qml.
+    //
+    // EVERY bind, described or not, unlike the cheatsheet: this page answers
+    // "what is this chord doing", so the media keys belong here even though
+    // they would be noise on a sheet of chords worth memorising.
 
-        command: ["hyprctl", "binds", "-j"]
+    Connections {
+        target: root
 
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let parsed;
-                try {
-                    parsed = JSON.parse(text || "[]");
-                } catch (e) {
-                    console.warn("KeybindsPage: could not parse hyprctl binds --", e.message);
-                    return;
-                }
-
-                const list = [];
-
-                for (const item of parsed) {
-                    const description = (item.description ?? "").trim();
-                    // has_description and a non-empty string, because hyprctl
-                    // reports the flag and the text separately and a bind can
-                    // carry an empty one.
-                    const described = !!item.has_description && description !== "";
-                    const colon = description.indexOf(": ");
-                    // A bind written by keycode has no keysym for hyprctl to
-                    // report, and an empty chip reads as a row that failed to
-                    // load rather than as a key nobody named.
-                    const key = (item.key ?? "") !== "" ? root.keyName(item.key)
-                        : item.keycode ? `code ${item.keycode}` : "?";
-                    const keys = root.modifiers(item.modmask).concat([key]);
-
-                    list.push({
-                        keys: keys,
-                        // "Category: what it does" is the form hyprland.lua
-                        // writes and the cheatsheet reads; a description
-                        // without a colon is kept whole under "Other" rather
-                        // than being cut at a separator it does not have.
-                        category: !described ? "Undescribed"
-                            : colon < 0 ? "Other" : description.slice(0, colon),
-                        text: !described ? ""
-                            : colon < 0 ? description : description.slice(colon + 2),
-                        described: described,
-                        submap: item.submap ?? "",
-                        nonConsuming: !!item.non_consuming,
-                        id: root.bindId(item),
-                        // Matched against BOTH spellings of the key: the chip
-                        // says "Esc" and the config says ESCAPE, and someone
-                        // hunting a bind will type either. The description
-                        // keeps its category prefix here so "shell" finds the
-                        // whole group.
-                        haystack: `${keys.join(" ")} ${item.key ?? ""} ${description}`.toLowerCase()
-                    });
-                }
-
-                root.entries = list;
-            }
+        // Re-read when the page is looked at, so a config reload between two
+        // visits cannot leave a stale list on screen.
+        function onVisibleChanged(): void {
+            if (root.visible)
+                Compositor.refreshBinds();
         }
     }
 }

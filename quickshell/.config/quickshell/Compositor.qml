@@ -64,6 +64,11 @@ Singleton {
     readonly property string captureOwner: backend?.captureOwner ?? ""
     readonly property string captureTarget: backend?.captureTarget ?? ""
     readonly property var keyboardLayouts: backend?.keyboardLayouts ?? ({ names: [], currentIndex: 0 })
+    readonly property var binds: backend?.binds ?? []
+
+    function refreshBinds(): void {
+        backend?.refreshBinds();
+    }
 
     // The question the shell should be asking. `Compositor.can("monitorConfig")`
     // rather than a name check -- see the header of CompositorBackend.qml for
