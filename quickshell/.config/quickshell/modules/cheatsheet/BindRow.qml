@@ -31,11 +31,21 @@ Item {
     // sheet agrees, see Cheatsheet.keyGutter.
     required property int gutterWidth
 
+    // How much room this row would need for its own chips. Reported back so the
+    // sheet can size the gutter to the widest chord it is actually showing
+    // rather than to a number written down when only one compositor existed --
+    // niri binds four-chip chords and the old fixed 150 pushed them off the
+    // card. Reading the Row's implicit width and not its width, which is the
+    // gutter it has been told to fit into.
+    readonly property int naturalWidth: chipRow.implicitWidth
+
     readonly property int gap: 12
 
     implicitHeight: 30
 
     Row {
+        id: chipRow
+
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         // Right to left, so the first item laid out ends up rightmost. The
