@@ -856,10 +856,22 @@ animations {
 // than a parse error. Included files are watched too, so editing one live
 // reloads exactly like editing this one.
 //
-// CAREFUL, THE MERGE RULES ARE NOT UNIFORM -- and they are not the same as
-// Lua's "the later assignment wins" either. Most sections merge, but
-// window-rule, output and workspace are INSERTED positionally, so a second
-// `output` block for a monitor named above does not cleanly replace the first.
-// Until that is measured rather than assumed, treat this file as the place
-// monitors are declared and use the include for binds and rules.
+// CAREFUL, THE MERGE RULES ARE NOT UNIFORM, and they are not Lua's "the later
+// assignment wins" either. Measured on a live session rather than assumed:
+//
+//   layout, focus-ring, input   MERGE property by property, and a later include
+//                               overrides what came before. This is how
+//                               colors.kdl replaces only active-gradient while
+//                               leaving width and inactive-color alone.
+//   window-rule                 every matching rule applies, and the last one
+//                               to set a property wins. opacity.kdl relies on
+//                               this and is included after the rules above it.
+//   output                      DOES NOT WORK THAT WAY. An `output` block in an
+//                               include is IGNORED when this file already names
+//                               the same monitor -- measured: a local.kdl
+//                               moving HDMI-A-1 to y=100 left it at y=0.
+//
+// So monitors can only be declared HERE, and the day this flavor grows a
+// generated override layer like Hyprland's monitors.lua, that generator has to
+// own the output blocks outright -- they cannot be layered on top.
 include optional=true "~/.config/niri/local.kdl"
