@@ -314,58 +314,31 @@ include optional=true "~/.config/niri/colors.kdl"
 // -----------------------------------------------------------------------------
 // WORKSPACES
 // -----------------------------------------------------------------------------
-// TEN NAMED WORKSPACES, WHICH IS DELIBERATELY NOT THE NIRI WAY.
+// DYNAMIC, WHICH IS NIRI'S OWN MODEL, AND CHOSEN AFTER TRYING THE ALTERNATIVE.
 //
-// niri's workspaces are dynamic: created as you need them, empty ones in the
-// middle disappear, and the number in `focus-workspace 3` means "the third one
-// on this monitor right now" rather than a place. The project recommends
-// leaning into that, and it is a coherent design.
+// niri creates workspaces as you need them, drops the empty ones in the middle,
+// and `focus-workspace 3` means "the third one on this monitor right now"
+// rather than a fixed place. Coming from Hyprland that is the one thing that
+// feels wrong: a row that renumbers itself when workspace 1 empties out moves
+// the window you were reaching for because something ELSE closed.
 //
-// It is not the design this desktop is built around. Hyprland's workspace 3 is
-// still workspace 3 tomorrow, muscle memory is built on that, and a row that
-// renumbers itself when workspace 1 empties out is worse than useless: the
-// window you were reaching for moved because something ELSE closed.
+// The fix for that is named workspaces, the only persistent kind niri has, and
+// it was built and measured here before being taken out again. It works -- ten
+// named workspaces, addressed by name, stable forever -- and it costs something
+// that turned out to matter more: a named workspace EXISTS WHETHER OR NOT
+// ANYTHING IS ON IT, so the overview always showed ten slots, nine of them
+// empty. The bar can filter those out; the overview is drawn by the compositor
+// and cannot.
 //
-// NAMED workspaces are the one persistent thing niri has -- a named workspace
-// exists whether or not anything is on it, and it keeps its place. So the ten
-// are declared here, and every workspace bind addresses them BY NAME. Note the
-// quotes: `focus-workspace "3"` and `focus-workspace 3` are different actions,
-// the first going to the workspace CALLED 3 and the second to whatever happens
-// to be third on this monitor at the time.
+// Both were checked for a way out and there is none:
+//   * Named workspaces are NOT created on demand -- focusing or moving a window
+//     to a name that was never declared does nothing at all.
+//   * There is no option to hide empty workspaces in the overview; the binary
+//     has nothing of the sort.
 //
-// WHAT THIS ALSO BUYS, measured rather than hoped for: focusing a named
-// workspace that lives on ANOTHER monitor moves the focus to that monitor. So
-// the ten behave like one session-wide set reachable from either screen, which
-// is the closest niri gets to Hyprland's shared workspaces. They are not
-// literally shared -- a workspace belongs to one monitor at a time, and nothing
-// here changes that.
-//
-// The cost, plainly: ten workspaces always exist, so the row never gets shorter
-// than ten and the overview always shows ten slots. That is what a number
-// meaning the same thing tomorrow costs on this compositor.
-// DECLARED BACKWARDS, AND NOT CALLED "1".."10". Both of those are measured
-// rather than stylistic:
-//
-//   * niri inserts each declared workspace ahead of the ones before it, so
-//     declaring 1..10 lays them out 10..1 on screen. Declaring them in reverse
-//     puts ws1 first, which is the only order the row makes sense in.
-//
-//   * A workspace named "5" cannot be addressed. `focus-workspace "5"` parses
-//     the reference as an INDEX before it ever considers names, so it goes to
-//     whatever is fifth -- which, in the reversed layout, was the workspace
-//     called 6. Off by one, silently, on every single key. Non-numeric names
-//     have no such collision, and nothing shows them: the bar draws dots and
-//     the binds carry their own descriptions.
-workspace "ws10"
-workspace "ws9"
-workspace "ws8"
-workspace "ws7"
-workspace "ws6"
-workspace "ws5"
-workspace "ws4"
-workspace "ws3"
-workspace "ws2"
-workspace "ws1"
+// So it is one or the other, and an overview that is honest about what exists
+// won. What is given up is written down rather than forgotten: SUPER+3 is the
+// third workspace at that moment, and the numbers shift when one empties out.
 
 
 
@@ -589,27 +562,27 @@ binds {
     // the Nth workspace OF THE MONITOR YOU ARE ON, and the Nth is not always
     // the same set of windows. The chord is preserved; the identity is not,
     // and it cannot be -- see the note on named workspaces above.
-    Mod+1 hotkey-overlay-title="Workspaces: go to workspace 1-10" { focus-workspace "ws1"; }
-    Mod+2 { focus-workspace "ws2"; }
-    Mod+3 { focus-workspace "ws3"; }
-    Mod+4 { focus-workspace "ws4"; }
-    Mod+5 { focus-workspace "ws5"; }
-    Mod+6 { focus-workspace "ws6"; }
-    Mod+7 { focus-workspace "ws7"; }
-    Mod+8 { focus-workspace "ws8"; }
-    Mod+9 { focus-workspace "ws9"; }
-    Mod+0 { focus-workspace "ws10"; }
+    Mod+1 hotkey-overlay-title="Workspaces: go to workspace 1-10" { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+6 { focus-workspace 6; }
+    Mod+7 { focus-workspace 7; }
+    Mod+8 { focus-workspace 8; }
+    Mod+9 { focus-workspace 9; }
+    Mod+0 { focus-workspace 10; }
 
-    Mod+Shift+1 hotkey-overlay-title="Workspaces: send the window to workspace 1-10" { move-column-to-workspace "ws1"; }
-    Mod+Shift+2 { move-column-to-workspace "ws2"; }
-    Mod+Shift+3 { move-column-to-workspace "ws3"; }
-    Mod+Shift+4 { move-column-to-workspace "ws4"; }
-    Mod+Shift+5 { move-column-to-workspace "ws5"; }
-    Mod+Shift+6 { move-column-to-workspace "ws6"; }
-    Mod+Shift+7 { move-column-to-workspace "ws7"; }
-    Mod+Shift+8 { move-column-to-workspace "ws8"; }
-    Mod+Shift+9 { move-column-to-workspace "ws9"; }
-    Mod+Shift+0 { move-column-to-workspace "ws10"; }
+    Mod+Shift+1 hotkey-overlay-title="Workspaces: send the window to workspace 1-10" { move-column-to-workspace 1; }
+    Mod+Shift+2 { move-column-to-workspace 2; }
+    Mod+Shift+3 { move-column-to-workspace 3; }
+    Mod+Shift+4 { move-column-to-workspace 4; }
+    Mod+Shift+5 { move-column-to-workspace 5; }
+    Mod+Shift+6 { move-column-to-workspace 6; }
+    Mod+Shift+7 { move-column-to-workspace 7; }
+    Mod+Shift+8 { move-column-to-workspace 8; }
+    Mod+Shift+9 { move-column-to-workspace 9; }
+    Mod+Shift+0 { move-column-to-workspace 10; }
 
     // WAS: the magic scratchpad. There is nothing to point these at any more --
     // see the WORKSPACES note above for why faking one was worse than not having
