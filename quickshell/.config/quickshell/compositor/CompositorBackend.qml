@@ -217,6 +217,11 @@ QtObject {
     // the session whatever is drawing it. A backend overrides this only to ask
     // its compositor nicely first -- which is worth doing, because a compositor
     // that exits on its own tears the session down in the order it wants to.
+    // Step to the next keyboard layout. Only meaningful where
+    // `keyboardLayout` is true -- elsewhere the shell rotates a stored list
+    // instead, because the compositor's own index cannot be read back.
+    function switchKeyboardLayout(): void {}
+
     function logout(): void {
         Quickshell.execDetached(["loginctl", "terminate-user", Quickshell.env("USER") ?? ""]);
     }

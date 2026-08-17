@@ -278,6 +278,10 @@ CompositorBackend {
         root.action({ FocusWorkspace: { reference: { Id: id } } });
     }
 
+    function switchKeyboardLayout(): void {
+        root.action({ SwitchLayout: { layout: "Next" } });
+    }
+
     function logout(): void {
         root.action({ Quit: { skip_confirmation: true } });
     }
