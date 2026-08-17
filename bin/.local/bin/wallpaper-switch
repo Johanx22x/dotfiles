@@ -326,6 +326,20 @@ if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" && -d "$XDG_RUNTIME_DIR/hypr" ]]; th
     export HYPRLAND_INSTANCE_SIGNATURE
 fi
 
+# The same recovery for the other flavor. niri publishes $NIRI_SOCKET, and a
+# systemd --user unit does not inherit it any more than it inherits Hyprland's
+# signature.
+if [[ -z "${NIRI_SOCKET:-}" ]]; then
+    NIRI_SOCKET="$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'niri.*.sock' 2>/dev/null | head -1)"
+    [[ -n "$NIRI_SOCKET" ]] && export NIRI_SOCKET
+fi
+
+# Which compositor is answering. Resolved next to this script rather than
+# through PATH: this runs from a systemd unit too, where ~/.local/bin may not be
+# on it.
+WS_BIN_DIR="$(dirname "$(readlink -f "$0")")"
+compositor() { "$WS_BIN_DIR/compositor" "$@"; }
+
 # ---------------------------------------------------------------
 # 4. Set the wallpaper
 # ---------------------------------------------------------------
@@ -343,11 +357,29 @@ fi
 # instead of a hole in the middle of the transition.
 
 # The pids owning a layer-shell surface under this namespace, one per line.
+# Hyprland only: niri's layer list has no pid, see below.
 layer_pids() {
     hyprctl layers 2>/dev/null \
         | grep "namespace: $1" \
         | sed -n 's/.*pid: \([0-9]*\).*/\1/p' \
         | sort -u
+}
+
+# HOW MANY layer-shell surfaces answer to this namespace right now.
+#
+# niri's IPC reports namespace, output, layer and keyboard interactivity for
+# each surface -- and NO pid. Verified against a live session, and it is the one
+# thing that makes the wait below work differently on the two compositors.
+#
+# Counting is enough because of a measured fact: ONE mpvpaper owns exactly ONE
+# surface per monitor. So while the outgoing and incoming processes overlap the
+# count is strictly higher than it was, and "higher than before" means the new
+# one has a surface -- which is the same proof the pid gave, arrived at without
+# one.
+layer_count() {
+    niri msg -j layers 2>/dev/null \
+        | jq --arg ns "$1" '[.[] | select(.namespace == $ns)] | length' 2>/dev/null \
+        || echo 0
 }
 
 # Wait until $1 has a surface belonging to a pid that is NOT in $2, a
@@ -363,7 +395,19 @@ layer_pids() {
 # mpvpaper is alive well before it has a surface, and a pid is only proof of a
 # surface when it came out of the surface list.
 wait_for_new_layer() {
-    local ns="$1" old=" $2 " pid _
+    local ns="$1" before="$2" _
+    if compositor can monitor-query 2>/dev/null && compositor is niri 2>/dev/null; then
+        # No pid to compare, so the proof is the COUNT going up -- see
+        # layer_count above for why that is equivalent here.
+        local baseline="${before:-0}"
+        for _ in {1..80}; do
+            [[ "$(layer_count "$ns")" -gt "$baseline" ]] && return 0
+            sleep 0.05
+        done
+        return 1
+    fi
+
+    local old=" $before " pid
     for _ in {1..80}; do
         while read -r pid; do
             [[ -n "$pid" && "$old" != *" $pid "* ]] && return 0
@@ -371,6 +415,16 @@ wait_for_new_layer() {
         sleep 0.05
     done
     return 1
+}
+
+# What to hand wait_for_new_layer as "before": pids on one compositor, a count
+# on the other. One call site, so the difference stays in here.
+layer_state() {
+    if compositor is niri 2>/dev/null; then
+        layer_count "$1"
+    else
+        layer_pids "$1" | tr '\n' ' '
+    fi
 }
 
 stop_video() {
@@ -412,8 +466,21 @@ apply_video() {
     # Noted, NOT killed. Going from one video to another, this is the only
     # thing on screen, and stopping it here is what put the compositor's
     # default wallpaper on the screen for half a second.
-    local old_pids
+    #
+    # TWO DIFFERENT QUESTIONS, and conflating them is what broke this under
+    # niri. WHO TO KILL is a process question, answered by pgrep and the same
+    # everywhere. WHETHER THE NEW ONE IS DRAWING is a compositor question, and
+    # the compositor answers it differently: Hyprland hands out the pid owning
+    # each surface, niri does not and only the surface count is available.
+    #
+    # The old code asked pgrep for both. On Hyprland the two lists happened to
+    # be the same numbers so it worked; on niri the surface side came back empty
+    # forever, the wait timed out, and the branch that kills the outgoing
+    # process never ran -- which is why every switch left another mpvpaper
+    # behind, four deep, all still playing the first video.
+    local old_pids old_layers
     old_pids="$(pgrep -x mpvpaper 2>/dev/null | tr '\n' ' ')"
+    old_layers="$(layer_state mpvpaper)"
 
     # -f forks: this script is run from keybinds and from a systemd timer, and
     # neither has a terminal to hold the process open.
@@ -424,7 +491,7 @@ apply_video() {
     # Nothing is torn down until the new video is genuinely on the layer. If it
     # never gets there, both the old backends are left exactly as they were:
     # a wallpaper that did not change is a better failure than a black screen.
-    if wait_for_new_layer mpvpaper "$old_pids"; then
+    if wait_for_new_layer mpvpaper "$old_layers"; then
         awww kill >/dev/null 2>&1
         # shellcheck disable=SC2086  # a pid list, deliberately split
         [[ -n "${old_pids// /}" ]] && kill $old_pids 2>/dev/null
@@ -496,16 +563,21 @@ matugen image "$PALETTE_SOURCE" --mode dark --prefer saturation --quiet \
     || die "matugen failed"
 
 # ---------------------------------------------------------------
-# 6. Apply the Hyprland border live
+# 6. Apply the accent border live
 # ---------------------------------------------------------------
-# matugen already wrote colors.lua (which is read at startup), but for the
-# change to show up right now it has to be pushed to the compositor.
+# ONLY HYPRLAND NEEDS THIS STEP AT ALL.
+#
+# matugen has just written both flavors' colour files. Hyprland reads its one at
+# startup, so making the change show up NOW takes a second push into the running
+# compositor. niri watches every file it includes and reloads itself, so the
+# write above already was the push -- there is nothing to do here and doing
+# nothing is the correct behaviour rather than a gap.
 #
 # CAREFUL: "hyprctl keyword" does NOT work with a Lua config -- it answers
 # "keyword can't work with non-legacy parsers". You have to use
 # "hyprctl eval", which runs Lua code against the live config.
 COLORS_LUA="$HOME/.config/hypr/colors.lua"
-if [[ -r "$COLORS_LUA" ]] && command -v hyprctl >/dev/null; then
+if [[ -r "$COLORS_LUA" ]] && command -v hyprctl >/dev/null && compositor can live-config 2>/dev/null; then
     ACCENT=$(grep -oP 'accent\s*=\s*"\K[0-9a-fA-F]{6}'  "$COLORS_LUA" | head -1)
     ACCENT2=$(grep -oP 'accent2\s*=\s*"\K[0-9a-fA-F]{6}' "$COLORS_LUA" | head -1)
     if [[ -n "$ACCENT" && -n "$ACCENT2" ]]; then

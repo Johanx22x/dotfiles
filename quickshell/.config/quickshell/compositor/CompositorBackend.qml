@@ -76,6 +76,15 @@ QtObject {
         inputConfig: false,
         // Is there a scratchpad / special workspace to send a window to?
         scratchpad: false,
+        // Does a layer surface holding an exclusive keyboard grab receive keys
+        // NO MATTER WHICH MONITOR the user is focused on?
+        //
+        // True on a compositor with one session-wide keyboard focus, false where
+        // focus belongs to a monitor. It decides where the launcher, the power
+        // menu and the cheatsheet are put: one fixed screen is only safe when
+        // the grab is global, and anywhere else they have to follow the focus or
+        // they come up on the wrong monitor and swallow nothing.
+        globalKeyboardGrab: false,
         // Can the session be ended by asking the compositor?
         logout: false
     })
