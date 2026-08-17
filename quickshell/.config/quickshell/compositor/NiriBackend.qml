@@ -108,6 +108,12 @@ CompositorBackend {
         // December 2024. The config maps the old scratchpad chords onto a named
         // workspace, which is a place you go to rather than an overlay.
         scratchpad: false,
+        // FALSE, measured rather than assumed. niri's Window carries a `layout`
+        // with tile and window SIZES, but `tile_pos_in_workspace_view` is null
+        // -- checked against six visible windows across both monitors, every
+        // one of them null. Sizes without positions cannot be turned into
+        // screen rectangles, so there is nothing to hand slurp.
+        windowGeometry: false,
         // FALSE, and this one is felt immediately rather than in theory. niri's
         // keyboard focus belongs to a monitor, so a launcher pinned to the main
         // screen opens there, takes its exclusive grab, and then receives
