@@ -210,6 +210,13 @@ CompositorBackend {
     // connection and then keeps that connection open pushing events forever, so
     // a request written into the stream would never be answered.
     property Socket requester: Socket {
+        // NAMED, and not reachable as `parent` from the parser below: a
+        // DataStreamParser is not a visual child, so its `parent` is null and
+        // touching it throws "Value is null and could not be converted to an
+        // object" -- once per action, from inside a signal handler, which is a
+        // long way from where it would look like it came from.
+        id: requesterSocket
+
         path: root.socketPath
         connected: false
 
@@ -237,7 +244,9 @@ CompositorBackend {
                 } catch (e) {
                     // The reply is only read to know it arrived.
                 }
-                parent.connected = false;
+                // The connection has served its purpose: niri answers one
+                // request per connection.
+                requesterSocket.connected = false;
             }
         }
     }

@@ -1,13 +1,15 @@
 // Workspaces of the monitor this bar sits on.
 //
-// Event-driven: Quickshell.Hyprland keeps a live model fed by the
-// compositor's event socket. Nothing polls and nothing spawns hyprctl.
+// Event-driven through Compositor, which keeps a live model fed by whichever
+// compositor is running. Nothing polls and nothing spawns a CLI tool.
 //
 // SHAPE
 // No numbers: each workspace is a dot, and the active one is a wide pill.
 // Position in the row identifies a workspace, so the label is redundant --
 // and dropping it is what lets the module shrink to a strip a few pixels
-// tall.
+// tall. It also happens to be the only design that works on both compositors:
+// Hyprland's workspaces are numbered places, niri's are a dynamic list where
+// the number is a position, and a dot means the same thing in both.
 //
 // THE INDICATOR IS ONE OBJECT, NOT A STATE PER DOT
 // The pill is a single Rectangle floating over the row, not the active dot
@@ -26,45 +28,42 @@
 // `focused` when it is the one the keyboard is on -- and only one workspace
 // in the whole session is focused. Tracking `focused` broke as soon as the
 // other monitor was clicked: no workspace on this bar was focused any more,
-// while the workspace of the OTHER monitor (whose slot exists here but is
-// invisible, and therefore never positioned by the Row) claimed the
-// indicator and threw the pill to x = 0.
+// while the workspace of the OTHER monitor claimed the indicator and threw the
+// pill to x = 0. Filtering the model by output, below, is what makes that
+// impossible rather than merely unlikely.
 //
-// `active` is per monitor, so each bar follows its own screen and nothing
-// moves when focus leaves. The guard on `visible` below is the belt to that
-// braces: a slot that does not belong to this monitor can never take the
-// indicator.
+// WHY THE MODEL IS A COUNT AND NOT THE LIST ITSELF
+// Compositor hands out a plain array, rebuilt whenever anything changes -- it
+// has to be, because QML only re-evaluates a binding when the property itself
+// changes, and mutating an array in place notifies nothing. Feeding that array
+// to the Repeater directly would DESTROY AND REBUILD EVERY DELEGATE on every
+// event, which resets the width animation mid-flight and makes the pill jump
+// instead of travel. Binding to the length instead keeps the delegates alive
+// while only their contents change, so a rebuild happens when a workspace is
+// genuinely added or removed and not when one is merely focused.
 
-import Quickshell
-import Quickshell.Hyprland
 import QtQuick
 import "root:/"
 
 Item {
     id: root
 
-    // Which screen to filter by: Hyprland.workspaces holds every workspace
-    // on every monitor.
+    // Which screen to filter by: the compositor reports every workspace on
+    // every monitor.
     required property var barScreen
 
     readonly property int dotSize: 12
     readonly property int pillWidth: 36
     readonly property int slotSpacing: 9
 
-    // Derived from the workspace model rather than from
-    // Hyprland.focusedMonitor. The IPC models are populated LAZILY: whichever
-    // one nothing subscribes to is never refreshed, and focusedMonitor stayed
-    // frozen on whatever monitor happened to be focused at startup. The
-    // Repeater below already subscribes to the workspace model, so asking it
-    // which monitor holds the globally focused workspace gives the same
-    // answer off data that is guaranteed live.
-    readonly property bool screenFocused: {
-        for (const ws of Hyprland.workspaces.values) {
-            if (ws.focused)
-                return ws.monitor?.name === barScreen.name;
-        }
-        return false;
-    }
+    // This monitor's workspaces, in the compositor-neutral shape:
+    // { id, number, name, output, active, focused, urgent, windows }
+    readonly property var list: Compositor.workspacesOn(barScreen.name)
+
+    // Does this screen have the keyboard? Straight from the facade, which
+    // derives it from whichever workspace is focused -- one question, answered
+    // the same way on every compositor.
+    readonly property bool screenFocused: Compositor.focusedOutput === barScreen.name
 
     // Set by whichever slot is currently active, see the delegate below.
     // Reading it out of the Repeater instead would mean looping over items
@@ -92,6 +91,10 @@ Item {
 
     implicitWidth: row.implicitWidth
     implicitHeight: Theme.groupHeight
+
+    // Nothing to show on a compositor that cannot report workspaces. The module
+    // collapses rather than leaving a gap in the bar.
+    visible: Compositor.can("workspaces") && list.length > 0
 
     // ---------------- The moving pill ----------------
     Rectangle {
@@ -125,20 +128,26 @@ Item {
 
         Repeater {
             id: repeater
-            model: Hyprland.workspaces
+            model: root.list.length
 
             Item {
                 id: slot
 
-                required property HyprlandWorkspace modelData
+                required property int index
 
-                readonly property bool occupied: modelData.toplevels.values.length > 0
-                readonly property bool isActive: modelData.active
+                // Re-read from the array on every change. The delegate itself
+                // survives; only this binding moves.
+                readonly property var ws: root.list[index] ?? null
 
-                // `?.` is load-bearing: a workspace exists for an instant
-                // with no monitor while it is being moved between screens,
-                // and reading .name off null throws inside the binding.
-                visible: modelData.monitor?.name === root.barScreen.name
+                readonly property bool isActive: ws?.active === true
+
+                // WHEN OCCUPANCY IS UNKNOWN, EVERYTHING READS AS OCCUPIED.
+                // `windows` is -1 on a compositor that cannot count them, and
+                // the alternative -- treating unknown as empty -- would paint
+                // the whole row in the barely-there colour and make the bar
+                // look broken. Bright is the safe direction to be wrong in.
+                readonly property bool occupied: !Compositor.can("workspaceOccupancy")
+                    || (ws?.windows ?? 0) > 0
 
                 // The slot widens for the active workspace so the pill has
                 // room; the rest of the row reflows around it.
@@ -149,12 +158,9 @@ Item {
                     NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
                 }
 
-                onIsActiveChanged: if (isActive && visible)
+                onIsActiveChanged: if (isActive)
                     root.activeSlot = slot
-                Component.onCompleted: if (isActive && visible)
-                    root.activeSlot = slot
-                // A workspace moved onto this monitor arrives already active.
-                onVisibleChanged: if (isActive && visible)
+                Component.onCompleted: if (isActive)
                     root.activeSlot = slot
 
                 Rectangle {
@@ -169,7 +175,7 @@ Item {
                     opacity: slot.isActive ? 0 : 1
 
                     color: {
-                        if (slot.modelData.urgent)
+                        if (slot.ws?.urgent === true)
                             return Theme.critical;
                         if (mouse.containsMouse)
                             return Theme.textOnSurface;
@@ -192,7 +198,8 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Hyprland.dispatch(`workspace ${slot.modelData.id}`)
+                    onClicked: if (slot.ws)
+                        Compositor.focusWorkspace(slot.ws.id)
                 }
             }
         }
