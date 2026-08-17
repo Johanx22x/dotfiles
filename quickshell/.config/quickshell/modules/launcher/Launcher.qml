@@ -83,10 +83,20 @@ PanelWindow {
     // So when the bar is hidden the panel stops pretending: it detaches, drops
     // its fillets and rounds all four corners like the free-floating thing it
     // has become.
-    // Answered through wlr-foreign-toplevel in the compositor backend, so it
-    // reads the same on every flavor -- see hasFullscreenOn in
-    // compositor/CompositorBackend.qml.
-    readonly property bool barVisible: !Compositor.hasFullscreenOn(root.screen?.name ?? "")
+    // TWO WAYS FOR THE BAR NOT TO BE THERE, and only one of them used to be
+    // checked. A fullscreen window covers it -- the bar is on the Top layer and
+    // fullscreen draws over that -- but a monitor can also simply not HAVE one:
+    // the bar is per screen and which screens carry it is a setting.
+    //
+    // Only testing for fullscreen meant that on a monitor without a bar this
+    // panel still welded itself to one: square top corners and a fillet on each
+    // side, joined to nothing, hanging off the top edge of the screen. Which is
+    // exactly what it looked like.
+    //
+    // The fullscreen half is answered through wlr-foreign-toplevel in the
+    // compositor backend, so it reads the same on every flavor.
+    readonly property bool barVisible: Screens.hasBar(root.screen)
+        && !Compositor.hasFullscreenOn(root.screen?.name ?? "")
 
 
     readonly property var commandResults: root.commandMode ? Commands.search(root.query.slice(1)) : []
