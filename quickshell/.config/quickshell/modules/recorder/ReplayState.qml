@@ -106,15 +106,85 @@ Singleton {
         }
     }
 
-    // The screen being kept: the shell's own main screen, so the buffer holds
-    // whatever the bar is on. Asked for by connector name because that is what
-    // gpu-screen-recorder's -w takes.
+    // ---------------- The screen being kept ----------------
     //
-    // NOT written down. "DP-3" used to be a literal here, and the name is
-    // assigned by the kernel: the move from linux-lts to mainline renamed both
-    // outputs on this machine once already, which would have left the buffer
-    // recording a monitor that no longer existed. Screens.qml resolves it live.
-    readonly property string monitor: Screens.mainName
+    // A CHOICE, and it did not used to be one. This was `Screens.mainName` --
+    // "whatever screen the shell is on" -- and the failure that made it a
+    // setting is worth writing down, because nothing about it looked broken:
+    // the recorder resolves the connector ONCE, in reaper.onExited, and keeps
+    // the process it built from it. A buffer that came up when only the second
+    // monitor had been announced went on recording the second monitor for as
+    // long as the shell lived, and the only place that fact existed was the
+    // command line of a background process. Every clip saved was of the wrong
+    // screen, and the dashboard said "Instant replay" the whole time.
+    //
+    // So two things changed. The answer is now visible -- the dashboard names
+    // the screen next to the switch -- and it can be given by hand rather than
+    // only inferred. And the resolution is live: `monitor` is a binding, and
+    // onMonitorChanged below restarts the recorder when it moves.
+    //
+    // STORED AS A screenKey AND NOT AS A CONNECTOR, for the reason the monitor
+    // section of Config.qml gives at length: "DP-3" is assigned by the kernel
+    // and the move from linux-lts to mainline renamed both outputs on this
+    // machine once already. The connector is only ever resolved, never
+    // written down -- and it is resolved because gpu-screen-recorder's -w is
+    // one of the things that wants it.
+    //
+    // NOTHING CHOSEN IS NOT ONE OF THE ANSWERS. The dashboard offers monitors
+    // and only monitors -- see the note on it -- so an empty setting is a
+    // machine that has not been asked yet rather than one that asked for
+    // "automatic". It still has to record something, and the something is the
+    // shell's own screen: what this did before it was a choice, and what a
+    // fresh clone and a single-monitor machine both want without a click.
+    readonly property var screen: {
+        if (!Config.replayMonitor)
+            return Screens.main;
+
+        for (const candidate of Screens.all)
+            if (Config.screenKey(candidate) === Config.replayMonitor)
+                return candidate;
+
+        // A CHOSEN MONITOR THAT IS NOT PLUGGED IN falls back to the main one,
+        // the same way Screens.qml falls back for the shell's own screen and
+        // for the same reason: a buffer that disarms itself because a monitor
+        // is off is a buffer that is not there the one time it matters. The
+        // setting stays put, so plugging the screen back in puts the buffer
+        // back on it. It is not silent either -- monitorMissing is what the
+        // dashboard draws to say the recording is not where it was asked to be.
+        return Screens.main;
+    }
+
+    readonly property string monitor: root.screen?.name ?? ""
+
+    readonly property bool monitorMissing: Config.replayMonitor !== ""
+        && Config.screenKey(root.screen) !== Config.replayMonitor
+
+    function setMonitor(key: string): void {
+        Config.replayMonitor = key;
+    }
+
+    // The monitor is a command-line flag, exactly like the buffer length, so it
+    // cannot change under a running recorder -- the process has to come back.
+    // Same path setSeconds uses and the same honest cost: the seconds it was
+    // holding are gone.
+    onMonitorChanged: {
+        if (root.armed) {
+            root.rearm = true;
+            root.disarm();
+            return;
+        }
+
+        // NOT ARMED, and this is the case that used to leave the buffer dead
+        // rather than merely misdirected. arm() runs at startup, and at startup
+        // the compositor may not have announced a single output yet: gsr given
+        // an empty -w exits at once, three of those inside ten seconds trips
+        // the failure counter, and the buffer gives up on a monitor that was
+        // about to appear. So arm() refuses to start without a screen and this
+        // starts it as soon as there is one -- unless it was switched off on
+        // purpose, which is what `wanted` remembers.
+        if (root.wanted)
+            root.arm();
+    }
 
     // The system's own sound and the microphone, MERGED INTO ONE TRACK. Passing
     // -a twice would give a file with two separate audio tracks, and most
@@ -150,14 +220,35 @@ Singleton {
 
     property string lastClip: ""
 
+    // Whether the buffer is MEANT to be running, which is not the same as
+    // whether it is. It is the switch on the dashboard remembered across the
+    // moments when there is no process to read the answer off: between a
+    // restart and the one after it, and before there is a screen to record at
+    // all. Armed is the resting state, so it starts true.
+    property bool wanted: true
+
     function arm(): void {
+        root.wanted = true;
+
         if (root.armed)
             return;
+
+        // Nothing to point it at yet. See onMonitorChanged, which is what
+        // starts the buffer when a screen finally shows up.
+        if (root.monitor === "")
+            return;
+
         // Through the reaper, never directly: see the header.
         reaper.running = true;
     }
 
     function disarm(): void {
+        // Set even when there is no process to stop, because this is the
+        // answer to "should there be one" and the two callers that are only
+        // restarting -- setSeconds and onMonitorChanged -- put it straight
+        // back through arm().
+        root.wanted = false;
+
         if (!root.armed)
             return;
 
@@ -255,10 +346,21 @@ Singleton {
         }
 
         onExited: {
-            // Asked for by setSeconds: straight back up with the new length.
+            // Asked for by setSeconds or by the monitor changing: straight back
+            // up with the new flag.
             if (root.rearm) {
                 root.rearm = false;
-                root.arm();
+                // The stop was deliberate and it has now happened; leaving this
+                // standing would make the NEXT death look like one that was
+                // asked for, and the recorder would not come back from it.
+                root.stopping = false;
+                // NOT arm() FROM HERE, and this is the whole reason a length
+                // change used to leave the buffer switched off: `armed` is
+                // replay.running, and inside this handler the process is still
+                // marked as running -- so arm() saw a live recorder and did
+                // nothing at all. A timer gets the call out of the exit
+                // handler and into a turn where the answer is true.
+                restart.restart();
                 return;
             }
 
@@ -281,6 +383,11 @@ Singleton {
             else
                 root.failures += 1;
 
+            // `wanted` is deliberately left standing here. Giving up is about
+            // this recorder, on this screen, right now -- and the likeliest
+            // reason for three deaths in a row is the monitor it was pointed
+            // at, so a screen appearing or the choice changing gets one more
+            // go rather than nothing at all. See onMonitorChanged.
             if (root.failures >= 3) {
                 Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-u", "critical",
                     "-i", "camera-video", "Instant replay stopped",
@@ -311,6 +418,19 @@ Singleton {
         id: revive
 
         interval: 2000
+        onTriggered: root.arm()
+    }
+
+    // The way back from a deliberate restart, and it is separate from `revive`
+    // only in how long it waits. Two seconds is the right pause before chasing
+    // a recorder that died on its own -- whatever killed it may still be
+    // happening -- and it is two seconds of no buffer after a click that was
+    // meant to change one setting. This is as short as it can be: the point is
+    // to leave the exit handler, not to wait for anything.
+    Timer {
+        id: restart
+
+        interval: 1
         onTriggered: root.arm()
     }
 
