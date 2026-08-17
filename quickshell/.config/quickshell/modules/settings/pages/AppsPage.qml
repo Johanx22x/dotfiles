@@ -19,7 +19,7 @@
 // NO TERMINAL ROW, which is the one people look for. There is no MIME type
 // for it -- the terminal is named in hyprland.lua, a tracked file with a
 // thousand lines of prose in it that this window must not rewrite. Same
-// boundary hypr-tweak's header draws.
+// boundary desktop-tweak's header draws.
 
 import Quickshell
 import Quickshell.Io

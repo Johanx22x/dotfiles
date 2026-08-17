@@ -29,7 +29,7 @@ SettingsPage {
         "pointer", "mouse pointer"]
 
     // The installed cursor themes, asked for once when the page is
-    // looked at. `hypr-tweak themes` lists the icon themes that have a
+    // looked at. `desktop-tweak themes` lists the icon themes that have a
     // cursors/ directory -- an icon theme without one is an application
     // icon set, and offering it would produce a choice that does nothing.
     property var cursorThemes: []
@@ -42,7 +42,7 @@ SettingsPage {
     Process {
         id: themeQuery
 
-        command: ["hypr-tweak", "themes"]
+        command: ["desktop-tweak", "themes"]
 
         stdout: StdioCollector {
             onStreamFinished: root.cursorThemes =
@@ -90,9 +90,16 @@ SettingsPage {
         // THE COMPOSITOR'S, NOT THE SHELL'S, which is why it sits in its own
         // section rather than under Transparency: it is drawn around every
         // window on the machine, and this window is only the place that asks
-        // for it. Hyprland applies it the moment the number changes, to
-        // windows already open as well as new ones -- unlike the opacity
-        // above, which new windows pick up and old ones do not.
+        // for it. It applies the moment the number changes, to windows already
+        // open as well as new ones -- unlike the opacity above, which new
+        // windows pick up and old ones do not.
+        //
+        // WHAT IT MOVES IS NOT THE SAME EDGE ON BOTH FLAVORS, and the name on
+        // the row is the honest one for either. Hyprland has one border, drawn
+        // outside the window's own area. niri has two -- a border that takes
+        // space INSIDE the layout and a focus ring drawn outside -- so this
+        // moves the ring, which is the one that behaves like Hyprland's.
+        // Zero turns it off rather than drawing an edge nobody can see.
         StepperRow {
             glyph: Icons.windowTiles
             label: "Window border"
@@ -124,7 +131,8 @@ SettingsPage {
             onMoved: value => Config.setTweak("gaps-in", value)
 
             hint: "Counted on both sides of a seam, so two tiled windows sit "
-                + "twice this far apart."
+                + "twice this far apart. On a compositor with a single gap "
+                + "value this is that gap."
         }
 
         StepperRow {
@@ -139,7 +147,9 @@ SettingsPage {
 
             hint: "The margin the tiled area leaves around itself. This is "
                 + "also what the bar sits in, so taking it to zero puts "
-                + "windows under the bar rather than beside it."
+                + "windows under the bar rather than beside it. Below the gap "
+                + "between windows it stops shrinking: that gap is already "
+                + "there."
         }
 
         StepperRow {
@@ -152,7 +162,7 @@ SettingsPage {
             suffix: " px"
             onMoved: value => Config.setTweak("rounding", value)
 
-            hint: "Hyprland's own corners, on every window. The shell's "
+            hint: "The compositor's own corners, on every window. The shell's "
                 + "surfaces have their own radius and do not follow this — "
                 + "see the note above `rounding` in hyprland.lua about why "
                 + "the two are set apart from each other."
@@ -163,10 +173,11 @@ SettingsPage {
     //
     // ITS OWN SECTION AND NOT PART OF "Windows", because it is the one thing
     // on this page that is not drawn by the compositor at all. The size has
-    // to be told to three different parties -- Hyprland for the session, the
-    // environment for anything started afterwards, and GTK through its own
-    // settings -- which is what the `hypr-tweak` script exists to keep in
-    // step. See its header.
+    // to be told to three different parties -- the compositor for the session,
+    // the environment for anything started afterwards, and GTK through its own
+    // settings -- which is what the `desktop-tweak` script exists to keep in
+    // step. See its header: how many of the three need telling separately is
+    // itself a difference between the two flavors.
     SettingsSection {
         width: parent.width
         glyph: Icons.cursor

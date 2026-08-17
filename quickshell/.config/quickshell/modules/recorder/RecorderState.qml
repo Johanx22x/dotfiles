@@ -79,14 +79,30 @@ Singleton {
             break;
 
         case "window":
-            // Every window on every VISIBLE workspace, not just the focused
-            // monitor's. Filtering by the active workspace meant the other
-            // screen's windows were not offered at all -- slurp can only snap
-            // to boxes it was given.
-            command = `WS=$(hyprctl monitors -j | jq -c '[.[].activeWorkspace.id]'); ` +
-                `hyprctl clients -j | jq -r --argjson ws "$WS" ` +
-                `'.[] | select((.workspace.id as $id | $ws | index($id)) != null and .mapped and (.hidden | not)) | ` +
-                `"\\(.at[0]),\\(.at[1]) \\(.size[0])x\\(.size[1])"' | slurp -r`;
+            // SNAPPING NEEDS BOXES, AND NOT EVERY COMPOSITOR HAS THEM.
+            //
+            // Given a list of rectangles, slurp snaps the selection to whichever
+            // one is under the pointer, so picking a window is a click. Given
+            // nothing, it is still slurp: the same drag as region mode, just
+            // without the help. That is the honest fallback rather than a mode
+            // that refuses to run.
+            //
+            // Hyprland reports .at and .size for every client. niri does not --
+            // its Window carries sizes but `tile_pos_in_workspace_view` is null
+            // even for windows plainly on screen, measured across six of them,
+            // and a size with no position is not a rectangle.
+            if (Compositor.can("windowGeometry")) {
+                // Every window on every VISIBLE workspace, not just the focused
+                // monitor's. Filtering by the active workspace meant the other
+                // screen's windows were not offered at all -- slurp can only
+                // snap to boxes it was given.
+                command = `WS=$(hyprctl monitors -j | jq -c '[.[].activeWorkspace.id]'); ` +
+                    `hyprctl clients -j | jq -r --argjson ws "$WS" ` +
+                    `'.[] | select((.workspace.id as $id | $ws | index($id)) != null and .mapped and (.hidden | not)) | ` +
+                    `"\\(.at[0]),\\(.at[1]) \\(.size[0])x\\(.size[1])"' | slurp -r`;
+            } else {
+                command = `exec slurp < /dev/null`;
+            }
             break;
 
         default:

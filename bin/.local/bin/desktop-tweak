@@ -1,0 +1,799 @@
+#!/usr/bin/env bash
+# desktop-tweak -- the compositor settings the settings window can change.
+#
+# Gaps, corner rounding, border thickness, mouse behaviour, the cursor and the
+# keyboard layouts. One script for all of them, and that is the point: the
+# alternative -- which this repository briefly had -- is one script, one state
+# file and one reader function in the compositor config PER VALUE, which is
+# three new pieces every time a row is added to a settings page.
+#
+# ONE SCRIPT FOR EVERY COMPOSITOR, AND THAT IS THE SECOND POINT. This was
+# `hypr-tweak` and spoke only Hyprland. The obvious next move when niri arrived
+# was a `niri-tweak` beside it, and it is the wrong one: the settings window
+# would then need to know which script to call, the two would drift on what a
+# value means, and a third flavor would be a third copy. What differs between
+# compositors is only HOW a value is written down, so that is the only part
+# that branches -- on `compositor`, which answers what the running one CAN DO
+# rather than which one it is. Adding a flavor is one generator function.
+#
+# HOW IT REACHES THE COMPOSITOR:
+#
+#   Hyprland, twice on purpose:
+#     1. `hyprctl eval` for the running session, so the change is visible
+#        before the finger comes off the button. NOT `hyprctl keyword`, which
+#        on a Lua config refuses and EXITS 0 WHILE REFUSING -- see the header
+#        of DisplayPage.qml, where that cost an afternoon.
+#     2. ~/.config/hypr/tweaks.lua, generated, which hyprland.lua reads at the
+#        very end. That is what survives `hyprctl reload`, which re-runs
+#        hyprland.lua and throws away everything eval'd.
+#
+#   niri, once, and it needs no second half: there is no `hyprctl eval` here
+#   -- `compositor can live-config` says no -- but niri watches every file it
+#   includes, so WRITING ~/.config/niri/tweaks.kdl IS applying it. What costs
+#   two mechanisms on one flavor costs one on the other.
+#
+# BOTH FILES ARE WRITTEN, whichever session is running, as long as the flavor
+# is installed (its ~/.config directory exists). The state is shared, so a gap
+# set under Hyprland is the gap you get after logging into niri instead --
+# generating only for the compositor answering right now would leave the other
+# one carrying whatever it was told last time it was up.
+#
+# WHY IT DOES NOT EDIT hyprland.lua OR config.kdl. Those files are stow
+# symlinks into a git repo, thousands of lines of hand-written prose in an
+# order a person chose. A program rewriting either would flatten the commentary
+# on the first change. The boundary is: the shell owns the generated file, the
+# person owns the config.
+#
+# THE NIRI FILE WRITES WHOLE BLOCKS, EVERY PROPERTY, EVERY TIME, and that is
+# not padding. The settings window OWNS these values: if it holds "adaptive"
+# and the generated file stays quiet about the acceleration profile, config.kdl
+# says "flat" and the page is showing a value nothing is using. So every key
+# this script owns is emitted whether or not anybody touched it -- exactly what
+# the Lua half has always done, for the same reason.
+#
+# It is also what makes the file independent of a merge rule that is easy to
+# guess wrong. THE GUESS IS THAT A SUB-BLOCK IS REPLACED WHOLE while a section
+# merges property by property. It is not what this niri does. Measured twice on
+# 26.04 against config.kdl:
+#
+#   include holding only `input { keyboard { repeat-rate 30 } }`
+#       -> `niri msg -j keyboard-layouts` still lists BOTH xkb layouts. And the
+#          keymap really is rebuilt on reload, checked by putting
+#          `xkb { layout "de" }` in the same place and watching the same
+#          command come back with German alone.
+#   include holding only `layout { border { width 8 } }`
+#       -> the border stays OFF: tile_size and window_size are still equal in
+#          `niri msg -j windows`, and a border takes layout space when it is on.
+#
+# So the merge goes all the way down here. Writing the blocks complete is
+# correct under either answer, which is the point of doing it that way rather
+# than trusting the measurement to hold across a niri release.
+#
+# THE CURSOR IS THE ODD ONE and does not go through the compositor config at
+# all on Hyprland: three separate things have to be told -- Hyprland for the
+# session (`hyprctl setcursor`), the environment for anything launched
+# afterwards (XCURSOR_*, which is why it lands in the generated Lua as hl.env),
+# and GTK through gsettings, because GTK applications ask the settings portal
+# and not the compositor. Miss any one and the pointer changes over some
+# windows and not others. niri needs two of the three: its own `cursor` block
+# covers the session AND the environment -- the binary exports XCURSOR_THEME
+# and XCURSOR_SIZE to what it spawns, verified with `strings /usr/bin/niri` --
+# so only gsettings is left, and that half is compositor-independent anyway.
+#
+# THE KEYBOARD LAYOUTS ARE A LIST, AND WHICH ONE OF THEM IS ACTIVE IS KEPT IN
+# TWO DIFFERENT PLACES because the two compositors keep it in two different
+# places. This is the one thing on the page that is genuinely not the same:
+#
+#   Hyprland  THE LIST IS THE STATE AND THE FIRST ENTRY IS THE ACTIVE ONE.
+#             `layouts` holds the whole cycle -- "us,latam" -- and switching
+#             ROTATES it: "latam,us", then "us,latam" again. It is worth saying
+#             why, because `hyprctl switchxkblayout` exists and looks like the
+#             obvious answer. The index is session state and lives nowhere: it
+#             goes back to zero on `hyprctl reload`, and also every time ANY
+#             value on this page changes, because applying them re-evaluates
+#             the whole input block and Hyprland rebuilds the keymaps. Changing
+#             the mouse speed would have put the keyboard back to English.
+#             Rotating stores the answer in the one place that survives both,
+#             and a rotation preserves the cycle ORDER, so nothing is lost.
+#
+#   niri      THE COMPOSITOR OWNS THE INDEX AND KEEPS IT. `niri msg -j
+#             keyboard-layouts` answers with the names and which one is
+#             current, and it survives a config reload. So the list here is
+#             written in the order it was given and NEVER rotated, and
+#             switching is `niri msg action switch-layout <n>`. Rotating on top
+#             of an index that is remembered would give two sources that
+#             disagree -- the list would move under the index and the layout
+#             pill would name the wrong keymap.
+#
+# Either way there is one entry point -- `desktop-tweak layout` -- so the bar
+# widget, the settings window and SUPER + K cannot drift apart.
+#
+# FOUR AT MOST, AND THAT IS XKB'S LIMIT AND NOT A CHOICE HERE. An xkb keymap
+# has four groups; a fifth layout is accepted by the parser and then silently
+# never reached. Measured on this machine: with five configured, cycling goes
+# 0, 1, 2, 3, 0. Refusing the fifth is the only way that failure is visible.
+#
+# ONE THING CAN STILL OVERRULE ALL OF THIS: local.lua and local.kdl, which both
+# configs read AFTER the generated file. A machine that sets the keyboard
+# layout there keeps whatever it says, and the settings window would then be
+# showing a cycle nothing is using. Machines that want the picker take the
+# layout out of their local file.
+
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
+STATE_FILE="$STATE_DIR/desktop-tweaks"
+# What this file was called while the script was `hypr-tweak`. Renamed rather
+# than left alone because the name was a claim about which compositor these
+# values belong to, and they belong to none of them -- but a machine that has
+# been configured must not lose its settings to a rename, so the old file is
+# adopted once and then never looked at again.
+LEGACY_STATE_FILE="$STATE_DIR/hypr-tweaks"
+
+# One per flavor, each read last by that compositor's config. A pure override
+# layer that never has to know what it is overriding.
+GENERATED_HYPR="$HOME/.config/hypr/tweaks.lua"
+GENERATED_NIRI="$HOME/.config/niri/tweaks.kdl"
+
+# Which compositor is answering right now. Asked once: the `compositor` helper
+# reads sockets, and the answer cannot change inside one run of this script.
+FLAVOR="$(compositor)"
+
+# key|minimum|maximum|default. The bounds are the settings window's range as
+# well: it reads them from nowhere, so the two have to agree, and this is the
+# copy that gets to refuse.
+#
+# THE DEFAULTS ARE ALSO WHAT THE TRACKED CONFIGS SAY, on both flavors, and that
+# is not a coincidence to be broken casually. hyprland.lua carries gaps_in = 5,
+# gaps_out = 20, border_size = 2, rounding = 10; config.kdl carries the same
+# four. A machine that has never touched the settings window gets a generated
+# file that says exactly what its config already said, so the file appearing
+# changes nothing until somebody chooses something.
+#
+# SENSITIVITY IS IN HUNDREDTHS because bash does not do floating point and a
+# shell script that shells out to bc to validate a number is a shell script
+# looking for a different language. -100..100 here is Hyprland's -1.0..1.0 and
+# niri's accel-speed, which are the same libinput range, divided again on the
+# way into the generated file.
+readonly -A NUMERIC=(
+    [gaps-in]="0|40|5"
+    [gaps-out]="0|80|20"
+    [rounding]="0|30|10"
+    [border]="0|6|2"
+    [sensitivity]="-100|100|0"
+    [repeat-rate]="10|80|25"
+    [repeat-delay]="150|800|600"
+    [cursor-size]="16|48|24"
+)
+
+# The ones that are not numbers, with their accepted values.
+readonly -A CHOICES=(
+    [accel]="adaptive flat"
+    [natural-scroll]="0 1"
+)
+
+# How many layouts an xkb keymap can hold. See the header: this is the
+# format's limit, and going over it fails silently rather than loudly.
+readonly LAYOUT_MAX=4
+
+# Where the layout codes and their English names come from. The `evdev` rules
+# are the ones in force -- xkbcommon's default, and neither config sets its own
+# rules -- so this is the list the compositor will actually accept, rather than
+# a copy of it kept here and going stale. base.lst is the fallback for a system
+# that ships only the legacy rules; on this machine the two files hold the same
+# 99 layouts.
+readonly XKB_LST_CANDIDATES=(
+    /usr/share/X11/xkb/rules/evdev.lst
+    /usr/share/X11/xkb/rules/base.lst
+)
+
+usage() {
+    cat >&2 <<'EOF'
+Usage:
+  desktop-tweak set <key> <value>   set one and apply it
+  desktop-tweak reset <key>         put one back to its default
+  desktop-tweak show                print every key, its value and its range
+  desktop-tweak apply               re-apply everything (after a restart)
+  desktop-tweak clear               forget the lot
+  desktop-tweak layout next|prev    move the keyboard cycle on by one
+  desktop-tweak layout <code>       make that layout the active one
+  desktop-tweak layouts             list every layout xkb offers, code and name
+
+Keys:
+  gaps-in gaps-out rounding border      look
+  sensitivity accel natural-scroll      mouse
+  repeat-rate repeat-delay layouts      keyboard
+  cursor-theme cursor-size              pointer
+
+`accel` is adaptive or flat, `natural-scroll` is 0 or 1, `sensitivity` is in
+hundredths (-100..100 is libinput's -1.0..1.0), and `cursor-theme` is the name
+of a directory under /usr/share/icons or ~/.icons.
+
+`layouts` is the whole keyboard cycle as a comma-separated list of xkb codes,
+up to four of them:
+
+  desktop-tweak set layouts us,latam    two layouts
+  desktop-tweak layout latam            switch to Spanish (Latin American)
+  desktop-tweak layout next             whichever comes next in the cycle
+
+On Hyprland the FIRST entry is the active one and switching rotates the list;
+on niri the order is fixed and the compositor remembers the index. See the
+header -- it is the one thing on this page the two flavors do not share.
+EOF
+    exit 2
+}
+
+# ---------------------------------------------------------------------------
+# The store. Tab-separated, one key per line, sorted -- so a diff of it is
+# readable and the settings window can parse it by splitting on a tab.
+
+declare -A VALUES=()
+
+load() {
+    # The rename, done once and in passing. A `mv` and not a copy: two files
+    # both claiming to hold the settings is exactly the state that ends with
+    # the wrong one being read.
+    if [[ ! -e $STATE_FILE && -r $LEGACY_STATE_FILE ]]; then
+        mkdir -p "$STATE_DIR"
+        mv "$LEGACY_STATE_FILE" "$STATE_FILE"
+    fi
+
+    [[ -r $STATE_FILE ]] || return 0
+
+    local key value
+    while IFS=$'\t' read -r key value; do
+        [[ -n ${key:-} ]] || continue
+        VALUES[$key]=$value
+    done < "$STATE_FILE"
+}
+
+save() {
+    mkdir -p "$STATE_DIR"
+
+    local key
+    for key in "${!VALUES[@]}"; do
+        printf '%s\t%s\n' "$key" "${VALUES[$key]}"
+    done | sort > "$STATE_FILE"
+}
+
+# The value in effect: what was set, or the default. Every reader below goes
+# through this, so an unset key behaves exactly like one set to its default
+# rather than like a hole.
+current() {
+    local key=$1
+
+    if [[ -n ${VALUES[$key]:-} ]]; then
+        printf '%s' "${VALUES[$key]}"
+        return
+    fi
+
+    if [[ -n ${NUMERIC[$key]:-} ]]; then
+        printf '%s' "${NUMERIC[$key]##*|}"
+        return
+    fi
+
+    case "$key" in
+        accel)          printf 'adaptive' ;;
+        natural-scroll) printf '0' ;;
+        # Empty, and it means "whatever the system already has". There is no
+        # sensible default cursor name to invent: the theme in use came from
+        # the distribution, and overwriting it with a guess would change the
+        # pointer on a machine where nobody asked for it.
+        cursor-theme)   printf '' ;;
+        # The same value both tracked configs carry, on purpose -- see the note
+        # on the defaults above.
+        layouts)        printf 'us' ;;
+    esac
+}
+
+validate() {
+    local key=$1 value=$2
+
+    if [[ -n ${NUMERIC[$key]:-} ]]; then
+        local spec=${NUMERIC[$key]} min max
+        IFS='|' read -r min max _ <<< "$spec"
+
+        [[ $value =~ ^-?[0-9]+$ ]] || {
+            echo "desktop-tweak: $key takes a whole number ($min to $max)." >&2
+            exit 2
+        }
+        (( value >= min && value <= max )) || {
+            echo "desktop-tweak: $key must be between $min and $max." >&2
+            exit 2
+        }
+        return
+    fi
+
+    if [[ -n ${CHOICES[$key]:-} ]]; then
+        local option
+        for option in ${CHOICES[$key]}; do
+            [[ $value == "$option" ]] && return
+        done
+        echo "desktop-tweak: $key must be one of: ${CHOICES[$key]}." >&2
+        exit 2
+    fi
+
+    if [[ $key == layouts ]]; then
+        local -a wanted=()
+        IFS=',' read -r -a wanted <<< "$value"
+
+        (( ${#wanted[@]} >= 1 )) || {
+            echo "desktop-tweak: layouts needs at least one layout." >&2
+            exit 2
+        }
+        (( ${#wanted[@]} <= LAYOUT_MAX )) || {
+            echo "desktop-tweak: at most $LAYOUT_MAX layouts -- an xkb keymap has" \
+                 "$LAYOUT_MAX groups, and a fifth one is never reached." >&2
+            exit 2
+        }
+
+        # Read WHOLE and then searched, rather than piping the list into a
+        # `grep -q` per code: with pipefail set, grep leaving early on a match
+        # kills `cut` with SIGPIPE and the pipeline reports 141, which would
+        # turn every valid layout into "no such layout".
+        local available
+        available=$(layouts | cut -f1)
+
+        local code seen=""
+        for code in "${wanted[@]}"; do
+            # Checked against what xkb actually ships rather than accepted
+            # blind, for the same reason the cursor theme is: an unknown code
+            # does not fail, it drops that group and leaves the settings
+            # window showing a layout nothing on the machine agrees with.
+            grep -qx -- "$code" <<< "$available" || {
+                echo "desktop-tweak: no keyboard layout called '$code'." >&2
+                echo "  Try: desktop-tweak layouts" >&2
+                exit 2
+            }
+            # A repeat is not harmless: it takes one of the four groups and
+            # adds a step to the cycle that changes nothing when you reach it.
+            case " $seen " in
+                *" $code "*)
+                    echo "desktop-tweak: '$code' is in the list twice." >&2
+                    exit 2
+                    ;;
+            esac
+            seen="$seen $code"
+        done
+        return
+    fi
+
+    if [[ $key == cursor-theme ]]; then
+        # Checked against the directories that actually exist rather than
+        # accepted blind: a cursor theme that is not installed does not fail,
+        # it silently leaves the old pointer in place, and the settings window
+        # would show a name nothing on screen agrees with.
+        [[ -d /usr/share/icons/$value || -d $HOME/.icons/$value ]] || {
+            echo "desktop-tweak: no cursor theme called '$value'." >&2
+            echo "  Installed: $(themes | tr '\n' ' ')" >&2
+            exit 2
+        }
+        return
+    fi
+
+    echo "desktop-tweak: unknown key '$key'." >&2
+    usage
+}
+
+# Every directory under the icon paths that has a cursors/ subdirectory. An
+# icon theme without one is an application icon set, not a pointer, and
+# offering it would produce a choice that does nothing.
+themes() {
+    local dir theme
+    for dir in "$HOME/.icons" /usr/share/icons; do
+        [[ -d $dir ]] || continue
+        for theme in "$dir"/*/; do
+            # An `if` and not `[[ ... ]] && basename`, which is what this was
+            # and which broke `show` outright: under `set -e` the loop takes
+            # the status of its last command, so a final directory without a
+            # cursors/ subdirectory made the whole function exit 1 and took
+            # the script with it. The last entry under /usr/share/icons here
+            # is `hicolor`, which never has one.
+            if [[ -d ${theme}cursors ]]; then
+                basename "$theme"
+            fi
+        done
+    done | sort -u
+}
+
+# Every layout xkb offers, as `code<TAB>English name`. Two columns because the
+# settings window needs both and neither one alone is enough: `latam` is what
+# the compositor takes and "Spanish (Latin American)" is what a person is
+# looking for in a list of ninety-nine.
+#
+# The `! layout` section of the rules list, which is a flat table indented by
+# two spaces and terminated by the next `!` heading -- the variants come right
+# after it, and reading past the boundary would offer `nativo` and `dvorak` as
+# though they were layouts.
+layouts() {
+    local lst
+    for lst in "${XKB_LST_CANDIDATES[@]}"; do
+        [[ -r $lst ]] || continue
+
+        awk '
+            /^! layout/ { inside = 1; next }
+            /^!/        { inside = 0 }
+            inside && NF {
+                code = $1
+                $1 = ""
+                sub(/^[ \t]+/, "")
+                printf "%s\t%s\n", code, $0
+            }
+        ' "$lst"
+        return
+    done
+
+    echo "desktop-tweak: no xkb rules list found -- is xkeyboard-config installed?" >&2
+    exit 1
+}
+
+# The cycle as a bash array, in order.
+cycle() {
+    local -a list=()
+    IFS=',' read -r -a list <<< "$(current layouts)"
+    printf '%s\n' "${list[@]}"
+}
+
+# Move to another layout. `next` and `prev` step by one; anything else is a
+# layout code and has to already be in the cycle -- adding one is
+# `set layouts`, which is a different intention and validates the whole list
+# rather than one member of it.
+#
+# WHERE THE ANSWER IS KEPT decides how this works, and the two flavors keep it
+# in different places -- see the header. On niri the compositor holds the index
+# and is simply told to move it; everywhere else the list itself is rotated so
+# that the first entry is the active one.
+switch_layout() {
+    local target=$1
+    local -a list=()
+    mapfile -t list < <(cycle)
+
+    local count=${#list[@]}
+    (( count > 1 )) || {
+        # Not an error. SUPER + K on a machine with one layout is somebody
+        # asking a question whose answer is "there is nowhere to go", and a
+        # failing keybind would be a notification about nothing.
+        echo "desktop-tweak: only one layout configured ('${list[0]}'); nothing to switch to." >&2
+        exit 0
+    }
+
+    local at=0 i
+    case "$target" in
+        next) at=1 ;;
+        prev) at=$(( count - 1 )) ;;
+        *)
+            at=-1
+            for i in "${!list[@]}"; do
+                [[ ${list[$i]} == "$target" ]] && { at=$i; break; }
+            done
+            (( at >= 0 )) || {
+                echo "desktop-tweak: '$target' is not one of the configured layouts (${list[*]})." >&2
+                echo "  Add it with: desktop-tweak set layouts $(current layouts),$target" >&2
+                exit 2
+            }
+            ;;
+    esac
+
+    if [[ $FLAVOR == niri ]]; then
+        # next/prev go through by name so that the compositor does the modulo,
+        # and a code becomes the position it holds in the stored list -- which
+        # is the position it holds in niri's own list, because the generated
+        # file is where niri's list comes from and it is never reordered.
+        case "$target" in
+            next|prev) niri msg action switch-layout "$target" >/dev/null ;;
+            *)         niri msg action switch-layout "$at" >/dev/null ;;
+        esac
+        return
+    fi
+
+    local -a rotated=()
+    for (( i = 0; i < count; i++ )); do
+        rotated+=( "${list[$(( (at + i) % count ))]}" )
+    done
+
+    local joined
+    joined=$(IFS=','; printf '%s' "${rotated[*]}")
+
+    VALUES[layouts]=$joined
+    save
+    generate
+    apply_live
+}
+
+# ---------------------------------------------------------------------------
+# Applying
+
+# Both compositors want a float here and bash has kept hundredths, so the
+# decimal point is put back by hand. printf and not bc: one is in the shell,
+# the other is a dependency.
+sensitivity_float() {
+    local hundredths sign
+    hundredths=$(current sensitivity)
+    sign=""
+    (( hundredths < 0 )) && { sign="-"; hundredths=$(( -hundredths )); }
+    printf '%s%d.%02d' "$sign" $(( hundredths / 100 )) $(( hundredths % 100 ))
+}
+
+# The Lua both halves of the Hyprland path send. Built once so the running
+# compositor and the generated file cannot drift apart -- which they would,
+# given two copies of this and one of them edited.
+config_lua() {
+    local natural="false"
+    [[ $(current natural-scroll) == 1 ]] && natural="true"
+
+    cat <<LUA
+hl.config({
+    general = {
+        gaps_in  = $(current gaps-in),
+        gaps_out = $(current gaps-out),
+        border_size = $(current border),
+    },
+    decoration = {
+        rounding = $(current rounding),
+    },
+    input = {
+        kb_layout      = "$(current layouts)",
+        sensitivity    = $(sensitivity_float),
+        accel_profile  = "$(current accel)",
+        natural_scroll = $natural,
+        repeat_rate    = $(current repeat-rate),
+        repeat_delay   = $(current repeat-delay),
+    },
+})
+LUA
+}
+
+# The same values as KDL, for niri. Four things are spelled differently enough
+# to be worth writing down rather than reading off the diff:
+#
+#   gaps        NIRI HAS ONE GAP AND HYPRLAND HAS TWO. niri puts `gaps` both
+#               between two columns and against the screen edge -- measured on
+#               a 2560-wide output with gaps 6: a full-width tile comes back
+#               2548 wide, and three columns come back 845 each, which is
+#               (2560 - 6*4)/3. Hyprland counts gaps_in twice between windows
+#               and gaps_out once at the edge. So gaps-in is the one that maps
+#               directly, and gaps-out becomes a STRUT: extra space at the
+#               edge, on top of the gap that is already there. The difference
+#               and not the value, or the margin would be counted twice.
+#   rounding    no global. niri applies a corner radius per window, so this is
+#               a catch-all window-rule -- and it is why the include sits where
+#               it does in config.kdl, ABOVE the rules that deliberately set a
+#               radius of their own (games and the capture card want square
+#               corners and the last matching rule wins).
+#   border      the coloured edge on this desktop is the FOCUS RING, not the
+#               border: niri's border takes space inside the layout and the
+#               ring is drawn outside the window, which is what Hyprland's
+#               border_size does. Zero means the ring is off entirely, which
+#               is the state config.kdl ships.
+#   mouse and   emitted COMPLETE, always, every property of each -- including
+#   keyboard    the ones nobody touched and the ones config.kdl already agrees
+#               with. See the header: the page owns these values, so the file
+#               has to say all of them out loud.
+config_kdl() {
+    local gaps_in gaps_out strut border theme
+    gaps_in=$(current gaps-in)
+    gaps_out=$(current gaps-out)
+    strut=$(( gaps_out - gaps_in ))
+    (( strut < 0 )) && strut=0
+    border=$(current border)
+    theme=$(current cursor-theme)
+
+    cat <<KDL
+input {
+    keyboard {
+        xkb {
+            layout "$(current layouts)"
+            options ""
+        }
+        repeat-delay $(current repeat-delay)
+        repeat-rate $(current repeat-rate)
+    }
+
+    mouse {
+        accel-profile "$(current accel)"
+        accel-speed $(sensitivity_float)
+KDL
+
+    # A FLAG AND NOT A BOOLEAN: in KDL `natural-scroll` present means on, and
+    # there is no `natural-scroll false` to write. Off is the line not being
+    # there, which is why this is built by hand instead of interpolated.
+    [[ $(current natural-scroll) == 1 ]] && echo "        natural-scroll"
+
+    cat <<KDL
+    }
+}
+
+layout {
+    gaps $gaps_in
+
+    struts {
+        left $strut
+        right $strut
+        top $strut
+        bottom $strut
+    }
+
+    focus-ring {
+KDL
+
+    if (( border > 0 )); then
+        # `on` explicitly, because a merge only overrides the properties named
+        # and config.kdl's `off` would otherwise survive underneath -- the ring
+        # would keep the new width and stay invisible.
+        echo "        on"
+        echo "        width $border"
+    else
+        echo "        off"
+    fi
+
+    cat <<KDL
+    }
+}
+
+window-rule {
+    geometry-corner-radius $(current rounding)
+}
+
+cursor {
+KDL
+
+    # Only when there is one to name. Empty means "whatever the system already
+    # has", and writing niri's own default over it would change the pointer on
+    # a machine where nobody asked.
+    [[ -n $theme ]] && echo "    xcursor-theme \"$theme\""
+
+    cat <<KDL
+    xcursor-size $(current cursor-size)
+}
+KDL
+}
+
+apply_live() {
+    # Only where there is something to push. niri watches the file it includes,
+    # so the generate() above this call already applied everything -- and that
+    # is exactly the question `compositor can live-config` answers.
+    if compositor can live-config; then
+        hyprctl eval "$(config_lua)" >/dev/null || true
+    fi
+
+    local theme size
+    theme=$(current cursor-theme)
+    size=$(current cursor-size)
+
+    if [[ $FLAVOR == hyprland && -n $theme ]]; then
+        hyprctl setcursor "$theme" "$size" >/dev/null || true
+    fi
+
+    # GTK asks the settings portal, which reads these, and never asks the
+    # compositor -- so without this half the pointer changes everywhere except
+    # over GTK applications, which on this desktop is most of them. Not
+    # flavor-dependent: it is the same portal either way.
+    if command -v gsettings >/dev/null; then
+        [[ -n $theme ]] && gsettings set org.gnome.desktop.interface cursor-theme "$theme" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface cursor-size "$size" 2>/dev/null || true
+    fi
+}
+
+# WRITTEN FOR EVERY FLAVOR THAT IS INSTALLED, not only for the one running --
+# see the header. The directory existing is the test, and it is a good one: it
+# is created by stow when that flavor's package is linked, so it says "this
+# machine can boot into this compositor" rather than "somebody typed a name".
+generate() {
+    [[ -d $(dirname "$GENERATED_HYPR") ]] && generate_hypr
+    [[ -d $(dirname "$GENERATED_NIRI") ]] && generate_niri
+    return 0
+}
+
+generate_hypr() {
+    {
+        echo "-- GENERATED by desktop-tweak. Do not edit: it is rewritten whenever"
+        echo "-- a value changes in the settings window (SUPER + C) or from a"
+        echo "-- terminal. Delete it and the compositor goes back to whatever"
+        echo "-- hyprland.lua says."
+        echo "--"
+        echo "-- Read LAST by hyprland.lua, so everything here is an override."
+        echo
+        config_lua
+
+        local theme size
+        theme=$(current cursor-theme)
+        size=$(current cursor-size)
+
+        echo
+        if [[ -n $theme ]]; then
+            echo "hl.env(\"XCURSOR_THEME\", \"$theme\")"
+            echo "hl.env(\"HYPRCURSOR_THEME\", \"$theme\")"
+        fi
+        echo "hl.env(\"XCURSOR_SIZE\", \"$size\")"
+        echo "hl.env(\"HYPRCURSOR_SIZE\", \"$size\")"
+    } > "$GENERATED_HYPR"
+}
+
+generate_niri() {
+    {
+        echo "// GENERATED by desktop-tweak. Do not edit: it is rewritten whenever"
+        echo "// a value changes in the settings window (SUPER + C) or from a"
+        echo "// terminal. Delete it and the compositor goes back to whatever"
+        echo "// config.kdl says."
+        echo "//"
+        echo "// Included by config.kdl AFTER the blocks it overrides -- includes"
+        echo "// are positional here -- and before local.kdl, which keeps the last"
+        echo "// word. Writing this file IS applying it: niri watches everything it"
+        echo "// includes."
+        echo
+        config_kdl
+    } > "$GENERATED_NIRI"
+}
+
+load
+
+case "${1:-show}" in
+    set)
+        [[ $# -eq 3 ]] || usage
+        validate "$2" "$3"
+        VALUES[$2]=$3
+        save
+        generate
+        apply_live
+        ;;
+
+    reset)
+        [[ $# -eq 2 ]] || usage
+        unset "VALUES[$2]"
+        save
+        generate
+        apply_live
+        ;;
+
+    apply)
+        generate
+        apply_live
+        ;;
+
+    clear)
+        VALUES=()
+        rm -f "$STATE_FILE" "$GENERATED_HYPR" "$GENERATED_NIRI"
+        # NOT re-applied. Clearing means "go back to the tracked config", and
+        # the only honest way to reach that state is to have it read again --
+        # eval'ing the defaults from here would put THIS script's idea of them
+        # into the compositor, which is not the same thing. niri needs no
+        # instruction: deleting a file it includes is a change it watches for.
+        if [[ $FLAVOR == hyprland ]]; then
+            echo "Cleared. Run 'hyprctl reload' to go back to hyprland.lua's own values."
+        else
+            echo "Cleared."
+        fi
+        ;;
+
+    layout)
+        [[ $# -eq 2 ]] || usage
+        switch_layout "$2"
+        ;;
+
+    show)
+        printf '%-16s %-14s %s\n' KEY VALUE RANGE
+        local_keys=(gaps-in gaps-out rounding border sensitivity accel natural-scroll repeat-rate repeat-delay layouts cursor-theme cursor-size)
+        for key in "${local_keys[@]}"; do
+            if [[ -n ${NUMERIC[$key]:-} ]]; then
+                IFS='|' read -r min max _ <<< "${NUMERIC[$key]}"
+                range="$min..$max"
+            elif [[ -n ${CHOICES[$key]:-} ]]; then
+                range="${CHOICES[$key]// /, }"
+            elif [[ $key == layouts ]]; then
+                # Not the ninety-nine codes, which would bury the rest of the
+                # table. `desktop-tweak layouts` is the list; what belongs here
+                # is the rule that governs the value.
+                range="up to $LAYOUT_MAX xkb codes"
+            else
+                range="$(themes | tr '\n' ' ')"
+            fi
+            printf '%-16s %-14s %s\n' "$key" "$(current "$key")" "$range"
+        done
+        ;;
+
+    themes) themes ;;
+
+    layouts) layouts ;;
+
+    *) usage ;;
+esac

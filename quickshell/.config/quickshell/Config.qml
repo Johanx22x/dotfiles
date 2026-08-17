@@ -150,7 +150,7 @@ Singleton {
         }
     }
 
-    // Tab-separated, one key per line, the same shape hypr-tweaks uses.
+    // Tab-separated, one key per line, the same shape desktop-tweaks uses.
     function adoptLaptopModules(): void {
         const parsed = ({});
 
@@ -296,17 +296,24 @@ Singleton {
     //
     // NOT Theme CONSTANTS, and this is the clearest case on the page for why
     // some appearance settings cannot be: none of these is drawn by the
-    // shell. Hyprland puts the border, the gaps and the rounded corners on
-    // every window on the machine, including all the ones this shell knows
+    // shell. The compositor puts the border, the gaps and the rounded corners
+    // on every window on the machine, including all the ones this shell knows
     // nothing about, and it owns the pointer and the mouse. The shell only
     // reads them so the settings window has something to show.
     //
-    // ONE FILE AND ONE SCRIPT FOR ALL OF THEM, which is a change from how the
-    // border alone used to work. That had its own state file, its own script
-    // and its own reader function in hyprland.lua -- three new pieces for
-    // every value, and the moment gaps, rounding, sensitivity and the cursor
-    // followed, that was thirty. `hypr-tweak` owns the lot: one
-    // tab-separated file here, one generated tweaks.lua for the compositor.
+    // ONE FILE AND ONE SCRIPT FOR ALL OF THEM, AND FOR EVERY COMPOSITOR. That
+    // is two changes from how the border alone used to work. It had its own
+    // state file, its own script and its own reader function in hyprland.lua --
+    // three new pieces for every value, and the moment gaps, rounding,
+    // sensitivity and the cursor followed, that was thirty. And a second
+    // compositor would have doubled whatever was left. `desktop-tweak` owns the
+    // lot: one tab-separated file here, and one generated override file per
+    // flavor (tweaks.lua for Hyprland, tweaks.kdl for niri) written from it.
+    //
+    // WHICH IS WHY NOTHING IN THIS SECTION BRANCHES ON THE COMPOSITOR. The
+    // values mean the same thing on both -- the script is where the spelling
+    // differs -- and the page that shows them asks `Compositor.can("inputConfig")`
+    // rather than which one is running.
     //
     // Parsed rather than aliased, because the file is a small table and QML
     // has no reader for one. The defaults repeated below are the script's own
@@ -334,13 +341,15 @@ Singleton {
     // ---------------- Keyboard layouts ----------------
     //
     // THE LIST IS THE STATE AND THE FIRST ENTRY IS THE ACTIVE LAYOUT. There is
-    // no index anywhere: switching rotates the cycle, so "us,latam" becomes
-    // "latam,us" and back. The argument for that shape is in hypr-tweak's
-    // header -- the short version is that Hyprland's own active-layout index
-    // is session-only and is reset by anything that re-applies the input
-    // block, including changing the mouse speed on the same settings page.
+    // no index kept here: on Hyprland switching rotates the cycle, so
+    // "us,latam" becomes "latam,us" and back. The argument for that shape is in
+    // desktop-tweak's header -- the short version is that Hyprland's own
+    // active-layout index is session-only and is reset by anything that
+    // re-applies the input block, including changing the mouse speed on the
+    // same settings page. On niri the compositor keeps the index and the list
+    // stays put, which is what keyboardLayoutIndex below is about.
     //
-    // So this is the whole truth about what the keyboard is doing, and both
+    // Either way this is the whole truth about WHICH LAYOUTS EXIST, and both
     // the bar's indicator and the settings page read it from here.
     readonly property var keyboardLayouts: (root.tweaks["layouts"] ?? "us")
         .split(",").map(code => code.trim()).filter(code => code !== "")
@@ -352,7 +361,7 @@ Singleton {
     // re-applies the input block -- including changing the mouse speed on the
     // same settings page -- so nothing outside the compositor can trust it. The
     // list is rotated instead and the FIRST entry is the active one, which is
-    // the whole argument in hypr-tweak's header.
+    // the whole argument in desktop-tweak's header.
     //
     // niri publishes the index and keeps it: `niri msg -j keyboard-layouts`
     // answers with the names and which one is current, and the shell watches
@@ -390,7 +399,7 @@ Singleton {
     // what keeps the keybind and the window from disagreeing about the order.
     // The new value comes back through the file watcher below.
     function useKeyboardLayout(code: string): void {
-        Quickshell.execDetached(["hypr-tweak", "layout", code]);
+        Quickshell.execDetached(["desktop-tweak", "layout", code]);
     }
 
     // STEPPING IT GOES TO WHOEVER OWNS THE ANSWER. Where the compositor keeps a
@@ -403,7 +412,7 @@ Singleton {
         if (Compositor.can("keyboardLayout"))
             Compositor.switchKeyboardLayout();
         else
-            Quickshell.execDetached(["hypr-tweak", "layout", "next"]);
+            Quickshell.execDetached(["desktop-tweak", "layout", "next"]);
     }
 
     // ---------------- What the layout codes mean ----------------
@@ -434,7 +443,7 @@ Singleton {
     Process {
         id: layoutNamesProcess
 
-        command: ["hypr-tweak", "layouts"]
+        command: ["desktop-tweak", "layouts"]
 
         stdout: StdioCollector {
             onStreamFinished: {
@@ -484,7 +493,7 @@ Singleton {
         interval: 150
         onTriggered: {
             for (const key in root.pendingTweaks)
-                Quickshell.execDetached(["hypr-tweak", "set", key, root.pendingTweaks[key]]);
+                Quickshell.execDetached(["desktop-tweak", "set", key, root.pendingTweaks[key]]);
 
             root.pendingTweaks = ({});
         }
@@ -493,7 +502,7 @@ Singleton {
     FileView {
         id: tweaksFile
 
-        path: `${root.stateDir}/hypr-tweaks`
+        path: `${root.stateDir}/desktop-tweaks`
         watchChanges: true
         printErrors: false
 
@@ -505,7 +514,7 @@ Singleton {
     // This used to return early while the push timer was running, which was
     // right when the settings window was the only writer: the file could only
     // be a moment behind our own values. It stopped being right when the
-    // layout arrived, because `hypr-tweak layout next` writes the file
+    // layout arrived, because `desktop-tweak layout next` writes the file
     // WITHOUT going through the timer, and a rotation landing inside the
     // 150ms after some other row was touched was thrown away -- the bar kept
     // showing the old layout until something else happened to change.
@@ -718,7 +727,7 @@ Singleton {
     // machine's main panel was DP-4 a week ago -- so a setting written against
     // one silently applies to the wrong monitor after an update. The rest of
     // this desktop already solved that: hyprland.lua matches monitors by their
-    // EDID description and hypr-monitor keys its overrides by the same string.
+    // EDID description and desktop-monitors keys its records by the same string.
     //
     // This uses MODEL + SERIAL, which is that same description minus the
     // manufacturer. Not a second convention, a shorter spelling of the one
@@ -973,7 +982,7 @@ Singleton {
         adapter.barIsland = root.defaults.barIsland;
         // Back to one bar on the monitor the rule picks, with no monitor
         // holding an opinion of its own. The Hyprland side is deliberately NOT
-        // reset from here: hypr-monitor owns that file, and a "restore
+        // reset from here: desktop-monitors owns that file, and a "restore
         // defaults" in this window that silently moved the compositor's game
         // rules would be reaching a long way outside the shell.
         adapter.mainMonitor = root.defaults.mainMonitor;

@@ -1,11 +1,18 @@
 // Mouse and keyboard: how far the pointer moves for a given push, and how
 // fast a held key repeats.
 //
-// ALL OF IT IS THE COMPOSITOR'S. Hyprland owns libinput here; the shell never
-// sees a pointer event that is not already scaled by these numbers, and
-// cannot apply any of them itself. Everything on this page goes out through
-// `hypr-tweak` -- one state file, one generated tweaks.lua, `hyprctl eval`
-// for the running session. See that script's header.
+// ALL OF IT IS THE COMPOSITOR'S. Whichever one is running owns libinput; the
+// shell never sees a pointer event that is not already scaled by these
+// numbers, and cannot apply any of them itself. Everything on this page goes
+// out through `desktop-tweak` -- one state file, and one generated override
+// file per flavor: tweaks.lua plus `hyprctl eval` on Hyprland, tweaks.kdl on
+// niri, where writing the file IS applying it. See that script's header.
+//
+// SO THE PAGE ITSELF NEVER LEARNS WHICH COMPOSITOR IT IS ON. Every row means
+// the same thing on both -- the pointer speed is libinput's -1.0..1.0 either
+// way -- and the one asymmetry, which of them remembers the ACTIVE keyboard
+// layout, is handled inside the script and inside Config.keyboardLayoutIndex.
+// What the page asks is `Compositor.can("inputConfig")`, once, below.
 //
 // THE KEYBOARD LAYOUT IS HERE NOW, and this comment used to say the opposite:
 // that the layout belongs to one machine and one person, and that a settings
@@ -16,29 +23,36 @@
 // argument that kept the layout out applied to a file that does not exist.
 // What was true is that hyprland.lua must not carry it, and it still does not:
 // what is tracked there is a plain `us` fallback, and the choice lives in the
-// state file this page writes. See hypr-tweak's header for the mechanism.
+// state file this page writes -- and the same is true of config.kdl on the
+// other flavor. See desktop-tweak's header for the mechanism.
 //
-// The one thing that can still overrule it is local.lua, which is read after
-// the generated file. A machine that sets kb_layout there keeps whatever it
-// says and should stop, if it wants this page to be in charge.
+// The one thing that can still overrule it is local.lua or local.kdl, both
+// read after the generated file. A machine that sets the layout there keeps
+// whatever it says and should stop, if it wants this page to be in charge.
 //
 // WHAT IS NOT HERE, and each absence is a decision rather than a gap:
 //
 //   - Layout VARIANTS -- us(intl), es(dvorak), and about six hundred more.
 //     They multiply a list of ninety-nine into one nobody can scroll, and the
 //     variant is the part almost nobody needs: what people mean by "I need to
-//     type in Spanish" is a layout. `hypr-tweak set layouts` takes what this
-//     page offers, and a variant is still reachable by hand from local.lua.
+//     type in Spanish" is a layout. `desktop-tweak set layouts` takes what
+//     this page offers, and a variant is still reachable by hand from the
+//     machine's local config.
 //   - kb_options, which is where xkb's own group switchers live
 //     (grp:alt_shift_toggle and friends). Deliberately unused: they move an
 //     index that dies with the session and that nothing outside the
 //     compositor can read, so the bar would have no way of knowing what you
 //     are typing in. SUPER + K goes through the script instead.
-//   - Per-device settings. Hyprland can configure each mouse separately with
-//     hl.device, and a page that offered it would need a device list, a
-//     per-device store and a way to talk about a mouse that is not plugged in
-//     today. The values here are the defaults every device inherits, which is
-//     what somebody adjusting their pointer speed actually means.
+//   - Per-device settings, AND THIS ONE IS NOW AN ABSENCE ON BOTH SIDES OF
+//     THE LINE. Hyprland can configure each mouse separately with hl.device,
+//     and a page that offered it would need a device list, a per-device store
+//     and a way to talk about a mouse that is not plugged in today. niri has
+//     no per-device input configuration AT ALL, so on that flavor there is
+//     nothing to offer even if the page wanted to -- which is why the one
+//     real casualty, the DualSense's touchpad moving the pointer, is written
+//     up in config.kdl's input block rather than here. The values on this page
+//     are the defaults every device inherits, which is what somebody adjusting
+//     their pointer speed actually means.
 //   - Anything touchpad. There is no touchpad on this machine, and a section
 //     that is always empty teaches the eye to skip the page.
 

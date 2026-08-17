@@ -1,0 +1,904 @@
+#!/usr/bin/env bash
+# =============================================================
+#  desktop-monitors — the monitor layout, on whichever compositor is running
+#
+#  ONE SCRIPT FOR BOTH FLAVORS, and that is the whole design decision. What a
+#  monitor is set to -- mode, position, scale, rotation -- is the same question
+#  under Hyprland and under niri; only the file it is written into and the
+#  socket it is pushed through differ. Two parallel scripts would mean two
+#  copies of the validation, the upsert, the state format and the settings
+#  window's contract with them, drifting apart from the first bug fixed in one
+#  of them. So the flavor is asked once, at the top, through the `compositor`
+#  helper, and only the four places that genuinely differ branch on it.
+#
+#  Adding a third compositor is a case in each of those four:
+#    out_file()        where the generated file goes
+#    read_outputs()    how the running compositor is asked what is connected
+#    generate()        how a record is written in that config language
+#    apply_live()      how a change is pushed into the running session
+#
+#  WHAT IT KEEPS. A generated, untracked file per flavor, holding the monitor
+#  records this machine has confirmed:
+#
+#      Hyprland   ~/.config/hypr/monitors.lua   applied ON TOP of hyprland.lua
+#      niri       ~/.config/niri/monitors.kdl   the ONLY declaration of outputs
+#
+#  AND THOSE TWO SENTENCES ARE NOT THE SAME ARRANGEMENT. Under Hyprland the
+#  generated file is a LAYER: hyprland.lua declares the monitors by hand,
+#  dofile()s this file at the end of its monitor section, and a later hl.monitor
+#  for the same output wins -- so deleting the file leaves the hand-written
+#  block standing. Under niri that model is impossible, and it was measured
+#  rather than assumed: an `output` block in an INCLUDED file is IGNORED when
+#  config.kdl already names the same monitor (a local.kdl moving HDMI-A-1 to
+#  y=100 left it at y=0). Layering cannot work, so config.kdl declares no
+#  outputs at all and this file owns them outright. Delete it there and the
+#  monitors come up at whatever niri picks on its own.
+#
+#      desktop-monitors set <desc> <mode> <position> <scale> <transform> [<vrr>]
+#      desktop-monitors apply <desc> <mode> <position> <scale> <transform> ...
+#      desktop-monitors list [--json]        what is connected right now
+#      desktop-monitors seed                 record what is connected right now
+#      desktop-monitors forget <desc>        drop one record
+#      desktop-monitors clear                drop them all
+#      desktop-monitors main <desc>          make that monitor the main one
+#      desktop-monitors main                 print the choice, empty if none
+#      desktop-monitors main --clear         back to the hand-written value
+#      desktop-monitors file                 where the generated file lives
+#      desktop-monitors                      show what is recorded
+#
+#  <desc> IS THE MONITOR'S NAME AS ITS OWN COMPOSITOR SPELLS IT, which is not
+#  one string but two, and copying one across gets a monitor that silently keeps
+#  its preferred mode and no rotation. Both are built from the same three EDID
+#  fields and only one of them normalises the manufacturer:
+#
+#      Hyprland   ASR PG32QF2B G5VL0A003533                   (no desc: prefix
+#      niri       PNP(ASR) PG32QF2B G5VL0A003533               here -- see below)
+#
+#  Which is why the state is kept in a file PER FLAVOR: one shared store would
+#  hold records naming monitors the other compositor cannot match, and the
+#  failure is silent. `desktop-monitors list` prints the right spelling for
+#  whichever one is running; it is the only honest place to read it from.
+#
+#  Descriptions and not connector names, for the reason written at the top of
+#  hyprland.lua and repeated in config.kdl: connector names are assigned by the
+#  kernel and change across kernel versions (linux-lts to mainline turned DP-4
+#  into DP-3 here and every rule stopped matching).
+#
+#  The `desc:` prefix belongs to the Lua that is GENERATED from a record, never
+#  to the record itself: 'desc:desc:ASR ...' matches nothing while looking
+#  almost right in every message that echoes it.
+#
+#  The settings window calls this after you confirm a change you can see. It is
+#  equally usable by hand, which is the point of it being a script.
+# =============================================================
+set -euo pipefail
+
+SELF="${0##*/}"
+
+die() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; exit 1; }
+note() { printf '  %s\n' "$*"; }
+
+# WHICH COMPOSITOR, asked of the helper rather than of XDG_CURRENT_DESKTOP --
+# see the header of `compositor` for why the socket is proof and the desktop
+# name is only intention.
+FLAVOR="$(compositor)"
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+# The records in a form this script can rewrite: one tab-separated line per
+# monitor. The generated config is the OUTPUT, not the store -- regenerating a
+# whole file from a table is safe, and editing Lua or KDL in place with sed is
+# how generated configs get corrupted.
+#
+# PER FLAVOR, for the reason in the header: the same monitor has two names and
+# a record written under one compositor names nothing under the other.
+STATE_FILE="$STATE_DIR/monitors-$FLAVOR"
+
+# The main-monitor choice, in a FILE OF ITS OWN, and that is the whole reason it
+# is a second file: the store above is a table where every line has the same
+# columns and is keyed by its first one, and this is not a row of that table --
+# it is a pointer AT one, and one that may name a monitor with no record at all.
+# Squeezing it in would mean either a fake description that the upsert's `grep
+# -v` and generate's `read` would both have to step around, or a line with a
+# different column count in a file whose entire reliability comes from every
+# line having the same shape.
+MAIN_FILE="$STATE_DIR/monitors-$FLAVOR-main"
+
+# The names this script used before it served both compositors. Moved rather
+# than left behind: the Hyprland machine has real records in there, and a rename
+# that silently dropped them would come back as "the settings window forgot my
+# monitors" weeks later. Only when the new name does not exist, so this is a
+# no-op from the second run onwards and can never overwrite anything.
+if [[ $FLAVOR == hyprland ]]; then
+  if [[ -f "$STATE_DIR/hypr-monitors" && ! -f "$STATE_FILE" ]]; then
+    mv "$STATE_DIR/hypr-monitors" "$STATE_FILE"
+  fi
+  if [[ -f "$STATE_DIR/hypr-monitor-main" && ! -f "$MAIN_FILE" ]]; then
+    mv "$STATE_DIR/hypr-monitor-main" "$MAIN_FILE"
+  fi
+fi
+
+out_file() {
+  case "$FLAVOR" in
+    hyprland) printf '%s\n' "$CONFIG_DIR/hypr/monitors.lua" ;;
+    niri)     printf '%s\n' "$CONFIG_DIR/niri/monitors.kdl" ;;
+    *)        return 1 ;;
+  esac
+}
+
+OUT_FILE="$(out_file || true)"
+
+# Refused here rather than halfway down, where the symptom would be an empty
+# monitor list or a file written into a directory nothing reads.
+[[ -n $OUT_FILE ]] || {
+  case "${1:-}" in
+    -h|--help|help) : ;;
+    *) die "No compositor this knows about is running (compositor says: $FLAVOR)" ;;
+  esac
+}
+
+tilde() { printf '%s' "${1/#$HOME/\~}"; }
+
+# ---------------------------------------------------------------------------
+# What is connected, in ONE shape whatever answered
+#
+# The settings window reads this and nothing else, so the shape is a contract:
+# it is Hyprland's own `hyprctl monitors -j`, because that is the vocabulary the
+# display page was written in and translating the other way round would mean
+# rewriting a page that already works. Every field the page touches is here.
+#
+#   name           connector, e.g. DP-3. Stable within a session, not across
+#                  kernels -- which is why nothing is SAVED under it.
+#   description    the monitor's identity, spelled the way its own compositor
+#                  spells it. This is the key everything else uses.
+#   make model     for the heading. width/height/refreshRate are the MODE.
+#   x y            logical position of the top-left corner.
+#   scale          fractional, as the compositor resolved it.
+#   transform      the wl_output index, 0-7. See transform_name below.
+#   focused        has the keyboard right now.
+#   availableModes "2560x1440@165.00Hz", as Hyprland prints them.
+# ---------------------------------------------------------------------------
+
+# niri's transform is a word and Hyprland's is an index into the same wl_output
+# enum, so the two are the same eight values with different spellings. Read out
+# of `niri msg output <name> transform --help` rather than guessed:
+#   normal 0, 90 1, 180 2, 270 3, flipped 4, flipped-90 5, flipped-180 6,
+#   flipped-270 7  -- all rotations counter-clockwise, same as wl_output.
+#
+# The JSON spells them differently again ("Normal", "270"), so the match is made
+# on the string with everything but letters and digits taken out: that reads
+# "Flipped90", "flipped-90" and "FLIPPED_90" as the same answer, and a niri
+# release renaming them costs nothing.
+NIRI_TO_INDEX='
+def clean: ascii_downcase | gsub("[^a-z0-9]"; "");
+def index: clean as $t
+  | if   $t == "normal"     then 0 elif $t == "90"         then 1
+    elif $t == "180"        then 2 elif $t == "270"        then 3
+    elif $t == "flipped"    then 4 elif $t == "flipped90"  then 5
+    elif $t == "flipped180" then 6 elif $t == "flipped270" then 7
+    else 0 end;
+'
+
+transform_name() {
+  case "$1" in
+    0) echo normal ;; 1) echo 90 ;;  2) echo 180 ;; 3) echo 270 ;;
+    4) echo flipped ;; 5) echo flipped-90 ;; 6) echo flipped-180 ;;
+    7) echo flipped-270 ;;
+    *) die "Not a transform: '$1' (expected 0 to 7)" ;;
+  esac
+}
+
+# The whole niri translation, in one place. Two things in here are easy to get
+# wrong and were checked against a live session rather than assumed:
+#
+#   - `niri msg -j outputs` answers with an OBJECT keyed by connector name, not
+#     an array. Hence to_entries.
+#   - `current_mode` is an INDEX into `modes`, and it is null on an output that
+#     has never been driven. refresh_rate is in MILLIhertz.
+#
+# Outputs with no `logical` block are DROPPED, which makes this agree with
+# `hyprctl monitors -j`: both then list the monitors that are actually being
+# driven, and the display page's "no monitors reported" note stays true.
+NIRI_TO_RECORDS='
+def hz2: (. / 10 | round) as $c
+  | "\(($c / 100) | floor).\(("0" + (($c % 100) | tostring))[-2:])";
+[ to_entries[] | .value | select(.logical != null) |
+  . as $o |
+  (if .current_mode == null then null else .modes[.current_mode] end) as $m |
+  { name: $o.name,
+    description: "\($o.make) \($o.model) \($o.serial)",
+    make: $o.make,
+    model: $o.model,
+    serial: $o.serial,
+    width: ($m.width // 0),
+    height: ($m.height // 0),
+    refreshRate: (($m.refresh_rate // 0) / 1000),
+    x: $o.logical.x,
+    y: $o.logical.y,
+    scale: $o.logical.scale,
+    transform: ($o.logical.transform | index),
+    focused: false,
+    availableModes: [ $o.modes[] | "\(.width)x\(.height)@\(.refresh_rate | hz2)Hz" ]
+  } ]
+'
+
+read_outputs() {
+  case "$FLAVOR" in
+    hyprland)
+      # Verbatim: this IS the shape, and passing it through a filter would only
+      # be a way to break it.
+      hyprctl monitors -j
+      ;;
+    niri)
+      niri msg -j outputs | jq "$NIRI_TO_INDEX$NIRI_TO_RECORDS"
+      ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Resolving a mode against what the panel actually offers
+#
+# ONLY niri NEEDS THIS, and the reason is a difference in what the two
+# compositors accept. Hyprland takes `preferred`, `highrr` and `highres` as mode
+# keywords and resolves them itself; niri has no such thing -- it takes a
+# concrete WIDTHxHEIGHT@RATE or "auto", and nothing else. So the keywords are
+# resolved HERE, against the modes the monitor is reporting right now, and what
+# lands in the file is the answer rather than the question.
+#
+# The rate is matched by NEAREST and not by equality, deliberately. Every rate
+# in this house is a fraction -- the main panel's "165 Hz" is 165.001 and the
+# secondary's is 164.999 -- and the display page rounds to two decimals before
+# it ever gets here. Asking for exactly "165" would match neither.
+#
+# Prints nothing when the monitor is not connected or the resolution is not one
+# it has: the caller writes the request through unchanged in that case, which
+# leaves a file niri will complain about honestly rather than one this script
+# guessed at.
+niri_resolve_mode() {
+  local desc="$1" mode="$2"
+
+  niri msg -j outputs | jq -r --arg desc "$desc" --arg mode "$mode" '
+    def hz3: (. / 1) as $m
+      | "\(($m / 1000) | floor).\(("00" + (($m % 1000) | tostring))[-3:])";
+    [ to_entries[] | .value
+      | select("\(.make) \(.model) \(.serial)" == $desc or .name == $desc) ][0]
+    | if . == null then empty else .modes as $modes |
+      ( if   $mode == "preferred" then [ $modes[] | select(.is_preferred) ][0]
+        elif $mode == "highres"   then ( $modes | sort_by(.width * .height, .refresh_rate) | last )
+        elif $mode == "highrr"    then ( $modes | sort_by(.refresh_rate, .width * .height) | last )
+        else ( $mode | capture("^(?<w>[0-9]+)x(?<h>[0-9]+)@(?<r>[0-9.]+)$") ) as $want
+          | [ $modes[] | select(.width == ($want.w | tonumber) and .height == ($want.h | tonumber)) ]
+          | sort_by((.refresh_rate / 1000 - ($want.r | tonumber)) | fabs) | first
+        end )
+      | if . == null then empty
+        else "\(.width)x\(.height)@\(.refresh_rate | hz3)" end
+      end'
+}
+
+# ---------------------------------------------------------------------------
+# Generating the file
+# ---------------------------------------------------------------------------
+
+# Lua single-quoted string. Descriptions carry dots and spaces but no quotes in
+# practice; escaped anyway, because "in practice" is how a config file ends up
+# with a syntax error in it.
+lua_escape() { printf '%s' "${1//\'/\\\'}"; }
+
+# KDL double-quoted string. Same argument, one more character: KDL has no
+# single-quoted form, so the backslash has to go first or escaping the quote
+# would escape its own escape.
+kdl_escape() { local s="${1//\\/\\\\}"; printf '%s' "${s//\"/\\\"}"; }
+
+# The saved main-monitor description, or nothing at all when there is none -- so
+# callers can test it with [[ -n ]] and the `main` query can print it raw. First
+# line only, and via `read` rather than "$(<file)": the file is written by this
+# script and should hold exactly one line, but a truncated write or a stray hand
+# edit would otherwise turn into a multi-line string literal, which is a config
+# that does not parse rather than a choice that got lost. `|| true` because read
+# reports EOF on a last line with no newline.
+read_main() {
+  [[ -s "$MAIN_FILE" ]] || return 0
+  local line
+  IFS= read -r line < "$MAIN_FILE" || true
+  printf '%s' "$line"
+}
+
+generate_hyprland() {
+  local desc mode position scale transform vrr
+  local main
+  main="$(read_main)"
+
+  echo "-- GENERATED BY $SELF. Do not edit by hand: the settings window"
+  echo "-- (SUPER + C) rewrites this file whenever a display change is"
+  echo "-- confirmed. Delete it and hyprland.lua's own monitor block stands"
+  echo "-- on its own again."
+  echo "--"
+  echo "-- Applied AFTER that block, so every entry here is an override."
+  echo ""
+
+  # WHY A PLAIN REASSIGNMENT IS ENOUGH, and it is worth spelling out because it
+  # looks like it should be too late to matter. hyprland.lua sets MONITOR_MAIN
+  # at the top, dofile()s this file at the end of its monitor section, and only
+  # much further down does require("gaming") run -- and gaming.lua's window
+  # rules are built at that point, reading MONITOR_MAIN as it stands then. So a
+  # global assigned here lands in between: after the hand-written value, before
+  # the only code that reads it. Nothing has to be patched and hyprland.lua
+  # keeps its own literal for the day this file is deleted.
+  #
+  # No `local`, deliberately: dofile runs this as its own chunk, so a local
+  # would be scoped to it and would leave the real global untouched.
+  if [[ -n "$main" ]]; then
+    echo "-- Which monitor games open on, as chosen from the settings window."
+    echo "-- Read by gaming.lua's window rules, which run after this file."
+    printf "MONITOR_MAIN = 'desc:%s'\n\n" "$(lua_escape "$main")"
+  fi
+
+  if [[ -s "$STATE_FILE" ]]; then
+    while IFS=$'\t' read -r desc mode position scale transform vrr; do
+      [[ -n "$desc" ]] || continue
+      printf 'hl.monitor({\n'
+      printf "    output    = 'desc:%s',\n" "$(lua_escape "$desc")"
+      printf "    mode      = '%s',\n" "$(lua_escape "$mode")"
+      printf "    position  = '%s',\n" "$(lua_escape "$position")"
+      printf '    scale     = %s,\n' "$scale"
+      printf '    transform = %s,\n' "$transform"
+      printf '})\n\n'
+    done < "$STATE_FILE"
+  elif [[ -z "$main" ]]; then
+    # Only when BOTH are empty. A file that said "nothing recorded" above a
+    # MONITOR_MAIN line would be a generated comment contradicting the generated
+    # code three lines under it.
+    echo "-- Nothing recorded."
+  fi
+
+  # The vrr column is READ AND NOT WRITTEN here, and that is deliberate rather
+  # than unfinished. hl.monitor's own vrr field has never been exercised on this
+  # machine, and monitors.lua -- re-read on every reload and every boot -- is the
+  # last file that should be where it is found out. niri's generator writes it
+  # because that is the flavor the column exists for; see the note there.
+  :
+}
+
+generate_niri() {
+  local desc mode position scale transform vrr
+  local resolved x y
+
+  echo "// GENERATED BY $SELF. Do not edit by hand: the settings window"
+  echo "// (SUPER + C) rewrites this file whenever a display change is"
+  echo "// confirmed."
+  echo "//"
+  echo "// THIS FILE IS THE ONLY PLACE OUTPUTS ARE DECLARED, which is not how"
+  echo "// the Hyprland side of these dotfiles works and cannot be. An \`output\`"
+  echo "// block in an included file is IGNORED when config.kdl already names"
+  echo "// the same monitor, so there is no layering to be had: config.kdl"
+  echo "// declares none and this file owns them all. Delete it and the monitors"
+  echo "// come up at whatever niri picks on its own -- preferred mode, no"
+  echo "// rotation, automatic position."
+  echo ""
+
+  if [[ ! -s "$STATE_FILE" ]]; then
+    echo "// Nothing recorded."
+    return
+  fi
+
+  while IFS=$'\t' read -r desc mode position scale transform vrr; do
+    [[ -n "$desc" ]] || continue
+
+    printf 'output "%s" {\n' "$(kdl_escape "$desc")"
+
+    # RESOLVED AGAINST THE LIVE MODE LIST, and written through unchanged when
+    # that fails -- see niri_resolve_mode. The failure case is a monitor that is
+    # not plugged in right now, and inventing a mode for it would be worse than
+    # writing down what was asked for.
+    resolved="$(niri_resolve_mode "$desc" "$mode" || true)"
+    if [[ -n "$resolved" ]]; then
+      printf '    mode "%s"\n' "$resolved"
+    elif [[ "$mode" == preferred ]]; then
+      # niri's own default. Saying nothing is how it is spelled: there is no
+      # `mode "preferred"`, and writing one would be a parse error.
+      printf '    // mode: preferred, which is what niri does with no mode line\n'
+    else
+      printf '    mode "%s"\n' "$(kdl_escape "$mode")"
+    fi
+
+    if [[ "$position" == auto ]]; then
+      printf '    // position: automatic, which is what niri does with no position line\n'
+    elif [[ "$position" =~ ^(-?[0-9]+)x(-?[0-9]+)$ ]]; then
+      x="${BASH_REMATCH[1]}"; y="${BASH_REMATCH[2]}"
+      printf '    position x=%s y=%s\n' "$x" "$y"
+    fi
+
+    printf '    scale %s\n' "$scale"
+    printf '    transform "%s"\n' "$(transform_name "$transform")"
+
+    # VRR, AND THIS IS THE COLUMN'S WHOLE REASON FOR EXISTING. It is not
+    # something the settings window sets; it is something config.kdl used to say
+    # about the main monitor -- `variable-refresh-rate on-demand=true` -- and
+    # that line had nowhere else to go once the output blocks moved in here. A
+    # generator that owns a block owns everything in it, including the parts it
+    # did not invent, or the first confirmed change silently drops them.
+    case "$vrr" in
+      on)        printf '    variable-refresh-rate\n' ;;
+      on-demand) printf '    variable-refresh-rate on-demand=true\n' ;;
+      off)       printf '    variable-refresh-rate false\n' ;;
+      *)         : ;;   # unset: niri's own default, which is off
+    esac
+
+    printf '}\n\n'
+  done < "$STATE_FILE"
+}
+
+generate() {
+  mkdir -p "$(dirname "$OUT_FILE")"
+
+  # Written whole through a temporary file and moved into place, so a crash
+  # halfway leaves the previous file rather than half of the new one. Under niri
+  # this matters more than it looks: the compositor WATCHES this file, so it
+  # would read whatever is there the instant it is touched, and a truncated KDL
+  # block is a config error on screen.
+  local tmp
+  tmp="$(mktemp "$(dirname "$OUT_FILE")/.desktop-monitors.XXXXXX")"
+
+  case "$FLAVOR" in
+    hyprland) generate_hyprland > "$tmp" ;;
+    niri)     generate_niri     > "$tmp" ;;
+  esac
+
+  mv "$tmp" "$OUT_FILE"
+}
+
+# ---------------------------------------------------------------------------
+# Pushing the same thing into the running session
+# ---------------------------------------------------------------------------
+
+# Hyprland: `eval` and not `keyword`. With a Lua config, keyword is refused
+# outright ("keyword can't work with non-legacy parsers") and STILL EXITS 0, so
+# anything checking the status is told the change went through. See
+# desktop-opacity, which shipped that bug once.
+#
+# ONE eval FOR EVERY SPEC AT ONCE, which is not tidiness: moving two monitors in
+# two calls means a moment where the first has moved and the second has not, and
+# every window on the desktop is re-laid out for both. `hyprctl eval` takes a Lua
+# chunk, so several hl.monitor calls go out as one statement list.
+apply_live_hyprland() {
+  local chunk="" desc mode position scale transform
+
+  while (( $# )); do
+    desc="$1"; mode="$2"; position="$3"; scale="$4"; transform="$5"; shift 5
+    chunk+="hl.monitor({
+      output    = 'desc:$(lua_escape "$desc")',
+      mode      = '$mode',
+      position  = '$position',
+      scale     = $scale,
+      transform = $transform,
+    })
+"
+  done
+
+  hyprctl eval "$chunk" >/dev/null
+}
+
+# niri: four separate messages per monitor, because that is the whole of its
+# runtime output API -- there is no eval and no batch.
+#
+# THEY ARE TEMPORARY BY DESIGN. `niri msg output` says so itself: the change is
+# not saved, and it is forgotten the moment the config changes. Which is exactly
+# what a provisional apply wants -- the settings window's countdown either
+# confirms it (and then `set` writes the file) or lets it lapse.
+#
+# AND IT IS ALSO THE ONLY WAY A MODE CHANGE HAPPENS AT ALL. Writing a mode into
+# the config file does NOT re-apply it: niri picks a mode when the connector
+# comes up and a `load-config-file` does not revisit that decision, so a mode in
+# a file needs the session restarted. Position, scale and transform do follow a
+# reload. So this is not a shortcut around writing the file -- for one of the
+# four fields it is the only thing that works today.
+#
+# ORDER MATTERS: position LAST. Transform and scale both change how much of the
+# desktop the monitor occupies, and niri repositions its neighbours when they
+# do; setting the position afterwards is what makes the number asked for the
+# number that sticks.
+apply_live_niri() {
+  local desc mode position scale transform name resolved x y
+  # Whether anything at all reached the compositor, so the caller can say
+  # "written and applied" or "written, and it will apply when that monitor comes
+  # back" rather than claiming the first and being wrong.
+  local any=0
+
+  while (( $# )); do
+    desc="$1"; mode="$2"; position="$3"; scale="$4"; transform="$5"; shift 5
+
+    # niri answers "output not found" and exits non-zero for a name it does not
+    # have, which under `set -e` would take the whole run down after the file had
+    # already been written. Checked first, and skipped with a word rather than a
+    # stack of errors: a record for a monitor that is unplugged is a normal
+    # thing to have.
+    name="$(read_outputs | jq -r --arg desc "$desc" \
+      '[ .[] | select(.description == $desc or .name == $desc) ][0].description // empty')"
+    if [[ -z "$name" ]]; then
+      note "not connected, so nothing to apply live: $desc"
+      continue
+    fi
+
+    resolved="$(niri_resolve_mode "$name" "$mode" || true)"
+    if [[ -n "$resolved" ]]; then
+      niri msg output "$name" mode "$resolved" >/dev/null
+    else
+      niri msg output "$name" mode auto >/dev/null
+    fi
+
+    niri msg output "$name" scale "$scale" >/dev/null
+    niri msg output "$name" transform "$(transform_name "$transform")" >/dev/null
+
+    if [[ "$position" == auto ]]; then
+      niri msg output "$name" position auto >/dev/null
+    elif [[ "$position" =~ ^(-?[0-9]+)x(-?[0-9]+)$ ]]; then
+      x="${BASH_REMATCH[1]}"; y="${BASH_REMATCH[2]}"
+      niri msg output "$name" position set "$x" "$y" >/dev/null
+    fi
+
+    any=1
+  done
+
+  (( any ))
+}
+
+# NON-ZERO MEANS "NOTHING WAS CONNECTED", not "something went wrong": a real
+# failure takes the script down where it happens, under `set -e`. Callers have
+# to test it rather than ignore it, or that same `set -e` would end the run on a
+# record for an unplugged monitor -- which is a normal thing to have.
+apply_live() {
+  case "$FLAVOR" in
+    # Hyprland is told about outputs it cannot see without complaining, so there
+    # is nothing to report back.
+    hyprland) apply_live_hyprland "$@" ;;
+    niri)     apply_live_niri "$@" ;;
+  esac
+}
+
+# Validated here rather than trusted, because everything downstream of a bad
+# value is a monitor that does not come back: the generated file would carry the
+# broken line through every reload from now on.
+validate_spec() {
+  local desc="$1" mode="$2" position="$3" scale="$4" transform="$5" vrr="${6:-}"
+
+  [[ -n "${desc//[[:space:]]/}" ]] || die "Not a description: empty"
+  [[ "$desc" != *$'\n'* && "$desc" != *$'\t'* ]] \
+    || die "Not a description: it contains a tab or a newline"
+  [[ "$desc" != desc:* ]] \
+    || die "Drop the 'desc:' prefix: it belongs to the generated Lua, not to the name"
+
+  [[ "$mode" =~ ^[0-9]+x[0-9]+@[0-9.]+$ || "$mode" == "preferred" || "$mode" == "highrr" || "$mode" == "highres" ]] \
+    || die "Not a mode: '$mode' (expected WIDTHxHEIGHT@RATE, or preferred/highrr/highres)"
+  [[ "$position" =~ ^-?[0-9]+x-?[0-9]+$ || "$position" == "auto" ]] \
+    || die "Not a position: '$position' (expected XxY, or auto)"
+  [[ "$scale" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "Not a scale: '$scale'"
+  [[ "$transform" =~ ^[0-7]$ ]] || die "Not a transform: '$transform' (expected 0 to 7)"
+  [[ -z "$vrr" || "$vrr" == on || "$vrr" == off || "$vrr" == on-demand ]] \
+    || die "Not a vrr mode: '$vrr' (expected on, off or on-demand)"
+}
+
+# What the record for this monitor says about vrr today, so a `set` that does not
+# mention it does not throw it away. The settings window sends four fields and
+# knows nothing about the fifth; a monitor's other properties are not its to
+# drop. See the note in generate_niri.
+#
+# THE TRAILING `return 0` IS NOT TIDINESS, it is the fix for a bug this had for
+# exactly one run. A while loop returns the status of the LAST command its body
+# executed, and the last thing this body does on a line that does not match is
+# fail a test -- so the loop returned 1, the function returned 1, and `vrr="$(
+# current_vrr ...)"` inherited it and `set -e` killed the script mid-command
+# with nothing printed at all. It only bit when the monitor being set was not
+# the last line of the state file, which is why it looked like it worked.
+current_vrr() {
+  local desc="$1" d m p s t v
+  [[ -s "$STATE_FILE" ]] || return 0
+  while IFS=$'\t' read -r d m p s t v; do
+    [[ "$d" == "$desc" ]] && { printf '%s' "$v"; return 0; }
+  done < "$STATE_FILE"
+  return 0
+}
+
+upsert() {
+  local desc="$1" mode="$2" position="$3" scale="$4" transform="$5" vrr="$6"
+  local tmp
+
+  mkdir -p "$STATE_DIR"
+  touch "$STATE_FILE"
+
+  # Everything but this monitor, then this monitor. Rewritten whole rather than
+  # edited in place, so a crash halfway leaves the old file.
+  tmp="$(mktemp)"
+  grep -v -P "^\Q$desc\E\t" "$STATE_FILE" > "$tmp" || true
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$desc" "$mode" "$position" "$scale" "$transform" "$vrr" >> "$tmp"
+  mv "$tmp" "$STATE_FILE"
+}
+
+# THE SENTENCE THAT SAYS WHAT IS STILL PENDING, and there is one per flavor
+# because the answer genuinely differs. Printed by the commands that leave the
+# file and the screen disagreeing on purpose (`forget`, `clear`, `main
+# --clear`): none of them applies anything, because undoing a record means going
+# back to whatever the hand-written config says and this script does not know
+# that value -- reading it would mean parsing the config, which is the one thing
+# this whole arrangement exists to avoid.
+settle_advice() {
+  case "$FLAVOR" in
+    hyprland)
+      note "run 'hyprctl reload' to go back to the values in hyprland.lua"
+      ;;
+    niri)
+      note "niri re-reads the file on its own, so position, scale and rotation"
+      note "settle by themselves; a MODE only changes when the session restarts"
+      ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+case "${1:-show}" in
+  show)
+    main="$(read_main)"
+
+    if [[ -s "$STATE_FILE" ]]; then
+      while IFS=$'\t' read -r desc mode position scale transform vrr; do
+        [[ -n "$desc" ]] || continue
+        # ONE LINE PER MONITOR AND ONE UNDER IT, and the indentation is the only
+        # thing separating them: the settings window parses this output, and a
+        # description can carry spaces and dots in the middle -- they all do --
+        # but never at the start.
+        printf '%s\n    %s at %s, scale %s, transform %s' \
+          "$desc" "$mode" "$position" "$scale" "$transform"
+        [[ -z "$vrr" ]] || printf ', vrr %s' "$vrr"
+        printf '\n'
+      done < "$STATE_FILE"
+    elif [[ -z "$main" ]]; then
+      case "$FLAVOR" in
+        hyprland) echo "No monitor overrides. hyprland.lua stands on its own." ;;
+        niri)     echo "No monitors recorded. niri picks mode, position and scale itself." ;;
+      esac
+    fi
+
+    # LAST, and that placement is load-bearing. The settings window reads an
+    # unindented line as a monitor's description and the indented line under it
+    # as that monitor's values. Down here this line can only be read as a
+    # description with nothing under it, which that parser drops. Anywhere else
+    # it would be a description with somebody else's values pinned to it.
+    if [[ -n "$main" ]]; then
+      printf 'Main monitor: %s\n' "$main"
+    fi
+    ;;
+
+  list)
+    (( $# <= 2 )) || die "Usage: $SELF list [--json]"
+
+    if [[ "${2:-}" == "--json" ]]; then
+      read_outputs
+      exit 0
+    fi
+
+    [[ -z "${2:-}" ]] || die "Usage: $SELF list [--json]"
+
+    # For a person: the name to record, and what it is doing right now. The
+    # description is on its own line because it is the long one and it is the
+    # one that gets copied.
+    read_outputs | jq -r '.[] |
+      "\(.description)\n    \(.name)  \(.width)x\(.height)@\(.refreshRate | . * 100 | round / 100)"
+      + " at \(.x)x\(.y), scale \(.scale), transform \(.transform)"'
+    ;;
+
+  file)
+    tilde "$OUT_FILE"; echo
+    ;;
+
+  seed)
+    (( $# == 1 )) || die "Usage: $SELF seed"
+
+    # RECORDS WHAT IS ON SCREEN RIGHT NOW, for the monitors that have no record
+    # yet. Existing ones are left alone, so this is safe to re-run and cannot
+    # undo a change somebody confirmed from the settings window.
+    #
+    # It exists for one moment in particular: the day a flavor starts owning the
+    # output blocks outright, when "no record" means "no configuration at all"
+    # rather than "no override on top of the hand-written one".
+    mkdir -p "$STATE_DIR"
+    touch "$STATE_FILE"
+
+    added=0
+    while IFS=$'\t' read -r desc mode position scale transform; do
+      [[ -n "$desc" ]] || continue
+      if grep -q -P "^\Q$desc\E\t" "$STATE_FILE"; then
+        note "already recorded: $desc"
+        continue
+      fi
+      validate_spec "$desc" "$mode" "$position" "$scale" "$transform" ""
+      upsert "$desc" "$mode" "$position" "$scale" "$transform" ""
+      printf 'Recorded: %s\n' "$desc"
+      note "$mode at $position, scale $scale, transform $transform"
+      added=1
+    done < <(read_outputs | jq -r '.[] |
+      [ .description,
+        "\(.width)x\(.height)@\(.refreshRate | . * 1000 | round / 1000)",
+        "\(.x)x\(.y)",
+        (.scale | . * 100 | round / 100 | tostring),
+        (.transform | tostring) ] | @tsv')
+
+    generate
+    if (( added )); then
+      note "written to $(tilde "$OUT_FILE")"
+    else
+      note "nothing new; $(tilde "$OUT_FILE") regenerated from what was already there"
+    fi
+    ;;
+
+  main)
+    (( $# <= 2 )) || die "Usage: $SELF main [<desc>|--clear]"
+
+    # No argument is a QUERY, and it prints the bare description with nothing
+    # around it -- no label, no sentence, nothing at all when unset. Every other
+    # subcommand here prints for a person; this one exists so the settings window
+    # can read the answer back with $(desktop-monitors main) instead of parsing
+    # prose, which is the complaint it already has about the `show` output.
+    if (( $# == 1 )); then
+      main="$(read_main)"
+      [[ -z "$main" ]] || printf '%s\n' "$main"
+      exit 0
+    fi
+
+    if [[ "$2" == "--clear" ]]; then
+      rm -f "$MAIN_FILE"
+      generate
+      echo "Main-monitor choice dropped."
+      # NOT settle_advice, which is about monitor RECORDS. Nothing about a mode
+      # or a position moved here, and printing that sentence would send somebody
+      # off to settle something that never changed.
+      case "$FLAVOR" in
+        hyprland)
+          note "run 'hyprctl reload' to go back to the value in hyprland.lua"
+          ;;
+        niri)
+          note "the shell picks again; games are unaffected either way, since"
+          note "config.kdl's window rules were never overridden to begin with"
+          ;;
+      esac
+      exit 0
+    fi
+
+    desc="$2"
+
+    # Guarded rather than trusted, because a wrong value here fails SILENTLY: a
+    # description that matches no monitor does not error, it just leaves the
+    # game window rules matching nothing, and the symptom is a game opening in
+    # the wrong place weeks later with nothing pointing back at this.
+    [[ -n "${desc//[[:space:]]/}" ]] || die "Not a description: empty"
+    [[ "$desc" != *$'\n'* && "$desc" != *$'\t'* ]] \
+      || die "Not a description: it contains a tab or a newline"
+    [[ "$desc" != desc:* ]] \
+      || die "Drop the 'desc:' prefix: $SELF main '${desc#desc:}'"
+
+    mkdir -p "$STATE_DIR"
+    printf '%s\n' "$desc" > "$MAIN_FILE"
+    generate
+
+    printf 'Main monitor: %s\n' "$desc"
+
+    case "$FLAVOR" in
+      hyprland)
+        # HALF OF THIS IS A NO-OP TODAY, and it is done anyway. What is true:
+        # `hyprctl eval` runs in the config's own Lua state rather than a fresh
+        # one, and a global assigned by one eval is still there for the next --
+        # measured by sending an eval that calls error() when the global is not
+        # what it should be. So after this the running config agrees with the
+        # file about which monitor is the main one.
+        #
+        # What is NOT true: nothing re-reads it. gaming.lua's window rules copied
+        # the string when they were built, at config parse time, and reassigning
+        # the variable now does not walk back into rules that already exist.
+        # Games keep opening where the old value pointed until `hyprctl reload`
+        # re-runs the config. Leaving the live state stale would be its own bug
+        # though: any other eval reading MONITOR_MAIN before the next reload
+        # would answer with the value this command was called to replace.
+        hyprctl eval "MONITOR_MAIN = 'desc:$(lua_escape "$desc")'" >/dev/null
+        note "written to $(tilde "$OUT_FILE"), and set live in the config's Lua"
+        note "run 'hyprctl reload' to move the game window rules onto it"
+        ;;
+      niri)
+        # SAID PLAINLY RATHER THAN HALF DONE. The shell's own half of this
+        # choice -- which screen the bar, the launcher and the settings window
+        # live on -- is already applied by whatever called this. The
+        # compositor's half is `open-on-output` on the game window rules in
+        # config.kdl, and there is no generated layer for window rules here: an
+        # override would have to repeat the app-id regex those rules match on,
+        # and a second copy of that regex is a copy that goes out of step.
+        note "the shell moved; games still open where config.kdl's window rules say"
+        note "change open-on-output there by hand -- this flavor has no override for it"
+        ;;
+    esac
+    ;;
+
+  set)
+    (( $# == 6 || $# == 7 )) \
+      || die "Usage: $SELF set <desc> <mode> <position> <scale> <transform> [<vrr>]"
+    desc="$2"; mode="$3"; position="$4"; scale="$5"; transform="$6"
+    # Not given means KEEP, not means OFF. The settings window sends the four
+    # fields it draws and knows nothing about vrr; wiping a monitor's other
+    # properties because the caller did not mention them is how a confirmed
+    # change silently turns a game's VRR off.
+    vrr="${7:-$(current_vrr "$desc")}"
+
+    validate_spec "$desc" "$mode" "$position" "$scale" "$transform" "$vrr"
+
+    upsert "$desc" "$mode" "$position" "$scale" "$transform" "$vrr"
+    generate
+
+    if apply_live "$desc" "$mode" "$position" "$scale" "$transform"; then
+      live="applied live"
+    else
+      live="it applies when that monitor is connected"
+    fi
+
+    printf 'Saved: %s\n' "$desc"
+    note "$mode at $position, scale $scale, transform $transform"
+    note "written to $(tilde "$OUT_FILE"), $live"
+    ;;
+
+  apply)
+    # LIVE ONLY, AND NOTHING IS WRITTEN. This is the provisional half of the
+    # settings window: a mode the panel cannot display leaves a black screen and
+    # the window holding the undo button is on it, so an apply is a question --
+    # can you see this? -- and only the answer is worth keeping. `set` is the
+    # answer.
+    shift
+    (( $# >= 5 && $# % 5 == 0 )) \
+      || die "Usage: $SELF apply <desc> <mode> <position> <scale> <transform> [...]"
+
+    # Every one of them checked BEFORE any of them is applied, so a typo in the
+    # second monitor does not leave the first one moved.
+    specs=("$@")
+    while (( $# )); do
+      validate_spec "$1" "$2" "$3" "$4" "$5" ""
+      shift 5
+    done
+
+    # `|| true` because a spec for a monitor that is not plugged in is a
+    # sentence, not a failure -- apply_live already said so on its own line.
+    apply_live "${specs[@]}" || true
+    ;;
+
+  forget)
+    (( $# == 2 )) || die "Usage: $SELF forget <desc>"
+    desc="$2"
+
+    [[ -s "$STATE_FILE" ]] || { echo "Nothing to forget."; exit 0; }
+
+    tmp="$(mktemp)"
+    grep -v -P "^\Q$desc\E\t" "$STATE_FILE" > "$tmp" || true
+    mv "$tmp" "$STATE_FILE"
+
+    generate
+    printf 'Forgotten: %s\n' "$desc"
+    settle_advice
+    ;;
+
+  clear)
+    : > "$STATE_FILE"
+    # The main-monitor choice goes too. It lives in its own file and survives
+    # `forget`, but `clear` is the "as if this script had never run" command, and
+    # leaving a main-monitor line standing in a file whose only other content is
+    # now the words "Nothing recorded" would make both the report and the
+    # generated file wrong at once.
+    rm -f "$MAIN_FILE"
+    generate
+    echo "All monitor records dropped, main-monitor choice included."
+    settle_advice
+    ;;
+
+  -h|--help|help)
+    sed -n '2,72p' "$0" | sed 's/^# \?//'
+    ;;
+
+  *)
+    die "Unknown command: '$1' (expected set, apply, list, seed, forget, clear, main, file or show)"
+    ;;
+esac

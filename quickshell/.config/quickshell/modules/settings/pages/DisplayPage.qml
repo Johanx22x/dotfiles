@@ -1,47 +1,47 @@
 // The display page: what each monitor is, and the three things about it that
 // are worth changing from a settings window.
 //
-// WHAT A CONFIRMED CHANGE IS WRITTEN INTO, because it is neither this file nor
-// hyprland.lua. Hyprland is configured in Lua on this machine and `hyprctl
-// reload` re-runs hyprland.lua, so everything this page eval'd used to be
-// thrown away the moment it did -- the page could apply and hand over a block
-// to paste, and nothing else. It no longer stops there. ~/.local/bin/hypr-
-// monitor keeps a SECOND file, generated and untracked:
+// IT TALKS TO ONE SCRIPT AND TO NOTHING ELSE. Every list, every apply and every
+// write below goes through ~/.local/bin/desktop-monitors, and there is not a
+// single `hyprctl` or `niri msg` left in this file. That is the whole reason
+// this page works on both compositors: what a monitor is set to is the same
+// question everywhere, and only the config language and the socket differ --
+// which is exactly what that script exists to absorb. A third flavor is four
+// branches in it and nothing at all here.
 //
-//     ~/.config/hypr/monitors.lua
+//     desktop-monitors list --json      what is connected, in one shape
+//     desktop-monitors apply <spec>...  live, provisional, written nowhere
+//     desktop-monitors set <spec>       live AND recorded
+//     desktop-monitors forget <desc>    drop the record
+//     desktop-monitors main <desc>      which monitor games open on
+//     desktop-monitors file             where the record is kept
 //
-// hyprland.lua ends its monitor section with a pcall(dofile) of it, so a
-// reload re-runs the hand-written block and then these overrides on top, and
-// later hl.monitor calls for the same output win. Measured, not assumed: an
-// override set to 120 Hz on the secondary panel was still 120 Hz after
-// `hyprctl reload`, and the hand-written block came through untouched.
+// WHAT A CONFIRMED CHANGE IS WRITTEN INTO, because it is not this file and it
+// is not the compositor's hand-written config either. The script keeps a
+// SECOND file, generated and untracked -- monitors.lua under Hyprland,
+// monitors.kdl under niri -- and the page names it in the line under the title
+// rather than hard-coding it, because the two flavors do not agree on it and
+// asking is cheaper than being wrong.
 //
-// WHY IT STILL DOES NOT WRITE hyprland.lua. That file is a stow symlink into a
-// git repo and nearly a thousand lines of hand-written commentary, in an order
-// a person chose. A settings window that edited it would be a program
+// THE TWO FLAVORS DO NOT AGREE ON WHAT THAT FILE *IS*, EITHER, and it shows up
+// on this page in exactly one place. Under Hyprland the generated file is an
+// override layer: hyprland.lua declares the monitors by hand, dofile()s the
+// generated one after them, and a later hl.monitor for the same output wins --
+// so Copy config exists, to promote a value the shell worked out into the file
+// a person maintains. Under niri there is no layering to be had (an `output`
+// block in an include is ignored when the main config names the same monitor,
+// measured), so the generated file is the only declaration there is and a block
+// pasted into config.kdl would shadow this page for good. Hence
+// `monitorConfigCopy`: the chip is drawn where it means something.
+//
+// WHY IT DOES NOT WRITE THE HAND-WRITTEN CONFIG ITSELF. That file is a stow
+// symlink into a git repo and a thousand lines of hand-written commentary, in
+// an order a person chose. A settings window that edited it would be a program
 // rewriting prose it cannot read: the first change would move the monitor
 // block, or drop the comment explaining why these monitors are matched by
 // description and not by connector name, or both -- and the diff would land in
-// git looking like something a human did. A generated file applied on top is
-// the honest boundary. The shell owns monitors.lua; the person owns
-// hyprland.lua, and Copy config is how a value crosses from one to the other
-// by hand.
-//
-// HOW IT TALKS TO THE COMPOSITOR, and this is not the usual answer.
-// `hyprctl keyword` does not work on this machine at all, and it fails in the
-// worst possible way:
-//
-//     $ hyprctl keyword nonexistent:foo 1
-//     keyword can't work with non-legacy parsers. Use eval.
-//     $ echo $?
-//     0
-//
-// It refuses, and it EXITS 0 WHILE REFUSING, so anything that checks the exit
-// status is told the change went through. `hyprctl setprop` answers "unknown
-// request". The one door that opens is `hyprctl eval '<lua>'`, where hl.monitor
-// is the same live function the config calls -- checked, not assumed:
-// `hyprctl repl 'return tostring(hl.monitor)'` answers "function: 0x...".
-// That is why every apply below is a line of Lua rather than a keyword.
+// git looking like something a human did. A generated file is the honest
+// boundary. The shell owns that one; the person owns theirs.
 //
 // THE REVERT TIMER IS THE POINT OF THIS PAGE, not a nicety on top of it. A
 // mode the panel cannot display leaves a black screen, and the window holding
@@ -62,12 +62,11 @@
 // Correct behaviour, badly surprising -- so the rotation control says so
 // before you press it, and only when it applies.
 //
-// WHAT IT DELIBERATELY WILL NOT DO: turn a monitor off. `hyprctl monitors -j`
-// lists the enabled ones only, so a monitor disabled from here could not be
-// listed again to be switched back on -- the revert timer would be the only
-// way out of it, and a safety net is not a design. Position is read and shown
-// but not edited for a related reason: moving one monitor rearranges the
-// desktop under every window, and undoing that is a second monitor's problem.
+// WHAT IT DELIBERATELY WILL NOT DO: turn a monitor off. `desktop-monitors list`
+// reports the monitors that are actually being driven, on both flavors, so a
+// monitor disabled from here could not be listed again to be switched back on
+// -- the revert timer would be the only way out of it, and a safety net is not
+// a design.
 
 import Quickshell
 import Quickshell.Io
@@ -89,7 +88,7 @@ SettingsPage {
     glyph: Icons.monitor
     keywords: ["monitor", "screen", "display", "resolution", "refresh", "hz",
         "scale", "scaling", "rotation", "rotate", "portrait", "landscape",
-        "mode", "hyprland"]
+        "mode", "hyprland", "niri"]
 
     // ---------------- Glyphs that are not in Icons yet ----------------
     //
@@ -167,7 +166,7 @@ SettingsPage {
 
     // WHAT WAS ACTUALLY SENT, kept rather than re-derived from the draft when
     // the confirmation arrives. The draft is a live binding into a map the page
-    // rewrites; this is a snapshot of the exact four values hyprctl was given,
+    // rewrites; this is a snapshot of the exact four values the script was given,
     // and it is the thing keep() writes to disk. Persisting anything else would
     // be persisting something nobody was shown.
     property var pendingSpec: null
@@ -181,13 +180,13 @@ SettingsPage {
     // -- so this is optimistic by construction.
     property string copiedFor: ""
 
-    // ---------------- What is saved, as hypr-monitor reports it ----------------
+    // ---------------- What is saved, as desktop-monitors reports it ----------------
     //
     // KEYED BY DESCRIPTION, not by connector name, because that is the key the
-    // script and hyprland.lua both use: the EDID string, which does not change
-    // when a kernel renames DP-4 to DP-3. Two identical panels would collide
-    // here, and they would collide in hyprland.lua first -- this page does not
-    // invent a way out of a limitation the config already has.
+    // script and both hand-written configs use: the EDID string, which does not
+    // change when a kernel renames DP-4 to DP-3. Two identical panels would
+    // collide here, and they would collide in the compositor's own config first
+    // -- this page does not invent a way out of a limitation it already has.
     //
     // A READING like `monitors`, and it is read back after every write rather
     // than assumed from what was written. The saved value and the live value
@@ -195,10 +194,10 @@ SettingsPage {
     // anything changes a mode without saving it.
     property var overrides: ({})
 
-    // The last thing `hypr-monitor forget` printed, and which monitor's row it
-    // belongs under. Held rather than re-typed: the sentence about running
-    // `hyprctl reload` is the script's, and a second copy of it in QML is a
-    // copy that goes out of step.
+    // The last thing `desktop-monitors forget` printed, and which monitor's row
+    // it belongs under. Held rather than re-typed: what is still left to happen
+    // after a record is dropped differs per compositor, and that sentence is the
+    // script's -- a second copy of it in QML is a copy that goes out of step.
     property string forgetNotice: ""
     property string forgetNoticeFor: ""
 
@@ -235,7 +234,7 @@ SettingsPage {
     // that is not in its own EDID list would otherwise start the cycle
     // somewhere it was never at.
     //
-    // And the list is sorted, because hyprctl reports it in EDID order, which
+    // And the list is sorted, because it comes back in EDID order, which
     // here starts the main panel at 59.95 Hz and buries 165 in the middle.
     // Stepping through that feels like the button is broken.
     function modeList(mon: var): var {
@@ -270,12 +269,17 @@ SettingsPage {
         return scales.sort((a, b) => a - b);
     }
 
-    // Hyprland's transform is an index, not an angle. 0-3 are the rotations
-    // this page offers; 4-7 are the same rotations with the output flipped,
-    // which nothing here sets but something else might have -- so they are
-    // named rather than left to print as a bare number, and the segmented
-    // control below simply shows nothing selected when the live value is one
-    // of them.
+    // A transform is an INDEX, not an angle, and that is the wl_output enum
+    // rather than any one compositor's idea: 0 normal, 1 through 3 the
+    // counter-clockwise rotations, 4 through 7 the same with the output
+    // flipped. Hyprland speaks it in numbers and niri in words ("270",
+    // "flipped-90"), and desktop-monitors translates -- which is why this page
+    // never sees a word.
+    //
+    // 0-3 are the rotations this page offers. 4-7 are named rather than left to
+    // print as a bare number, because nothing here sets them but something else
+    // might have; the segmented control below simply shows nothing selected
+    // when the live value is one of them.
     function transformLabel(transform: int): string {
         switch (transform) {
         case 0: return "0° · normal";
@@ -290,10 +294,10 @@ SettingsPage {
         }
     }
 
-    // The make as a person would say it. hyprctl reports "GIGA-BYTE
+    // The make as a person would say it. Both compositors report "GIGA-BYTE
     // TECHNOLOGY CO., LTD." in `make`, which is a legal entity and not a
     // heading. The description keeps its full form and gets a row of its own,
-    // because THAT string is the monitor's identity as far as Hyprland is
+    // because THAT string is the monitor's identity as far as the compositor is
     // concerned and nothing here should paraphrase it.
     function shortMake(mon: var): string {
         return (mon.make ?? "").split(",")[0].split(" ")[0];
@@ -306,19 +310,26 @@ SettingsPage {
 
     // ---------------- Specs ----------------
     //
-    // A spec is the four things hl.monitor is given. Position is carried
-    // through untouched rather than left out: an hl.monitor call that omits it
-    // is a call whose result depends on what Hyprland decides to do with an
-    // unspecified field, and the one thing an apply here must not do is move a
-    // monitor nobody asked to move.
+    // A spec is the four things desktop-monitors is given for one monitor.
+    // Position is carried through untouched rather than left out: a spec that
+    // omits it is one whose result depends on what the compositor decides to do
+    // with an unspecified field, and the one thing an apply here must not do is
+    // move a monitor nobody asked to move.
 
     function specOf(mon: var): var {
         return {
-            // desc: AND NOT THE CONNECTOR NAME, for the reason hyprland.lua's
-            // own monitor block spells out: connector names are assigned by
-            // the kernel and they change across kernels -- linux-lts to
-            // mainline turned DP-4 into DP-3 here and every rule stopped
-            // matching. The description comes from the EDID.
+            // THE DESCRIPTION AND NOT THE CONNECTOR NAME, for the reason both
+            // configs spell out at the top: connector names are assigned by the
+            // kernel and they change across kernels -- linux-lts to mainline
+            // turned DP-4 into DP-3 here and every rule stopped matching. The
+            // description comes from the EDID.
+            //
+            // Carried WITH the `desc:` prefix because Copy config's Lua wants
+            // it, and stripped again by specArgs on the way to the script,
+            // which builds its own. Passing the prefixed form through would
+            // record an output called desc:desc:ASR ..., a rule that matches
+            // nothing while looking almost right in every message that echoes
+            // it.
             output: `desc:${mon.description ?? ""}`,
             mode: root.modeOf(mon),
             position: `${mon.x}x${mon.y}`,
@@ -361,7 +372,7 @@ SettingsPage {
 
     // ---------------- Reading the saved overrides ----------------
 
-    // hypr-monitor prints for a person, not for a program. There is no --json
+    // desktop-monitors prints for a person, not for a program. There is no --json
     // and asking for one would mean two output formats to keep in step for the
     // sake of one caller, so this parses the human one:
     //
@@ -391,7 +402,15 @@ SettingsPage {
                 continue;
             }
 
-            const parts = /^\s+(\S+) at (\S+), scale ([\d.]+), transform ([0-7])$/.exec(line);
+            // THE vrr TAIL IS OPTIONAL AND IS NOT CAPTURED, which is the whole
+            // of this page's relationship with that field. A record can carry a
+            // variable-refresh-rate mode -- niri's output blocks moved into the
+            // generated file and brought it with them -- and nothing here sets
+            // it, reads it or shows it. What matters is that a record which HAS
+            // one still parses: without the tail this regex fails, the line is
+            // dropped, and the monitor silently loses its Saved override row
+            // and its Forget chip.
+            const parts = /^\s+(\S+) at (\S+), scale ([\d.]+), transform ([0-7])(?:, vrr \S+)?$/.exec(line);
             if (desc && parts) {
                 found[desc] = {
                     mode: parts[1],
@@ -416,7 +435,7 @@ SettingsPage {
 
     function savedLabel(saved: var): string {
         const m = root.parseMode(saved.mode);
-        // hypr-monitor also accepts preferred, highrr and highres, which
+        // desktop-monitors also accepts preferred, highrr and highres, which
         // nothing on this page can produce but a person running the script by
         // hand can. Printed verbatim in that case: modeLabel would render them
         // as "0 × 0 · 0 Hz", which is a lie about a value this page did not set.
@@ -424,7 +443,51 @@ SettingsPage {
         return `${mode} · scale ${saved.scale.toFixed(2)} · ${root.transformLabel(saved.transform)}`;
     }
 
-    // ---------------- Lua ----------------
+    // ---------------- Talking to the script ----------------
+
+    // A spec as the five arguments desktop-monitors takes, in order. Every call
+    // that reaches the script goes through this, so there is one place where
+    // the shape of that command line is decided.
+    function specArgs(spec: var): var {
+        return [
+            // WITHOUT the `desc:` prefix -- see specOf. The script builds it
+            // itself when it writes Lua and does not want it at all when it
+            // writes KDL.
+            String(spec.output).replace(/^desc:/, ""),
+            root.modeArg(spec.mode),
+            spec.position,
+            // The script's validation wants a bare decimal, and JavaScript
+            // prints 1 for 1 and 1.25 for 1.25, which is exactly it.
+            String(spec.scale),
+            String(spec.transform)
+        ];
+    }
+
+    // The mode as the script is given it, which is NOT quite the form used
+    // everywhere else here. Internally a mode carries two decimals so it can
+    // be compared against availableModes, where both compositors are made to
+    // print "2560x1440@165.00Hz"; on the way out a whole refresh rate loses
+    // them again, because "2560x1440@165" is the exact string the monitor block
+    // in hyprland.lua already passes every time the config is read.
+    //
+    // NOTHING DOWNSTREAM NEEDS THE PRECISION, and that is worth knowing before
+    // anybody tries to add it back. The rates in this house are all fractional
+    // -- 165.001 on one panel and 164.999 on the other -- so an exact match
+    // could never have worked from a two-decimal reading anyway. Hyprland
+    // resolves the nearest itself, and desktop-monitors resolves it against the
+    // live mode list before writing KDL. A fractional rate keeps its decimals,
+    // since 59.95 has nowhere to round to.
+    function modeArg(mode: string): string {
+        const m = root.parseMode(mode);
+        return `${m.w}x${m.h}@${m.hz % 1 === 0 ? m.hz.toFixed(0) : m.hz}`;
+    }
+
+    // ---------------- Lua, for Copy config and nothing else ----------------
+    //
+    // THE ONE PIECE OF COMPOSITOR-SPECIFIC TEXT LEFT ON THIS PAGE, and it is
+    // only ever put on a clipboard. It is drawn where `monitorConfigCopy` says
+    // there is a hand-written config to paste it into, which today means
+    // Hyprland; see the header.
 
     // Descriptions come out of the monitor's EDID, which is a blob written by
     // a manufacturer. Nothing guarantees it has no quote or backslash in it,
@@ -432,31 +495,6 @@ SettingsPage {
     // an hl.monitor call against the wrong output at worst.
     function luaString(value: string): string {
         return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
-    }
-
-    // The mode as hl.monitor is given it, which is NOT quite the form used
-    // everywhere else here. Internally a mode carries two decimals so it can
-    // be compared against availableModes, where the compositor prints
-    // "2560x1440@165.00Hz"; on the way out a whole refresh rate loses them
-    // again, because "2560x1440@165" is the exact string the monitor block in
-    // hyprland.lua already passes to this same function every time the config
-    // is read. Whether the compositor's own two-decimal rendering would parse
-    // as readily is likely and untested, and there is no reason to find out on
-    // the call that can black out a screen. A fractional rate keeps its
-    // decimals, since 59.95 has nowhere to round to.
-    function luaMode(mode: string): string {
-        const m = root.parseMode(mode);
-        return `${m.w}x${m.h}@${m.hz % 1 === 0 ? m.hz.toFixed(0) : m.hz}`;
-    }
-
-    // JavaScript already prints 1 for 1.0 and 1.25 for 1.25, which is exactly
-    // what Lua wants, so the number goes in unquoted and unformatted.
-    function inlineLua(spec: var): string {
-        return `hl.monitor({ output = ${root.luaString(spec.output)}`
-            + `, mode = ${root.luaString(root.luaMode(spec.mode))}`
-            + `, position = ${root.luaString(spec.position)}`
-            + `, scale = ${spec.scale}`
-            + `, transform = ${spec.transform} })`;
     }
 
     // The pasteable form: hyprland.lua's own layout, aligned on the equals
@@ -472,7 +510,7 @@ SettingsPage {
         return `-- ${root.monitorTitle(mon)}\n`
             + `hl.monitor({\n`
             + `    output    = ${root.luaString(spec.output)},\n`
-            + `    mode      = ${root.luaString(root.luaMode(spec.mode))},\n`
+            + `    mode      = ${root.luaString(root.modeArg(spec.mode))},\n`
             + `    position  = ${root.luaString(spec.position)},\n`
             + `    scale     = ${spec.scale},\n`
             + `    transform = ${spec.transform},\n`
@@ -485,8 +523,13 @@ SettingsPage {
         // No guard against an overlapping run, and it does not need one: the
         // controls lock while a confirmation is pending, and the earliest a
         // revert can fire is a full second after the apply that started it.
-        // hyprctl is long gone by then.
-        applier.command = ["hyprctl", "eval", root.inlineLua(spec)];
+        // The script is long gone by then.
+        //
+        // `apply` AND NOT `set`: this writes nothing anywhere. Under niri that
+        // is not merely the page's convention -- `niri msg output` is temporary
+        // by design and says so in its own help, which is exactly the right
+        // shape for a change that has ten seconds to be confirmed.
+        applier.command = ["desktop-monitors", "apply"].concat(root.specArgs(spec));
         applier.running = true;
     }
 
@@ -507,25 +550,10 @@ SettingsPage {
     }
 
     // Writing it down is a separate act from applying it, and this is the half
-    // that lasts. `set` rewrites monitors.lua and hands the spec to the
+    // that lasts. `set` rewrites the generated file and hands the spec to the
     // compositor as well.
     function persist(spec: var): void {
-        Quickshell.execDetached(["hypr-monitor", "set",
-            // WITHOUT the `desc:` prefix. The script builds `desc:%s` itself
-            // when it writes the Lua, so passing the prefixed form would save
-            // an output called desc:desc:ASR ... -- a rule that matches nothing
-            // and fails by doing nothing at all on the next reload.
-            String(spec.output).replace(/^desc:/, ""),
-            // The same string the eval used, for the reason luaMode exists:
-            // "2560x1440@165" is what hyprland.lua already passes, and this is
-            // not the call to find out whether the two-decimal form parses.
-            root.luaMode(spec.mode),
-            spec.position,
-            // Lua and the script's own validation both want a bare decimal;
-            // JavaScript prints 1 for 1 and 1.25 for 1.25, which is exactly it.
-            String(spec.scale),
-            String(spec.transform)]);
-
+        Quickshell.execDetached(["desktop-monitors", "set"].concat(root.specArgs(spec)));
         overrideSettle.restart();
     }
 
@@ -533,22 +561,27 @@ SettingsPage {
         // THE WRITE IS HERE AND NOT IN commit(), and that is the whole point of
         // the countdown existing. An apply is a question -- can you see this?
         // -- and only the answer is worth keeping. Writing on the apply instead
-        // would put a mode into monitors.lua before anyone knew whether the
-        // panel could show it, and monitors.lua is re-read on every reload and
+        // would put a mode into the generated file before anyone knew whether
+        // the panel could show it, and that file is re-read on every reload and
         // every boot: a settings file that faithfully restores a black screen
         // is the exact failure this design exists to avoid. Nothing is written
         // when the countdown expires or Revert is pressed, which is the same
         // rule said the other way round.
         //
-        // THE REDUNDANCY IS DELIBERATE AND IT IS A NO-OP. `hypr-monitor set`
+        // THE REDUNDANCY IS DELIBERATE AND IT IS A NO-OP. `desktop-monitors set`
         // applies the spec live as well as writing it, so the compositor is
         // told a second time what it is already doing -- same output, same
         // mode string, same position, scale and transform, because what is
-        // persisted is the snapshot of what was eval'd ten seconds ago and not
-        // a re-reading of anything. hl.monitor setting every field to the value
-        // it already holds changes no pixels. Not worth a --no-apply flag on
-        // the script: that would be a second code path through the one part of
-        // this that must not be wrong, bought for nothing.
+        // persisted is the snapshot of what was applied ten seconds ago and not
+        // a re-reading of anything. Setting every field to the value it already
+        // holds changes no pixels. Not worth a --no-apply flag on the script:
+        // that would be a second code path through the one part of this that
+        // must not be wrong, bought for nothing.
+        //
+        // AND UNDER niri IT IS NOT EVEN REDUNDANT. A mode written into the
+        // config file is not re-applied on a reload -- niri chooses a mode when
+        // the connector comes up and does not revisit it -- so the live push is
+        // what keeps the screen and the file agreeing until the next session.
         if (root.pendingSpec)
             root.persist(root.pendingSpec);
 
@@ -574,12 +607,14 @@ SettingsPage {
     }
 
     // Dropping a saved override. It does NOT put the screen back and it is not
-    // meant to: the script writes the file and says so, and going back to
-    // whatever hyprland.lua declares takes a reload, which neither the script
-    // nor this page can do on the user's behalf without moving a monitor
-    // nobody asked to move.
+    // meant to: the script writes the file and says what is left to happen,
+    // which is not the same sentence on both flavors -- a reload under
+    // Hyprland, nothing at all under niri except for the mode, which waits for
+    // the next session. Neither the script nor this page settles it on the
+    // user's behalf, because that would mean moving a monitor nobody asked to
+    // move. Whatever it printed is shown verbatim under the card.
     function forget(mon: var): void {
-        forgetter.command = ["hypr-monitor", "forget", mon.description ?? ""];
+        forgetter.command = ["desktop-monitors", "forget", mon.description ?? ""];
         root.forgetNoticeFor = mon.name;
         root.forgetNotice = "";
         forgetter.running = true;
@@ -597,7 +632,7 @@ SettingsPage {
     // place that can introduce them. The shell keys its choice by model +
     // serial (Config.screenKey, off Quickshell's ShellScreen, which has no
     // description); Hyprland matches on the full EDID description, which is
-    // what hyprland.lua and hypr-monitor already use everywhere. Both are read
+    // what the compositor's config and desktop-monitors already use. Both are read
     // off the same monitor here, so neither side has to guess at the other's.
     //
     // The bridge between the two lists is the CONNECTOR, which is safe for
@@ -627,9 +662,11 @@ SettingsPage {
     //
     // The shell's half is immediate -- assigning the property moves the bar,
     // the launcher and the notifications as the bindings re-evaluate. The
-    // compositor's half is a rewrite of the generated monitors.lua, and what
-    // that does and does not apply before the next reload is the script's
-    // sentence to write, not this page's to guess at.
+    // compositor's half is the script's, and what it does and does not manage is
+    // the script's sentence to write rather than this page's to guess at: under
+    // Hyprland it rewrites the generated Lua and a reload moves the game rules,
+    // and under niri it says plainly that it cannot move them at all, because
+    // that would mean repeating the app-id regex those rules match on.
     function makeMain(mon: var): void {
         const screen = root.screenFor(mon);
         if (!screen)
@@ -637,19 +674,19 @@ SettingsPage {
 
         Config.mainMonitor = Config.screenKey(screen);
 
-        mainSetter.command = ["hypr-monitor", "main", mon.description ?? ""];
+        mainSetter.command = ["desktop-monitors", "main", mon.description ?? ""];
         root.mainNoticeFor = mon.name;
         root.mainNotice = "";
         mainSetter.running = true;
     }
 
-    // Back to Screens.qml's rule and to the MONITOR_MAIN written by hand in
-    // hyprland.lua. Not the same as "no main monitor": there is always one,
-    // this only stops it being pinned.
+    // Back to Screens.qml's rule and to whatever the compositor's own config
+    // says. Not the same as "no main monitor": there is always one, this only
+    // stops it being pinned.
     function clearMain(mon: var): void {
         Config.mainMonitor = "";
 
-        mainSetter.command = ["hypr-monitor", "main", "--clear"];
+        mainSetter.command = ["desktop-monitors", "main", "--clear"];
         root.mainNoticeFor = mon.name;
         root.mainNotice = "";
         mainSetter.running = true;
@@ -693,19 +730,25 @@ SettingsPage {
 
         // Asked at the same moment and for the same reason: the file can have
         // been changed from a terminal since the page was last looked at --
-        // hypr-monitor is a script precisely so it can be.
+        // desktop-monitors is a script precisely so it can be.
         if (!overrideQuery.running)
             overrideQuery.running = true;
 
-        // Whether the night light daemon is up. Asked here rather than polled
-        // or watched: the answer only changes when a package is installed or
-        // a session restarts, and both of those end with a trip back to this
-        // page. See the section at the bottom of this file.
-        if (!sunsetProbe.running)
-            sunsetProbe.running = true;
+        // WHERE that file is, asked ONCE and not on every visit: the answer
+        // depends on which compositor is running, and that cannot change without
+        // the shell being restarted with it.
+        if (root.savedTo === "" && !fileQuery.running)
+            fileQuery.running = true;
+
+        // Which blue-light daemon, if any, this session has. Asked here rather
+        // than polled or watched: the answer only changes when a package is
+        // installed or a session restarts, and both of those end with a trip
+        // back to this page. See the section at the bottom of this file.
+        if (!nightLightProbe.running)
+            nightLightProbe.running = true;
 
         // The forget advice belongs to the visit it was earned in. It says to
-        // go and run `hyprctl reload`, and leaving the settings window is the
+        // go and settle something outside this window, and leaving it is the
         // likeliest thing to have happened in order to do that.
         root.forgetNotice = "";
         root.forgetNoticeFor = "";
@@ -714,7 +757,14 @@ SettingsPage {
     Process {
         id: monitorQuery
 
-        command: ["hyprctl", "monitors", "-j"]
+        // THE SHAPE THIS PAGE WAS WRITTEN AGAINST, whoever answered. The
+        // script normalises: under Hyprland this is `hyprctl monitors -j`
+        // passed through untouched, and under niri it is `niri msg -j outputs`
+        // translated into the same fields -- an object keyed by connector name
+        // turned into an array, refresh rates out of millihertz, a mode index
+        // resolved into a mode, and the transform word turned back into the
+        // wl_output number everything here counts in.
+        command: ["desktop-monitors", "list", "--json"]
 
         stdout: StdioCollector {
             onStreamFinished: {
@@ -722,14 +772,15 @@ SettingsPage {
                 try {
                     parsed = JSON.parse(text || "[]");
                 } catch (e) {
-                    console.warn("DisplayPage: could not parse hyprctl monitors --", e.message);
+                    console.warn("DisplayPage: could not parse desktop-monitors list --", e.message);
                     return;
                 }
 
                 // Left to right, which is how they are arranged on the desk.
-                // hyprctl reports them by internal id, and on this machine
-                // that puts the side monitor first for no reason the person
-                // reading the page can see.
+                // Neither compositor reports them that way -- Hyprland uses its
+                // internal id and niri hands back an object -- and on this
+                // machine either order puts the side monitor first for no reason
+                // the person reading the page can see.
                 root.monitors = parsed.slice().sort((a, b) => a.x - b.x || a.y - b.y);
             }
         }
@@ -739,7 +790,7 @@ SettingsPage {
         id: overrideQuery
 
         // Bare, which is the script's `show`. It only prints.
-        command: ["hypr-monitor"]
+        command: ["desktop-monitors"]
 
         stdout: StdioCollector {
             onStreamFinished: root.overrides = root.parseOverrides(text)
@@ -778,14 +829,25 @@ SettingsPage {
     Process {
         id: applier
 
-        // The reply is NOT what says it worked. hyprctl eval answers on stdout
-        // and exits 0 for a Lua error as readily as for a success, so nothing
-        // here branches on it -- it is printed so a broken call leaves a trace,
-        // and the re-read below is what the page actually believes.
+        // THE REPLY IS NOT WHAT SAYS IT WORKED, and that has not changed by
+        // going through a script. `hyprctl eval` answers on stdout and exits 0
+        // for a Lua error as readily as for a success, and under niri an apply
+        // for a monitor that has just been unplugged is a sentence rather than a
+        // failure. So nothing here branches on either stream -- they are printed
+        // so a broken call leaves a trace, and the re-read below is what the page
+        // actually believes.
         stdout: StdioCollector {
             onStreamFinished: {
                 if (text.trim())
-                    console.warn("DisplayPage: hyprctl eval said --", text.trim());
+                    console.warn("DisplayPage: desktop-monitors apply said --", text.trim());
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                const message = text.replace(/\u001b\[[0-9;]*m/g, "").trim();
+                if (message)
+                    console.warn("DisplayPage: desktop-monitors apply failed --", message);
             }
         }
 
@@ -1095,11 +1157,30 @@ SettingsPage {
     // ONE LINE AND NOT A PARAGRAPH. It is true of every control below it, so
     // it has to be said once, up here, and then never repeated on a row -- a
     // notice printed six times is a notice nobody reads. It used to say the
-    // opposite ("this session only"), and the reason it no longer does is
-    // monitors.lua; naming the file is the point of the line, because it is a
-    // file the person can read, delete or keep out of git themselves. The
-    // refresh beside it is the manual way to re-read; the page does it on its
-    // own whenever it is opened and after every apply.
+    // opposite ("this session only"), and the reason it no longer does is the
+    // generated file; naming it is the point of the line, because it is a file
+    // the person can read, delete or keep out of git themselves. The refresh
+    // beside it is the manual way to re-read; the page does it on its own
+    // whenever it is opened and after every apply.
+    //
+    // THE PATH IS ASKED FOR RATHER THAN WRITTEN DOWN, and that is the whole
+    // reason there is a `file` subcommand at all. It is monitors.lua on one
+    // flavor and monitors.kdl on another, and a settings window naming the wrong
+    // file is worse than one naming none: somebody goes looking for it, does not
+    // find it, and concludes the setting was never saved. Until the answer
+    // arrives the line simply says less.
+    property string savedTo: ""
+
+    Process {
+        id: fileQuery
+
+        command: ["desktop-monitors", "file"]
+
+        stdout: StdioCollector {
+            onStreamFinished: root.savedTo = text.trim()
+        }
+    }
+
     Item {
         width: parent.width
         // Grows with the notice rather than clipping it, since the sentence
@@ -1120,10 +1201,11 @@ SettingsPage {
             // is not wide enough for the sentence, so what reached the screen
             // was "Kept changes are saved to ~/.config/hypr/monitors.lua — ge…"
             // -- the half that says WHERE, cut before the half that says the
-            // file is generated and stacks on top of the hand-written one.
-            // A settings window is the last place that should be telling you
-            // most of something.
-            text: "Kept changes are saved to ~/.config/hypr/monitors.lua — generated, applied on top of hyprland.lua."
+            // file is generated. A settings window is the last place that
+            // should be telling you most of something.
+            text: root.savedTo === ""
+                ? "Kept changes are written to a generated file, read back on every reload."
+                : `Kept changes are saved to ${root.savedTo} — generated, read back on every reload.`
             wrapMode: Text.WordWrap
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 1
@@ -1169,9 +1251,9 @@ SettingsPage {
     // ---------------- Arranging the monitors ----------------
     //
     // WHERE EACH SCREEN IS RELATIVE TO THE OTHERS, dragged on a map rather
-    // than typed as coordinates. This is the one thing on this page the header
-    // above used to say it would not do -- "position is read and shown but not
-    // edited... undoing that is a second monitor's problem" -- and that
+    // than typed as coordinates. The header above used to refuse this outright,
+    // on the grounds that moving one monitor rearranges the desktop under every
+    // window and undoing that is a second monitor's problem -- and that
     // argument does not survive contact with the actual failure: a position is
     // not a mode. Every screen keeps drawing whatever happens, the mistake is
     // visible the moment the pointer refuses to cross where you expected, and
@@ -1237,9 +1319,9 @@ SettingsPage {
         return false;
     }
 
-    // Two screens claiming the same desktop coordinates. Hyprland allows it
-    // and it is occasionally even deliberate, so this warns rather than
-    // refuses -- but it is almost always a drag that was let go early, and the
+    // Two screens claiming the same desktop coordinates. Neither compositor
+    // refuses it and it is occasionally even deliberate, so this warns rather
+    // than refuses -- but it is almost always a drag that was let go early, and the
     // symptom (a pointer that vanishes into a region drawn twice) is not one
     // anybody diagnoses from the desk.
     readonly property bool arrangeOverlaps: {
@@ -1308,11 +1390,11 @@ SettingsPage {
 
     // The whole layout pulled back so its top-left corner is 0,0.
     //
-    // Hyprland takes negative coordinates and this is not about it refusing
-    // them. It is about the numbers a person reads afterwards: hyprland.lua's
-    // own block, the Position row on every card and every example in the wiki
-    // are written from an origin, and a desktop whose left edge is at -1080
-    // makes every one of those a subtraction. Run after each drag, so the
+    // Both compositors take negative coordinates and this is not about either
+    // refusing them. It is about the numbers a person reads afterwards: the
+    // monitor block in the hand-written config, the Position row on every card
+    // and every example in either wiki are written from an origin, and a desktop
+    // whose left edge is at -1080 makes every one of those a subtraction. Run after each drag, so the
     // origin is a consequence of the arrangement rather than of which monitor
     // happened to be dragged.
     function normaliseArrangement(): void {
@@ -1362,15 +1444,23 @@ SettingsPage {
         return specs;
     }
 
-    // ONE eval FOR THE WHOLE ARRANGEMENT, and this is not tidiness. Moving two
-    // monitors in two calls means a moment where the first has moved and the
-    // second has not, which for a layout that ends up correct is a flash of
-    // one that overlaps -- and every window on the desktop is re-laid out for
-    // both of them. `hyprctl eval` takes a Lua chunk, so several hl.monitor
-    // calls go out as one statement list.
-    function evalArrangement(specs: var): void {
-        arranger.command = ["hyprctl", "eval",
-            specs.map(spec => root.inlineLua(spec)).join("\n")];
+    // ONE CALL FOR THE WHOLE ARRANGEMENT, and this is not tidiness. Moving two
+    // monitors in two commands means a moment where the first has moved and the
+    // second has not, which for a layout that ends up correct is a flash of one
+    // that overlaps -- and every window on the desktop is re-laid out for both
+    // of them. So `apply` takes any number of specs, five arguments each, and
+    // the script decides how atomic it can make them: Hyprland gets one eval
+    // holding several hl.monitor calls, niri gets them back to back over its
+    // socket, which is as close as it has.
+    //
+    // Named for what it does rather than for how it used to do it -- there is no
+    // eval in this file any more.
+    function applyArrangement_(specs: var): void {
+        let args = ["desktop-monitors", "apply"];
+        for (const spec of specs)
+            args = args.concat(root.specArgs(spec));
+
+        arranger.command = args;
         arranger.running = true;
     }
 
@@ -1381,14 +1471,14 @@ SettingsPage {
 
         root.arrangePending = specs;
         root.arrangeSeconds = root.revertAfter;
-        root.evalArrangement(specs.map(entry => entry.spec));
+        root.applyArrangement_(specs.map(entry => entry.spec));
     }
 
     function keepArrangement(): void {
         if (!root.arrangePending)
             return;
 
-        // Written one at a time, waiting for each. `hypr-monitor set` reads
+        // Written one at a time, waiting for each. `desktop-monitors set` reads
         // the whole state file, edits one record and writes it back, so two
         // copies started together would each save what they read before the
         // other wrote -- and the second monitor's position would land in a
@@ -1406,7 +1496,7 @@ SettingsPage {
         const back = root.arrangePending.map(entry => entry.revert);
         root.arrangePending = null;
         root.arrangeDraft = ({});
-        root.evalArrangement(back);
+        root.applyArrangement_(back);
     }
 
     property var persistQueue: []
@@ -1423,12 +1513,7 @@ SettingsPage {
         const head = root.persistQueue[0];
         root.persistQueue = root.persistQueue.slice(1);
 
-        persister.command = ["hypr-monitor", "set",
-            String(head.output).replace(/^desc:/, ""),
-            root.luaMode(head.mode),
-            head.position,
-            String(head.scale),
-            String(head.transform)];
+        persister.command = ["desktop-monitors", "set"].concat(root.specArgs(head));
         persister.running = true;
     }
 
@@ -1720,9 +1805,9 @@ SettingsPage {
             width: parent.width - Theme.groupPadding * 2
             topPadding: 6
 
-            text: "Two screens are on top of each other. Hyprland allows it, "
-                + "but the overlapping strip is drawn by both and the pointer "
-                + "behaves as though one of them is not there."
+            text: "Two screens are on top of each other. Neither compositor "
+                + "refuses it, but the overlapping strip is drawn by both and "
+                + "the pointer behaves as though one of them is not there."
             wrapMode: Text.WordWrap
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 1
@@ -1823,22 +1908,27 @@ SettingsPage {
         title: "Night light"
 
         // FIRST, AND ONLY WHEN IT IS TRUE. Everything below this line is a
-        // control that silently does nothing without the daemon, and a page
-        // full of switches that do nothing is a worse bug than a missing
-        // feature -- the user concludes the setting is broken rather than
-        // absent.
+        // control that silently does nothing without a daemon, and a page full
+        // of switches that do nothing is a worse bug than a missing feature --
+        // the user concludes the setting is broken rather than absent.
+        //
+        // WHICH DAEMON IS NOT THIS PAGE'S BUSINESS, and that is why the sentence
+        // is built around what the script answered rather than naming one.
+        // `night-light` picks one per session -- hyprsunset under Hyprland,
+        // wl-gammarelay-rs under niri -- and naming the wrong one is how a
+        // person spends an evening trying to start a service that was never
+        // going to help.
         Text {
-            visible: !root.sunsetRunning
+            visible: !root.nightLightAvailable
 
             x: Theme.groupPadding
             width: parent.width - Theme.groupPadding * 2
             topPadding: 4
             bottomPadding: 6
 
-            text: "hyprsunset is not running, so nothing below will reach the screen. "
-                + "It is the daemon that owns the colour matrix; Hyprland only passes "
-                + "messages to it. Start it with "
-                + "`systemctl --user enable --now hyprsunset.service`."
+            text: "Nothing below will reach the screen: this session has no blue-light "
+                + "daemon. Hyprland uses hyprsunset and niri uses wl-gammarelay-rs; "
+                + "`night-light show` says which one it looked for and what it found."
             wrapMode: Text.WordWrap
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 1
@@ -1857,7 +1947,7 @@ SettingsPage {
             // switch is still the clearest statement of whether the filter is
             // on right now, and watching it move at 20:00 is how you find out
             // the schedule works.
-            enabled: !NightLight.scheduled && root.sunsetRunning
+            enabled: !NightLight.scheduled && root.nightLightAvailable
 
             onToggled: value => NightLight.setEnabled(value)
         }
@@ -1888,7 +1978,7 @@ SettingsPage {
             to: NightLight.maxTemperature
             step: 100
             suffix: "K"
-            enabled: root.sunsetRunning
+            enabled: root.nightLightAvailable
             hint: "Lower is warmer. 6000K is roughly daylight and is where the "
                 + "screen sits with no filter at all, which is why the range "
                 + "stops there — the top of the scale and the switch above "
@@ -1901,7 +1991,7 @@ SettingsPage {
             glyph: Icons.clock
             label: "Turn on automatically"
             checked: NightLight.scheduled
-            enabled: root.sunsetRunning
+            enabled: root.nightLightAvailable
 
             onToggled: value => NightLight.setScheduled(value)
         }
@@ -1918,7 +2008,7 @@ SettingsPage {
             to: 23 * 60 + 30
             step: 30
             display: NightLight.clockText(NightLight.from)
-            enabled: NightLight.scheduled && root.sunsetRunning
+            enabled: NightLight.scheduled && root.nightLightAvailable
 
             onMoved: value => NightLight.setFrom(value)
         }
@@ -1931,7 +2021,7 @@ SettingsPage {
             to: 23 * 60 + 30
             step: 30
             display: NightLight.clockText(NightLight.to)
-            enabled: NightLight.scheduled && root.sunsetRunning
+            enabled: NightLight.scheduled && root.nightLightAvailable
             hint: "An end earlier than the start is the normal case, not a "
                 + "mistake: 20:00 to 07:00 is the two ends of the day rather "
                 + "than the middle of it, and that is what this reads it as."
@@ -1940,18 +2030,22 @@ SettingsPage {
         }
     }
 
-    // Whether the daemon is up, asked when the page is looked at rather than
-    // polled. The same argument the Wi-Fi scanner makes: every page in this
-    // window is built and alive, so `visible` is the only honest signal that
-    // somebody is reading this one.
+    // Whether there is a daemon to talk to at all, asked when the page is looked
+    // at rather than polled. The same argument the Wi-Fi scanner makes: every
+    // page in this window is built and alive, so `visible` is the only honest
+    // signal that somebody is reading this one.
     //
     // It is asked ONCE per visit and not watched, because the answer only
     // changes when a person installs a package or a session restarts -- and
-    // both of those end with a trip back to this page.
-    // Asked from the page's single onVisibleChanged handler further up, next
-    // to the two hyprctl queries -- QML allows one handler per signal, and a
-    // second `onVisibleChanged` here is not an override but an error.
-    property bool sunsetRunning: true
+    // both of those end with a trip back to this page. Asked from the page's
+    // single onVisibleChanged handler further up, next to the monitor queries --
+    // QML allows one handler per signal, and a second `onVisibleChanged` here is
+    // not an override but an error.
+    //
+    // OPTIMISTIC UNTIL THE ANSWER ARRIVES, deliberately: the probe takes a
+    // moment and controls that flash from dead to alive on every visit read as a
+    // page that is broken and then recovers.
+    property bool nightLightAvailable: true
 
     // ---------------- One section per connected monitor ----------------
     Repeater {
@@ -1992,10 +2086,15 @@ SettingsPage {
                 value: card.mon.name ?? ""
             }
 
-            // The full EDID string, verbatim. Prefixed with `desc:` this is
-            // what every rule in hyprland.lua matches on and what the Lua
-            // below sends, so it is worth being able to read it off the screen
-            // rather than out of `hyprctl monitors all -j`.
+            // The full EDID string, verbatim, and it is worth being able to
+            // read it off the screen rather than out of a terminal: it is the
+            // name every rule in the compositor's own config matches on, and
+            // the two compositors do not spell it the same way -- Hyprland
+            // normalises the manufacturer and niri does not.
+            //
+            // Which is also why this row shows what THIS session reports and
+            // never a string derived from the other one. `desktop-monitors list`
+            // is the same answer in a terminal.
             Reading {
                 label: "Description"
                 value: card.mon.description ?? ""
@@ -2244,19 +2343,27 @@ SettingsPage {
                     // STILL HERE NOW THAT KEEPING WORKS, and it is not the
                     // leftover of the days when it was the only way to make a
                     // change last. The two destinations are different files
-                    // with different owners: Keep writes monitors.lua, which is
-                    // generated and gitignored, and this puts the same block on
-                    // the clipboard for hyprland.lua, which is hand-written and
-                    // in git. Promoting a value from the first to the second is
-                    // a thing to want, and it is not a thing a settings window
-                    // should do by itself -- see the header.
+                    // with different owners: Keep writes the generated file, and
+                    // this puts the same block on the clipboard for the
+                    // hand-written one, which is in git. Promoting a value from
+                    // the first to the second is a thing to want, and it is not
+                    // a thing a settings window should do by itself -- see the
+                    // header.
                     //
                     // NOT gated on `dirty`, unlike the two above: copying the
                     // block for a monitor exactly as it is now is the whole
                     // point on the day you want to write the current setup
-                    // into hyprland.lua without changing anything first.
+                    // into the tracked config without changing anything first.
+                    //
+                    // HIDDEN WHERE THERE IS NOWHERE TO PASTE IT. Under niri the
+                    // generated file is the ONLY declaration of an output, so
+                    // this block would have no destination -- and the one place
+                    // somebody would try, config.kdl, is the place that shadows
+                    // the generated file and kills this page. A chip that hands
+                    // you a footgun is worse than no chip.
                     Chip {
                         anchors.verticalCenter: parent.verticalCenter
+                        visible: Compositor.can("monitorConfigCopy")
                         label: root.copiedFor === card.mon.name ? "Copied" : "Copy config"
                         glyph: root.copiedFor === card.mon.name ? root.check : root.clipboardText
                         onActivated: root.copyConfig(card.mon)
@@ -2323,11 +2430,11 @@ SettingsPage {
             }
 
             // THE SCRIPT'S OWN WORDS, printed verbatim under the monitor they
-            // were about. `forget` rewrites monitors.lua and deliberately
+            // were about. `forget` rewrites the generated file and deliberately
             // applies nothing, so at this instant the file and the screen
-            // disagree and only a reload settles it -- which is precisely what
-            // the line it prints says. Shown rather than paraphrased so there
-            // is one copy of that sentence, in the script that knows it.
+            // disagree -- and what settles them is not the same on both flavors.
+            // Shown rather than paraphrased so there is one copy of that
+            // sentence, in the script that knows it.
             Text {
                 visible: root.forgetNoticeFor === card.mon.name && root.forgetNotice !== ""
 
@@ -2419,8 +2526,8 @@ SettingsPage {
 
                     // "Keep" and a save glyph, because this one press does both
                     // things: it stops the countdown AND it is what writes the
-                    // change to monitors.lua. A tick here would say the change
-                    // was merely accepted.
+                    // change to the generated file. A tick here would say the
+                    // change was merely accepted.
                     Chip {
                         anchors.verticalCenter: parent.verticalCenter
                         label: "Keep"
@@ -2444,7 +2551,7 @@ SettingsPage {
 
     // ---------------- Nothing plugged in, or nothing read yet ----------------
     //
-    // hyprctl is asked when the page appears, so an empty list is either the
+    // The script is asked when the page appears, so an empty list is either the
     // few milliseconds before the first answer or a genuinely empty reply.
     // Both are covered by one line: a page that draws nothing at all reads as
     // a page that failed to load.
@@ -2460,8 +2567,9 @@ SettingsPage {
             topPadding: 4
             bottomPadding: 4
 
-            text: "No monitors reported. `hyprctl monitors -j` lists the enabled ones only, "
-                + "so a screen that is switched off in the compositor does not appear here."
+            text: "No monitors reported. `desktop-monitors list` reports the ones actually "
+                + "being driven, so a screen that is switched off in the compositor does "
+                + "not appear here."
             wrapMode: Text.WordWrap
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 1
@@ -2474,11 +2582,26 @@ SettingsPage {
     }
 
     Process {
-        id: sunsetProbe
+        id: nightLightProbe
 
-        command: ["pgrep", "-x", "hyprsunset"]
-        // pgrep exits 1 when it matches nothing, which is the whole answer --
-        // there is no output to collect.
-        onExited: code => root.sunsetRunning = code === 0
+        // THE SCRIPT IS ASKED, and not the process table. It used to be `pgrep
+        // -x hyprsunset`, which is wrong twice over now: it names one flavor's
+        // daemon, and the other one's cannot be pgrep'd at all -- the name
+        // wl-gammarelay-rs is 16 characters, the kernel caps comm at 15, and
+        // pgrep answers zero matches rather than an error. `night-light show`
+        // already knows: it prints the backend it chose for this session and
+        // whether that daemon is up.
+        //
+        // A BACKEND OF `none` IS THE ONLY HARD NO. Both daemons are started on
+        // demand by the script, so "not running" is a state it fixes on the
+        // first toggle rather than a reason to grey the controls out.
+        command: ["night-light", "show"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const backend = /^backend:\s+(\S+)$/m.exec(text);
+                root.nightLightAvailable = !!backend && backend[1] !== "none";
+            }
+        }
     }
 }
