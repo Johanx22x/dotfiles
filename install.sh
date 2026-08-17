@@ -523,12 +523,12 @@ fi
 # hardware that is actually plugged in, and saying whether the configuration
 # already knows about each screen.
 #
-# TWO FILES NAME MONITORS, and a check that reads only one of them is wrong.
-# hyprland.lua carries the hand-written block for the machine this repo was set
-# up on: tracked, commented, and NOT where a second machine should record its
-# own screens -- editing a tracked file is what leaves a clone permanently
-# dirty and turns every pull into a conflict. On top of that block hyprland.lua
-# dofile()s ~/.config/hypr/monitors.lua, which the `hypr-monitor` script
+# TWO FILES NAME MONITORS UNDER HYPRLAND, and a check that reads only one of
+# them is wrong. hyprland.lua carries the hand-written block for the machine
+# this repo was set up on: tracked, commented, and NOT where a second machine
+# should record its own screens -- editing a tracked file is what leaves a clone
+# permanently dirty and turns every pull into a conflict. On top of that block
+# hyprland.lua dofile()s ~/.config/hypr/monitors.lua, which `desktop-monitors`
 # generates and .gitignore keeps out of the repo, and a later hl.monitor for
 # the same output wins. So a machine set up the current way names its screens
 # ONLY there, and grepping hyprland.lua alone would report it as broken.
@@ -539,16 +539,24 @@ fi
 # gives it preferred mode and automatic position -- it just sits wherever
 # Hyprland decided to put it, at whatever refresh rate.
 #
-# UNDER NIRI THE CHECK BELOW DOES NOT APPLY AT ALL, and it is not a matter of
-# swapping hyprctl for `niri msg`. The two compositors build a monitor's name
-# from the same three EDID fields and do NOT produce the same string: Hyprland
-# normalises the manufacturer and niri does not, so this machine's portrait
-# screen is "GIGA-BYTE TECHNOLOGY CO. LTD. GS27FA ..." in one and
-# "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA ..." -- with the comma -- in the other.
-# A check that compared one compositor's names against the other's config would
-# report every screen as unconfigured, and, far worse, somebody copying the line
-# across would get a monitor that silently keeps its preferred mode and no
-# rotation. So niri gets its own branch that prints what niri itself reports.
+# UNDER NIRI IT IS ONE FILE, AND THE NAMES ARE NOT THE SAME NAMES. Both points
+# matter and both are easy to get wrong:
+#
+#   - ~/.config/niri/monitors.kdl is the ONLY place an output is declared.
+#     config.kdl declares none on purpose, because an `output` block in an
+#     include is ignored when the including file names the same monitor -- so
+#     there is no layering here, and "not recorded" means "not configured at
+#     all" rather than "no override on top of the hand-written one".
+#   - The two compositors build a monitor's name from the same three EDID
+#     fields and do NOT produce the same string: Hyprland normalises the
+#     manufacturer and niri does not, so this machine's portrait screen is
+#     "GIGA-BYTE TECHNOLOGY CO. LTD. GS27FA ..." in one and "GIGA-BYTE
+#     TECHNOLOGY CO., LTD. GS27FA ..." -- with the comma -- in the other.
+#     Copying a name across gets a monitor that silently keeps its preferred
+#     mode and no rotation.
+#
+# `desktop-monitors` knows both of those, which is why each branch below asks it
+# rather than grepping for itself.
 echo
 blue "== Monitors =="
 HYPR_CONF="$HOME/.config/hypr/hyprland.lua"
@@ -556,30 +564,71 @@ HYPR_OVERRIDES="$HOME/.config/hypr/monitors.lua"
 NIRI_CONF="$HOME/.config/niri/config.kdl"
 
 if command -v niri >/dev/null && [[ -n ${NIRI_SOCKET:-} ]]; then
-  # In a live niri session. There is no monitors.kdl override layer yet -- the
-  # `hypr-monitor` equivalent for this flavor does not exist -- so config.kdl is
-  # the only file that names screens, and it is TRACKED. Which means the advice
-  # here cannot be "record it": editing a tracked file is what leaves a clone
-  # permanently dirty. It is printed and left to the person.
+  # In a live niri session. Every attached monitor is compared against the
+  # records in ~/.config/niri/monitors.kdl -- untracked and generated, so
+  # writing to it is the RIGHT advice here rather than something that leaves a
+  # clone dirty.
+  #
+  # A screen with no record still lights up: niri gives it its preferred mode,
+  # no rotation and an automatic position. It just does not keep the layout
+  # anybody chose.
   if [[ ! -f $NIRI_CONF ]]; then
     echo "   $NIRI_CONF not found — run step 3 (stow) first."
+  elif ! command -v jq >/dev/null; then
+    echo "   jq is not installed, so the monitors cannot be read."
+    echo "   It is in packages/pacman.txt: install it and re-run this script."
+  elif [[ ! -x $HOME/.local/bin/desktop-monitors ]]; then
+    echo "   ~/.local/bin/desktop-monitors is missing — run step 3 (stow) first."
   else
-    echo "   Every output as niri reports it right now:"
-    echo
-    niri msg outputs | sed 's/^/     /'
-    echo
-    echo "   Those names go in the output blocks of config.kdl. Copy them from"
-    echo "   the line above and NOT from hyprland.lua: the two compositors spell"
-    echo "   the same monitor differently and the mismatch fails silently."
-    echo
-    echo "   config.kdl is tracked, so a second machine editing it will conflict"
-    echo "   on every pull. Until this flavor grows its own override layer, put"
-    echo "   machine-local output blocks in ~/.config/niri/local.kdl, which the"
-    echo "   config includes at the end and .gitignore keeps out of the repo."
+    # The recorded names, read out of the script's own `show` rather than out
+    # of the generated file: one parser for that format, and it lives with the
+    # thing that writes it.
+    RECORDED=()
+    mapfile -t RECORDED < <("$HOME/.local/bin/desktop-monitors" | grep -v '^\( \|Main monitor:\|No monitors recorded\)')
+
+    in_recorded() {
+      local needle="$1" item
+      for item in "${RECORDED[@]}"; do
+        if [[ $item == "$needle" ]]; then return 0; fi
+      done
+      return 1
+    }
+
+    NIRI_UNCONFIGURED=0
+    while IFS= read -r desc; do
+      if in_recorded "$desc"; then
+        green "   recorded (monitors.kdl): $desc"
+      else
+        red   "   not recorded:            $desc"
+        NIRI_UNCONFIGURED=1
+      fi
+    done < <("$HOME/.local/bin/desktop-monitors" list --json | jq -r '.[].description')
+
+    if (( NIRI_UNCONFIGURED )); then
+      echo
+      echo "   Those screens work — niri gives them preferred mode, no rotation"
+      echo "   and an automatic position — but nothing places them or sets a rate."
+      echo
+      echo "   Arrange them the way you like them, then record what is on screen:"
+      echo
+      echo "       desktop-monitors seed"
+      echo
+      echo "   That writes ~/.config/niri/monitors.kdl, which config.kdl includes"
+      echo "   FIRST and .gitignore keeps out of the repo. Do NOT put output"
+      echo "   blocks in config.kdl: it is tracked, and an output named there is"
+      echo "   ignored in the include, which would leave the settings window"
+      echo "   applying changes that every reload undoes."
+      echo
+      echo "   The settings window (SUPER + C) does the same thing from a display"
+      echo "   page that applies a change live and puts it back unless you confirm"
+      echo "   it."
+    else
+      green "   every attached monitor is recorded, nothing to change"
+    fi
   fi
 elif ! command -v hyprctl >/dev/null || ! hyprctl monitors -j >/dev/null 2>&1; then
   echo "   No compositor is running, so the monitors cannot be read."
-  echo "   Log in and re-run this script, or run 'hypr-monitor' by hand."
+  echo "   Log in and re-run this script, or run 'desktop-monitors' by hand."
 elif ! command -v jq >/dev/null; then
   # Everything below reads hyprctl's JSON through jq. Said here rather than
   # discovered halfway down, where a missing jq would abort the script under
@@ -593,7 +642,7 @@ else
   MONITORS_JSON="$(hyprctl monitors -j)"
 
   # The descriptions each file names. hyprland.lua writes them "desc:like
-  # this" and hypr-monitor generates them 'desc:like this', so both quotes end
+  # this" and desktop-monitors generates them 'desc:like this', so both quotes end
   # the match. They are kept apart because they mean different things: one is
   # this repo's own machine, the other is what THIS machine has recorded.
   NAMED=() OVERRIDDEN=()
@@ -644,7 +693,7 @@ else
       (if (.transform % 2) == 1 then "rotated panel, transform \(.transform)"
        elif .width > .height then "landscape"
        else "portrait panel" end) + "\n" +
-      "       hypr-monitor set \"\(.description)\" \(.width)x\(.height)@\(.refreshRate|round) \(.x)x\(.y) \(.scale*100|round/100) \(.transform)"' \
+      "       desktop-monitors set \"\(.description)\" \(.width)x\(.height)@\(.refreshRate|round) \(.x)x\(.y) \(.scale*100|round/100) \(.transform)"' \
       <<<"$MONITORS_JSON"
     echo
     echo "   The settings window (SUPER + C) does the same thing from a display"
@@ -672,10 +721,11 @@ Left to do by hand:
   1. /etc  — see system/ and the table in the README. The fstab UUIDs belong
              to the original machine: do NOT copy it as is.
   2. Monitors — if the check above listed a screen as not configured, record
-             it with 'hypr-monitor set ...' (the command is printed for you)
-             or from the settings window, SUPER + C. That writes
-             ~/.config/hypr/monitors.lua, which is generated and gitignored;
-             hyprland.lua is tracked and does not need editing.
+             it with 'desktop-monitors set ...' (the command is printed for you),
+             with 'desktop-monitors seed', or from the settings window, SUPER + C.
+             That writes ~/.config/hypr/monitors.lua under Hyprland and
+             ~/.config/niri/monitors.kdl under niri, both generated and
+             gitignored; the tracked configs do not need editing.
   3. The GPU driver. Deliberately not installed by this script: it is the one
              thing that depends on hardware nothing here can see, and a driver
              for a card you do not have is not a harmless mistake.

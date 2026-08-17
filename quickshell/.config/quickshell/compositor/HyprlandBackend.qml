@@ -33,13 +33,17 @@ CompositorBackend {
         castingIndicator: true,
         // The active layout does NOT come from the compositor here, by design:
         // Hyprland's layout index is session-only, is thrown away by a reload,
-        // and nothing outside the compositor can read it -- so `hypr-tweak`
+        // and nothing outside the compositor can read it -- so `desktop-tweak`
         // owns a state file instead and the bar reads that. See the long note
         // on the SUPER+K bind in hyprland.lua.
         keyboardLayout: false,
         focusGrab: true,
         bindsIntrospection: true,
         monitorConfig: true,
+        // hyprland.lua declares the monitors by hand and the generated
+        // monitors.lua only overrides it, so promoting a value from one file to
+        // the other is a thing to want and Copy config is how it crosses.
+        monitorConfigCopy: true,
         inputConfig: true,
         scratchpad: true,
         // One keyboard focus for the whole session, so a grabbing surface is
