@@ -62,7 +62,7 @@ ShellRoot {
     // power menu: it takes an exclusive keyboard grab, and two of them would
     // be two surfaces fighting over the keyboard.
     Variants {
-        model: Screens.mainOnly
+        model: Screens.grabScreens
 
         Launcher {}
     }
@@ -71,7 +71,7 @@ ShellRoot {
     // deliberately: it is a single modal thing and a copy per screen would
     // mean two of them opening at once, both grabbing focus.
     Variants {
-        model: Screens.mainOnly
+        model: Screens.grabScreens
 
         PowerMenu {}
     }
@@ -81,7 +81,7 @@ ShellRoot {
     // exclusive keyboard grab, and two of them would be two surfaces fighting
     // over the keyboard.
     Variants {
-        model: Screens.mainOnly
+        model: Screens.grabScreens
 
         Cheatsheet {}
     }

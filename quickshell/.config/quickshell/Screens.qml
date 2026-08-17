@@ -110,6 +110,32 @@ Singleton {
     // filtering out of shell.qml.
     readonly property var mainOnly: root.main ? [root.main] : []
 
+    // WHERE THE GRABBING SURFACES GO -- the launcher, the power menu and the
+    // cheatsheet. One of them at a time, always; the only question is which
+    // screen it appears on, and that depends on the compositor rather than on
+    // taste.
+    //
+    // Where the keyboard grab is session-wide, a fixed screen is right: the
+    // surface is heard wherever the user happens to be looking, and pinning it
+    // to the main monitor means it always shows up in the same place.
+    //
+    // Where keyboard focus belongs to a MONITOR, that same arrangement breaks in
+    // the worst way -- the launcher opens on the main screen, takes its
+    // exclusive grab, and receives nothing at all while the user is focused on
+    // the other monitor. The window is there and typing goes nowhere. So it
+    // follows the focus instead.
+    //
+    // Falls back to the main screen whenever the focused output is unknown or
+    // is not one of ours, which is also the state for the first instants of a
+    // session, before the compositor has said anything.
+    readonly property var grabScreens: {
+        if (Compositor.can("globalKeyboardGrab"))
+            return root.mainOnly;
+
+        const focused = Quickshell.screens.find(s => s.name === Compositor.focusedOutput);
+        return focused ? [focused] : root.mainOnly;
+    }
+
     // The main screen's key, for the settings window and for anything that has
     // to say "this one" in the same spelling Config stores.
     readonly property string mainKey: Config.screenKey(root.main)
