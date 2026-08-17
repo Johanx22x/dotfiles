@@ -67,7 +67,15 @@ CompositorBackend {
         // niri has no `hyprctl binds`. The binds live in the KDL config, which
         // is parseable -- unlike Hyprland's Lua, where every bind reports as
         // "__lua" -- but reading it is a separate job from this backend.
-        bindsIntrospection: false,
+        // TRUE, and the route is different from the other flavor's rather than
+        // absent. niri has no `hyprctl binds`, but its config is KDL and a bind
+        // can carry a `hotkey-overlay-title` -- which is exactly the
+        // "Category: what it does" string Hyprland's `description` holds. So
+        // the answer is read from the config file instead of from the socket.
+        //
+        // Better than Hyprland's in one way worth noting: there, a Lua config
+        // makes every bind report as "__lua" with no readable action at all.
+        bindsIntrospection: true,
         monitorConfig: false,
         inputConfig: false,
         // niri has no special workspace at all: upstream issue #845, open since
@@ -165,6 +173,101 @@ CompositorBackend {
             if (w.workspace_id === workspaceId)
                 n += 1;
         return n;
+    }
+
+    // ---- Keybindings ------------------------------------------------------
+    //
+    // READ FROM THE CONFIG FILE, because there is no IPC for this: niri knows
+    // its binds -- its own hotkey overlay lists them -- but does not expose
+    // them. The file is the next best source and an honest one, since it IS
+    // what the compositor loaded.
+    //
+    // Only binds carrying a hotkey-overlay-title are listed, which matches the
+    // rule on the other flavor: a bind with no description is deliberately
+    // invisible, and that is what keeps the sheet to the chords worth
+    // remembering rather than every media key.
+    //
+    // The title doubles as niri's own overlay text, so writing one serves both
+    // the built-in overlay and this shell -- there is no second place to keep
+    // in step.
+    function refreshBinds(): void {
+        configFile.reload();
+    }
+
+    // "Mod+Shift+S" -> ["SUPER", "SHIFT", "S"]. Mod is what niri calls the
+    // modifier that is Super in a real session, and the shell spells it the way
+    // it is printed on the key.
+    function chordToKeys(chord: string): var {
+        return chord.split("+").map(part => {
+            switch (part) {
+            case "Mod": return "SUPER";
+            case "Shift": return "SHIFT";
+            case "Ctrl": return "CTRL";
+            case "Alt": return "ALT";
+            default: return part;
+            }
+        });
+    }
+
+    property FileView configFile: FileView {
+        // $NIRI_CONFIG wins where it is set, the way niri itself resolves it.
+        path: (Quickshell.env("NIRI_CONFIG") ?? "")
+            || `${Quickshell.env("HOME")}/.config/niri/config.kdl`
+
+        onLoaded: {
+            const out = [];
+
+            // EVERY bind line, titled or not, because the keybinds page lists
+            // the undescribed ones too. A line looks like one of:
+            //   Mod+Return hotkey-overlay-title="Apps: a terminal" { spawn ... }
+            //   XF86AudioMute allow-when-locked=true { spawn ... }
+            //
+            // Anchored to the start of a line and requiring the opening brace,
+            // so a chord written inside a comment cannot be mistaken for a
+            // binding -- and this file is full of chords inside comments.
+            //
+            // ONE HONEST GAP: this reads the config rather than the compositor,
+            // so it lists what the file says instead of what niri is holding.
+            // The two agree unless the file was edited and not reloaded, and
+            // since niri reloads on save that window is about as long as it
+            // takes to hit save. Hyprland's side asks the compositor directly
+            // and has no such gap.
+            const bindLine = /^[ \t]*([A-Za-z0-9_+]+)((?:[ \t]+[a-z-]+=(?:"[^"]*"|[^ \t{]+))*)[ \t]*\{/gm;
+            const titleIn = /hotkey-overlay-title="([^"]+)"/;
+
+            let m;
+            while ((m = bindLine.exec(text())) !== null) {
+                const chord = m[1];
+                // The chord always carries a modifier or is a named media key;
+                // a bare word followed by a brace is a config section, not a
+                // bind.
+                if (!chord.includes("+") && !chord.startsWith("XF86"))
+                    continue;
+
+                const titleMatch = titleIn.exec(m[2] ?? "");
+                const title = titleMatch ? titleMatch[1] : "";
+                const described = title !== "";
+                const colon = title.indexOf(": ");
+
+                out.push({
+                    keys: root.chordToKeys(chord),
+                    category: !described ? "Undescribed"
+                        : colon < 0 ? "Other" : title.slice(0, colon),
+                    description: !described ? ""
+                        : colon < 0 ? title : title.slice(colon + 2),
+                    described: described,
+                    // niri has no submaps, and every bind consumes its chord.
+                    submap: "",
+                    nonConsuming: false
+                });
+            }
+            root.binds = out;
+        }
+
+        onLoadFailed: error => {
+            console.warn("niri: could not read the config to list binds:", error);
+            root.binds = [];
+        }
     }
 
     // ---- Actions ---------------------------------------------------------
