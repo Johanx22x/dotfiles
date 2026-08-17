@@ -74,6 +74,12 @@ CompositorBackend {
         // December 2024. The config maps the old scratchpad chords onto a named
         // workspace, which is a place you go to rather than an overlay.
         scratchpad: false,
+        // FALSE, and this one is felt immediately rather than in theory. niri's
+        // keyboard focus belongs to a monitor, so a launcher pinned to the main
+        // screen opens there, takes its exclusive grab, and then receives
+        // nothing at all while the user is focused on the other monitor -- the
+        // window appears and typing goes nowhere.
+        globalKeyboardGrab: false,
         logout: true
     })
 
