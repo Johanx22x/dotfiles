@@ -99,6 +99,10 @@ Two flavors, chosen at install time and switched at the display manager. They
 are not exclusive: answer **both** and each session appears separately in SDDM,
 so one can be tried without dismantling the other.
 
+Built and tested against **Hyprland 0.56** and **niri 26.04**. Where a version
+matters — and it does more than once, because both move fast — the config says
+so next to the line that depends on it.
+
 | | Hyprland | niri |
 |---|---|---|
 | Model | dynamic tiling (dwindle) | scrollable tiling (columns) |
@@ -107,14 +111,30 @@ so one can be tried without dismantling the other.
 | Session | `uwsm` | `niri-session` |
 | Portal | `xdg-desktop-portal-hyprland` | `xdg-desktop-portal-gnome` |
 
+| Workspaces | numbered, permanent | dynamic, renumbered as they empty |
+| Blur | global, behind anything translucent | per window, asked for by a rule |
+| Blue light | `hyprsunset` | `wl-gammarelay-rs` |
+
 **Every keybind is the same in both.** Four Hyprland actions have no niri
-equivalent, so their chords were given to the nearest thing niri does rather
-than left dead — pseudotile becomes cycling the preset column widths,
-togglesplit becomes tabbed columns, pin becomes jumping between the floating and
-tiled layers, and the magic scratchpad becomes a named workspace. What niri can
-do and Hyprland cannot is bound on chords that were free: the overview, moving
-and consuming columns, the ends of the strip, monitor focus. Each one is marked
-in `niri/.config/niri/config.kdl`, which is where the reasoning lives.
+equivalent, and rather than leave those chords dead each went to the nearest
+thing niri actually does: pseudotile cycles the preset column widths,
+togglesplit stacks the column as tabs, pin jumps between the floating and tiled
+layers, and the magic scratchpad — niri has none, and faking one cost a
+permanent workspace — became "back to the previous workspace".
+
+What niri can do and Hyprland cannot is bound on chords that were free: the
+overview on `SUPER + Tab`, moving and consuming columns, the ends of the strip,
+monitor focus. Every one of those decisions is written next to the bind it
+belongs to in `niri/.config/niri/config.kdl`.
+
+**Workspaces behave differently and that is not configurable.** niri creates
+them as you need them and renumbers when one empties, so `SUPER + 3` is the
+third workspace *at that moment*. Ten named, permanent ones were built to fix
+that and then taken out again: named workspaces exist whether or not anything is
+on them, so the overview always showed ten slots with nine empty. The bar can
+filter empties; the compositor's overview cannot. Stable numbers or an honest
+overview — there is no third option, and the trade-off is written into the
+config.
 
 ### Adding a third one
 
@@ -167,15 +187,23 @@ file first — and the display page's *Copy config* chip, which hands you a bloc
 to paste into the tracked config, is not offered there: pasting one in would
 shadow the generated file for good.
 
-**What the niri flavor does not do yet.** There is no per-device input
-configuration in niri at all, so the DualSense touchpad quirk has no home yet —
-the equivalent would be a libinput quirk in `/etc`, which `install.sh` does not
-touch. Hyprland's one gap value maps directly and its second becomes a strut,
-which is close rather than identical. And *Make main* only moves the shell
-there: which monitor games open on is `open-on-output` on the window rules in
-`config.kdl`, and overriding that from a generated file would mean repeating the
-app-id regex those rules match on — so the script says so instead of half doing
-it.
+### What niri cannot do
+
+Not a to-do list — these were each tried, measured and written down:
+
+| | |
+|---|---|
+| **Per-device input** | niri has none at all, so the DualSense touchpad quirk has no home. The equivalent is a libinput rule in `/etc`, which `install.sh` does not touch |
+| **Window geometry** | `tile_pos_in_workspace_view` is null even for visible windows, so *record a window* cannot snap to one and falls back to a free drag |
+| **Make main** | only moves the shell. Which monitor games open on is an `open-on-output` on their window rules, and a generated copy of that would go out of step |
+| **Shared workspaces** | a workspace belongs to one monitor. Focusing one that lives on the other moves focus there, which is as close as it gets |
+
+And for gaming, unchanged by any of this: niri has no explicit sync, no
+tearing control, Steam Input does not move the cursor, and Alt+Tab shrinks
+fullscreen Steam games. Those are upstream.
+
+One mapping is close rather than exact: Hyprland has two gap values and niri
+has one, so the inner gap maps directly and the outer becomes a strut.
 
 ## Layout
 
