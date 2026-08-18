@@ -5,11 +5,9 @@
 # If not running interactively, don't do anything
 [[ $- != *i* ]] && return
 
-# ---- PATH (migrated from .bashrc) ----
-# typeset -U avoids duplicate entries when re-sourcing
-typeset -U path PATH
-path=("$HOME/.local/bin" $path)
-export PATH
+# ---- PATH ----
+# In .zshenv, not here. This file returns a few lines up for a non-interactive
+# shell, and the graphical session starts through one -- see the note there.
 
 # ---- Aliases (migrated from .bashrc) ----
 alias ls='ls --color=auto'
