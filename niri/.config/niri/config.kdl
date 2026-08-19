@@ -982,6 +982,75 @@ window-rule {
     open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
 }
 
+// --- DaVinci Resolve ---
+//
+// THE APP-ID IS `resolve`, not `davinci-resolve` and not `DaVinci Resolve`.
+// It is the X11 WM_CLASS, which the shipped DaVinciResolve.desktop records as
+// StartupWMClass=resolve. Same trap as the RetroArch rule above, in the
+// opposite direction: there the X11 name is the wrong one, here it is the only
+// one.
+//
+// FOR MONTHS THIS APPLICATION COULD NOT BE OPENED AT ALL, and the reason is
+// worth keeping because nothing about it pointed at the real cause. Resolve
+// started, initialised CUDA and OpenGL without one error, logged "Launching
+// main loop" -- and no window appeared. `niri msg windows` listed nothing,
+// because nothing ever reached niri to be listed.
+//
+// It was a REGRESSION IN xwayland-satellite 0.8.2, which niri spawns to serve
+// X11 clients: a resizable DIALOG carrying WM_TRANSIENT_FOR and client-side
+// _MOTIF_WM_HINTS was classified as an xdg_popup and parented to a hidden 1x1
+// WM_CLIENT_LEADER window. Resolve's project manager is exactly that window.
+// Fixed by upstream PR #480, carried here as packages/xwayland-satellite until
+// it reaches the repos -- the rules below do nothing without it.
+//
+//   https://github.com/Supreeeme/xwayland-satellite/issues/470
+//   https://github.com/Supreeeme/xwayland-satellite/pull/480
+//
+// It also explains the one day it worked: a session that opens straight into
+// the last project never shows the project manager, and never trips the bug.
+//
+// ALWAYS ON THE LANDSCAPE MONITOR. The secondary one is rotated to portrait
+// and is 1080x1920 logical; Resolve's UI is a wide timeline with the viewers
+// above it, and no arrangement of that fits in 1080 of width.
+//
+// min-width, because nothing else pins the width of a tiled column: the cycle
+// on SUPER + P would otherwise take the window to a third of 2560, and at
+// 853 px the page tabs along the bottom collapse into each other.
+//
+// NO OPACITY, and deliberately rather than by omission. Resolve is a colour
+// grading application, so blending the wallpaper into the viewer is the
+// mistake the Celluloid rule already avoids, only worse: here the picture is
+// being judged, not watched. Do not add `resolve` to the `desktop-opacity`
+// dial -- opacity.kdl is included after this and would win.
+//
+// Square corners for the same reason as the capture card: the viewer is drawn
+// out to the window edge and a 10 px radius takes a bite out of the image.
+// open-fullscreen FALSE, not absent: Resolve asks for fullscreen itself on
+// startup, and a fullscreen window in niri has no border, no rounded corners
+// and no gaps -- which looked exactly like the rules below never matching.
+// This denies the request; f still works once it is open.
+window-rule {
+    match app-id=r#"^resolve$"#
+    open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
+    open-fullscreen false
+    open-maximized true
+    min-width 1280
+}
+
+// The project manager, which is a SECOND TOPLEVEL and not a modal drawn inside
+// the main window -- that is what the satellite bug got wrong, and now that it
+// arrives correctly niri gives it a column of its own and splits the screen in
+// two on every launch. Floating is what it wants to be.
+//
+// Matched by title on top of the app-id: every Resolve window answers to
+// `resolve`, so an app-id-only rule here would float the main window too.
+window-rule {
+    match app-id=r#"^resolve$"# title=r#"^Project Manager$"#
+    open-floating true
+    default-column-width { fixed 1600; }
+    default-window-height { fixed 1000; }
+}
+
 // --- The four rules that did NOT come across, and why ---
 //
 // suppress-maximize-events  Hyprland ignores maximize requests from every app
