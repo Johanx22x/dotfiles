@@ -1,0 +1,7 @@
+# makepkg build output. Only the PKGBUILD and the patch belong in the repo:
+# everything here is downloaded or produced by `makepkg -si` and weighs
+# hundreds of megabytes.
+/src/
+/pkg/
+*.tar.gz
+*.pkg.tar.zst

@@ -1,0 +1,91 @@
+# The Arch PKGBUILD for xwayland-satellite 0.8.2, plus the one-line fix from
+# upstream PR #480, because without it DaVinci Resolve cannot be opened at all
+# under niri.
+#
+# WHAT IT FIXES. 0.8.2 misclassifies a resizable DIALOG that carries
+# WM_TRANSIENT_FOR and client-side _MOTIF_WM_HINTS as an xdg_popup, and parents
+# it to the hidden 1x1 WM_CLIENT_LEADER window. Resolve's project manager is
+# exactly that window, so it is never handed to the compositor: the splash
+# appears, the splash closes, and nothing is left on screen. Resolve itself is
+# fine -- it initialises CUDA and OpenGL without one error and reaches
+# "Launching main loop" -- and `niri msg windows` lists nothing, because the
+# window never reaches niri to be listed.
+#
+# It is a REGRESSION, introduced by commit ade7778e after 0.8.1 and first
+# shipped in 0.8.2. That is why the same machine ran Resolve happily on
+# 2026-08-17: it opened straight into the last project, and a session that
+# never shows the project manager never touches the bug.
+#
+#   https://github.com/Supreeeme/xwayland-satellite/issues/470
+#   https://github.com/Supreeeme/xwayland-satellite/issues/481
+#   https://github.com/Supreeeme/xwayland-satellite/pull/480
+#
+# The upstream test added by the patch is called davinci_resolve_project_manager
+# and matches on wm_class "resolve". This is not a workaround shaped to fit;
+# it is the case the fix was written for.
+#
+# DELETE THIS WHOLE DIRECTORY once the fix is in the repos. pkgrel is 1.1 rather
+# than 2 on purpose: it beats the current 0.8.2-1 so pacman installs it, and it
+# LOSES to any future 0.8.2-2 or 0.8.3, so a released fix replaces this package
+# on its own with no pin to remember and nothing in IgnorePkg to clean up.
+#
+# Build and install:   cd this directory && makepkg -si
+# (-s pulls clang and rust as build dependencies; add -r to drop them after.)
+#
+# Maintainer: David Runge <dvzrv@archlinux.org>
+
+pkgname=xwayland-satellite
+pkgver=0.8.2
+pkgrel=1.1
+pkgdesc="Xwayland outside your Wayland"
+arch=(x86_64)
+url="https://github.com/Supreeeme/xwayland-satellite"
+license=(MPL-2.0)
+depends=(
+  glibc
+  libgcc
+  libxcb
+  xcb-util-cursor
+  xorg-xwayland
+)
+makedepends=(
+  clang
+  rust
+)
+source=(
+  "$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
+  480-dialog-toplevel.patch
+)
+sha512sums=(
+  'a125fe92591c7c39c4ae05e5d7a5b737d4104419165b98e4d486c5e2208b30b95173f2793141ef897f23f22c87c15f80daf8dcc2dbb4327c2fdf3288d56acd80'
+  'd75cb3f6e45a68214400a7d7b674bc51f01725848b811bb7bf4fcd683716f2bf53fa608d39a7c1ef2de2860c013a88cc4754887a10cf37e6fdbab1367b779f4e'
+)
+b2sums=(
+  '3bd8880386f0b2f73d2587e9ad5803ded1e107be4f4b8fe75f17453a3e98624f9f34c15a2ef11a2bb8362809100b6d9ce4fd6e1d350af164b3cf954cae7653db'
+  'SKIP'
+)
+
+prepare() {
+  cd $pkgname-$pkgver
+  patch -Np1 -i "$srcdir/480-dialog-toplevel.patch"
+  sed 's|/usr/local|/usr|' -i resources/$pkgname.service
+  cargo fetch --locked --target "$(rustc --print host-tuple)"
+}
+
+build() {
+  cd $pkgname-$pkgver
+  cargo build --frozen --release --features systemd
+}
+
+check() {
+  cd $pkgname-$pkgver
+  export XDG_RUNTIME_DIR="$(mktemp -d)"
+  cargo test --frozen
+}
+
+package() {
+  cd $pkgname-$pkgver
+  install -vDm 755 target/release/$pkgname -t "$pkgdir/usr/bin/"
+  install -vDm 644 resources/$pkgname.service -t "$pkgdir/usr/lib/systemd/user/"
+  install -vDm 644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgdir/"
+}
