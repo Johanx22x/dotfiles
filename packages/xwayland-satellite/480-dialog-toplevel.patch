@@ -1,0 +1,51 @@
+diff --git a/src/xstate/mod.rs b/src/xstate/mod.rs
+index efcb13de..3b1a280c 100644
+--- a/src/xstate/mod.rs
++++ b/src/xstate/mod.rs
+@@ -1189,7 +1189,9 @@ impl WindowRoleHeuristics {
+             match ty {
+                 x if x == window_atoms.normal => return WindowRole::Toplevel,
+                 x if x == window_atoms.dialog => {
+-                    return WindowRole::new_basic(self.has_transient_for && motif_no_decor);
++                    return WindowRole::new_basic(
++                        self.has_transient_for && motif_no_decor && forced_size,
++                    );
+                 }
+                 x if x == window_atoms.utility => {
+                     return WindowRole::new_basic(motif_no_decor && forced_size);
+diff --git a/src/xstate/tests.rs b/src/xstate/tests.rs
+index 0e77dc90..44128fe2 100644
+--- a/src/xstate/tests.rs
++++ b/src/xstate/tests.rs
+@@ -473,6 +473,31 @@ mod window_role_heuristics {
+         assert_eq!(win.guess_window_role(&win_types), WindowRole::Popup);
+     }
+ 
++    // https://github.com/Supreeeme/xwayland-satellite/issues/470
++    // A DIALOG with TRANSIENT_FOR and no Motif decorations which is resizable
++    // (min_size != max_size) should be a top-level, mirroring the UTILITY fix in #383.
++    // Otherwise the popup parent resolves to a hidden WM_CLIENT_LEADER and the
++    // window never appears (e.g. DaVinci Resolve's Project Manager).
++    // Window attributes are taken from the full xprop posted in #470 (DIALOG +
++    // NORMAL window types, _MOTIF_WM_HINTS decorations=0, resizable normal hints).
++    #[test]
++    fn davinci_resolve_project_manager() {
++        let win_types = WindowTypes::new();
++        let wm_normal_hints = WmNormalHints::new()
++            .user_pos(0, 0)
++            .user_size(300, 200)
++            .min_size(200, 100);
++        let win = WindowRoleHeuristics {
++            has_transient_for: true,
++            motif_wm_hints: Some(motif::Hints::from([0x2_u32, 0x1, 0, 0, 0].as_slice())),
++            window_types: vec![win_types.dialog, win_types.normal],
++            wm_normal_hints: Some(wm_normal_hints.into()),
++            wm_class: Some("resolve".into()),
++            ..Default::default()
++        };
++        assert_eq!(win.guess_window_role(&win_types), WindowRole::Toplevel);
++    }
++
+     // https://github.com/Supreeeme/xwayland-satellite/pull/390
+     // With Motif decorations, even a dialog with TRANSIENT_FOR is better treated as a top-level
+     #[test]
