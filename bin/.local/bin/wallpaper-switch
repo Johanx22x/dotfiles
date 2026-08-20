@@ -533,10 +533,53 @@ stop_video() {
     done
 }
 
+# Is every output showing $1 right now? awww answers one line per output,
+# ending in the path it has up. Anything other than "all of them" is a
+# half-applied wallpaper, which is the state this file exists to avoid.
+awww_shows_everywhere() {
+    local out total matched
+    out="$(awww query 2>/dev/null)" || return 1
+
+    total="$(printf '%s\n' "$out" | grep -c 'currently displaying')"
+    [[ "$total" -gt 0 ]] || return 1
+
+    matched="$(printf '%s\n' "$out" | grep -F -- "$1" | grep -c 'currently displaying')"
+    [[ "$matched" -eq "$total" ]]
+}
+
+# The same question, given time to become true. Long enough to cover a
+# transition: awww goes on reporting the outgoing image while it dissolves, so
+# checking the instant `awww img` returns would fail on every fade.
+awww_wait_for() {
+    local _
+    for _ in {1..18}; do
+        awww_shows_everywhere "$1" && return 0
+        sleep 0.15
+    done
+    return 1
+}
+
 apply_image() {
     # The daemon takes a moment to come up the first time.
     if ! awww query >/dev/null 2>&1; then
-        spawn_daemon awww-daemon
+        # --no-cache OR THE DAEMON COMPETES WITH US FOR THE WALLPAPER. awww
+        # remembers the last image of each output under
+        # ~/.cache/awww/<version>/<output> and restores it as it starts. That
+        # restore is asynchronous and `awww query` begins answering before it
+        # has finished, so the `awww img` below was racing it -- and on
+        # whichever output the restore landed last, an old wallpaper won.
+        #
+        # Measured on 2026-08-19, freezing the wallpaper for a game: DP-3 sat
+        # on an autumn-path.jpg nobody had asked for while HDMI-A-1 showed the
+        # frame that had just been applied. The cache file for DP-3 held
+        # exactly that path. It reads as "the wallpaper changed by itself",
+        # and it only happens when the daemon has to be started -- which is
+        # every single freeze, since the video wallpaper leaves awww stopped.
+        #
+        # Nothing is lost by not restoring: every route into this function
+        # applies an image immediately after, which is the only reason the
+        # daemon is being started at all.
+        spawn_daemon awww-daemon --no-cache
         for _ in {1..20}; do
             awww query >/dev/null 2>&1 && break
             sleep 0.15
@@ -551,6 +594,19 @@ apply_image() {
         --transition-bezier "$TRANSITION_BEZIER" \
         --transition-fps 165 \
         || die "awww could not apply the wallpaper"
+
+    # AND THEN CHECK THAT IT HAPPENED, on every output. --no-cache removes the
+    # one cause that was found, but "the same picture on every screen" is what
+    # this function promises, it was quietly broken for weeks, and asking costs
+    # one query. A monitor coming back mid-apply would break it again.
+    #
+    # The retry carries no transition on purpose: a second fade over a picture
+    # the eye has already accepted looks like the desktop apologising.
+    if ! awww_wait_for "$1"; then
+        awww img "$1" --transition-type none >/dev/null 2>&1
+        awww_wait_for "$1" \
+            || echo "wallpaper-switch: awww left an output on a different image" >&2
+    fi
 
     # Only once the still is up. awww img has returned by here, so the image
     # is on the layer and the video can go without leaving a hole.
