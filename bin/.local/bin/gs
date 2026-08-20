@@ -142,6 +142,33 @@ wallpaper_switch() {
     env -u LD_LIBRARY_PATH -u LD_PRELOAD "$HOME/.local/bin/wallpaper-switch" "$@"
 }
 
+# The watchdog has to end up OUT OF STEAM'S PROCESS TREE, and not merely out of
+# this script's session, which is all `setsid` ever bought.
+#
+# Steam runs every game under steam-runtime-supervisor --terminate-when-signaled,
+# and that implies --subreaper: "Do not exit until all descendant processes have
+# exited", per the supervisor's own --help. A subreaper adopts orphans, session
+# or no session, so the watchdog stayed a descendant of it -- and so did the
+# mpvpaper it starts on the way out, which then plays for hours. The game was
+# long gone and Steam still showed it as running, because the one thing it was
+# still waiting on was the wallpaper. That is the game stuck on "Stop" in the
+# library that nothing but restarting Steam would clear.
+#
+# systemd-run puts the watchdog under the user's systemd manager, which is
+# nobody's descendant, so the last thing left in the tree dies with the game.
+# setsid stays as the fallback: without a user manager the restore still runs,
+# exactly as it did before, and only Steam's idea of "running" goes back to
+# clearing late.
+start_wallpaper_watchdog() {
+    if command -v systemd-run >/dev/null 2>&1 &&
+       systemctl --user show-environment >/dev/null 2>&1; then
+        systemd-run --user --collect --quiet \
+            --description="gs: restore the wallpaper when the game exits" \
+            -- bash -c "$1" >/dev/null 2>&1 && return 0
+    fi
+    setsid -f bash -c "$1" >/dev/null 2>&1
+}
+
 freeze_video_wallpaper() {
     [[ ${GS_WALLPAPER:-0} == 1 ]] && return 0
     pgrep -x mpvpaper >/dev/null 2>&1 || return 0
@@ -154,11 +181,12 @@ freeze_video_wallpaper() {
 
     # $$ is this script's pid, read inside the watchdog's own quoting. `kill -0`
     # only tests whether the pid is still there; it sends nothing.
-    setsid -f bash -c '
+    local watchdog='
         while kill -0 '"$$"' 2>/dev/null; do sleep 1; done
         exec env -u LD_LIBRARY_PATH -u LD_PRELOAD \
             "$HOME/.local/bin/wallpaper-switch" reapply
-    ' >/dev/null 2>&1 || {
+    '
+    start_wallpaper_watchdog "$watchdog" || {
         echo "gs: could not start the wallpaper watchdog" >&2
     }
 
