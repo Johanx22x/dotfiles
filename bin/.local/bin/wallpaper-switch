@@ -63,7 +63,13 @@ TRANSITION_BEZIER="${TRANSITION_BEZIER:-.42,0,.58,1}"
 # which is what awww does by default for stills, so a video and an image frame
 # the same way. hwdec=auto puts the decoding on the GPU -- the whole reason for
 # a separate process instead of decoding inside the shell.
-MPV_OPTIONS="${MPV_OPTIONS:---no-audio --loop-file=inf --panscan=1.0 --hwdec=auto}"
+#
+# --input-ipc-server is what lets `still` freeze THE FRAME THAT IS ON SCREEN
+# rather than a fixed one: see capture_live_frame below. mpv only listens on a
+# socket if it is told to at startup, so the option has to be here, not at the
+# moment the frame is wanted.
+IPC_SOCKET="${MPVPAPER_IPC:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/mpvpaper.sock}"
+MPV_OPTIONS="${MPV_OPTIONS:---no-audio --loop-file=inf --panscan=1.0 --hwdec=auto --input-ipc-server=$IPC_SOCKET}"
 
 # -p pauses when the wallpaper is covered and -a FULL extends that to any
 # fullscreen window. FULL and not MAX because this is a tiling compositor: MAX
@@ -92,6 +98,12 @@ VIDEO_EXT=(mp4 webm mkv)
 # build the palette, and the QML pickers need one to draw a thumbnail. Two
 # consumers, one cache, so a video is never decoded twice for the same frame.
 FRAME_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-frames"
+
+# The frozen frame `still` puts up, which is NOT one of those thumbnails and so
+# deliberately does not live among them: `thumbs` sweeps FRAME_CACHE for PNGs
+# that no longer belong to any video and would carry this one off with them.
+# One file, overwritten on every freeze -- it stands for a moment, not a video.
+STILL_FRAME="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-still.png"
 
 mkdir -p "$(dirname "$STATE_FILE")"
 
@@ -147,24 +159,79 @@ frame_for() {
         return 0
     fi
 
-    command -v ffmpeg >/dev/null || return 1
     mkdir -p "$FRAME_CACHE"
+    extract_frame "$src" "$out" '1280:-2' || return 1
+    printf '%s\n' "$out"
+}
 
-    # Both attempts are checked for a non-empty FILE and not for an exit code.
-    # Seeking past the end of a short clip is not an error to ffmpeg: it exits
-    # 0, having written nothing, and a bare `||` chain would take that for
-    # success and never try the second seek.
-    local seek
+# One frame of $1 written to $2, optionally through a scale filter given as $3.
+# Split out of frame_for because the still wants the same seeking but at the
+# video's own size, and a second copy of it would have been a second thing to
+# get right.
+#
+# Both attempts are checked for a non-empty FILE and not for an exit code.
+# Seeking past the end of a short clip is not an error to ffmpeg: it exits 0,
+# having written nothing, and a bare `||` chain would take that for success and
+# never try the second seek.
+extract_frame() {
+    local src="$1" out="$2" scale="${3:-}" seek args
+    command -v ffmpeg >/dev/null || return 1
     for seek in 2 0; do
-        ffmpeg -y -loglevel error -ss "$seek" -i "$src" -frames:v 1 \
-            -vf 'scale=1280:-2' "$out" >/dev/null 2>&1
-        [[ -s "$out" ]] && { printf '%s\n' "$out"; return 0; }
+        args=(-y -loglevel error -ss "$seek" -i "$src" -frames:v 1)
+        [[ -n "$scale" ]] && args+=(-vf "scale=$scale")
+        ffmpeg "${args[@]}" "$out" >/dev/null 2>&1
+        [[ -s "$out" ]] && return 0
     done
 
     # Leave no empty file behind: it would be newer than the video and so pass
-    # the freshness check above forever.
+    # frame_for's freshness check forever.
     rm -f "$out"
     return 1
+}
+
+# THE FRAME THAT IS ACTUALLY ON SCREEN, full size, written to $1.
+#
+# mpvpaper is mpv, so the picture it is showing can simply be asked for over
+# mpv's JSON IPC socket. `screenshot-to-file <path> video` writes the decoded
+# frame with no OSD and at the video's own resolution -- 3840x2194 for the
+# wallpapers here, against the 1280 of the thumbnail cache.
+#
+# python3 and not socat: socat is one more package to install on every machine
+# that shares these dotfiles, and python is already there. Every failure --
+# no socket because mpvpaper was started without the option, no python, mpv not
+# answering -- is a plain non-zero return, and the caller falls back.
+capture_live_frame() {
+    local out="$1"
+    [[ -S "$IPC_SOCKET" ]] || return 1
+    command -v python3 >/dev/null 2>&1 || return 1
+    rm -f "$out"
+
+    python3 - "$IPC_SOCKET" "$out" <<'PY' >/dev/null 2>&1 || return 1
+import json, socket, sys
+
+sock_path, out = sys.argv[1], sys.argv[2]
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(5)
+s.connect(sock_path)
+s.sendall((json.dumps({"command": ["screenshot-to-file", out, "video"]}) + "\n").encode())
+
+# mpv interleaves unsolicited events with replies, so read until the message
+# carrying an "error" field turns up -- that one is the answer to the command.
+buf = b""
+while True:
+    chunk = s.recv(4096)
+    if not chunk:
+        sys.exit(1)
+    buf += chunk
+    while b"\n" in buf:
+        line, buf = buf.split(b"\n", 1)
+        if not line.strip():
+            continue
+        if "error" in (msg := json.loads(line)):
+            sys.exit(0 if msg["error"] == "success" else 1)
+PY
+
+    [[ -s "$out" ]]
 }
 
 # ---------------------------------------------------------------
@@ -558,15 +625,46 @@ apply_video() {
 #
 # STATE_FILE is deliberately NOT written: the video is still the current
 # wallpaper, it is only off screen for a while, and `reapply` has to bring back
-# the video and not the frame. Nor is the palette regenerated -- it was built
-# from this very frame, so there is nothing to recompute.
+# the video and not the frame.
+#
+# The palette is NOT regenerated either, and since the frame is now captured
+# live that is a deliberate choice rather than a free one: the colours of the
+# moment being frozen may differ from the ones matugen built off the thumbnail.
+# Recomputing would re-theme every open application at the exact instant a game
+# is starting, for a picture that goes away when it ends. The palette follows
+# the wallpaper, and the wallpaper has not changed -- it is paused.
 if [[ "$MODE" == "still" ]]; then
     if is_video "$TARGET"; then
-        FRAME="$(frame_for "$TARGET")" \
-            || die "could not extract a frame from $(basename "$TARGET") (is ffmpeg installed?)"
+        # THE FRAME HAS TO BE THE ONE ON SCREEN, AND AT THE SIZE OF THE SCREEN.
+        # Reusing frame_for's thumbnail was wrong on both counts, and both were
+        # visible: it is the frame at second 2 scaled to 1280 wide, so freezing
+        # a 115 s loop threw the picture back to a different moment of it --
+        # which reads as a different wallpaper, not as a pause -- and then those
+        # 1280 pixels were blown up to 2560x1440 and 1080x1920, which is what
+        # made the desktop and niri's overview look muddy.
+        #
+        # The thumbnail is not wrong for what it was made for: matugen and the
+        # QML pickers want ONE small deterministic frame per video, and they
+        # still get exactly that.
+        #
+        # The capture has to happen BEFORE apply_image, which is what stops
+        # mpvpaper: no mpv, no frame to ask for.
+        STILL="$STILL_FRAME"
+        mkdir -p "$(dirname "$STILL")"
+        if ! capture_live_frame "$STILL"; then
+            # Ground is given up one step at a time: same timestamp as the old
+            # behaviour but at the video's real size, and only then the
+            # thumbnail, which at least always exists.
+            if extract_frame "$TARGET" "$STILL"; then
+                echo "wallpaper-switch: mpv did not answer, froze to the opening frame instead" >&2
+            else
+                STILL="$(frame_for "$TARGET")" \
+                    || die "could not extract a frame from $(basename "$TARGET") (is ffmpeg installed?)"
+            fi
+        fi
         # apply_image brings awww up FIRST and only then stops mpvpaper, so the
         # background layer is never empty in between.
-        apply_image "$FRAME"
+        apply_image "$STILL"
         echo "wallpaper: $(basename "$TARGET") frozen to a still frame"
     else
         echo "wallpaper: $(basename "$TARGET") is already a still, nothing to freeze"
