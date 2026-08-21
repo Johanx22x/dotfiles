@@ -80,6 +80,34 @@
 # and XCURSOR_SIZE to what it spawns, verified with `strings /usr/bin/niri` --
 # so only gsettings is left, and that half is compositor-independent anyway.
 #
+# AND THERE IS A FOURTH, WHICH IS THE ONE THAT TOOK AN AFTERNOON TO FIND: the
+# GTK setting `gtk-cursor-theme-name`, in ~/.config/gtk-3.0/settings.ini.
+#
+# On this desktop that file is not what GTK applications obey -- gsettings wins
+# whenever the settings portal is running, and it is -- so the line in it looks
+# redundant and sat there saying "Adwaita" for a year without hurting anything.
+# It is not redundant for one client: the Steam client runs inside the Steam
+# Runtime container, which has no portal, so its embedded browser reads the
+# FILE. It was asking for Adwaita and getting Adwaita, and the pointer went
+# plain the moment it crossed into Steam's window.
+#
+# THE FILE IS TRACKED IN GIT, so this script must not rewrite it: the cursor
+# theme changes with every wallpaper, and the repository would pick up a
+# modification every half hour. What it says instead is the fixed name
+# `default`, and what follows the wallpaper is where that name POINTS --
+# ~/.icons/default/index.theme, a four-line file this script writes and git
+# never sees. The indirection is what keeps a rotating value out of a tracked
+# file.
+#
+# WHAT THIS DOES NOT FIX, so it is not rediscovered as a bug: Steam loads its
+# cursors once, at startup. Rewriting the file below changes what a NEW Steam
+# picks up, not the one already running. Making a running client follow along
+# needs the theme name itself to change, which is what the XSETTINGS route
+# (xsettingsd serving Gtk/CursorThemeName) buys and what it charges a resident
+# daemon for -- one that would also take the XSETTINGS selection away from
+# xwayland-satellite and with it its DPI handling.
+#
+#
 # THE KEYBOARD LAYOUTS ARE A LIST, AND WHICH ONE OF THEM IS ACTIVE IS KEPT IN
 # TWO DIFFERENT PLACES because the two compositors keep it in two different
 # places. This is the one thing on the page that is genuinely not the same:
@@ -690,6 +718,39 @@ apply_live() {
         [[ -n $theme ]] && gsettings set org.gnome.desktop.interface cursor-theme "$theme" 2>/dev/null || true
         gsettings set org.gnome.desktop.interface cursor-size "$size" 2>/dev/null || true
     fi
+
+    apply_default_cursor_theme "$theme"
+}
+
+# Point the `default` cursor theme at the one in use.
+#
+# See the header for why the indirection exists. In short: the GTK setting that
+# the Steam client reads lives in a file that is tracked in git, so that file
+# names something that never changes and this rewrites what it resolves to.
+#
+# AN `Inherits=` LINE AND NOT A COPY of the theme, which is the other way of
+# doing this and is what several people report having needed. A copy is 30 MB
+# per wallpaper change; the inheritance was tested here, with inotifywait
+# watching the theme directories, and the Steam client followed it to the right
+# files. If a client ever turns up that does not follow it, a copy is the
+# fallback -- `cp -rL` of the theme over this directory.
+#
+# Failure is silent on purpose, like the rest of an apply: a pointer that keeps
+# the previous colour inside one application is not a reason for changing the
+# wallpaper to report an error.
+apply_default_cursor_theme() {
+    local theme="$1" dir="$HOME/.icons/default"
+
+    [[ -n $theme ]] || return 0
+    [[ -d "$HOME/.icons/$theme" || -d "/usr/share/icons/$theme" ]] || return 0
+
+    mkdir -p "$dir" 2>/dev/null || return 0
+    cat > "$dir/index.theme" 2>/dev/null <<EOF || return 0
+[Icon Theme]
+Name=default
+Comment=Written by desktop-tweak: follows the cursor theme in use
+Inherits=$theme
+EOF
 }
 
 # WRITTEN FOR EVERY FLAVOR THAT IS INSTALLED, not only for the one running --
