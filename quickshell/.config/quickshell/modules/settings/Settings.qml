@@ -87,9 +87,17 @@ FloatingWindow {
     // list you filtered ten minutes ago looks like a window with most of its
     // settings missing.
     onVisibleChanged: {
-        if (!root.visible)
+        if (root.visible)
+            root.everOpened = true;
+        else
             search.clear();
     }
+
+    // HAS THIS WINDOW EVER BEEN OPENED IN THIS SHELL PROCESS. What the page
+    // host below is loaded on, and it only ever goes one way: once the pages
+    // exist they are kept, so everything the window promises about coming back
+    // to where you were still holds. See the Loader for the whole argument.
+    property bool everOpened: false
 
     // Filled by pageHost below, once: the pages this machine actually offers,
     // in rail order. NOT `pageHost.children` any more -- a page can opt out
@@ -349,57 +357,118 @@ FloatingWindow {
             boundsBehavior: Flickable.StopAtBounds
             visible: !root.searching
 
-            Column {
+            // BUILT THE FIRST TIME THE WINDOW IS OPENED, AND KEPT AFTER THAT.
+            // `everOpened` latches true and never goes back, so this is not a
+            // Loader in the usual sense of throwing things away -- it saves
+            // exactly one case, the shell that is started and whose settings
+            // window is never opened, which is nearly every shell start.
+            //
+            // AND NEARLY EVERY SHELL START IS WHAT MAKES IT WORTH DOING. The
+            // thirteen pages below are about 8,800 lines of QML, all of it
+            // constructed before the first frame is drawn, and Quickshell
+            // reloads the whole config every time a .qml file is saved -- so
+            // the bill is paid again on every save while editing the shell,
+            // which is when somebody is most likely to be watching it come up.
+            //
+            // WHAT WAS MEASURED, and it is smaller than the line count
+            // suggests. A probe holding this window and nothing else, in the
+            // tree with this change and in the tree without it, timing from
+            // the moment the process was launched to the moment its shell root
+            // reported itself complete -- seven runs each, alternating between
+            // the two so a busy moment could not land on one side:
+            //
+            //     without    215 237 221 213 219 221 233 ms   median 221
+            //     with       176 192 188 176 176 187 188 ms   median 187
+            //
+            // Thirty-four milliseconds, and every run with it was faster than
+            // every run without it. Building QML objects is not where a shell
+            // start goes -- the process, Qt, the Wayland connection and the
+            // scene graph are the rest of those 187 ms -- so this is close to
+            // all of what there was to take, and it is not a lot.
+            //
+            // AND THE PAGES ARE STILL THERE AFTERWARDS, which is the half
+            // that would matter if it were wrong. The same probe, asked how
+            // many pages the window is holding:
+            //
+            //                            without    with
+            //     never opened                13       0
+            //     opened on the sound page    13      13
+            //     closed again                13      13
+            //
+            // IT DOES NOT COST THE STATED GOAL. The note further down about
+            // every page being built and kept alive is about state surviving a
+            // trip to ANOTHER PAGE, and about `visible` being the wrong flag
+            // for "somebody is looking at me". Both still hold: after the
+            // first opening this is exactly the tree that used to be here, and
+            // nothing is destroyed when the window closes.
+            //
+            // What it does change is WHEN the pages are built: on the first
+            // open rather than at startup, so those 34 ms land on the frame
+            // that first shows the window instead. That is the trade -- a cost
+            // nobody asked for at every start, against the same cost once, at
+            // the moment somebody did ask.
+            Loader {
                 id: pageHost
 
                 width: parent.width
-                spacing: 0
+                active: root.everOpened
 
-                // THE ORDER HERE IS THE ORDER IN THE RAIL, and index 0 is
-                // reached through the user block rather than through a rail
-                // entry. Everything after it is a subject, roughly in the
-                // order someone would go looking: what it looks like, then
-                // what is on screen, then the machine, then the reference
-                // material.
-                UserPage {}
-                AppearancePage {}
-                WallpaperPage {}
-                BarPage {}
-                NotificationsPage {}
-                DisplayPage {}
-                AudioPage {}
-                InputPage {}
-                NetworkPage {}
-                BluetoothPage {}
-                AppsPage {}
-                KeybindsPage {}
-                AboutPage {}
+                // Kept alive deliberately: `active` never returns to false.
+                sourceComponent: Component {
+                    Column {
+                        // `parent` is the Loader, which has a width. The Loader
+                        // writes the same number in on its own; the binding is
+                        // here so this does not depend on that.
+                        width: parent.width
+                        spacing: 0
 
-                Component.onCompleted: {
-                    // Each page is told where it sits, which is how it knows
-                    // whether it is the visible one. Done here rather than
-                    // written into each file because a page should not have
-                    // to know its own position in a list it is not holding.
-                    //
-                    // PAGES THAT ARE NOT AVAILABLE ARE LEFT OUT ENTIRELY rather
-                    // than hidden -- see `available` in SettingsPage.qml. They
-                    // keep index -1, which no page can be current at, so they
-                    // never draw; and they are absent from root.pages, so they
-                    // take no rail entry and cannot be found by search.
-                    //
-                    // Computed ONCE and not bound, deliberately: what a page
-                    // depends on is what the compositor can do, and that cannot
-                    // change without the session ending. A binding here would
-                    // re-index the whole rail on any child change for an answer
-                    // that is fixed for the lifetime of the process.
-                    const shown = [];
-                    for (const page of children) {
-                        if (!page.available)
-                            continue;
-                        page.index = shown.length;
-                        shown.push(page);
+                        // THE ORDER HERE IS THE ORDER IN THE RAIL, and index 0 is
+                        // reached through the user block rather than through a rail
+                        // entry. Everything after it is a subject, roughly in the
+                        // order someone would go looking: what it looks like, then
+                        // what is on screen, then the machine, then the reference
+                        // material.
+                        UserPage {}
+                        AppearancePage {}
+                        WallpaperPage {}
+                        BarPage {}
+                        NotificationsPage {}
+                        DisplayPage {}
+                        AudioPage {}
+                        InputPage {}
+                        NetworkPage {}
+                        BluetoothPage {}
+                        AppsPage {}
+                        KeybindsPage {}
+                        AboutPage {}
+
+                        Component.onCompleted: {
+                            // Each page is told where it sits, which is how it knows
+                            // whether it is the visible one. Done here rather than
+                            // written into each file because a page should not have
+                            // to know its own position in a list it is not holding.
+                            //
+                            // PAGES THAT ARE NOT AVAILABLE ARE LEFT OUT ENTIRELY rather
+                            // than hidden -- see `available` in SettingsPage.qml. They
+                            // keep index -1, which no page can be current at, so they
+                            // never draw; and they are absent from root.pages, so they
+                            // take no rail entry and cannot be found by search.
+                            //
+                            // Computed ONCE and not bound, deliberately: what a page
+                            // depends on is what the compositor can do, and that cannot
+                            // change without the session ending. A binding here would
+                            // re-index the whole rail on any child change for an answer
+                            // that is fixed for the lifetime of the process.
+                            const shown = [];
+                            for (const page of children) {
+                                if (!page.available)
+                                    continue;
+                                page.index = shown.length;
+                                shown.push(page);
+                            }
+                            root.pages = shown;
+                        }
                     }
-                    root.pages = shown;
                 }
             }
         }
