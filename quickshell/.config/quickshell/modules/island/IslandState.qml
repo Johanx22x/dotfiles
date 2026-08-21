@@ -7,13 +7,14 @@
 //
 // THE LADDER, highest first:
 //
-//   1. Acknowledgement  volume, and whatever joins it later (brightness, mic
-//                       mute, capture taken). These are answers to something
-//                       the user JUST did: they appear, they confirm, and they
-//                       get out of the way after `ackDuration`. This is the
-//                       whole reason Volume no longer has a permanent seat on
-//                       the right of the bar -- a number that matters for two
-//                       seconds does not deserve one.
+//   1. Acknowledgement  volume and brightness, and whatever joins them later
+//                       (mic mute, capture taken). These are answers to
+//                       something the user JUST did: they appear, they
+//                       confirm, and they get out of the way after
+//                       `ackDuration`. This is the whole reason Volume no
+//                       longer has a permanent seat on the right of the bar
+//                       -- a number that matters for two seconds does not
+//                       deserve one.
 //   2. Activity         a thing that is ongoing and unattended. Screen
 //                       capture is the first occupant: something is watching
 //                       this screen and you should not have to remember it.
@@ -112,8 +113,8 @@ Singleton {
     readonly property int ackDuration: 2000
 
     // "" when nothing is being acknowledged. A string rather than a bool
-    // because brightness and mic mute are the next two entries and they are
-    // the same mechanism with a different glyph.
+    // because brightness turned out to be exactly that -- the same mechanism
+    // with a different glyph -- and mic mute is the next one.
     property string ack: ""
 
     // Payload of the current acknowledgement. Deliberately untyped and shared:
@@ -199,6 +200,27 @@ Singleton {
         // restart() and not start(): turning the wheel five notches should
         // leave the island up for two seconds after the LAST notch, not after
         // the first.
+        expiry.restart();
+    }
+
+    // The backlight, and the second occupant of this rung -- the header of
+    // this file named it as one before it existed. It is the same mechanism as
+    // the volume with a different glyph, which is what `ack` is a string for.
+    //
+    // NO MUTED FLAG, and the one line that clears it is the whole difference
+    // between the two. A backlight has no off: the floor is five percent
+    // because zero is a black screen with nothing lit to find the keys by. So
+    // `ackMuted` is reset rather than passed, or a brightness acknowledgement
+    // raised while the speakers happen to be muted would draw itself in the
+    // outline colour and read "off" -- one payload shared by every kind on
+    // this rung is what makes that possible, and clearing what does not apply
+    // is the price of it.
+    function flashBrightness(value: int): void {
+        root.ackValue = value;
+        root.ackMuted = false;
+        root.ack = "brightness";
+        // restart(), for the reason above it: holding the key down should
+        // leave the island up for two seconds after the last repeat.
         expiry.restart();
     }
 
