@@ -558,9 +558,9 @@ Singleton {
 
     // ---------------- The wallpaper collection ----------------
     //
-    // ONE READER FOR TWO VIEWS. The launcher's picker and the settings
-    // window's grid both list this folder, and until this property existed
-    // they each carried their own `~/Pictures/wallpapers`. Pointing the
+    // ONE READER FOR TWO VIEWS. The carousel lists this folder and the
+    // settings page counts it, and back when the second view was a grid of its
+    // own they each carried their own `~/Pictures/wallpapers`. Pointing the
     // collection somewhere else moved one of them and not the other, which is
     // the worst outcome available: not a setting that fails, a setting that
     // half works.
@@ -590,10 +590,9 @@ Singleton {
 
     // ---------------- What a wallpaper can be ----------------
     //
-    // Here for the same reason wallpaperDir is: the launcher's strip and the
-    // settings grid each had their own copy of five extensions, so adding
-    // videos would have been two lists to keep in step and one of them
-    // eventually not being.
+    // Here for the same reason wallpaperDir is: the two views each had their
+    // own copy of five extensions, so adding videos would have been two lists
+    // to keep in step and one of them eventually not being.
     //
     // The stills include gif on purpose. awww animates a GIF by itself, so it
     // is a moving wallpaper that still goes down the image path and keeps the
@@ -615,18 +614,38 @@ Singleton {
         return root.wallpaperVideoExtensions.includes(path.slice(dot + 1).toLowerCase());
     }
 
-    // What to point an Image at for a given wallpaper. An Image cannot decode
-    // an mp4, so a video entry would draw as an empty rectangle -- in a picker
-    // whose whole job is choosing by looking, that is the same as not being
-    // there. wallpaper-switch extracts a frame per video and this reproduces
-    // the name it files it under: the source path with its slashes flattened,
-    // which is what keeps two `loop.mp4` in different subfolders apart.
+    // What to point an Image at for a given wallpaper, which is NEVER the
+    // wallpaper itself.
     //
+    // A VIDEO HAS NOTHING AN IMAGE CAN DECODE, so wallpaper-switch extracts a
+    // frame per video and this reproduces the name it files it under: the
+    // source path with its slashes flattened, which is what keeps two
+    // `loop.mp4` in different subfolders apart.
+    //
+    // A STILL IS SKIPPED FOR A DIFFERENT REASON, and it is the one that costs.
+    // The collection is 4K and about half of it is PNG, which has no scaled
+    // decoding: asked for a card-sized thumbnail of one, Qt decodes all 8.3
+    // million pixels and throws most of them away -- measured at 170 to 220 ms
+    // and some 35 MB, every time a card slides into the carousel's fan. The
+    // script keeps a 960 px JPEG of each one, which is about 5 ms.
+    //
+    // THE FILE MAY NOT BE THERE YET, on a collection the script has not been
+    // over. The caller is expected to fall back to the wallpaper itself when
+    // the Image reports an error -- see the carousel -- because a missing
+    // thumbnail should be slow, not blank.
     function wallpaperThumb(path: string): string {
-        if (!root.isWallpaperVideo(path))
-            return path;
+        const flat = path.replace(/^\//, "").replace(/\//g, "_");
 
-        return `${root.cacheDir}/wallpaper-frames/${path.replace(/^\//, "").replace(/\//g, "_")}.png`;
+        if (root.isWallpaperVideo(path))
+            return `${root.cacheDir}/wallpaper-frames/${flat}.png`;
+
+        return `${root.cacheDir}/wallpaper-thumbs/${flat}.jpg`;
+    }
+
+    // The wallpaper itself as a URL, for that fallback. Encoded segment by
+    // segment for the reason the two below are.
+    function wallpaperFullUrl(path: string): string {
+        return `file://${path.split("/").map(encodeURIComponent).join("/")}`;
     }
 
     // The same thing as a URL, which is what an Image actually wants.
@@ -640,24 +659,64 @@ Singleton {
         return `file://${root.wallpaperThumb(path).split("/").map(encodeURIComponent).join("/")}`;
     }
 
-    // Those frames have to exist before anything asks for one, and the two
-    // views cannot each run the extraction: they would race over the same
-    // output files the first time a folder of videos is opened. So it runs
-    // once, here, and the views ask for it rather than doing it.
+    // ---------------- The preview clip of a video ----------------
     //
-    // Cheap to repeat -- the script skips any video whose frame is already
-    // newer than it is -- which is what makes calling it on every change
-    // acceptable rather than something that needs to be smart.
+    // WHAT THE CAROUSEL ACTUALLY PLAYS. These wallpapers are 4K -- one of them
+    // 4K at 120 fps -- and playing one measured about two thirds of a core.
+    // wallpaper-switch builds a 960x540 copy at 24 fps beside the still
+    // frames, and twelve seconds of that decodes in a third of a second of
+    // CPU.
+    //
+    // Same naming as the frame: the source path with its slashes flattened,
+    // which is what keeps two `loop.mp4` in different subfolders apart. This
+    // reproduces it rather than asking the script, for the reason the thumb
+    // path already does -- a running shell cannot ask a script where it filed
+    // something without spawning it.
+    //
+    // NOT DEFINED FOR A STILL. A caller with an image has nothing to play, and
+    // an empty string is the answer that makes that obvious at the call site
+    // instead of handing back a path that will never exist.
+    function wallpaperPreview(path: string): string {
+        if (!root.isWallpaperVideo(path))
+            return "";
+
+        return `${root.cacheDir}/wallpaper-previews/${path.replace(/^\//, "").replace(/\//g, "_")}.mp4`;
+    }
+
+    // The same thing as a URL, encoded segment by segment. See the note on
+    // wallpaperThumbUrl: "(live)-persona3.mp4" is a real name in this
+    // collection and a raw "#" in one of them would cut the URL short.
+    function wallpaperPreviewUrl(path: string): string {
+        const preview = root.wallpaperPreview(path);
+        if (preview === "")
+            return "";
+
+        return `file://${preview.split("/").map(encodeURIComponent).join("/")}`;
+    }
+
+    // Those files have to exist before anything asks for one, and the views
+    // cannot each run the extraction: they would race over the same output
+    // files the first time a folder is opened. So it runs once, here, and the
+    // views ask for it rather than doing it.
+    //
+    // Cheap to repeat -- the script skips any wallpaper whose cached files are
+    // already newer than it is -- which is what makes calling it on every
+    // change acceptable rather than something that needs to be smart.
     property int wallpaperThumbsRevision: 0
 
     Process {
         id: wallpaperThumbsProcess
 
+        // Builds ALL THREE caches in one pass -- a thumbnail for every
+        // wallpaper, plus a still frame and a preview clip for every video --
+        // because they are named after the same file and go stale together.
+        // See the mode's own note in the script.
         command: ["wallpaper-switch", "thumbs"]
 
-        // The bump is what tells the pickers to look again. Until ffmpeg has
-        // finished, a video's thumbnail file does not exist, and an Image
-        // pointed at a missing file does not retry on its own.
+        // The bump is what tells the views to look again. Until ffmpeg has
+        // finished, a video's thumbnail and its preview do not exist, and
+        // neither an Image nor a MediaPlayer pointed at a missing file retries
+        // on its own.
         onExited: root.wallpaperThumbsRevision++
     }
 
