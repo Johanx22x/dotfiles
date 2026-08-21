@@ -52,7 +52,7 @@ SettingsPage {
     // title does not say out loud.
     keywords: [
         "keybind", "keybinding", "hotkey", "shortcut", "shortcuts", "keys",
-        "keyboard", "bind", "chord", "conflict", "hyprland"
+        "keyboard", "bind", "chord", "conflict", "hyprland", "niri"
     ]
 
     // ---------------- Glyphs that are not in Icons yet ----------------
@@ -80,9 +80,143 @@ SettingsPage {
     // ---------------- Geometry ----------------
 
     // The chord sits in a fixed-width gutter so every description in the list
-    // starts at the same x, the same as the cheatsheet's rows. Measured
-    // against the widest chord bound here, SUPER + SHIFT + Enter.
-    readonly property int keyGutter: 150
+    // starts at the same x, the same as the cheatsheet's rows. What the gutter
+    // buys is set out over KeyChips below and none of it changes here: the key
+    // chip is the one nearest its description, the modifiers trail off to the
+    // left, and "S" sits at the same x in "SUPER S" and in "SUPER CTRL S".
+    // That only works while every row on the page agrees on ONE number, which
+    // is why this is a single property and not a per-row width.
+    //
+    // A FUNCTION OF THE CHORDS AND NOT A NUMBER WRITTEN DOWN ONCE. It was a
+    // flat 150, measured against the widest chord that existed the day it was
+    // measured -- SUPER + SHIFT + Enter, three chips. The set has grown four-
+    // chip chords since, SUPER + CTRL + Left and CTRL + SHIFT + Right among
+    // them, and the number did not follow. A chord wider than its gutter does
+    // not spill to the right the way a too-narrow column usually does: the Row
+    // is laid out RightToLeft from the gutter's right edge, so the extra chips
+    // hang off the LEFT edge of the card, which is what this fixes.
+    //
+    // ADDED UP FROM THE TEXT, NOT COLLECTED FROM THE RENDERED ROWS. The other
+    // shape is the one the cheatsheet uses -- each row reports how wide it came
+    // out and the sheet keeps the largest -- and a running maximum can only
+    // ever grow: it is correct the first time and then holds whatever the
+    // widest thing it ever saw was, so it cannot come back down when the type
+    // size does. On this page it would also be incomplete, because the rows
+    // that would report are the FILTERED ones while the conflict list above the
+    // filter is drawn in the same gutter. Adding the chips up from the chord
+    // itself has neither problem: it is an ordinary binding on the binds and on
+    // the font, so it recomputes in both directions and does not care which
+    // rows happen to exist at the moment it runs.
+    //
+    // OVER EVERY BIND AND NOT OVER THE FILTERED ONES, deliberately, and the
+    // conflicts are the half that settles it -- they are never filtered, so a
+    // gutter sized to the search results would be too narrow for them. The
+    // other half is that a gutter recomputed per keystroke would slide the
+    // whole list sideways while somebody is reading it. The price is a few
+    // pixels of slack when a search leaves only short chords on screen.
+    readonly property int keyGutter: {
+        // THE FONT IS NAMED HERE and not only inside chipMetrics below, and it
+        // is the one line of this that is not obvious. A binding re-runs when
+        // a property it READ changes, not when a property some function it
+        // CALLED read changes -- and advanceWidth() is a function call, so
+        // nothing in the loop below would ever give this a reason to run
+        // again. Measured: with the type size taken from 11pt to 16pt the
+        // chips grew and the gutter did not move, which puts the chords back
+        // over the edge at exactly the size somebody picked because the text
+        // was too small to read.
+        //
+        // chipMetrics' OWN font and not Theme's, though they hold the same
+        // value: both this and chipMetrics.font read Theme.fontSize, and
+        // which of the two updates first is not something to rely on. Read off
+        // chipMetrics, the answer is always measured with the font
+        // advanceWidth() is about to use.
+        //
+        // An unresolved font measures as nothing, which is a real state -- this
+        // runs before Config has read the size off disk -- so it gives the
+        // floor rather than a gutter of zero.
+        if (chipMetrics.font.family === "" || chipMetrics.font.pointSize <= 0)
+            return root.keyGutterFloor;
+
+        let widest = 0;
+
+        for (const entry of root.entries) {
+            if (entry.keys.length === 0)
+                continue;
+
+            let chord = root.chipSpacing * (entry.keys.length - 1);
+            for (const key of entry.keys)
+                chord += chipMetrics.advanceWidth(key) + root.chipPadding;
+
+            widest = Math.max(widest, chord);
+        }
+
+        // ROUNDED UP ONCE, AT THE END, and not per chip. A chip is as wide as
+        // its label plus the padding and a label is a fractional number of
+        // pixels; rounding each one up first would add up to a gutter a couple
+        // of pixels wider than the row it is measuring, which is not wrong on
+        // screen but makes the model and the thing it models disagree -- and a
+        // model that is allowed to disagree cannot be used to catch a drift.
+        return Math.max(root.keyGutterFloor, Math.ceil(widest));
+    }
+
+    // A FLOOR AND NOT A DEFAULT. Every chord this machine binds today is wider
+    // than nothing, so the floor is invisible in practice -- what it is for is
+    // the two moments the list is short or empty: before the compositor has
+    // answered, and on a sheet of two-chip chords that would otherwise close
+    // up and read as a different page. 150 is the number the gutter was fixed
+    // at before this, so a narrow list looks exactly like it always did.
+    readonly property int keyGutterFloor: 150
+
+    // The chip's own geometry, HERE AND NOT AS LITERALS IN KeyChips, because
+    // the gutter above is an arithmetic model of a chip: a model that does not
+    // add up the same numbers the chip is drawn with is a model that drifts,
+    // and it drifts silently -- the chords would simply start hanging off the
+    // edge again, which is the bug this is fixing.
+    //
+    // HANDED TO KeyChips AS REQUIRED PROPERTIES rather than read out of this
+    // scope by it, and that is measured rather than stylistic. An inline
+    // component does NOT reliably see the ids of the document it is declared
+    // in: `root.chipPadding` written inside KeyChips resolves while the chips
+    // are built from inside this file and raises "ReferenceError: root is not
+    // defined" the moment one is built from anywhere else, at runtime, as a
+    // warning rather than an error. Required properties are checked when the
+    // page is compiled, so a call site that forgets one cannot be shipped.
+    readonly property int chipPadding: 14
+    readonly property int chipSpacing: 5
+
+    // The chip label's font, so advanceWidth() above measures the text with
+    // the face it will actually be drawn in. It has to be kept in step with
+    // the Text inside KeyChips by hand -- FontMetrics takes a font, not a
+    // component -- and the check that they agree is the one below: a rendered
+    // KeyChips reports implicitWidth, this computes the same number, and the
+    // commit that added it measured the two against each other over the whole
+    // bind set.
+    FontMetrics {
+        id: chipMetrics
+
+        font.family: Theme.fontFamily
+        font.pointSize: Theme.fontSize - 1.5
+        font.weight: Theme.fontWeight
+    }
+
+    // WHAT A ROW WITH NOTHING TO SAY FOR ITSELF SAYS, and the point of it is
+    // the second half: where to go and write a description. It read "no
+    // description in hyprland.lua" unconditionally, which on this machine is
+    // twenty-eight rows telling a niri session to edit a Hyprland config that
+    // is not there. The file comes from the compositor facade now -- see
+    // bindsFile in compositor/CompositorBackend.qml -- and the sentence drops
+    // the words rather than guessing when there is nothing to ask.
+    //
+    // THE NAME AND NOT THE PATH, here only: this is one line among eighty in a
+    // list that elides, and the whole path is in the Editing section at the
+    // foot of the page, which is where somebody who has decided to go and edit
+    // it is looking.
+    readonly property string undescribed: {
+        const file = Compositor.bindsFile;
+        return file === ""
+            ? "no description"
+            : `no description in ${file.split("/").pop()}`;
+    }
 
     // A CEILING ON THE LIST, not a height for it. Sixty-four binds at thirty
     // pixels a row plus eight headings is around two thousand pixels, and a
@@ -332,59 +466,91 @@ SettingsPage {
     // idiom in BindRow. A third file would be a shared component that is not
     // shared.
     //
-    // RIGHT TO LEFT inside a fixed gutter, which is the whole trick: the KEY
-    // is always the chip nearest its description, the modifiers trail off to
-    // the left, and "S" sits at the same x in "SUPER S" and "SUPER CTRL S".
+    // FLUSH WITH THE RIGHT EDGE OF THE GUTTER, which is the whole trick: the
+    // KEY is always the chip nearest its description, the modifiers trail off
+    // to the left, and "S" sits at the same x in "SUPER S" and "SUPER CTRL S".
     // The key chip takes the accent and the modifiers stay muted -- the
     // modifier is the part you already know.
-    component KeyChips: Row {
+    //
+    // AN ITEM HOLDING A RIGHT-ANCHORED ROW, and not a Row laid out
+    // RightToLeft inside a width of its own, which is what this was. The two
+    // draw exactly the same thing until the gutter CHANGES -- and the gutter
+    // changes now that it follows the binds instead of being a constant.
+    // Measured: a RightToLeft Row whose width goes from 150 to 227 leaves
+    // every chip precisely where it was, on that turn and on the next one. A
+    // positioner re-lays-out when its CONTENT changes and not when its own
+    // width does, so the chips would stay pinned to the old right edge with
+    // the new gutter open behind them. An anchor is re-evaluated, so the row
+    // follows the edge it is held to.
+    //
+    // With the row sized to its own content the layout direction stops
+    // mattering, so the chord is drawn in the order it arrives -- modifiers
+    // first, key last -- and there is no reversed copy of the array to keep
+    // in step with an `index === 0` test.
+    component KeyChips: Item {
         id: chips
 
         required property var keys
         required property int gutterWidth
 
-        layoutDirection: Qt.RightToLeft
+        // The chip geometry, from the page. See root.chipPadding for why these
+        // arrive from the call site instead of being written here: the gutter
+        // is computed by adding exactly these two numbers up, so the chip that
+        // is drawn and the chip that is measured have to be the same chip.
+        required property int chipPadding
+        required property int chipSpacing
+
+        // The gutter IS this item; the chips are what sits at the end of it.
+        implicitWidth: chips.gutterWidth
         width: chips.gutterWidth
-        spacing: 5
+        implicitHeight: row.implicitHeight
 
-        Repeater {
-            // Reversed to match the layout direction: index 0 after the
-            // reverse is the key.
-            model: chips.keys.slice().reverse()
+        Row {
+            id: row
 
-            Rectangle {
-                id: chip
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: chips.chipSpacing
 
-                required property int index
-                required property string modelData
+            Repeater {
+                model: chips.keys
 
-                readonly property bool isKey: chip.index === 0
+                Rectangle {
+                    id: chip
 
-                implicitWidth: label.implicitWidth + 14
-                implicitHeight: 22
-                radius: height / 2
+                    required property int index
+                    required property string modelData
 
-                color: chip.isKey ? Theme.primaryContainer : Theme.surfaceContainerHighest
+                    // The key is the LAST chip, the modifiers everything before
+                    // it, which is the order the facade hands the chord over in.
+                    readonly property bool isKey: chip.index === chips.keys.length - 1
 
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
+                    implicitWidth: label.implicitWidth + chips.chipPadding
+                    implicitHeight: 22
+                    radius: height / 2
 
-                Text {
-                    id: label
-
-                    anchors.centerIn: parent
-                    text: chip.modelData
-                    font.family: Theme.fontFamily
-                    // Under the body text: a chip is a label on a key, not a
-                    // sentence, and at the same size the chords compete with
-                    // the descriptions instead of introducing them.
-                    font.pointSize: Theme.fontSize - 1.5
-                    font.weight: Theme.fontWeight
-                    color: chip.isKey ? Theme.textOnPrimaryContainer : Theme.textOnSurfaceVariant
+                    color: chip.isKey ? Theme.primaryContainer : Theme.surfaceContainerHighest
 
                     Behavior on color {
                         ColorAnimation { duration: Theme.recolorDuration }
+                    }
+
+                    Text {
+                        id: label
+
+                        anchors.centerIn: parent
+                        text: chip.modelData
+                        font.family: Theme.fontFamily
+                        // Under the body text: a chip is a label on a key, not
+                        // a sentence, and at the same size the chords compete
+                        // with the descriptions instead of introducing them.
+                        font.pointSize: Theme.fontSize - 1.5
+                        font.weight: Theme.fontWeight
+                        color: chip.isKey ? Theme.textOnPrimaryContainer : Theme.textOnSurfaceVariant
+
+                        Behavior on color {
+                            ColorAnimation { duration: Theme.recolorDuration }
+                        }
                     }
                 }
             }
@@ -566,6 +732,8 @@ SettingsPage {
 
                     keys: clash.modelData.keys
                     gutterWidth: root.keyGutter
+                    chipPadding: root.chipPadding
+                    chipSpacing: root.chipSpacing
                 }
 
                 Text {
@@ -736,6 +904,8 @@ SettingsPage {
 
                                     keys: bind.modelData.keys
                                     gutterWidth: root.keyGutter
+                                    chipPadding: root.chipPadding
+                                    chipSpacing: root.chipSpacing
                                 }
 
                                 Text {
@@ -751,7 +921,7 @@ SettingsPage {
                                     // key is taken by something with no name.
                                     text: {
                                         if (!bind.modelData.described)
-                                            return "no description in hyprland.lua";
+                                            return root.undescribed;
                                         return bind.modelData.submap === ""
                                             ? bind.modelData.text
                                             : `${bind.modelData.text}  ·  in submap ${bind.modelData.submap}`;
@@ -788,11 +958,27 @@ SettingsPage {
             topPadding: 4
             bottomPadding: 6
 
-            text: "Binds are written in ~/.config/hypr/hyprland.lua, and that file "
-                + "is where they are changed. Hyprland hands out every bind as a Lua "
-                + "callback number, so this window can read which keys are taken and "
-                + "what they are for, but never what a bind actually runs — which is "
-                + "the half an editor here would need."
+            // THE SAME BUG AS THE ROWS ABOVE, and fixing one without the other
+            // would have left the page contradicting itself: eighty rows
+            // pointing at config.kdl over a paragraph pointing at
+            // hyprland.lua. The file comes from the same place they do.
+            //
+            // The reason it is a view and not an editor is the file's own
+            // header argument rather than the Hyprland one that used to be
+            // here. "Hyprland hands out every bind as a Lua callback number"
+            // is true and is only true on Hyprland -- under niri the backend
+            // reads the config itself and can see exactly what a bind runs, so
+            // as a reason for this window not offering to edit them it is the
+            // wrong reason on the machine it is being read on. What holds
+            // either way is what the file IS.
+            text: (Compositor.bindsFile === ""
+                    ? "Binds are written in the compositor's own config, and that file "
+                    : `Binds are written in ${Compositor.bindsFile}, and that file `)
+                + "is where they are changed. This window reads them and never writes "
+                + "them: the file is hand-written — prose about why each key sits "
+                + "where it does, and loops that turn two lines into twenty binds — "
+                + "and a window that generated it would produce a correct list of "
+                + "binds while destroying the only record of why they are those binds."
             wrapMode: Text.WordWrap
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 1
