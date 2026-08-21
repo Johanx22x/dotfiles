@@ -138,6 +138,10 @@ case "$(asuser "$BIN_DIR/compositor" 2>/dev/null)" in
 esac
 
 hdr "Launcher"
+# shellcheck disable=SC2088  # the tilde is in the MESSAGE, not in a path. The
+# path this tests is $REAL_HOME/.local/bin/gs, expanded on the line above the
+# message; `~` is how the sentence names it to a reader, and expanding it would
+# print /root under sudo, which is the one home this check is not looking at.
 [[ -x $REAL_HOME/.local/bin/gs ]] && ok "gs is executable" || bad "~/.local/bin/gs is missing"
 command -v gamemoderun >/dev/null && ok "gamemoderun on the PATH" || bad "gamemoderun not found"
 

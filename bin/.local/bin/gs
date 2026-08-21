@@ -130,7 +130,14 @@ export VKD3D_CONFIG="${VKD3D_CONFIG:-dxr11,dxr}"
 # script's pid to disappear, however it disappears, and only then restores. One
 # restorer and no trap, so there is no second path to keep in step and no double
 # transition when both would have fired.
-WALLPAPER_FROZEN=0
+#
+# THE FLAG THAT USED TO BE HERE WAS THE TRAP'S. `WALLPAPER_FROZEN=0` sat under
+# this paragraph and `WALLPAPER_FROZEN=1` in freeze_video_wallpaper, and nothing
+# in this file or any other ever read either of them -- the only thing that would
+# have is the `trap restore` the paragraph above explains the removal of, which
+# needed to know whether there was anything to restore. The watchdog does not:
+# it is started by the same branch that would have set the flag, so its existence
+# IS the flag. Left standing it reads as state somebody has to keep in step.
 
 # STEAM'S LOADER ENVIRONMENT HAS TO GO before calling anything on the host.
 # Steam exports its own LD_LIBRARY_PATH into everything it launches, this script
@@ -188,7 +195,6 @@ freeze_video_wallpaper() {
         echo "gs: could not freeze the video wallpaper, leaving it alone" >&2
         return 0
     }
-    WALLPAPER_FROZEN=1
 
     # $$ is this script's pid, read inside the watchdog's own quoting. `kill -0`
     # only tests whether the pid is still there; it sends nothing.
@@ -279,6 +285,9 @@ fi
 # environment. So the path comes from the library and the wrapping stays here.
 # A `compositor` that could not be run would degrade to the fallback resolution
 # without saying so, which is why it is resolved rather than looked up.
+# shellcheck disable=SC2120  # a passthrough shim, like the library's own. This
+# file only ever asks it the bare question, but the shim is the same everywhere
+# and one that dropped "$@" would be a trap for the next caller that asks `can`.
 compositor() { host "$COMPOSITOR_BIN" "$@"; }
 
 # ASKING THE COMPOSITOR HAS TO HAPPEN OUTSIDE STEAM'S LOADER ENVIRONMENT.

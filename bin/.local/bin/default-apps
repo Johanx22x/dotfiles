@@ -28,6 +28,11 @@ set -euo pipefail
 # are listed from: an application that handles image/png and not image/jpeg
 # would be an odd viewer, and offering the union would list programs that only
 # handle one corner of the role.
+# shellcheck disable=SC2154  # `[browser]=` is a KEY, not `$browser`. The
+# unquoted subscript of an associative-array literal is read as an arithmetic
+# expression, and a bare word in one is a variable, so each of these comes back
+# as a variable that was never assigned. desktop-tweak declares its own keys the
+# same way and carries the same note.
 readonly -A ROLES=(
     [browser]="x-scheme-handler/https x-scheme-handler/http text/html"
     [files]="inode/directory"
@@ -61,6 +66,10 @@ check_role() {
 }
 
 first_type() {
+    # shellcheck disable=SC2206  # split on purpose. The value is the
+    # space-separated MIME list declared above and the point of this is to reach
+    # its first entry; a MIME type contains no whitespace and no glob character,
+    # so there is nothing here for quoting to protect.
     local types=(${ROLES[$1]})
     printf '%s' "${types[0]}"
 }
