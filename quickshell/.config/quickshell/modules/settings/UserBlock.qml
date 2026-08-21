@@ -108,7 +108,7 @@ Rectangle {
             // cut at a hard step at zero, which for a fully opaque mask
             // texture means everything passes and nothing is masked at all.
             // The pair below -- 0.5 and 1.0 -- is copied verbatim from
-            // WallpaperPicker.qml, which took it from CornerWedge.qml, where
+            // the wallpaper carousel, which took it from CornerWedge.qml, where
             // the note says the spread is what keeps the antialiasing on the
             // cut edge instead of throwing it away.
             //

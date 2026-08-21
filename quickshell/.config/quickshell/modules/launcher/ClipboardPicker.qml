@@ -67,8 +67,8 @@ Item {
         if (root.count === 0)
             return;
 
-        // Wraps, like the wallpaper strip: a list that stops silently leaves
-        // the user pressing a key that does nothing.
+        // Wraps, like the wallpaper carousel: a list that stops silently
+        // leaves the user pressing a key that does nothing.
         root.selected = (root.selected + delta + root.count) % root.count;
     }
 
