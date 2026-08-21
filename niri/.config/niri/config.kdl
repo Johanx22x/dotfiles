@@ -824,10 +824,15 @@ window-rule {
     geometry-corner-radius 10
 
     // THE GLOBAL `blur` BLOCK ONLY SETS THE PARAMETERS. Nothing is blurred until
-    // a rule asks for it, which is the opposite of Hyprland, where
+    // something asks for it, which is the opposite of Hyprland, where
     // decoration.blur applies behind every translucent window on its own. So
-    // this catch-all is what actually turns the glass on, and the block at the
-    // top is how it looks.
+    // this catch-all is what actually turns the glass on for WINDOWS, and the
+    // block at the top is how it looks.
+    //
+    // A rule is not the only way to ask. A client can name its own blur region
+    // through ext-background-effect, which is how the shell's layer surfaces get
+    // theirs and why the LAYER RULES section below is empty. No window on this
+    // desktop does, hence this rule.
     background-effect {
         blur true
     }
@@ -1180,62 +1185,64 @@ include optional=true "~/.config/niri/opacity.kdl"
 // -----------------------------------------------------------------------------
 // LAYER RULES
 // -----------------------------------------------------------------------------
-// THE GLASS IS THE COMPOSITOR'S JOB HERE TOO, and this is the rule that does it.
+// THERE ARE NONE, AND THAT IS THE POINT. The shell's glass is blurred here, and
+// niri is told where by the shell rather than by this file.
 //
-// Hyprland has no idea a client wants blur, so hyprland.lua tells it: a
-// layer_rule matching the quickshell-* namespaces, with blur, ignore_alpha
-// tuned just under the surfaces' own alpha, and xray so the bar and its popouts
-// composite over the same wallpaper and end up the same colour.
+// niri implements ext-background-effect: the SURFACE names the region behind it
+// that should be blurred, and the compositor honours it with no rule of any
+// kind. Every glass surface in the shell now does -- see
+// BackgroundEffect.blurRegion in modules/bar/Bar.qml and its six siblings, and
+// components/WedgeRegion.qml for the awkward part. The `blur` block up in the
+// GLASS section still sets how that blur looks; only the question of which
+// pixels moved.
 //
-// niri COULD invert that, and this section used to claim it already did. It
-// implements ext-background-effect, where the SURFACE asks for its own blur,
-// and Quickshell 0.3.0 does ship the type for it -- Quickshell.Wayland has a
-// BackgroundEffect. THIS SHELL NEVER INSTANTIATES ONE: `grep -rn
-// BackgroundEffect ~/.config/quickshell` comes back empty, while ten files
-// import Quickshell.Wayland for WlrLayershell and nothing else. So nobody was
-// asking, nothing was answering, and every glass surface -- the bar, its
-// popouts, the launcher, the cheatsheet, the power menu, the notifications and
-// the wallpaper carousel -- was drawing Theme.glassAlpha over a perfectly sharp
-// background. Frosted under Hyprland, a flat tint under niri.
+// A RULE USED TO BE HERE AND IT BROKE THE DESKTOP, which is worth keeping
+// written down because the shape of the failure is the whole argument for
+// asking the surface.
 //
-// ONE KNOB, NOT THREE. Under a layer-rule, niri 26.04's background-effect takes
-// `blur` and nothing else: `ignore-alpha` and `passes` are rejected by `niri
-// validate`, and xray has no equivalent at all because the question it answers
-// does not come up -- the effect belongs to the surface rather than to a
-// rectangle the compositor blurs from outside. Which is also why the blur may
-// look different from Hyprland's rather than identical; that is a thing to look
-// at on screen rather than reason about here.
+// It matched the seven quickshell-* namespaces with `background-effect { blur
+// true }`. Three of those surfaces are deliberately BIGGER than the panel they
+// show: the launcher asks for `panel.implicitWidth + Theme.barCornerRadius * 2`
+// and paints a concave fillet into the extra strip so the panel looks welded to
+// the bar, and the popouts and the notification panel do the same. A fillet is
+// a square with a quarter circle taken out of it, so most of that strip is
+// transparent -- and a layer-rule blurs the surface's whole RECTANGLE, because
+// from outside there is nothing else to go on. The launcher opened with a lit,
+// round-cornered band down each side of the panel.
 //
-// THE NAMESPACE LIST IS SHORTER THAN hyprland.lua's, and that is the whole
-// difference between the two compositors here. Screen corners and the click
-// catcher were always left out -- one is opaque black, the other invisible --
-// but launcher, popout and notifications had to come out too, on screen.
+// Hyprland gets away with the same rule because `ignore_alpha` lets it throw
+// away pixels below a threshold, and the shell's glass sits just above it. niri
+// has no such knob: `ignore-alpha` and `passes` are both rejected by `niri
+// validate` as unexpected nodes inside `background-effect`. So the rule was cut
+// back to the four surfaces whose rectangle IS what they paint, and the other
+// three went back to a flat tint. That was a workaround, and this is what
+// replaced it.
 //
-// WHY THOSE THREE. Their surface is deliberately bigger than the panel you see.
-// The launcher asks for `panel.implicitWidth + Theme.barCornerRadius * 2` and
-// then paints concave fillets into that extra strip so the panel looks welded to
-// the bar; Popout and Notifications do the same. Under Hyprland the strip stays
-// invisible because `ignore_alpha` tells the compositor not to blur what is
-// transparent. niri has no such knob for a layer-rule -- see the paragraph above
-// -- so it blurs the whole rectangle, and the transparent part of each fillet
-// came out as a lit, round-cornered band flanking the panel. Two of them, one per
-// side, appearing the moment the launcher opened.
+// WHAT background-effect DOES TAKE HERE, checked against `niri validate` rather
+// than assumed, because an earlier version of this note guessed and got it
+// wrong: `blur`, `xray`, `noise` and `saturation` are accepted; `ignore-alpha`,
+// `passes` and `radius` are not.
 //
-// So the surfaces that stay are the ones whose rectangle IS what they paint: the
-// bar, and the three full-screen sheets, where frosting everything behind a modal
-// is the point rather than a bug.
+// THE ONE THING THAT IS NOT SETTLED, and it is xray. Under Hyprland the
+// blur-quickshell rule sets it because without it the bar and a popout are the
+// same colour in the config and different colours on screen -- the bar sits over
+// the wallpaper, a popout hangs over a window, and 85% opacity shows what is
+// behind it. Measured there at rgb(39,44,37) against rgb(25,28,25). niri has
+// never had xray on for these surfaces, and until now it did not matter because
+// the popouts were not blurred at all. They are now, so the mismatch can show up
+// here for the first time. Nothing has been added for it on speculation. If the
+// popouts come out darker than the bar, this is the rule -- and note that it
+// leaves `blur` UNSET on purpose, which is what keeps "blur where the surface
+// asked" intact while changing only how:
 //
-// THE REAL FIX IS ext-background-effect, per the paragraph above: a surface that
-// asks for its own blur gets it on the region it actually paints, and then this
-// rule can go away and all seven namespaces get frosted under both compositors.
-// That work belongs in the shell, not here.
+//   layer-rule {
+//       match namespace="^quickshell-"
+//       background-effect { xray true; }
+//   }
 //
-// A namespace missing from here does not merely go unblurred, it goes flat --
-// see the note in hyprland.lua for what that looked like the last time.
-layer-rule {
-    match namespace="^quickshell-(bar|powermenu|cheatsheet|wallpaper)$"
-    background-effect { blur true; }
-}
+// Setting `blur true` there instead would force the blur back onto the whole
+// rectangle and bring the bands with it. `blur false` would switch it off even
+// for a surface that asked.
 
 
 // -----------------------------------------------------------------------------

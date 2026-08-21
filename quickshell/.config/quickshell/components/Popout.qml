@@ -170,6 +170,32 @@ PanelWindow {
         item: panel
     }
 
+    // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
+    //
+    // ext-background-effect: the client names the region behind it that should
+    // be blurred, and both compositors here implement it. It matters more here
+    // than anywhere else in the shell, because of the high-water mark above:
+    // this window is deliberately as large as the largest thing any popout has
+    // ever shown, and everywhere the panel is not, it paints nothing at all.
+    // Blur the rectangle and the popout frosts a slab of screen it does not
+    // occupy -- and keeps frosting it after the content shrinks back.
+    //
+    // The region follows `panel`, so it shrinks and grows with the animation
+    // rather than with the window, and the fillets come along because
+    // WedgeRegion reads their position, which is anchored to the panel's edges.
+    BackgroundEffect.blurRegion: Region {
+        item: panel
+
+        // The panel's own rounding, so the blur stops at the curve. Welded,
+        // the top two corners are above the window and the compositor clips
+        // them away -- the same trick that makes the drawn edge come out
+        // straight against the bar.
+        radius: Theme.cardRadius
+
+        WedgeRegion { wedge: leftFillet }
+        WedgeRegion { wedge: rightFillet }
+    }
+
     FocusGrab {
         window: root
         targetScreen: root.screen
@@ -180,12 +206,20 @@ PanelWindow {
 
     // The two fillets that weld the panel to the bar. Same colour as the
     // panel, and outside it so they are not clipped by its own rounding.
+    //
+    // Named, because the blur region above is built from them: it reads each
+    // one's `radius`, `corner`, `visible` and position rather than being told
+    // any of it twice.
     CornerWedge {
+        id: leftFillet
+
         visible: root.barVisible
 
         // Anchored to the PANEL and not to the window: the window is now
         // larger than what is drawn, and a fillet at its edge would weld the
-        // bar to thin air.
+        // bar to thin air. The blur region inherits that for free -- it reads
+        // this item's x, which the anchor keeps on the panel's edge through
+        // the width animation.
         anchors.right: panel.left
         anchors.top: parent.top
         corner: "topRight"
@@ -194,6 +228,8 @@ PanelWindow {
     }
 
     CornerWedge {
+        id: rightFillet
+
         visible: root.barVisible
 
         anchors.left: panel.right

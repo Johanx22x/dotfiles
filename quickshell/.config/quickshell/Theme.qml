@@ -107,8 +107,14 @@ Singleton {
 
     // ---------------- Glass ----------------
     // 0.85 is this setup's standard, the same figure waybar, wofi and dunst
-    // use. The blur behind it is Hyprland's, applied per layer namespace in
-    // hyprland.lua -- nothing here produces it.
+    // use. The blur behind it is the compositor's, but WHERE it goes is this
+    // shell's own doing now: every glass surface names its blur region through
+    // ext-background-effect (BackgroundEffect.blurRegion, see modules/bar and
+    // its siblings), and both compositors honour it. Under Hyprland the
+    // blur-quickshell rule in hyprland.lua still picks the parameters, and one
+    // of them -- ignore_alpha at 0.84 -- is tied to the number below: it drops
+    // anything more transparent than that out of the blur, so an alpha chosen
+    // under it there would come out flat rather than frosted.
     //
     // THE ONE VALUE IN THIS FILE THAT IS A PREFERENCE and not a decision, so
     // it is the one that comes from Config rather than being written here.
