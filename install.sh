@@ -126,7 +126,7 @@ install_list() {
   green "   $label: ${#available[@]} package(s) handled"
 }
 
-blue "== 1/6  Packages from the official repos =="
+blue "== 1/7  Packages from the official repos =="
 echo "   $(wc -l < "$DOT/packages/pacman.txt") packages in packages/pacman.txt"
 
 # THE COMPOSITOR'S OWN PACKAGES LIVE IN THEIR OWN LISTS, and only the chosen
@@ -192,7 +192,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-blue "== 2/6  AUR packages =="
+blue "== 2/7  AUR packages =="
 # Everything from here to the end of the block is best-effort on purpose. An
 # AUR package that fails to build is a normal Tuesday, and with `set -e` a bare
 # failing command here would take the whole script down BEFORE the stow step --
@@ -228,7 +228,7 @@ if ask "Install yay and the ones in packages/aur.txt?"; then
 fi
 
 # ---------------------------------------------------------------------------
-blue "== 3/6  Link the configuration (stow) =="
+blue "== 3/7  Link the configuration (stow) =="
 echo "   packages: ${PACKAGES[*]}"
 if ask "Link them?"; then
   command -v stow >/dev/null || { red "   stow is missing"; exit 1; }
@@ -394,7 +394,7 @@ fi
 # ("not writing through dangling symlink") and, under `set -e`, takes the rest
 # of the script with it -- over a link the user can delete in one command, and
 # without ever saying which link it was. -L catches it first and says so.
-blue "== 4/6  Seed the files the applications rewrite =="
+blue "== 4/7  Seed the files the applications rewrite =="
 echo "   seeds/ -> \$HOME, and only where there is nothing already"
 
 # Where each seed goes. A destination cannot be derived from a seed's name --
@@ -472,7 +472,7 @@ if ask "Copy the missing ones?"; then
 fi
 
 # ---------------------------------------------------------------------------
-blue "== 5/6  Neovim (separate repo) =="
+blue "== 5/7  Neovim (separate repo) =="
 if [[ -e "$HOME/.config/nvim" ]]; then
   echo "   ~/.config/nvim already exists, leaving it alone"
 elif ask "Clone Johanx22x/nvim into ~/.config/nvim?"; then
@@ -486,7 +486,62 @@ elif ask "Clone Johanx22x/nvim into ~/.config/nvim?"; then
 fi
 
 # ---------------------------------------------------------------------------
-blue "== 6/6  Generate the colour palette =="
+blue "== 6/7  Cursor themes =="
+echo "   28 Bibata themes coloured from Material 3 roles, one per accent"
+echo "   family. cursor-match picks the one closest to the wallpaper after"
+echo "   every change; without them the pointer stays whatever the system"
+echo "   ships. 83 MB to download, 845 MB once unpacked into ~/.icons."
+
+# NOT VERSIONED IN THIS REPOSITORY, and not built here either. The pack is
+# nearly a gigabyte of compiled bitmaps -- an XCursor file carries the pointer
+# at all 19 sizes -- which is the same reason packages/xwayland-satellite/
+# ignores its own build output. Building instead of downloading would mean
+# librsvg, xcursorgen, fish and about half an hour for 28 themes.
+#
+# PINNED TO A TAG on purpose: `latest` would change the pointers on a machine
+# that only re-ran the installer. Bump it here when there is a reason to.
+CURSOR_PACK_VERSION="v1.3.0"
+CURSOR_PACK_URL="https://github.com/SakibShahariar/material-bibata-cursor/releases/download/$CURSOR_PACK_VERSION/bibata-material-dark-$CURSOR_PACK_VERSION.tar.gz"
+
+# The dark half only. matugen runs with --mode dark on this desktop, so the
+# -Light counterparts would never come out of the matcher -- they would only
+# double both the disk and the length of the picker in the settings window.
+if compgen -G "$HOME/.icons/Bibata-Material-*" >/dev/null; then
+  echo "   already installed in ~/.icons, leaving it alone"
+elif ask "Download and install them?"; then
+  # curl OR wget, whichever the machine has. Neither is guaranteed: curl comes
+  # in as a dependency of half of Arch but is in no list here, and wget is in
+  # packages/pacman.txt, which step 1 is free to skip.
+  fetch=""
+  command -v curl >/dev/null && fetch="curl -fL --progress-bar -o"
+  [[ -z "$fetch" ]] && command -v wget >/dev/null && fetch="wget -q --show-progress -O"
+
+  if [[ -z "$fetch" ]]; then
+    red "   neither curl nor wget is installed, skipping"
+  else
+    # Same shape as the Neovim clone below: fallible, wrapped, and never
+    # allowed to take `set -e` and the rest of the script with it.
+    tmp="$(mktemp -d)"
+    if $fetch "$tmp/pack.tar.gz" "$CURSOR_PACK_URL"; then
+      mkdir -p "$HOME/.icons"
+      # --strip-components=1 drops the versioned top directory, so the themes
+      # land as ~/.icons/Bibata-Material-<name> and the name in the settings
+      # window does not carry a release number that means nothing to it.
+      if tar xzf "$tmp/pack.tar.gz" -C "$HOME/.icons" \
+           --strip-components=1 --exclude='INSTALL.txt'; then
+        green "   done"
+      else
+        red "   the archive could not be unpacked, ~/.icons may be half-written"
+      fi
+    else
+      red "   the download failed, the cursor themes are not installed"
+    fi
+    rm -rf "$tmp"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+blue "== 7/7  Generate the colour palette =="
 echo "   Without this, colors.css, colors.lua, gtk.css... are missing and"
 echo "   several apps come up grey. Needs at least one image in"
 echo "   ~/Pictures/wallpapers."
