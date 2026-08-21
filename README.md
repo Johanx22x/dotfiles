@@ -50,7 +50,7 @@ It opens by asking which compositor this machine gets — Hyprland, niri, or bot
 takes Hyprland, which is the default and the one everything here was built
 against. See [Compositors](#compositors) below.
 
-Then six steps, each asking before it acts:
+Then seven steps, each asking before it acts:
 
 | | |
 |---|---|
@@ -59,7 +59,8 @@ Then six steps, each asking before it acts:
 | **3 · Symlinks** | `stow` links the config into `$HOME` |
 | **4 · Seeds** | copies `seeds/` where nothing exists yet — never overwrites |
 | **5 · Neovim** | clones [Johanx22x/nvim](https://github.com/Johanx22x/nvim) into `~/.config/nvim` |
-| **6 · Palette** | a first `wallpaper-switch random` so the generated colour files exist |
+| **6 · Cursors** | downloads the Material Bibata pack into `~/.icons` so the pointer can follow the wallpaper |
+| **7 · Palette** | a first `wallpaper-switch random` so the generated colour files exist |
 
 It refuses to run as root or off Arch, and skips a package it cannot find
 instead of aborting the transaction. If files are already in the way, it lists
@@ -249,3 +250,11 @@ settings window, and back.
 
 `SUPER + /` opens the cheatsheet, which lists every binding that carries a
 description — including itself.
+
+## Credits
+
+The mouse cursors are [Bibata](https://github.com/ful1e5/Bibata_Cursor), in the
+Material 3 recolouring by
+[SakibShahariar](https://github.com/SakibShahariar/material-bibata-cursor) —
+28 themes, one per accent family, which is what lets the pointer follow the
+wallpaper without rebuilding anything.

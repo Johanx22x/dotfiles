@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# cursor-match - give the pointer the colour of the wallpaper.
+#
+#   cursor-match            resolve and apply -- what wallpaper-switch calls
+#   cursor-match --dry-run  say what it would pick and change nothing
+#
+# ---- Why a lookup and not a render ----
+# An XCursor theme is a directory of COMPILED files: every pointer is a binary
+# holding the bitmap at each size, so there is no template to fill in with a
+# hex colour the way gtk3-colors.css or niri-colors.kdl are filled in. The
+# choices were to rebuild a theme from its SVG sources on every wallpaper
+# change, or to install a set of them once and pick the nearest. This is the
+# second, and the reason is not only the two seconds of rsvg-convert:
+#
+# NIRI ONLY RELOADS THE POINTER WHEN THE THEME NAME CHANGES. From its config
+# reload handler (26.04): `if config.cursor != old_config.cursor { reload(...);
+# cursor_texture_cache.clear() }`, which is the only caller of reload() in the
+# tree, and there is no cursor IPC to poke instead. Rewriting the files under a
+# name that stays the same leaves the running compositor showing whatever it
+# had already drawn -- and worse, the texture cache fills lazily per shape, so
+# the pointers drawn so far keep the old colour while the ones drawn later come
+# out new. Rebuilding in place would therefore have needed versioned theme
+# names, and a garbage collector for the ones left behind. Picking a different
+# installed name sidesteps that entirely: the name always changes.
+#
+# ---- Where the pieces are ----
+# The palette comes from ~/.config/quickshell/colors.json, which matugen writes
+# on every wallpaper change -- `primary` is the Material 3 accent, the same one
+# the shell paints with. The matcher is CIEDE2000 in Lab, which is worth the
+# import: raw HSV distance mangles blues and cyans badly enough to pick a theme
+# that reads as the wrong colour.
+#
+# Applying is `desktop-tweak set cursor-theme`, and this script does no more
+# than that on purpose. Telling niri, telling Hyprland, telling GTK through
+# gsettings and remembering the value across a reboot are four things that
+# script already does, and doing any of them here would be a second opinion on
+# a question that already has an owner.
+
+set -uo pipefail
+
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cursor-match"
+MATCHER="$DATA_DIR/color_match.py"
+THEMES="$DATA_DIR/themes.json"
+PALETTE="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/colors.json"
+
+# The installed themes are named for the project they come from, and the file
+# they are listed in is not: themes.json says `Sky-Blue`, the directory under
+# ~/.icons says `Bibata-Material-Sky-Blue`. One place to change if the pack is
+# ever swapped for another built the same way.
+PREFIX="Bibata-Material-"
+
+DRY_RUN=0
+[[ ${1:-} == --dry-run ]] && DRY_RUN=1
+
+# EVERY MISSING PIECE IS A QUIET EXIT 0, NOT AN ERROR. This runs at the end of
+# every wallpaper change, including on a fresh clone where the cursor pack was
+# never installed and on a machine where somebody removed it. A wallpaper that
+# refuses to change because the pointer could not be recoloured would be a poor
+# trade -- see the same reasoning at the matugen step in wallpaper-switch,
+# which does treat its own failure as fatal because there is nothing left to
+# apply if the palette is missing.
+missing() {
+    (( DRY_RUN )) && echo "cursor-match: $*" >&2
+    exit 0
+}
+
+[[ -r $PALETTE ]] || missing "no palette at $PALETTE -- run wallpaper-switch first"
+[[ -r $MATCHER && -r $THEMES ]] || missing "the matcher is not installed in $DATA_DIR"
+command -v python3 >/dev/null || missing "python3 is not installed"
+
+# The setting is read straight from the store rather than being cached here:
+# the settings window writes it, and a copy in a second file is a copy that
+# goes stale. `show` prints one key per line, key and value tab-separated.
+auto=$(desktop-tweak show 2>/dev/null | awk '$1 == "cursor-auto" { print $2 }')
+if [[ $auto == 0 ]]; then
+    (( DRY_RUN )) && echo "cursor-match: cursor-auto is 0 -- the theme was chosen by hand" >&2
+    exit 0
+fi
+
+# One interpreter for both halves: reading the accent out of the JSON and
+# measuring it against the themes. color_match.py is written to be imported --
+# see its docstring -- so this needs no second process and no jq.
+match=$(python3 - "$MATCHER" "$THEMES" "$PALETTE" <<'PY'
+import importlib.util, json, sys
+
+matcher_path, themes_path, palette_path = sys.argv[1:4]
+
+spec = importlib.util.spec_from_file_location("color_match", matcher_path)
+color_match = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(color_match)
+
+with open(palette_path) as f:
+    palette = json.load(f)
+
+# `primary` and not `source_color`: the themes were built from Material 3 roles
+# (Container for the body, Primary for the outline), so Primary is the value
+# they are comparable with. source_color is the raw pixel colour matugen picked
+# out of the image, before the scheme moves it into a usable tone.
+accent = palette.get("primary")
+if not accent:
+    sys.exit(1)
+
+with open(themes_path) as f:
+    themes = json.load(f)
+
+name, score = color_match.find_closest_theme(accent, themes)
+print(f"{name}\t{score:.3f}\t{accent}")
+PY
+) || missing "the matcher failed"
+
+IFS=$'\t' read -r name score accent <<< "$match"
+[[ -n ${name:-} ]] || missing "the matcher returned nothing"
+
+theme="$PREFIX$name"
+
+# Checked here as well as in desktop-tweak, and not as belt and braces: this is
+# what makes a machine WITHOUT the pack silently do nothing instead of printing
+# a validation error after every single wallpaper change.
+[[ -d $HOME/.icons/$theme || -d /usr/share/icons/$theme ]] \
+    || missing "$theme is not installed"
+
+if (( DRY_RUN )); then
+    printf '%s -> %s (dE2000 %s)\n' "$accent" "$theme" "$score"
+    exit 0
+fi
+
+# Nothing to do when the answer has not moved, and saying so out loud matters:
+# `desktop-tweak set` regenerates both compositor files and calls gsettings,
+# and niri reloads its config every time one of those files is touched. Two
+# wallpapers from the same family would otherwise make the pointer flicker
+# through a reload for no change at all.
+current=$(desktop-tweak show 2>/dev/null | awk '$1 == "cursor-theme" { print $2 }')
+[[ $current == "$theme" ]] && exit 0
+
+desktop-tweak set cursor-theme "$theme"
