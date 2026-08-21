@@ -367,6 +367,11 @@ SettingsPage {
         VolumeSlider {
             id: slider
 
+            // The page scrolls and this does not. See the note on the property
+            // itself: the pointer crosses these on the way down the page far
+            // more often than it stops on one.
+            wheelEnabled: false
+
             anchors.left: muteButton.right
             anchors.leftMargin: Theme.itemSpacing
             anchors.right: percent.left
@@ -671,6 +676,8 @@ SettingsPage {
         }
 
         VolumeSlider {
+            wheelEnabled: false
+
             anchors.left: streamMute.right
             anchors.leftMargin: Theme.itemSpacing
             anchors.right: streamPercent.right
