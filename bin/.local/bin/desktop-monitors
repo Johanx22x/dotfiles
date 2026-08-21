@@ -99,10 +99,10 @@ STATE_FILE="$STATE_DIR/monitors-$FLAVOR"
 # is a second file: the store above is a table where every line has the same
 # columns and is keyed by its first one, and this is not a row of that table --
 # it is a pointer AT one, and one that may name a monitor with no record at all.
-# Squeezing it in would mean either a fake description that the upsert's `grep
-# -v` and generate's `read` would both have to step around, or a line with a
-# different column count in a file whose entire reliability comes from every
-# line having the same shape.
+# Squeezing it in would mean either a fake description that rewrite_store's
+# `grep -v` and generate's `read` would both have to step around, or a line
+# with a different column count in a file whose entire reliability comes from
+# every line having the same shape.
 MAIN_FILE="$STATE_DIR/monitors-$FLAVOR-main"
 
 # The names this script used before it served both compositors. Moved rather
@@ -599,20 +599,70 @@ current_vrr() {
   return 0
 }
 
-upsert() {
-  local desc="$1" mode="$2" position="$3" scale="$4" transform="$5" vrr="$6"
-  local tmp
+# THE ONE PLACE THE STORE IS REWRITTEN. Every line except $1's, plus $2 if it
+# is not empty, written whole and moved over the old file -- so a crash halfway
+# leaves the previous records rather than half of the new ones. `set` and
+# `forget` are the two callers and they differ only in whether they have a line
+# to put back; they used to be two copies of this, carrying the same three
+# mistakes each.
+#
+# THE TEMPORARY FILE GOES BESIDE THE STORE. A bare `mktemp` lands in $TMPDIR,
+# and on this machine `findmnt -T /tmp` says tmpfs while `findmnt -T "$HOME"`
+# says btrfs on /dev/nvme0n1p2 -- two filesystems, so `mv` across them is a copy
+# followed by an unlink and NOT the atomic rename the comment above it claimed.
+# An interrupted copy is a truncated store, which is the exact accident writing
+# whole and moving is there to prevent. generate() has always created its
+# temporary next to its destination for this reason; this is that pattern.
+#
+# grep's EXIT 2 IS NOT ITS EXIT 1, and `|| true` could not tell them apart.
+# Exit 1 is "nothing matched", the ordinary case here -- the first time a
+# monitor is recorded there is no line to drop. Exit 2 is a real failure, and
+# the shape of it is what makes swallowing it expensive: grep writes NOTHING, so
+# the temporary file is empty, and moving it into place replaces every record
+# this machine has with a single line, or under `forget` with none at all.
+# Measured with this store and this pattern: a description containing \E closes
+# the \Q quoting early and the rest is read as a regex ("missing closing
+# parenthesis", exit 2, no output), and a description carrying bytes that are
+# not valid UTF-8 gets "UTF-8 error: illegal byte", exit 2, no output. A grep
+# built without PCRE is the third way and needs no monitor at all. Nothing is
+# written on exit 2 now.
+#
+# -a FOR THE SAME REASON ONE LEVEL DOWN, and this one is worse because it does
+# not fail. Given a store with one invalid byte anywhere in it, grep decides the
+# whole file is binary, warns on stderr, exits 0 -- and leaves out the line that
+# byte is on. So the monitor with the odd description does not report an error,
+# it quietly stops being recorded the next time any OTHER monitor is set.
+# Verified both ways on a three-line file: without -a the middle line is gone,
+# with -a all three survive.
+rewrite_store() {
+  local desc="$1" line="${2:-}" tmp status=0
 
   mkdir -p "$STATE_DIR"
   touch "$STATE_FILE"
 
-  # Everything but this monitor, then this monitor. Rewritten whole rather than
-  # edited in place, so a crash halfway leaves the old file.
-  tmp="$(mktemp)"
-  grep -v -P "^\Q$desc\E\t" "$STATE_FILE" > "$tmp" || true
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$desc" "$mode" "$position" "$scale" "$transform" "$vrr" >> "$tmp"
+  tmp="$(mktemp "$STATE_DIR/.monitors.XXXXXX")"
+  grep -a -v -P "^\Q$desc\E\t" "$STATE_FILE" > "$tmp" || status=$?
+  if (( status > 1 )); then
+    rm -f "$tmp"
+    die "grep exited $status reading $(tilde "$STATE_FILE"); nothing was changed"
+  fi
+
+  [[ -n "$line" ]] && printf '%s\n' "$line" >> "$tmp"
+
   mv "$tmp" "$STATE_FILE"
+}
+
+upsert() {
+  local desc="$1" mode="$2" position="$3" scale="$4" transform="$5" vrr="$6"
+  local line
+
+  # Built with printf -v and not inside a command substitution: this record's
+  # last field is routinely empty -- vrr is optional -- so the line ends in a
+  # tab, and a subshell to produce a string this function already holds every
+  # piece of buys nothing.
+  printf -v line '%s\t%s\t%s\t%s\t%s\t%s' \
+    "$desc" "$mode" "$position" "$scale" "$transform" "$vrr"
+  rewrite_store "$desc" "$line"
 }
 
 # THE SENTENCE THAT SAYS WHAT IS STILL PENDING, and there is one per flavor
@@ -872,9 +922,7 @@ case "${1:-show}" in
 
     [[ -s "$STATE_FILE" ]] || { echo "Nothing to forget."; exit 0; }
 
-    tmp="$(mktemp)"
-    grep -v -P "^\Q$desc\E\t" "$STATE_FILE" > "$tmp" || true
-    mv "$tmp" "$STATE_FILE"
+    rewrite_store "$desc"
 
     generate
     printf 'Forgotten: %s\n' "$desc"
@@ -882,6 +930,11 @@ case "${1:-show}" in
     ;;
 
   clear)
+    # mkdir first, like every other writer here: on a machine where nothing has
+    # been recorded yet ~/.local/state may not exist, and `clear` would fail on
+    # the redirection while claiming in the next breath to have dropped
+    # everything.
+    mkdir -p "$STATE_DIR"
     : > "$STATE_FILE"
     # The main-monitor choice goes too. It lives in its own file and survives
     # `forget`, but `clear` is the "as if this script had never run" command, and
