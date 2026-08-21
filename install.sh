@@ -323,6 +323,25 @@ sudo_end() {
   return 0
 }
 
+# WHAT THE PLAN LEAVES OUT, SAID OUT LOUD. Any requirement of the units about to
+# run that is not among them and is not already ok, one line each.
+#
+# All three modes that apply anything now run exactly the list they announce and
+# nothing else, so all three owe the reader this: a step that is about to fail
+# for a reason already on the table should say so before it does, rather than
+# leaving somebody to work out from the output that `symlinks` failed because
+# `packages` was never run. <suffix> is how to get the missing one, which is the
+# only part that differs between the modes.
+notice_unmet_requires() {
+  local suffix="$1"; shift
+  local dep state
+  while IFS=$'\t' read -r dep state; do
+    [[ -z $dep ]] && continue
+    ui_warn "  note: this needs '$dep', which is $state"
+    ui_dim  "        ./install.sh apply $dep$suffix"
+  done < <(unit_unmet_requires "$@")
+}
+
 # Applies one list of units, skipping the ones this machine has no use for.
 # Shared by `apply` and the full run so that the two cannot drift apart.
 run_units() {
@@ -408,7 +427,7 @@ mode_check() {
 # named on screen with their state, so a step that is about to fail for a known
 # reason says so first. `--with-requires` is the way back.
 mode_apply() {
-  local id dep state
+  local id
 
   for id in "${UNIT_ARGS[@]}"; do
     if ! unit_exists "$id"; then
@@ -428,11 +447,7 @@ mode_apply() {
     fi
   else
     unit_order_within "${UNIT_ARGS[@]}"
-    while IFS=$'\t' read -r dep state; do
-      [[ -z $dep ]] && continue
-      ui_warn "  note: this needs '$dep', which is $state"
-      ui_dim  "        ./install.sh apply $dep   -- or --with-requires to chain them"
-    done < <(unit_unmet_requires "${UNIT_ARGS[@]}")
+    notice_unmet_requires "   -- or --with-requires to chain them" "${UNIT_ARGS[@]}"
   fi
 
   run_units "${UNIT_ORDER[@]}"
@@ -520,8 +535,23 @@ mode_update() {
     return 0
   fi
 
-  ui_say "  applying: ${todo[*]}"
-  unit_order "${todo[@]}"
+  # THE LIST ANNOUNCED IS THE LIST APPLIED, which it was not. This said
+  # "applying: symlinks seeds nvim cursors laptop" and then called unit_order,
+  # which walks _requires and pulls the requirements back in whatever the
+  # profile said and whatever `check` had just answered. With `unit.packages 0`
+  # written down out loud, the next thing on screen was
+  #
+  #     applying: symlinks seeds nvim cursors laptop
+  #     == Packages ==
+  #
+  # -- a "no" ignored, and a unit that was already ok done over again, which is
+  # the "half an hour of pacman saying there is nothing to do" that mode_setup's
+  # own comment says it avoids. unit_order_within orders the same set by
+  # _requires and adds nothing to it; what it leaves out is named below rather
+  # than being smuggled back in.
+  unit_order_within "${todo[@]}"
+  ui_say "  applying: ${UNIT_ORDER[*]}"
+  notice_unmet_requires "   -- or tick it, so this mode takes it too" "${UNIT_ORDER[@]}"
   run_units "${UNIT_ORDER[@]}"
   fail_report
 
@@ -738,11 +768,16 @@ mode_setup() {
     return 0
   fi
 
+  # ORDERED AMONG THEMSELVES AND NOTHING ELSE ADDED, for the reason written out
+  # in mode_update: unit_order would put a unit back that the boxes above said
+  # no to, and the intersection three lines up is the whole point of the boxes.
+  unit_order_within "${todo[@]}"
+
   echo
-  ui_say "  Would apply: ${todo[*]}"
+  ui_say "  Would apply: ${UNIT_ORDER[*]}"
+  notice_unmet_requires "   -- or tick it and run this again" "${UNIT_ORDER[@]}"
   ui_confirm "  Go ahead?" || { ui_say "  Nothing done."; return 0; }
 
-  unit_order "${todo[@]}"
   run_units "${UNIT_ORDER[@]}"
 
   echo

@@ -621,6 +621,42 @@ want "and the summary names the unit that did it" \
 chmod +x "$MINI/bin/.local/bin/laptop-modules"
 
 # ---------------------------------------------------------------------------
+say "a no in the profile is not undone by something else's requirement"
+
+# `update` and the menu built their list as "ticked AND not already ok" and then
+# handed it to unit_order, which walks _requires and puts the requirements back
+# whatever the profile said. So `unit.packages 0` was announced as honoured and
+# then ignored one line later:
+#
+#     applying: symlinks seeds nvim cursors laptop
+#     == Packages ==
+#
+# Set up here rather than at the top because it needs the machine to be finished
+# -- the only unit left with anything to do is the one whose link is deleted --
+# and because it puts a name in the required list that must not be installed.
+rm -f "$HOME_DIR/.zshrc"
+printf 'unit.packages\t0\n' >> "$PROFILE"
+printf 'bc\n' >> "$MINI/packages/required/ci.txt"
+
+unticked="$SANDBOX/update-unticked.txt"
+if installer update > "$unticked" 2>&1; then
+    pass "update with an unticked requirement exits zero"
+else
+    bad "update with an unticked requirement exits zero"
+fi
+sed 's/^/installer-run:   | /' "$unticked"
+
+want "update applies exactly what it announced" \
+     grep -qE '^  applying: symlinks$' "$unticked"
+want_not "a unit the profile said no to is not pulled back in" \
+     grep -q '^== Packages ==' "$unticked"
+# The one that cannot be argued with: bc is only in the list that unit installs.
+want_not "and nothing that unit would have installed arrived" pacman -Qq bc
+want "update names the requirement it left out" \
+     grep -qF "note: this needs 'packages'" "$unticked"
+want "and it still did the work it did announce" test -L "$HOME_DIR/.zshrc"
+
+# ---------------------------------------------------------------------------
 if (( FAILURES )); then
     printf '\ninstaller-run: %d assertion(s) failed\n' "$FAILURES" >&2
     exit 1
