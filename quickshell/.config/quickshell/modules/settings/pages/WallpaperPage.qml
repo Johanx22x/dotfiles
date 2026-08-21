@@ -101,18 +101,19 @@ SettingsPage {
 
     // ---------------- Rotation ----------------
     //
-    // THE SWITCH IS A READING OF systemd TOO. It shows what `is-active` says,
-    // not what was clicked: the click starts a process, the process finishes,
-    // and only then is the state re-read. A few milliseconds, invisible in
-    // use, and it means a failed enable leaves the switch where it was instead
-    // of showing an "on" that nothing on the system agrees with.
+    // THE SWITCH IS A READING OF THE SETTING TOO. It shows what
+    // `wallpaper-interval show` says, not what was clicked: the click starts a
+    // process, the process finishes, and only then is the state re-read. A few
+    // milliseconds, invisible in use, and it means a call that did not work
+    // leaves the switch where it was instead of showing an "on" that nothing
+    // on the system agrees with.
     property bool rotating: false
 
     // A Date, or null when systemd has no next elapse for the unit.
     property var nextChange: null
 
     function probeRotation(): void {
-        activeProbe.running = true;
+        modeProbe.running = true;
         nextProbe.running = true;
     }
 
@@ -141,50 +142,87 @@ SettingsPage {
             root.probeRotation();
     }
 
-    // TURNING THIS ON ENABLES THE UNIT AS WELL AS STARTING IT, and that is a
-    // decision, not a convenience.
+    // THIS SWITCH USED TO CALL `systemctl --user disable --now`, AND THAT
+    // DELETED THE UNIT FILE. Not the enablement symlink -- the unit.
     //
-    // `start`/`stop` alone are runtime-only. Switch rotation off here, reboot,
-    // and it is on again -- the timer is enabled in this install, verified
-    // with `systemctl --user is-enabled wallpaper-rotate.timer`. A settings
-    // window whose switches quietly revert is worse than one with no switch at
-    // all: nothing on screen ever explains why.
+    // The reasoning it replaced was that an enablement is machine-local state,
+    // that dotfiles/systemd carries only the unit FILES, and that flipping it
+    // therefore "cannot make the repo and the machine disagree about a tracked
+    // file". Every clause of that is true and the conclusion is still wrong,
+    // because of where stow puts the file. It links it into
+    // ~/.config/systemd/user/, which is not merely a directory systemd reads:
+    // it is THE unit configuration directory, so the unit counts as linked --
     //
-    // The cost is a write outside the dotfiles repo, and it was checked before
-    // being accepted rather than assumed. The enablement is a single symlink
-    // in ~/.config/systemd/user/timers.target.wants/, created by systemctl;
-    // dotfiles/systemd carries the two unit FILES and nothing else, so that
-    // symlink is machine-local state and flipping it cannot make the repo and
-    // the machine disagree about a tracked file. Which is exactly what an
-    // enablement is: this machine's answer, not the configuration's.
+    //   $ systemctl --user is-enabled wallpaper-rotate.service
+    //   linked
     //
-    // --now does both halves in one call. Separately they can end up
-    // disagreeing -- enabled but stopped, or the reverse -- and then "is
-    // rotation on?" has two answers.
+    // -- and `man systemctl` says of disable that it "removes all symlinks to
+    // the unit files backing the specified units from the unit configuration
+    // directory ... including manually created symlinks, and not just those
+    // actually created by enable or link". stow's symlink is a manually
+    // created symlink to a matching unit file, so disable took it with the
+    // enablement. The unit then reported not-found, this switch could never
+    // turn it back on, and `install.sh check` began listing the file as not
+    // linked. It happened three times in one day.
+    //
+    // SO NOTHING HERE TOUCHES UNIT STATE AT ALL NOW. Both directions go
+    // through `wallpaper-interval`, which owns the drop-in at
+    // ~/.config/systemd/user/wallpaper-rotate.timer.d/interval.conf and
+    // nothing else; the script's own header carries the systemd evidence. Off
+    // is a schedule the timer can never reach, on is an interval, and the
+    // enablement is left to whoever set it -- the installer's services-user
+    // unit -- exactly as it was before anyone clicked anything.
+    //
+    // IT STILL SURVIVES A REBOOT, and by a plainer route than before: the
+    // setting is a FILE. ~/.config/systemd/user/wallpaper-rotate.timer.d/
+    // interval.conf is read by systemd on every start of the user manager, so
+    // an off written today is still off after a reboot without anything having
+    // to remember it. That is strictly more durable than the old enablement
+    // symlink, which lived in the same place but could be removed by any
+    // `disable` of the unit, deliberate or otherwise.
+    //
+    // TURNING IT ON SENDS THE INTERVAL AND NOT A WORD LIKE "on", because
+    // `wallpaper-interval` has no `on`: setting an interval is what turns
+    // rotation on. Config.wallpaperInterval is the one the stepper is showing,
+    // read back out of the state file the script writes, so the value the row
+    // above has been displaying while greyed out is the value that takes
+    // effect.
     function setRotation(on: bool): void {
-        switcher.command = ["systemctl", "--user", on ? "enable" : "disable",
-            "--now", "wallpaper-rotate.timer"];
+        switcher.command = ["wallpaper-interval",
+            on ? String(Config.wallpaperInterval) : "off"];
         switcher.running = true;
     }
 
     Process {
         id: switcher
 
-        // Whatever systemctl did or refused to do, the answer comes from
+        // Whatever the script did or refused to do, the answer comes from
         // asking it again rather than from assuming the call worked.
         onExited: root.probeRotation()
     }
 
+    // ASKING THE SCRIPT AND NOT systemd, and that is forced rather than
+    // preferred. `systemctl --user is-active wallpaper-rotate.timer` used to be
+    // the reading here, and under the drop-in scheme it answers `active` in
+    // BOTH states: an off timer is a healthy enabled timer whose next elapse is
+    // never, so it sits in SubState=elapsed and is-active still says active.
+    // The only thing that can tell the two apart is the drop-in, and
+    // `wallpaper-interval show` is the reader for it -- it prints `off`, or the
+    // interval in minutes.
+    //
+    // The trade-off being accepted: this now reports the SETTING rather than
+    // the running state, so a machine where the timer was never enabled shows
+    // the switch on while nothing rotates. That is the installer's question,
+    // `install.sh check` already asks it, and the alternative -- a switch that
+    // refuses to move because of something no text on this page mentions -- is
+    // the worse of the two.
     Process {
-        id: activeProbe
+        id: modeProbe
 
-        command: ["systemctl", "--user", "is-active", "wallpaper-rotate.timer"]
+        command: ["wallpaper-interval", "show"]
 
-        // Exits non-zero when the unit is not active, which is an answer and
-        // not a failure -- so the exit code is ignored and the word on stdout
-        // is what counts.
         stdout: StdioCollector {
-            onStreamFinished: root.rotating = text.trim() === "active"
+            onStreamFinished: root.rotating = text.trim() !== "off"
         }
     }
 
@@ -213,8 +251,16 @@ SettingsPage {
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
-                    // An inactive timer is not listed at all, so an empty
-                    // array is the normal case for rotation being off.
+                    // TWO SHAPES MEAN "NO NEXT CHANGE", not one. A timer that
+                    // is not running is not listed at all, so an empty array
+                    // is still possible; but an off timer under the drop-in
+                    // scheme IS listed, active, with `next` and `left` both
+                    // JSON null. Verified on a scratch copy of the unit:
+                    //
+                    //   [{"next":null,"left":null,"last":0,"passed":0, ...}]
+                    //
+                    // `null > 0` is false in JavaScript, so the same
+                    // comparison covers both without a second branch.
                     const rows = JSON.parse(text || "[]");
                     const next = rows.length > 0 ? rows[0].next : 0;
                     root.nextChange = next > 0 ? new Date(next / 1000) : null;

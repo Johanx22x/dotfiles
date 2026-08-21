@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# wallpaper-interval -- how often the wallpaper rotates.
+# wallpaper-interval -- how often the wallpaper rotates, and whether it does.
 #
 # The rotation itself is wallpaper-rotate.timer, which is a TRACKED file in
 # this repository. This does not touch it. It writes a systemd DROP-IN, which
@@ -9,22 +9,70 @@
 #
 #   ~/.config/systemd/user/wallpaper-rotate.timer.d/interval.conf
 #
-# THE EMPTY ASSIGNMENT IS NOT DECORATION. Timer options accumulate: a drop-in
-# that just says OnUnitActiveSec=45min gives the unit TWO triggers, the
-# original 30 and the new 45, and it fires on both. Assigning the empty string
-# first resets the list, which is the documented way to replace rather than
-# add.
+# THE DROP-IN IS ALSO WHERE "OFF" LIVES, and that is the whole reason `off`
+# exists as a mode. The settings window used to turn rotation off with
+# `systemctl --user disable --now wallpaper-rotate.timer`, and that DELETED THE
+# UNIT. stow links the unit file into ~/.config/systemd/user/, which is the
+# unit configuration directory, so systemd considers it a LINKED unit --
+# `systemctl --user is-enabled wallpaper-rotate.service` answers `linked` on
+# this machine -- and `man systemctl` says of disable that it "removes all
+# symlinks to matching unit files, including manually created symlinks, and not
+# just those actually created by enable or link". stow's symlink is a manually
+# created symlink to a matching unit file. Turning rotation off removed it, the
+# unit went to not-found, the switch could never turn it back on, and
+# `install.sh check` started reporting the file as not linked. It happened
+# three times in one day before anyone connected the two.
 #
-# NO RESTART, ONLY A RELOAD, and that was measured before being relied on:
-# after `daemon-reload` alone, `systemctl show -p TimersMonotonic` reported the
-# new interval and list-timers recalculated the next elapse from the LAST run.
-# Restarting the timer would re-arm OnActiveSec instead, so changing "every 30
-# minutes" to "every 6 hours" would drag the next change to five minutes from
-# now -- a settings change that quietly moves something else.
+# So nothing here ever runs enable or disable. The timer stays exactly as
+# enabled as the installer left it; off is a drop-in that gives it a schedule
+# it can never reach, and the file on disk is what makes the setting survive a
+# reboot.
 #
-# OnActiveSec is deliberately left alone for the same reason. It is the delay
-# after login before the first change, which is a different question from how
-# often, and the unit's own comment explains why it is five minutes.
+# THE EMPTY ASSIGNMENT IS NOT DECORATION, AND IT RESETS MORE THAN ITS OWN
+# OPTION. Timer options accumulate: a drop-in that just says
+# OnUnitActiveSec=45min gives the unit TWO triggers, the original 30 and the
+# new 45, and it fires on both. Assigning the empty string first resets the
+# list -- but `man systemd.timer` is explicit that it resets THE WHOLE LIST,
+# "both monotonic timers and OnCalendar= timers", not the option it was written
+# against. Measured on a scratch unit rather than taken on faith:
+#
+#   drop-in                              systemctl show -p TimersMonotonic
+#   -----------------------------------  --------------------------------------
+#   OnUnitActiveSec=45min                OnUnitActiveUSec=45min
+#                                        OnUnitActiveUSec=30min   <- accumulated
+#                                        OnActiveUSec=5min
+#   OnUnitActiveSec=                     OnUnitActiveUSec=45min   <- and NOTHING
+#   OnUnitActiveSec=45min                                            else
+#
+# That second form is what this script used to write, which means every machine
+# that had ever chosen an interval had silently lost OnActiveSec=5min -- the
+# unit's "first change five minutes after the timer starts". Without it the
+# only trigger left is OnUnitActiveSec, which is measured from the last time
+# the SERVICE ran, and after a reboot systemd does not know when that was: the
+# timer comes up armed for nothing (NextElapseUSecMonotonic=infinity) and the
+# wallpaper never rotates again until something runs the service by hand. The
+# old comment here said "OnActiveSec is deliberately left alone", and it was
+# not left alone; it was deleted. Both values are restated below for that
+# reason.
+#
+# NO RESTART WHEN ONLY THE INTERVAL MOVES, and that was measured before being
+# relied on: after `daemon-reload` alone, `systemctl show -p TimersMonotonic`
+# reported the new interval and list-timers recalculated the next elapse from
+# the LAST run. Restarting the timer would re-arm OnActiveSec instead, so
+# changing "every 30 minutes" to "every 6 hours" would drag the next change to
+# five minutes from now -- a settings change that quietly moves something else.
+#
+# A RESTART WHEN COMING BACK FROM OFF, for the opposite reason, and also
+# measured. An off timer has run out of triggers, so it sits in SubState=elapsed
+# with next elapse infinity; a daemon-reload that hands it a schedule again does
+# NOT re-arm it, it stays elapsed forever. Only a restart does:
+#
+#   off, then reload only    SubState=elapsed  next=infinity
+#   then restart             SubState=waiting  next=5min
+#
+# Going the other way needs nothing: writing the off drop-in and reloading
+# drops the pending elapse on its own (waiting/5min -> elapsed/infinity), so
+# turning rotation off takes effect immediately without touching unit state.
 
 set -euo pipefail
 
@@ -45,10 +93,14 @@ STATE_FILE="$STATE_DIR/wallpaper-interval"
 DROPIN_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/wallpaper-rotate.timer.d"
 DROPIN="$DROPIN_DIR/interval.conf"
 
-# The unit's own value, which is what "no drop-in" means. Repeated here
-# because a script cannot read a comment; if the unit ever changes, this is
-# the line that has to follow it.
+readonly TIMER_UNIT=wallpaper-rotate.timer
+
+# The unit's own values, which are what "no drop-in" means. Repeated here
+# because a script cannot read a comment; if the unit ever changes, these are
+# the lines that have to follow it. FIRST_DELAY is only here because the reset
+# above wipes it -- see the table.
 readonly DEFAULT_MINUTES=30
+readonly DEFAULT_FIRST_DELAY=5min
 
 # Five minutes is the floor because matugen runs on every change: a full
 # palette regeneration and ten template renders. A week is the ceiling because
@@ -56,14 +108,47 @@ readonly DEFAULT_MINUTES=30
 readonly MIN_MINUTES=5
 readonly MAX_MINUTES=10080
 
+# THE 30th OF FEBRUARY, AND IT IS NOT A JOKE. "Off" has to leave the unit with
+# a schedule, because a timer with NO trigger at all is not a stopped timer, it
+# is a broken one -- which is the failure the note on apply() below already
+# warned about, met head on rather than avoided. A drop-in that only clears the
+# list gets
+#
+#   scratch.timer: Timer unit lacks value setting. Refusing.
+#   Loaded: bad-setting (Reason: Unit ... has a bad unit file setting.)
+#
+# and the unit will not even start. systemd's calendar parser accepts a date
+# that cannot occur and says so itself, which is the property being used here:
+#
+#   $ systemd-analyze calendar '*-02-30'
+#       Next elapse: never
+#
+# With this in force the unit loads clean (`systemd-analyze --user verify` exits
+# 0), starts, reports `active`, and settles in SubState=elapsed with
+# list-timers giving next=null -- an enabled, healthy, permanently idle timer.
+# The alternative measured alongside it, OnUnitActiveSec=infinity, also never
+# fires but reports next_elapse=0 inside TimersMonotonic, which reads like "any
+# moment now" and is a worse thing to find in a year.
+readonly NEVER_CALENDAR='*-02-30'
+
 usage() {
     cat >&2 <<'EOF'
 Usage:
-  wallpaper-interval            print the interval in minutes
-  wallpaper-interval <minutes>  set it (5 - 10080)
+  wallpaper-interval            print the interval in minutes, or 'off'
+  wallpaper-interval <minutes>  rotate every <minutes> (5 - 10080), turning
+                                rotation back on if it was off
+  wallpaper-interval off        stop rotating, keeping the interval for later
   wallpaper-interval clear      back to the unit's own value
 EOF
     exit 2
+}
+
+# Whether the drop-in currently in place is the off one. The drop-in is the
+# state -- there is no second file recording on/off, because two records of one
+# fact drift the first time somebody edits either. Matched as a whole line so a
+# comment mentioning the date could never be read as the setting.
+is_off() {
+    [[ -r $DROPIN ]] && grep -qxF "OnCalendar=$NEVER_CALENDAR" "$DROPIN"
 }
 
 # 10# ON EVERY NUMBER THAT CAME FROM OUTSIDE, and it is not decoration. A
@@ -97,12 +182,59 @@ dropin() {
 # Delete it, or run 'wallpaper-interval clear', and the rotation goes back to
 # whatever wallpaper-rotate.timer says.
 #
-# The empty assignment resets the list. Without it this would ADD a second
-# trigger to the unit's own rather than replacing it.
+# The empty assignment resets the WHOLE trigger list, monotonic and calendar
+# alike, which is why OnActiveSec has to be written out again below even though
+# it is not the setting being changed. Without it the unit loses its "first
+# change five minutes after the timer starts" and, after a reboot, never
+# rotates at all.
 [Timer]
-OnUnitActiveSec=
+OnActiveSec=
+OnActiveSec=${DEFAULT_FIRST_DELAY}
 OnUnitActiveSec=${minutes}min
 EOF
+}
+
+dropin_off() {
+    cat <<EOF
+# GENERATED by wallpaper-interval. Rotation is OFF.
+#
+# NOT 'systemctl --user disable'. This unit is stow'd into the unit
+# configuration directory, so systemd sees it as linked, and disable deletes
+# every symlink to a matching unit file -- including that one. Off is expressed
+# here instead: the timer stays enabled and gets a date that never comes.
+#
+#   \$ systemd-analyze calendar '${NEVER_CALENDAR}'
+#       Next elapse: never
+#
+# The empty assignment clears both trigger lists. A timer left with no trigger
+# whatsoever is refused outright ("Timer unit lacks value setting"), so there
+# has to be something here, and this is the something that does nothing.
+#
+# 'wallpaper-interval <minutes>' undoes it, as does deleting this file.
+[Timer]
+OnCalendar=
+OnCalendar=${NEVER_CALENDAR}
+EOF
+}
+
+# Best-effort on every unit command: outside a user session -- a chroot, a
+# build, an install running before the graphical session exists -- there is no
+# manager to tell, and the drop-in is still correct for the next login.
+#
+# $1 says whether the timer has to be RE-ARMED, which is only true when it is
+# coming back from off. `start` on a running timer is a no-op -- verified: the
+# next elapse is byte-identical before and after -- so the other branch cannot
+# drag the schedule the way a restart would, while still covering a timer that
+# was never started at all.
+tell_systemd() {
+    systemctl --user daemon-reload 2>/dev/null || true
+
+    if (( $1 )); then
+        systemctl --user restart "$TIMER_UNIT" 2>/dev/null \
+            || warn "could not restart $TIMER_UNIT; rotation resumes at the next login."
+    else
+        systemctl --user start "$TIMER_UNIT" 2>/dev/null || true
+    fi
 }
 
 apply() {
@@ -114,21 +246,39 @@ apply() {
     # after it is a timer with NO trigger at all, which is the one failure here
     # that leaves the wallpaper still and gives no sign why.
     write_generated "$DROPIN" dropin "$minutes"
-
-    # Best-effort: outside a user session -- a chroot, a build -- there is no
-    # manager to tell, and the file is still correct for the next login.
-    systemctl --user daemon-reload 2>/dev/null || true
 }
 
 case "${1:-show}" in
     show)
-        echo "$(current)"
+        if is_off; then
+            echo off
+        else
+            current; echo
+        fi
+        ;;
+
+    off)
+        # The state file is left alone on purpose: it is the remembered
+        # interval, not the on/off switch, and forgetting it here would mean
+        # coming back from off always landed on 30 minutes regardless of what
+        # the person had chosen. It also keeps the file a plain number for
+        # every reader -- Config.qml parses it with parseInt and would fall
+        # back to the default on the word "off", quietly moving the stepper.
+        write_generated "$DROPIN" dropin_off
+        # No re-arm: a reload alone drops the pending elapse, measured.
+        tell_systemd 0
+        echo "Rotation off. The interval stays at $(current) minutes for when it comes back."
         ;;
 
     clear)
+        # Whether the timer has to be re-armed depends on where it is coming
+        # FROM, so the question is asked before the drop-in is removed.
+        was_off=0
+        is_off && was_off=1
+
         rm -f "$DROPIN" "$STATE_FILE"
         rmdir "$DROPIN_DIR" 2>/dev/null || true
-        systemctl --user daemon-reload 2>/dev/null || true
+        tell_systemd "$was_off"
         echo "Back to ${DEFAULT_MINUTES} minutes, the unit's own value."
         ;;
 
@@ -145,6 +295,15 @@ case "${1:-show}" in
             exit 2
         }
 
+        # Asked before the drop-in is overwritten, for the same reason as in
+        # clear: afterwards there is nothing left to tell the two cases apart,
+        # and the answer decides restart versus start. Setting an interval is
+        # therefore also how rotation is turned back on -- there is no separate
+        # `on`, because "every 45 minutes" already says both things and a
+        # second mode could only disagree with this one.
+        was_off=0
+        is_off && was_off=1
+
         # THE DROP-IN FIRST AND THE STATE FILE AFTER. The state file is not the
         # setting, it is the RECORD of it -- the settings window reads the
         # interval back out of it, and this script's own `show` does too. Written
@@ -157,5 +316,7 @@ case "${1:-show}" in
         apply "$minutes"
 
         printf '%s\n' "$minutes" | state_write "$STATE_FILE"
+
+        tell_systemd "$was_off"
         ;;
 esac
