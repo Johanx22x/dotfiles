@@ -36,21 +36,41 @@ laptop_check() {
 }
 
 laptop_apply() {
-  local modules="$DOT/bin/.local/bin/laptop-modules"
+  local modules="$DOT/bin/.local/bin/laptop-modules" answer
 
   if [[ ! -x $modules ]]; then
     ui_bad "   $modules is missing"
-    FAILED+=("laptop: laptop-modules is not in the repo")
+    # NOT FATAL. What this unit decides is whether two widgets -- battery and
+    # backlight -- are drawn in the bar. Every other unit is indifferent to the
+    # answer, and a desktop with a battery widget it cannot use is a cosmetic
+    # complaint rather than a broken machine.
+    fail_note "laptop" "laptop-modules is not in the repo at $modules" \
+      "Check the checkout is complete (git status), then: ./install.sh apply laptop"
     return 0
   fi
 
+  # TESTED, BECAUSE `set -e` IS SUSPENDED INSIDE AN _apply. Unguarded, a
+  # laptop-modules that failed still reached the "on" line below and the state
+  # file it writes -- the one thing _check looks at -- was never written, so the
+  # unit reported success now and "nobody has said whether this is a laptop"
+  # forever after.
   ui_say "   Off by default; they are only useful on a machine that has both."
   if ui_confirm "Is this a laptop?"; then
-    run "$modules" on >/dev/null
-    ui_did "   on -- they appear once the shell restarts"
+    answer=on
   else
-    run "$modules" off >/dev/null
-    ui_say "   off"
+    answer=off
+  fi
+
+  if run "$modules" "$answer" >/dev/null; then
+    if [[ $answer == on ]]; then
+      ui_did "   on -- they appear once the shell restarts"
+    else
+      ui_say "   off"
+    fi
+  else
+    ui_bad "   laptop-modules $answer did not finish"
+    fail_note "laptop" "laptop-modules could not record '$answer', so the widgets follow no decision" \
+      "$modules $answer   -- then: ./install.sh check"
   fi
 }
 

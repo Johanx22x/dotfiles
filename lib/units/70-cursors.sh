@@ -67,7 +67,14 @@ cursors_apply() {
 
   if [[ -z $fetch ]]; then
     ui_bad "   neither curl nor wget is installed, skipping"
-    FAILED+=("cursors: nothing to download with")
+    # ALL FOUR FAILURES IN THIS UNIT ARE NOTES, and it is the same argument
+    # each time: a cursor theme is a picture of a pointer. Without it the
+    # desktop comes up with Adwaita, which is what an Arch install has anyway,
+    # and nothing else in this repo reads ~/.icons to decide what to do. It is
+    # also 83 MB over the network, which is the single most likely thing here
+    # to fail for a reason that has nothing to do with this machine.
+    fail_note "cursors" "neither curl nor wget is installed, so nothing could be downloaded" \
+      "sudo pacman -S --needed curl && ./install.sh apply cursors"
     return 0
   fi
 
@@ -81,7 +88,8 @@ cursors_apply() {
   tmp="$(mktemp -d)"
   if ! $fetch "$tmp/pack.tar.gz" "$CURSOR_PACK_URL"; then
     ui_bad "   the download failed, the cursor themes are not installed"
-    FAILED+=("cursors: the download failed")
+    fail_note "cursors" "the download of the Bibata pack failed" \
+      "Check the network and that $CURSOR_PACK_URL still resolves, then: ./install.sh apply cursors"
     rm -rf "$tmp"
     return 0
   fi
@@ -97,7 +105,8 @@ cursors_apply() {
     ui_say "   Nothing was unpacked. Either the release was replaced -- in which"
     ui_say "   case bump the version and the sum together -- or something is"
     ui_say "   between you and GitHub."
-    FAILED+=("cursors: the download did not match its checksum")
+    fail_note "cursors" "the download did not match the sha256 pinned in 70-cursors.sh" \
+      "If the release was genuinely replaced, bump CURSOR_PACK_URL and CURSOR_PACK_SHA256 together; otherwise try again on a different network"
     rm -rf "$tmp"
     return 0
   fi
@@ -110,8 +119,15 @@ cursors_apply() {
        --strip-components=1 --exclude='INSTALL.txt'; then
     ui_ok "   installed"
   else
+    # THE ONE HERE THAT LEAVES A MESS, and still not fatal: a half-unpacked
+    # ~/.icons is a directory of incomplete themes, which the cursor picker
+    # lists and nothing else looks at. Said explicitly in the remedy because
+    # "run it again" alone would not get rid of what is already there -- and
+    # the unit's own _check answers "already installed" for a directory that
+    # exists, so a second run would skip it.
     ui_bad "   the archive could not be unpacked, ~/.icons may be half-written"
-    FAILED+=("cursors: the archive could not be unpacked")
+    fail_note "cursors" "the archive could not be unpacked; ~/.icons may hold a half-written theme" \
+      "rm -rf ~/.icons/Bibata-* && ./install.sh apply cursors"
   fi
   rm -rf "$tmp"
 }

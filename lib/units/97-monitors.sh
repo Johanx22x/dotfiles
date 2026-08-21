@@ -109,13 +109,24 @@ monitors_check() {
 monitors_apply() {
   local recorded=() attached=() desc unconfigured=0
 
+  # BOTH OF THESE ARE NOTES, AND NEITHER USED TO BE ANYTHING. This unit writes
+  # nothing at all -- it compares the attached screens against the recorded ones
+  # and prints instructions -- so nothing here can leave a machine half
+  # configured. What it CAN do is silently not run, and the two ways it does
+  # that both used to `return 0` with a line on screen and nothing in the
+  # summary, so a run ended with no mention that the one step needing a human
+  # decision had never been reached.
   if ! command -v jq >/dev/null; then
     ui_say "   jq is not installed, so the monitors cannot be read."
     ui_say "   It is in packages/required/shell.txt."
+    fail_note "monitors" "jq is not installed, so the attached screens could not be read" \
+      "sudo pacman -S --needed jq && ./install.sh apply monitors"
     return 0
   fi
   if [[ ! -x "$(monitors_tool)" ]]; then
     ui_say "   ~/.local/bin/desktop-monitors is missing -- apply 'symlinks' first."
+    fail_note "monitors" "$(monitors_tool) is not linked, so the screens could not be compared" \
+      "./install.sh apply symlinks && ./install.sh apply monitors"
     return 0
   fi
 

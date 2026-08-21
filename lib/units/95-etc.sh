@@ -99,6 +99,25 @@ etc_check() {
 }
 
 # ---------------------------------------------------------------------------
+# THE THREE DESTINATIONS THE MACHINE BOOTS FROM, in one predicate because two
+# places need the same answer for two different reasons: etc_post uses it to
+# decide whether a generator has to be re-run, and etc_apply_copy uses it to
+# decide whether a failed write is worth stopping the whole run over. Keeping
+# it in one function is what stops those two drifting apart the day a fourth
+# file joins the list.
+#
+# What makes these three different from the other seven rows in the table is
+# not that they are important -- bluetooth and sddm are important too -- but
+# that getting them wrong is discovered at the NEXT BOOT, by which time nobody
+# is at a keyboard and the machine may not offer one.
+etc_boots_the_machine() {
+  case "$1" in
+    /etc/mkinitcpio.conf|/etc/mkinitcpio.d/*|/etc/default/grub) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
 # ONE FILE AT A TIME, DIFF FIRST, AND A QUESTION EACH.
 #
 # There is no "yes to all" here on purpose, and --yes does reach it -- but the
@@ -116,13 +135,24 @@ etc_apply() {
       recipe)    etc_apply_recipe "$src" "$dst" ;;
       reference) etc_apply_reference "$src" "$dst" ;;
       copy)      etc_apply_copy "$src" "$dst" "$mode" && touched+=("$dst") ;;
-      *)         ui_bad "   $src: unknown kind '$kind' in the table, skipped" ;;
+      # A MISTAKE IN THIS REPOSITORY AND NOT ON THIS MACHINE, which is why it
+      # is a note and not a stop: nothing was written, nothing is half done,
+      # and the machine is exactly as it was. It is recorded rather than only
+      # printed because the person who can fix it is the person reading the
+      # summary, and the row is one word away from being right.
+      *)         ui_bad "   $src: unknown kind '$kind' in the table, skipped"
+                 fail_note "etc" "system/README.md gives system/$src the unknown kind '$kind', so it was skipped" \
+                   "Change that row's fourth column to copy, reference or recipe" ;;
     esac
   done < <(etc_rows)
 
   while IFS= read -r src; do
     [[ -z $src ]] && continue
     ui_bad "   system/$src has no row in system/README.md and was skipped"
+    # Same reasoning as the unknown kind above: a file nobody wired up is a
+    # gap in the repository. Nothing on the machine is worse for it.
+    fail_note "etc" "system/$src has no row in system/README.md, so it was skipped" \
+      "Add a row for it to the table in system/README.md, then: ./install.sh apply etc"
   done < <(etc_unlisted)
 
   # Handed to _post through a file rather than a variable, because _post runs
@@ -154,8 +184,19 @@ etc_apply_reference() {
   echo
 
   if ui_confirm "   Update system/$src FROM $dst? (a change to the repo, not the machine)" n; then
-    run cp "$dst" "$DOT/system/$src"
-    ui_did "   system/$src now matches this machine -- commit it or check it out"
+    # A NOTE AND NOT A STOP, because this direction does not touch the machine
+    # at all: it writes into the git working tree, where the way back is
+    # `git checkout`. Tested rather than run bare for the reason seeds and
+    # laptop are -- errexit is suspended inside an _apply, so an unguarded cp
+    # that failed still printed "now matches this machine", which is the one
+    # kind of failure no summary can classify because nothing recorded it.
+    if run cp "$dst" "$DOT/system/$src"; then
+      ui_did "   system/$src now matches this machine -- commit it or check it out"
+    else
+      ui_bad "   could not update system/$src"
+      fail_note "etc" "system/$src could not be updated from $dst" \
+        "Check the checkout is writable, then: cp $dst $DOT/system/$src"
+    fi
   fi
 }
 
@@ -192,8 +233,26 @@ etc_apply_copy() {
     ui_did "   installed $dst"
     return 0
   fi
+  # THE ONLY WRITE IN THE WHOLE INSTALLER THAT LANDS IN /etc, and the severity
+  # splits on what the destination is rather than on the unit.
+  #
+  # `install` copies onto the destination in place. A write that fails partway
+  # -- a full /, a remount to read-only, a signal -- leaves a file that is
+  # neither the old one nor the new one, and nothing here can tell which. For
+  # /etc/bluetooth/main.conf that is a controller that misbehaves until
+  # somebody looks. For /etc/mkinitcpio.conf or /etc/default/grub it is a
+  # machine that may not boot, discovered at the next boot, with no shell to
+  # fix it from -- so those three stop the run while there is still a working
+  # session in front of the person, and the message says not to reboot before
+  # the file has been looked at.
   ui_bad "   could not install $dst"
-  FAILED+=("etc: $dst could not be installed")
+  if etc_boots_the_machine "$dst"; then
+    fail_stop "etc" \
+      "$dst could not be written, and it may now be neither the old file nor the new one. This is a file the machine boots from." \
+      "Do NOT reboot yet. Compare it against the repository -- diff $dst $DOT/system/$src -- put it right, and if it changed run 'sudo mkinitcpio -P' (or grub-mkconfig) before rebooting."
+  fi
+  fail_note "etc" "$dst could not be written from system/$src" \
+    "Check the diff printed above, then: sudo install -Dm $mode $DOT/system/$src $dst"
   return 1
 }
 
@@ -215,9 +274,10 @@ etc_post() {
   local dst initramfs=0 grub=0
 
   for dst in "${ETC_TOUCHED[@]}"; do
+    etc_boots_the_machine "$dst" || continue
     case "$dst" in
-      /etc/mkinitcpio.conf|/etc/mkinitcpio.d/*) initramfs=1 ;;
-      /etc/default/grub)                        grub=1 ;;
+      /etc/default/grub) grub=1 ;;
+      *)                 initramfs=1 ;;
     esac
   done
 
@@ -225,25 +285,52 @@ etc_post() {
     ui_warn "   The initramfs is generated from what just changed, and is stale until"
     ui_say  "   it is rebuilt. This takes a couple of minutes and rewrites /boot."
     if ui_confirm "   Run 'sudo mkinitcpio -P' now?" n; then
-      run sudo mkinitcpio -P || ui_bad "   mkinitcpio failed -- do NOT reboot until it succeeds"
+      # THE WORST OUTCOME IN THE WHOLE INSTALLER, and the one place a _post is
+      # allowed to end the run. A failed mkinitcpio does not leave the old
+      # initramfs alone: the preset writes each image as it goes, so /boot can
+      # hold one that is half built for a kernel this machine is about to be
+      # told to boot. The message it used to leave -- one red line saying do
+      # not reboot -- was printed at the very end of a long run and then had
+      # the hand-off paragraph printed underneath it.
+      run sudo mkinitcpio -P || fail_stop "etc" \
+        "mkinitcpio failed, so /boot may hold an initramfs that is half written. DO NOT REBOOT." \
+        "Run 'sudo mkinitcpio -P' again and read what it says -- a missing firmware package or a module name in /etc/mkinitcpio.conf that no longer exists. Only reboot once it has finished cleanly."
     else
+      # DECLINED IS A NOTE AND NOT A STOP: nothing was regenerated, so the old
+      # initramfs is still whole and still what the machine boots. What is
+      # wrong is only that the file no longer describes it, and the person
+      # said so on purpose.
       ui_warn "   Remember: sudo mkinitcpio -P"
+      fail_note "etc" "/etc/mkinitcpio.conf changed and the initramfs was not rebuilt, so the change is not in effect" \
+        "sudo mkinitcpio -P"
     fi
   fi
 
   if (( grub )); then
     ui_warn "   /boot/grub/grub.cfg is generated from /etc/default/grub and is stale."
     if ui_confirm "   Run 'sudo grub-mkconfig -o /boot/grub/grub.cfg' now?" n; then
+      # A NOTE, UNLIKE mkinitcpio, AND THE DIFFERENCE IS WHERE THE OUTPUT GOES.
+      # grub-mkconfig writes to a temporary and moves it over grub.cfg only
+      # once it has finished, so a failure leaves the previous menu intact and
+      # bootable. The machine still boots exactly as it did this morning; what
+      # is lost is the change.
       run sudo grub-mkconfig -o /boot/grub/grub.cfg \
-        || ui_bad "   grub-mkconfig failed -- the old menu is still in place"
+        || fail_note "etc" "grub-mkconfig failed, so /boot/grub/grub.cfg is still the previous menu" \
+             "sudo grub-mkconfig -o /boot/grub/grub.cfg   -- the machine boots as before until it succeeds"
     else
       ui_warn "   Remember: sudo grub-mkconfig -o /boot/grub/grub.cfg"
+      fail_note "etc" "/etc/default/grub changed and the boot menu was not regenerated, so the change is not in effect" \
+        "sudo grub-mkconfig -o /boot/grub/grub.cfg"
     fi
   fi
 
-  # NEVER FATAL, by the contract every _post is held to: a reload that fails
-  # must not undo a run that otherwise worked, and both of the commands above
-  # can be re-run by hand from the message they leave behind.
+  # NOTHING BELOW HERE FAILS THE UNIT, which is the contract every _post is
+  # held to -- but two of the branches above end the run themselves, and that
+  # is a different thing. The contract says the RUNNER never treats a _post's
+  # return value as fatal, because a reload on a machine with no session yet
+  # must not undo a run that otherwise worked. It does not say a _post cannot
+  # have found something a person has to deal with before touching the reboot
+  # button. mkinitcpio is that case and it is the only one here.
   return 0
 }
 

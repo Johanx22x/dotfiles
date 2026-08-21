@@ -120,8 +120,26 @@ gpu_apply() {
     ui_say  "   Every name in it resolves; that is all that has been checked."
   fi
 
+  # STOP, AND IT IS THE ONE CLASSIFICATION HERE THAT COST AN ARGUMENT.
+  #
+  # Against stopping: nothing later in the run needs this. A card with no
+  # vendor driver still lights up -- nouveau and the in-kernel amdgpu are
+  # there -- so the compositor comes up, badly, and the driver can be
+  # installed any time afterwards. Stopping prevents no damage.
+  #
+  # For stopping, which is what this does: the failure is discovered at the
+  # NEXT BOOT and not now. Everything else that goes wrong in this run is
+  # visible from a working desktop and fixable from a terminal inside it; a
+  # display driver that did not go in is the one failure that can leave
+  # somebody with nothing to type into. The person is at the keyboard at this
+  # moment, and the whole reason to stop rather than to note is that they will
+  # not be later. The rest of the run is idempotent, so the cost of being
+  # wrong here is one re-run.
+  #
+  # `none` never reaches this line -- it returned above -- so this is only ever
+  # a machine that asked for a driver and did not get one.
   mapfile -t names < <(pkg_read_list "$(gpu_list "$vendor")")
-  pkg_install "gpu/$vendor" "${names[@]}"
+  pkg_install stop gpu "gpu/$vendor" "${names[@]}"
 }
 
 unit_register gpu
