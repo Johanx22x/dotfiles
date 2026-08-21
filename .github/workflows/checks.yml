@@ -44,11 +44,19 @@ name: Checks
 # five different questions, not the same job five times. The obvious-looking
 # alternative -- keeping the base filter and adding a `push:` trigger to cover
 # the rest -- is what would double it, because a branch with a pull request
-# open fires both. Retargeting is quiet too: when the branch below merges and
-# the stack is restacked, changing a base fires `edited`, which is not in
-# `pull_request`'s default activity types, so nothing re-runs for that alone.
-# What does re-run is the force-push that restacking performs, and that one has
-# genuinely changed the tree.
+# open fires both, and that is the reason there is no `push:` here.
+#
+# The one thing left unverified is what happens at a restack. GitHub documents
+# that "a workflow only runs when a `pull_request` event's activity type is
+# `opened`, `synchronize`, or `reopened`", and neither of the two things a
+# restack does to a pull request above the one that merged -- retargeting its
+# base, force-pushing its head -- is an `opened` or a `reopened`. The
+# force-push is a `synchronize` and should re-run, which is correct: the tree
+# really did change. The retarget looks like an `edited` and should not, but
+# GitHub's own pages list the activity types for this event without saying
+# which one a base change belongs to, so that half is read off the meanings and
+# not off a document. If a stack is ever seen running twice on one push, the
+# retarget is the first place to look.
 on:
   pull_request:
 
