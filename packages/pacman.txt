@@ -75,7 +75,6 @@ noto-fonts
 noto-fonts-cjk
 noto-fonts-emoji
 npm
-obs-studio
 openrgb
 otf-font-awesome
 pacman-contrib
@@ -85,6 +84,7 @@ pipewire-alsa
 pipewire-jack
 pipewire-pulse
 playerctl
+python-pillow
 python-pynvim
 qbittorrent
 qt5-wayland
@@ -113,6 +113,7 @@ ttf-jetbrains-mono-nerd
 ttf-liberation
 ttf-nerd-fonts-symbols-mono
 unzip
+upower
 vulkan-tools
 wf-recorder
 wget
@@ -121,6 +122,7 @@ wl-clip-persist
 wl-clipboard
 wpa_supplicant
 xdg-utils
+xorg-xrandr
 xorg-xrdb
 zathura
 zathura-pdf-poppler
