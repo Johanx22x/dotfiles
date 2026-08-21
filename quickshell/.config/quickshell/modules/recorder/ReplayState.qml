@@ -426,6 +426,16 @@ Singleton {
         if (!root.wanted || root.armed)
             return;
 
+        // ALREADY ON ITS WAY UP. arm() has four callers -- startup, the config
+        // arriving, a screen appearing and the revive timer -- and at login
+        // three of them fire within a few turns of each other, measured on a
+        // probe that printed this path three times. `armed` does not cover it:
+        // the reaper is a separate process and the recorder does not exist yet
+        // while it runs, so without this the reap would be asked to start again
+        // underneath itself.
+        if (reaper.running)
+            return;
+
         // NOT BEFORE THE CONFIG HAS BEEN READ. Every flag this recorder takes
         // comes out of Config, the read is asynchronous, and for the first
         // turns of the shell's life those properties hold their defaults --
