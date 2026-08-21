@@ -84,7 +84,8 @@ SettingsPage {
         "widgets", "tray", "logo", "title", "battery", "hide",
         "laptop", "brightness", "backlight", "keyboard", "layout",
         "language", "indicator", "monitor", "monitors", "screen",
-        "display", "second monitor", "per monitor", "reset", "defaults"]
+        "display", "second monitor", "per monitor", "reset", "defaults",
+        "notifications", "notification history", "bell", "missed"]
 
     // How many of the connected monitors are carrying a bar. Used for two
     // things: to keep the last one from being switched off, and to decide
@@ -409,6 +410,21 @@ SettingsPage {
             Behavior on color {
                 ColorAnimation { duration: Theme.recolorDuration }
             }
+        }
+
+        // The bell, between the clock and the gear -- where it sits on the bar,
+        // and this list reads left to right the way the bar does.
+        //
+        // What it hides is a DOOR and not a reading, which is why the note under
+        // it names the other way in. The history used to be a tab of the
+        // dashboard and is not any more, so with this off the only ways to it
+        // are the key and the do-not-disturb badge, and the badge is only there
+        // while the mute is on.
+        ToggleRow {
+            glyph: Icons.bell
+            label: "Notification history"
+            checked: Config.barWidget(root.barKey, "notifications")
+            onToggled: value => Config.setBarWidget(root.barKey, "notifications", value)
         }
 
         ToggleRow {
