@@ -540,8 +540,20 @@ overview {
 // Both backends are matched: awww draws stills and mpvpaper draws videos, and
 // which one is up depends on the wallpaper rather than on anything configured
 // here -- see the wallpaper-switch script.
+//
+// THE NAME TO MATCH IS THE LAYER SURFACE'S, NOT THE COMMAND'S, and for stills
+// the two differ: the binary you call is `awww`, but the surface belongs to
+// the daemon and is announced as `awww-daemon`. `^(awww|mpvpaper)$` is
+// anchored, so it missed every still and matched every video -- which is
+// exactly how it looked: opening the overview over a video showed the video,
+// opening it over a photograph showed the flat backdrop colour above.
+//
+// Ask the compositor rather than guessing, since nothing here warns when a
+// rule matches nothing:
+//
+//   niri msg layers | grep Namespace
 layer-rule {
-    match namespace="^(awww|mpvpaper)$"
+    match namespace="^(awww-daemon|mpvpaper)$"
     place-within-backdrop true
 }
 
