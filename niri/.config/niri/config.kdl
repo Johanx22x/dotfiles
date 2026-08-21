@@ -965,11 +965,16 @@ window-rule {
 // gamescope      -> anything launched with the `gs` script
 // steam_app_<id> -> Steam games under XWayland without gamescope
 // .exe           -> some Proton games identify themselves this way
+//
+// WHICH MONITOR THIS OPENS ON IS NOT DECIDED HERE. It is one of the five rules
+// main-monitor.kdl overrides -- see the include at the end of this section --
+// and this app-id is REPEATED THERE, in `desktop-monitors`, because a window
+// rule has to say what it matches and KDL cannot point at a rule declared
+// elsewhere. Change the regex here and change it there in the same commit: a
+// rule that matches nothing does not error, the game just opens somewhere else.
 window-rule {
     match app-id=r#"^(gamescope|steam_app_.*|.*\.exe|hl2_linux|cs2)$"#
 
-    // ALWAYS on the landscape 1440p monitor, never on the portrait one.
-    open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
     open-fullscreen true
 
     // No compositor decoration in the way.
@@ -983,10 +988,10 @@ window-rule {
     variable-refresh-rate true
 }
 
-// Big Picture: fullscreen on the main monitor.
+// Big Picture: fullscreen, on the main monitor. Which monitor that is comes
+// from main-monitor.kdl; the match here is repeated there.
 window-rule {
     match app-id=r#"^steam$"# title=r#"^Steam Big Picture Mode$"#
-    open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
     open-fullscreen true
 }
 
@@ -1002,10 +1007,12 @@ window-rule {
 //
 // Floating at exactly 1920x1080, the native resolution of the card: no
 // rescaling. mpv's f key toggles fullscreen and comes back to this size.
+//
+// On the main monitor, which main-monitor.kdl decides; the match is repeated
+// there.
 window-rule {
     match app-id=r#"^capture-card$"#
     open-floating true
-    open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
     default-column-width { fixed 1920; }
     default-window-height { fixed 1080; }
     geometry-corner-radius 0
@@ -1018,10 +1025,12 @@ window-rule {
 // Its menu is designed around a 16:9 canvas and tiling squashes it into
 // whatever slot is free, so it always floats. Fullscreen still works on top of
 // this -- floating only decides how the window sits when it is NOT fullscreen.
+//
+// On the main monitor, which main-monitor.kdl decides; the match is repeated
+// there.
 window-rule {
     match app-id=r#"^com\.libretro\.RetroArch$"#
     open-floating true
-    open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
 }
 
 // --- DaVinci Resolve ---
@@ -1051,9 +1060,12 @@ window-rule {
 // It also explains the one day it worked: a session that opens straight into
 // the last project never shows the project manager, and never trips the bug.
 //
-// ALWAYS ON THE LANDSCAPE MONITOR. The secondary one is rotated to portrait
-// and is 1080x1920 logical; Resolve's UI is a wide timeline with the viewers
-// above it, and no arrangement of that fits in 1080 of width.
+// ALWAYS ON THE MAIN MONITOR, which on this machine is the landscape one. The
+// secondary is rotated to portrait and is 1080x1920 logical; Resolve's UI is a
+// wide timeline with the viewers above it, and no arrangement of that fits in
+// 1080 of width. That is a reason to CHOOSE a landscape monitor as the main
+// one, not a reason to name one here: main-monitor.kdl decides, and the match
+// below is repeated there.
 //
 // min-width, because nothing else pins the width of a tiled column: the cycle
 // on SUPER + P would otherwise take the window to a third of 2560, and at
@@ -1073,7 +1085,6 @@ window-rule {
 // This denies the request; f still works once it is open.
 window-rule {
     match app-id=r#"^resolve$"#
-    open-on-output "PNP(ASR) PG32QF2B G5VL0A003533"
     open-fullscreen false
     open-maximized true
     min-width 1280
@@ -1115,6 +1126,40 @@ window-rule {
 //                           window is fullscreen. niri already gives a
 //                           fullscreen window the whole output with no gaps.
 
+
+// --- Which monitor the five rules above open on ---
+// Written by `desktop-monitors`, the same script that writes monitors.kdl, from
+// the same main-monitor choice the shell uses to decide which screen the bar
+// lives on. It holds five window-rule blocks -- games, Big Picture, the capture
+// card, RetroArch and Resolve -- carrying nothing but a `match` and an
+// `open-on-output`.
+//
+// IT IS HERE AND NOT UP AT monitors.kdl, and the two includes are positional
+// for OPPOSITE reasons. monitors.kdl goes FIRST because an `output` block in an
+// include is ignored when something before it already named the same monitor.
+// This one goes LAST-ISH because a window rule is the other way round: every
+// matching rule applies and the last one to set a property wins, so it has to
+// come after the five rules whose open-on-output it is setting. One include
+// cannot be in both places, which is why there are two files.
+//
+// The precedent it follows is opacity.kdl's, three lines below, and not
+// tweaks.kdl's: tweaks.kdl is included BEFORE the app rules because its
+// catch-all corner radius must lose to the square corners the games rule asks
+// for, and this one has to WIN over what the rules above it say. Anything that
+// overrides a literal goes after it.
+//
+// IT SITS BEFORE opacity.kdl RATHER THAN AFTER, and either would work: the two
+// files set disjoint properties -- one opacity, one open-on-output -- so
+// nothing of one can lose to the other. Before, because the note on opacity.kdl
+// says it is last in this section on purpose, and a sentence that is true is
+// worth more than three lines of ordering nobody can observe.
+//
+// optional=true, and its absence is a real state rather than a broken one: on a
+// machine where no main monitor has been chosen the file holds no rules at all,
+// so the five rules above carry no open-on-output and their windows open
+// wherever niri decides. That is the same honest fallback the outputs have with
+// no monitors.kdl. To choose one:  desktop-monitors main "$(desktop-monitors list | head -1)"
+include optional=true "~/.config/niri/main-monitor.kdl"
 
 // --- The desktop's one transparency dial ---
 // Written by `desktop-opacity`, one window-rule per translucent application.
@@ -1242,8 +1287,20 @@ animations {
 //                               anyway -- see the note at its include -- so it
 //                               does not depend on this answer either way.
 //   window-rule                 every matching rule applies, and the last one
-//                               to set a property wins. opacity.kdl relies on
-//                               this and is included after the rules above it.
+//                               to set a property wins. opacity.kdl and
+//                               main-monitor.kdl both rely on this and are both
+//                               included after the rules they override. Checked
+//                               again on niri 26.04 (8ed0da4) when the second
+//                               one was added, and checked in both directions:
+//                               an included rule setting open-on-workspace
+//                               "beta" over an inline rule's "alpha" put the
+//                               window on beta, and moving the include ABOVE
+//                               the inline rule put it back on alpha -- so it
+//                               is file order that decides and not "the include
+//                               wins". niri's own source agrees and agrees for
+//                               open-on-output by name: src/window/mod.rs,
+//                               ResolvedWindowRules::compute, walks the whole
+//                               rule list assigning each property it finds set.
 //   output                      DOES NOT WORK THAT WAY. An `output` block in an
 //                               include is IGNORED when this file already names
 //                               the same monitor -- measured: a local.kdl

@@ -17,22 +17,31 @@
 #    generate()        how a record is written in that config language
 #    apply_live()      how a change is pushed into the running session
 #
-#  WHAT IT KEEPS. A generated, untracked file per flavor, holding the monitor
-#  records this machine has confirmed:
+#  WHAT IT KEEPS. Generated, untracked files holding the monitor records this
+#  machine has confirmed and the choice of which monitor is the main one:
 #
-#      Hyprland   ~/.config/hypr/monitors.lua   applied ON TOP of hyprland.lua
-#      niri       ~/.config/niri/monitors.kdl   the ONLY declaration of outputs
+#      Hyprland   ~/.config/hypr/monitors.lua      outputs AND the main one
+#      niri       ~/.config/niri/monitors.kdl      outputs
+#                 ~/.config/niri/main-monitor.kdl  the main one
 #
-#  AND THOSE TWO SENTENCES ARE NOT THE SAME ARRANGEMENT. Under Hyprland the
-#  generated file is a LAYER: hyprland.lua declares the monitors by hand,
-#  dofile()s this file at the end of its monitor section, and a later hl.monitor
-#  for the same output wins -- so deleting the file leaves the hand-written
-#  block standing. Under niri that model is impossible, and it was measured
-#  rather than assumed: an `output` block in an INCLUDED file is IGNORED when
-#  config.kdl already names the same monitor (a local.kdl moving HDMI-A-1 to
-#  y=100 left it at y=0). Layering cannot work, so config.kdl declares no
-#  outputs at all and this file owns them outright. Delete it there and the
-#  monitors come up at whatever niri picks on its own.
+#  AND THOSE ARE NOT THE SAME ARRANGEMENT. Under Hyprland the generated file is
+#  a LAYER: hyprland.lua declares the monitors by hand, dofile()s this file at
+#  the end of its monitor section, and a later hl.monitor for the same output
+#  wins -- so deleting the file leaves the hand-written block standing. Under
+#  niri that model is impossible, and it was measured rather than assumed: an
+#  `output` block in an INCLUDED file is IGNORED when config.kdl already names
+#  the same monitor (a local.kdl moving HDMI-A-1 to y=100 left it at y=0).
+#  Layering cannot work, so config.kdl declares no outputs at all and this file
+#  owns them outright. Delete it there and the monitors come up at whatever niri
+#  picks on its own.
+#
+#  WHY THE niri SIDE NEEDS TWO FILES WHERE HYPRLAND NEEDS ONE. The main-monitor
+#  choice reaches niri as `open-on-output` on window rules, and window rules and
+#  output blocks want OPPOSITE POSITIONS in config.kdl: an output declaration
+#  has to come before anything else that names a monitor, and a window rule has
+#  to come after every rule whose property it overrides. One include cannot be
+#  both first and last, so there are two. hyprland.lua has no such problem: it
+#  reassigns a variable, MONITOR_MAIN, and gaming.lua's rules read it afterwards.
 #
 #      desktop-monitors set <desc> <mode> <position> <scale> <transform> [<vrr>]
 #      desktop-monitors apply <desc> <mode> <position> <scale> <transform> ...
@@ -145,8 +154,22 @@ out_file() {
 
 OUT_FILE="$(out_file || true)"
 
+# The niri flavor's SECOND generated file, holding the window rules that carry
+# the main-monitor choice. Empty under Hyprland, where the choice is a variable
+# in the file above and needs no file of its own -- see the header.
+rules_file() {
+  case "$FLAVOR" in
+    niri) printf '%s\n' "$CONFIG_DIR/niri/main-monitor.kdl" ;;
+    *)    return 1 ;;
+  esac
+}
+
+RULES_FILE="$(rules_file || true)"
+
 # Refused here rather than halfway down, where the symptom would be an empty
-# monitor list or a file written into a directory nothing reads.
+# monitor list or a file written into a directory nothing reads. Only OUT_FILE
+# is tested: an empty RULES_FILE is what every flavor but niri is supposed to
+# have, so it says nothing about whether the compositor is one this knows.
 [[ -n $OUT_FILE ]] || {
   case "${1:-}" in
     -h|--help|help) : ;;
@@ -445,6 +468,101 @@ generate_niri() {
   done < "$STATE_FILE"
 }
 
+# The five window rules that have to open on the main monitor, and the ONLY
+# place a monitor is named in the niri flavor's window rules. config.kdl keeps
+# the five rules and every other property on them; what it no longer keeps is
+# the EDID string, which used to sit there five times over and named exactly one
+# machine's screen.
+#
+# WHY AN OVERRIDE WORKS HERE WHEN IT DOES NOT WORK FOR OUTPUTS, which is the
+# whole reason this file can exist at all. Window rules do not replace each
+# other: niri walks every rule in order and the last one to set a property wins,
+# so a rule in a file included AFTER the ones in config.kdl overrides their
+# open-on-output without touching them. Measured twice against niri 26.04
+# (8ed0da4) rather than assumed -- a nested session where an included rule set
+# open-on-workspace "beta" over an inline rule's "alpha" put the window on beta,
+# and moving the include above the inline rule put it back on alpha. The
+# compositor's own source says the same in one line, and says it for this exact
+# property: src/window/mod.rs, ResolvedWindowRules::compute, iterating the whole
+# rule list with `if let Some(x) = rule.open_on_output { open_on_output = ... }`.
+#
+# THE MATCHES ARE A SECOND COPY OF THE ONES IN config.kdl AND THERE IS NO WAY
+# AROUND IT. A window rule has to say what it matches; KDL has no way to point
+# at a rule declared elsewhere. So the app-ids below and the app-ids in
+# config.kdl's WINDOW RULES section have to stay in step, and each one carries
+# the name of the rule it mirrors. The failure if they drift is the silent kind:
+# a rule matching nothing does not error, the game simply opens somewhere else.
+# config.kdl says the same thing beside each of the five.
+#
+# WITH NO MAIN MONITOR RECORDED THIS FILE HOLDS NO RULES AT ALL, and that is the
+# honest fallback rather than a guess: the five rules keep everything else they
+# say and carry no open-on-output, so the windows open wherever niri would have
+# put them. It is the same fallback the outputs already have when monitors.kdl
+# does not exist. Inventing a monitor here -- the focused one, the first one --
+# would be a choice nobody made, applied to the one setting whose whole purpose
+# is to be chosen.
+generate_niri_rules() {
+  local main
+  main="$(read_main)"
+
+  echo "// GENERATED BY $SELF. Do not edit by hand: the settings window"
+  echo "// (SUPER + C) rewrites this file whenever the main monitor changes."
+  echo "//"
+  echo "// INCLUDED AFTER config.kdl's own window rules, which is what makes it"
+  echo "// an override: every matching rule applies and the last one to set a"
+  echo "// property wins. It is the opposite placement to monitors.kdl, which"
+  echo "// has to come FIRST because an output block in an include is ignored"
+  echo "// when something before it already named the same monitor."
+  echo "//"
+  echo "// Delete it and the rules in config.kdl carry no open-on-output at all:"
+  echo "// games, Big Picture, the capture card, RetroArch and Resolve open"
+  echo "// wherever niri decides, which is the same fallback the outputs have."
+  echo ""
+
+  if [[ -z "$main" ]]; then
+    echo "// No main monitor chosen. Pick one in the settings window, or run"
+    echo "//     $SELF main \"\$($SELF list | head -1)\""
+    return
+  fi
+
+  local escaped
+  escaped="$(kdl_escape "$main")"
+
+  # ONE BLOCK PER RULE IN config.kdl, in the same order and named after it,
+  # rather than one block with five `match` nodes. Both work -- a rule applies
+  # when ANY of its matches does -- and this shape is the one that can be read
+  # side by side with the file it overrides, which is what a copied regex needs.
+  echo "// config.kdl: the games rule."
+  printf 'window-rule {\n'
+  printf '    match app-id=r#"^(gamescope|steam_app_.*|.*\\.exe|hl2_linux|cs2)$"#\n'
+  printf '    open-on-output "%s"\n' "$escaped"
+  printf '}\n\n'
+
+  echo "// config.kdl: Steam Big Picture."
+  printf 'window-rule {\n'
+  printf '    match app-id=r#"^steam$"# title=r#"^Steam Big Picture Mode$"#\n'
+  printf '    open-on-output "%s"\n' "$escaped"
+  printf '}\n\n'
+
+  echo "// config.kdl: the capture card."
+  printf 'window-rule {\n'
+  printf '    match app-id=r#"^capture-card$"#\n'
+  printf '    open-on-output "%s"\n' "$escaped"
+  printf '}\n\n'
+
+  echo "// config.kdl: RetroArch."
+  printf 'window-rule {\n'
+  printf '    match app-id=r#"^com\\.libretro\\.RetroArch$"#\n'
+  printf '    open-on-output "%s"\n' "$escaped"
+  printf '}\n\n'
+
+  echo "// config.kdl: DaVinci Resolve."
+  printf 'window-rule {\n'
+  printf '    match app-id=r#"^resolve$"#\n'
+  printf '    open-on-output "%s"\n' "$escaped"
+  printf '}\n'
+}
+
 # Written whole through a temporary file in the destination's own directory and
 # moved into place, so a crash halfway leaves the previous file rather than half
 # of the new one. Under niri this matters more than it looks: the compositor
@@ -455,10 +573,17 @@ generate_niri() {
 # shared with desktop-tweak, which writes two files niri watches for the same
 # reason. What it adds over the version that lived here is that the generator's
 # exit status is checked before the move.
+#
+# BOTH niri FILES, ALWAYS, and never one of them: they are two halves of one
+# state and a run that refreshed the outputs while leaving yesterday's main
+# monitor standing would be a config nothing in this script could explain. They
+# are written as two calls rather than one because they land in two places in
+# config.kdl -- see the header -- not because either is optional.
 generate() {
   case "$FLAVOR" in
     hyprland) write_generated "$OUT_FILE" generate_hyprland ;;
-    niri)     write_generated "$OUT_FILE" generate_niri ;;
+    niri)     write_generated "$OUT_FILE" generate_niri
+              write_generated "$RULES_FILE" generate_niri_rules ;;
   esac
 }
 
@@ -774,6 +899,13 @@ case "${1:-show}" in
     ;;
 
   file)
+    # ONE LINE, AND UNDER niri THAT IS THE OUTPUTS FILE RATHER THAN BOTH. The
+    # caller is the settings window, which puts this straight into a sentence --
+    # DisplayPage.qml collects stdout and does text.trim() -- so a second line
+    # would land in the middle of it. It is also the right one of the two to
+    # name: the display page is where a person changes a mode or a position, and
+    # monitors.kdl is where that ends up. main-monitor.kdl is named by the `main`
+    # command instead, which is the command that writes it.
     tilde "$OUT_FILE"; echo
     ;;
 
@@ -843,8 +975,10 @@ case "${1:-show}" in
           note "run 'hyprctl reload' to go back to the value in hyprland.lua"
           ;;
         niri)
-          note "the shell picks again; games are unaffected either way, since"
-          note "config.kdl's window rules were never overridden to begin with"
+          # niri re-reads the file the moment it is written, so this one really
+          # is done: the five rules go back to carrying no open-on-output.
+          note "the shell picks again, and games, Big Picture, the capture card,"
+          note "RetroArch and Resolve open wherever niri decides from now on"
           ;;
       esac
       exit 0
@@ -892,15 +1026,20 @@ case "${1:-show}" in
         note "run 'hyprctl reload' to move the game window rules onto it"
         ;;
       niri)
-        # SAID PLAINLY RATHER THAN HALF DONE. The shell's own half of this
-        # choice -- which screen the bar, the launcher and the settings window
-        # live on -- is already applied by whatever called this. The
-        # compositor's half is `open-on-output` on the game window rules in
-        # config.kdl, and there is no generated layer for window rules here: an
-        # override would have to repeat the app-id regex those rules match on,
-        # and a second copy of that regex is a copy that goes out of step.
-        note "the shell moved; games still open where config.kdl's window rules say"
-        note "change open-on-output there by hand -- this flavor has no override for it"
+        # NOTHING TO PUSH AND NOTHING LEFT OVER, which is the one place this
+        # flavor is simpler than the other. The shell's half of the choice --
+        # which screen the bar, the launcher and the settings window live on --
+        # was applied by whatever called this. The compositor's half is
+        # open-on-output on five window rules, and niri watches every file it
+        # includes, so writing main-monitor.kdl IS applying it. There is no
+        # `niri reload` to ask for and no stale live state to correct, which is
+        # exactly what the Hyprland branch above has to spend a paragraph on.
+        #
+        # It applies to windows OPENED FROM NOW ON. open-on-output decides where
+        # a window is placed when it appears; one already on screen stays where
+        # it is, on either compositor.
+        note "written to $(tilde "$RULES_FILE"), and niri re-read it on the spot"
+        note "games opened from now on land on that monitor"
         ;;
     esac
     ;;
