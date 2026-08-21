@@ -259,13 +259,28 @@ PanelWindow {
     // One fillet and not two: the panel is flush with the right edge of the
     // screen, so there is no angle to fill on that side.
     BackgroundEffect.blurRegion: Region {
-        item: panel
+        // ONE PIXEL IN FROM THE PANEL, and not `item: panel`. A wl_region is a
+        // list of rectangles, so the rounded corners below come out rasterised
+        // to whole pixels while the corner painted over them is antialiased,
+        // and a blur that reaches the paint's own edge lights up the
+        // half-covered pixels along the curve. See components/WedgeRegion.qml
+        // for the measurement and for why the number is one.
+        //
+        // Spelled out rather than taken from `item`, because a Region has no
+        // way to say "that item, minus a pixel". The panel is a direct child of
+        // this window, so its x and y are already surface-local -- the same
+        // assumption the fillet below makes.
+        x: panel.x + 1
+        y: panel.y + 1
+        width: panel.width - 2
+        height: panel.height - 2
 
-        // The panel's own rounding. Docked, the top corners are pushed up
-        // behind the bar and the compositor clips them, which is exactly what
-        // the paint does; undocked, all four round and the blur rounds with
-        // them.
-        radius: Theme.barCornerRadius
+        // The panel's own rounding, less that same pixel, so the region's arc
+        // stays concentric with the painted one. Docked, the top corners are
+        // pushed up behind the bar and the compositor clips them, which is
+        // exactly what the paint does; undocked, all four round and the blur
+        // rounds with them.
+        radius: Theme.barCornerRadius - 1
 
         WedgeRegion { wedge: fillet }
     }
