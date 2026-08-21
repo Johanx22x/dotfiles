@@ -278,12 +278,35 @@ Singleton {
         atomicWrites: true
 
         onFileChanged: reload()
+
+        // THE WRITE THIS SHELL JUST MADE IS NOW ON DISK, so the file is the
+        // authority again and the copy held in memory can go. Cleared on
+        // `loaded` and not on `fileChanged`: the second fires before the new
+        // text has been read, and dropping the copy there would leave one
+        // frame in which the boxes show the file as it was a moment ago.
+        onLoaded: root.written = null
     }
+
+    // WHAT THIS SHELL WROTE, UNTIL THE FILE CATCHES UP -- and this is a bug
+    // fixed rather than a nicety. A FileView write is asynchronous: setText
+    // returns, the write happens, the watcher fires, the file is re-read, and
+    // only then does text() answer differently. Two clicks inside that window
+    // -- ticking a pack and then a package in it, which is the ordinary way to
+    // use the section below -- both read the OLD text, so the second write
+    // rebuilt the file without the first one in it. Measured: ticking
+    // `gaming` and then unticking `steam` in the same tick produced a profile
+    // holding `pkg.gaming.steam 0` and no `group.gaming` at all.
+    //
+    // Null except during that window. The file wins the moment it can, so a
+    // `./install.sh` run in a terminal still moves the boxes here -- what this
+    // does not do is let an asynchronous read overwrite a decision somebody
+    // has already made.
+    property var written: null
 
     // Parsed as a BINDING on the file's text, the same shape Theme uses for
     // colors.json: reload() re-evaluates it, so a `./install.sh` run in a
     // terminal moves the boxes in this window without anything being told.
-    readonly property var profile: {
+    readonly property var fileProfile: {
         const map = ({});
 
         for (const line of (profileFile.text() || "").split("\n")) {
@@ -301,6 +324,8 @@ Singleton {
         return map;
     }
 
+    readonly property var profile: root.written ?? root.fileProfile
+
     function profileGet(key: string, fallback: string): string {
         const value = root.profile[key];
         return value === undefined ? fallback : value;
@@ -309,6 +334,11 @@ Singleton {
     function profileSet(key: string, value: string): void {
         const next = Object.assign({}, root.profile);
         next[key] = value;
+
+        // Held in memory as well as written, so that the click after this one
+        // builds on it rather than on a file that has not been re-read yet.
+        // See `written` above for the bug this is the fix for.
+        root.written = next;
 
         const lines = [];
         for (const name of Object.keys(next))
@@ -384,6 +414,19 @@ Singleton {
         checker.running = true;
     }
 
+    // The same thing, for a caller that fires on an event it does not control
+    // -- the settings page coming on screen, which happens every time somebody
+    // clicks past it in the rail. Three seconds of pacman per glance down a
+    // list of pages is a cost with nothing to show for it: the answer cannot
+    // have changed in the ten seconds since the last one unless this window
+    // changed it, and the paths that do change it call check() directly.
+    function checkIfStale(): void {
+        if (Date.now() - root.checkedAt < 10000)
+            return;
+
+        root.check();
+    }
+
     // What this shell may do itself. `apply` and not `update`, and the
     // difference is the whole privilege rule: `update` applies everything the
     // profile wants, which on this machine includes pacman, and a pacman
@@ -394,6 +437,17 @@ Singleton {
     // documented behaviour and it is the right one here: what the page lists
     // is what runs, and anything missing underneath is named on screen by the
     // CLI itself rather than being smuggled into the run.
+    //
+    // NOTHING DESTRUCTIVE CAN HAPPEN DOWN HERE WITHOUT SOMEBODY SAYING SO, and
+    // that falls out of the CLI rather than out of anything this file does. A
+    // Process has no terminal attached, ui_confirm sees no tty and takes the
+    // question's default, and the default for anything destructive is no. The
+    // one question in the set is `symlinks` offering to move files that are in
+    // the way into a timestamped folder: with nothing to answer on, it
+    // declines, stops, and says why -- and the reason lands in `log` below,
+    // where the page shows it. Measured with --dry-run against a checkout with
+    // 184 files in the way; nothing was moved and the account of it was
+    // readable on the page.
     function applyHere(): void {
         if (root.applying || !root.repoKnown || root.runnableNow.length === 0)
             return;
@@ -594,21 +648,41 @@ Singleton {
 
         workingDirectory: root.repoDir
 
-        // One line per group and one per package:
+        // Three kinds of record, tab separated:
         //
-        //   group<TAB>name<TAB>the list's own one-line description
+        //   group<TAB>name<TAB>
+        //   sum<TAB>group<TAB>one line of the list's own description
         //   pkg<TAB>group<TAB>package
         //
-        // THE TWO seds ARE lib/pkg.sh's, copied rather than re-invented --
-        // pkg_read_list and pkg_list_summary, at the top of that file. If
-        // either ever changes, this is the second place. Copying four lines of
-        // sed is the smaller evil against a settings page that disagrees with
-        // the installer about what is in a pack.
+        // THE PACKAGE sed IS lib/pkg.sh's, copied rather than re-invented --
+        // pkg_read_list, at the top of that file. If it ever changes, this is
+        // the second place. Three expressions of sed is the smaller evil
+        // against a settings page that disagrees with the installer about what
+        // is in a pack.
+        //
+        // THE DESCRIPTION IS NOT pkg_list_summary's, and that is deliberate.
+        // That function takes line one, which is right for a one-line hint at
+        // a terminal and wrong for a paragraph in a window: four of the six
+        // lists open with a sentence that wraps onto a second comment line, so
+        // line one on its own ends mid-clause -- "borgmatic for the". The
+        // leading block of comment down to the first blank one is the sentence
+        // whoever wrote the list actually wrote, and it arrives here a line at
+        // a time to be joined below.
+        //
+        // THE TWO `q` EXPRESSIONS COME BEFORE THE SUBSTITUTION, which is not a
+        // style choice: sed applies every expression to the pattern space as
+        // it stands, so stripping the leading "# " first turns the very next
+        // line into one that matches /^[^#]/ and quits after one line. That is
+        // the bug this ordering is the fix for, and it looked exactly like a
+        // truncated sentence.
         command: ["sh", "-c",
             'for f in packages/optional/*.txt; do ' +
             '  [ -f "$f" ] || continue; ' +
             '  g=$(basename "$f" .txt); ' +
-            '  printf "group\\t%s\\t%s\\n" "$g" "$(sed -n "1s/^# *//p" "$f")"; ' +
+            '  printf "group\\t%s\\t\\n" "$g"; ' +
+            '  sed -n -e "/^#[[:space:]]*$/q" -e "/^[^#]/q" ' +
+            '         -e "s/^#[[:space:]]*//;s/[[:space:]]*$//;p" "$f" | ' +
+            '    while IFS= read -r line; do printf "sum\\t%s\\t%s\\n" "$g" "$line"; done; ' +
             '  sed -e "s/#.*//" -e "s/[[:space:]]*$//" -e "/^[[:space:]]*$/d" "$f" | ' +
             '    while IFS= read -r p; do printf "pkg\\t%s\\t%s\\n" "$g" "$p"; done; ' +
             'done']
@@ -624,9 +698,16 @@ Singleton {
                         continue;
 
                     if (cell[0] === "group") {
-                        byName[cell[1]] = ({ name: cell[1], summary: cell[2], packages: [] });
+                        byName[cell[1]] = ({ name: cell[1], summary: "", packages: [] });
                         out.push(byName[cell[1]]);
-                    } else if (cell[0] === "pkg" && byName[cell[1]]) {
+                    } else if (!byName[cell[1]]) {
+                        continue;
+                    } else if (cell[0] === "sum") {
+                        // Joined with a space, because what was split was a
+                        // sentence wrapped across comment lines and not a list.
+                        const group = byName[cell[1]];
+                        group.summary = group.summary === "" ? cell[2] : `${group.summary} ${cell[2]}`;
+                    } else if (cell[0] === "pkg") {
                         byName[cell[1]].packages.push(cell[2]);
                     }
                 }

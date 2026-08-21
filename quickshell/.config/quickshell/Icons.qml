@@ -334,6 +334,17 @@ Singleton {
     // console and not a Tux or a shell glyph: what is being offered is a
     // terminal, not a distribution and not a login shell.
     readonly property string terminal: String.fromCodePoint(0xF018D)     // nf-md-console
+    // The boxes in the pack list on that page, and the only checkboxes in this
+    // shell: everything else that is on or off is a ToggleRow's switch. A pack
+    // holding a hundred package names cannot be a hundred switches -- the row
+    // would be taller than the name it is about -- so the compact form of the
+    // same question gets the compact control.
+    readonly property string checkboxOn: String.fromCodePoint(0xF0135)   // nf-md-checkbox_marked_outline
+    readonly property string checkboxOff: String.fromCodePoint(0xF0131)  // nf-md-checkbox_blank_outline
+    // The pack that is open, against `chevronRight` above for the ones that
+    // are not. Rotating one glyph would save a line here and cost an
+    // animation nobody asked for on a list that can be twenty rows long.
+    readonly property string chevronDown: String.fromCodePoint(0xF0140)  // nf-md-chevron_down
 
     // ---------------- Cheatsheet ----------------
     // One per category heading. The names on the LEFT are the categories as
