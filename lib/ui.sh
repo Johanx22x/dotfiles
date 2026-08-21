@@ -72,6 +72,16 @@ ui_confirm() {
     return 0
   fi
 
+  # A mode that has switched questions off takes the default and says which one
+  # it took, so a log of an `update` run reads as a decision rather than as a
+  # gap where a prompt should have been.
+  if (( ${UI_ASK:-1} == 0 )); then
+    printf '%s%s%s [%s] %s(not asking)%s\n' \
+      "$C_DIM" "$question" "$C_RESET" "$default" "$C_DIM" "$C_RESET"
+    [[ $default == y ]]
+    return
+  fi
+
   if ! ui_has_tty; then
     ui_no_tty_notice
     [[ $default == y ]]

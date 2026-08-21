@@ -8,7 +8,7 @@
 
 services-user_meta() {
   echo "User services"
-  echo "the wallpaper and battery timers, the polkit agent, the blue light filter"
+  echo "the wallpaper and battery timers, and the polkit agent"
 }
 
 # The unit files for the two timers come out of the systemd stow package, so
@@ -31,25 +31,51 @@ services-user_available() {
 
 # Which units this machine should have enabled, one per line.
 #
-# ONLY UNDER HYPRLAND FOR hyprsunset, and not because it would fail loudly
-# otherwise: it would come up perfectly and do nothing at all. hyprsunset
-# changes the colour temperature through hyprland-ctm-control-v1, and under
-# niri that protocol simply is not there, so the daemon would sit running with
-# no effect while `night-light` reports success. Enabling it in a niri session
-# buys a unit that lies.
+# hyprsunset.service IS NOT ONE OF THEM, ON ANY MACHINE, and that is the one
+# decision in this file worth reading before changing.
 #
-# AND NOTHING FOR NIRI, which is deliberate rather than missing.
-# wl-gammarelay-rs ships no unit, and `night-light` starts it on demand as a
-# transient systemd-run unit precisely so nothing binds it to
-# graphical-session.target -- a unit that did would also come up under
-# Hyprland, where it would fight hyprsunset for gamma control of the same
-# outputs.
+# THERE IS ONE USER MANAGER AND THERE ARE TWO SESSIONS. `systemctl --user` is
+# per user, not per session, so `enable` puts a link into
+# graphical-session.target.wants once and it fires in WHICHEVER session comes up
+# -- and this repository's whole point is that both can be installed at the same
+# time. The unit's own guard cannot tell them apart either: it is
+# `ConditionEnvironment=WAYLAND_DISPLAY`, which is set in both.
+#
+# What happens then was measured on this machine rather than reasoned about.
+# hyprsunset drives the filter through hyprland-ctm-control-v1, which only
+# Hyprland implements, so in a niri session it starts, prints "Compositor
+# doesn't support hyprland-ctm-control-v1, are you running on Hyprland?", exits
+# 1, and `Restart=on-failure` brings it back four more times until systemd gives
+# up with start-limit-hit. The journal from 08:59 has all five. A unit sitting
+# `failed` for three hours is exactly the sort of quiet wrongness `check` exists
+# to find, so it must not be this script that creates it.
+#
+# AND ENABLING IT BUYS NOTHING, which is what makes the answer easy. `night-
+# light` already calls `systemctl --user start hyprsunset.service` and polls for
+# the daemon before it sends anything -- ensure_hyprsunset(), in bin/ -- so under
+# Hyprland the filter comes up the first time it is used, and under niri the
+# dispatch never reaches that branch at all because `compositor can gamma`
+# answers no. Started on demand, exactly like wl-gammarelay-rs on the other
+# side; the two flavors end up symmetric instead of one being a special case.
+#
+# THE OTHER WAY OUT WAS A DROP-IN adding
+# `ConditionEnvironment=XDG_CURRENT_DESKTOP=Hyprland`, which would let the unit
+# stay enabled and skip itself cleanly in the wrong session. It is a real
+# option -- the user manager does carry that variable, it reads `niri` here --
+# but it cannot be verified from a niri session, it depends on uwsm exporting
+# exactly the string `Hyprland`, and it would add a file to keep for a daemon
+# that already starts itself. Not taken.
+#
+# NOTHING FOR NIRI EITHER, for the reason that has always been written down:
+# wl-gammarelay-rs ships no unit, and `night-light` starts it as a transient
+# systemd-run unit precisely so nothing binds it to graphical-session.target --
+# a unit that did would also come up under Hyprland and fight hyprsunset for
+# gamma control of the same outputs.
 services-user_units() {
   printf '%s\n' wallpaper-rotate.timer airpods-battery.timer
   # A plain D-Bus agent, which belongs to neither flavor and works the same
   # under both.
   printf '%s\n' hyprpolkitagent.service
-  if want_hyprland; then printf '%s\n' hyprsunset.service; fi
 }
 
 services-user_check() {
@@ -105,9 +131,12 @@ services-user_apply() {
     FAILED+=("services-user: $failures unit(s) could not be enabled")
   fi
 
-  if want_niri; then
-    ui_dim "   niri: the blue light filter is wl-gammarelay-rs, started on demand"
-  fi
+  # Said out loud because the absence is deliberate and looks like an omission.
+  # See the note above services-user_units: neither filter is enabled, both are
+  # started by `night-light` when they are first used, and enabling hyprsunset
+  # on a machine that can boot into niri is how it ends up sitting `failed`.
+  ui_dim "   The blue light filter is not enabled under either compositor:"
+  ui_dim "   night-light starts hyprsunset or wl-gammarelay-rs on demand."
 }
 
 unit_register services-user

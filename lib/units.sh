@@ -81,13 +81,45 @@ unit_detail() { unit_load_meta "$1"; printf '%s\n' "${UNIT_DETAIL[$1]}"; }
 UNIT_ORDER=()
 declare -A UNIT_MARK=()
 
+# When this is set, the walk uses _requires to decide who goes FIRST and never
+# to decide who goes at all: a requirement outside the set is looked at, used
+# for ordering, and not added. See unit_order_within.
+declare -A UNIT_ORDER_SET=()
+UNIT_ORDER_RESTRICT=0
+
 unit_order() {
   local id
   UNIT_ORDER=()
   UNIT_MARK=()
+  UNIT_ORDER_SET=()
+  UNIT_ORDER_RESTRICT=0
   for id in "$@"; do
     unit_visit "$id"
   done
+}
+
+# ORDER AMONG EXACTLY THESE, AND PULL IN NOTHING ELSE.
+#
+# `apply` is the surgical tool: somebody has read a `check` table, seen one row
+# that is wrong and named it. Expanding that into its requirements is correct in
+# principle and useless in practice -- `apply symlinks` reaches `packages`, and
+# a `packages` that is one name short of 119 is not `ok`, so asking for one
+# missing symlink produced an offer to run `pacman -S --needed` over the whole
+# desktop plus four AUR builds. The requirement was real and the answer was
+# still wrong.
+#
+# So the named set is the plan, ordering still comes from _requires, and
+# anything required from outside the set is REPORTED rather than added -- see
+# unit_unmet_requires. `--with-requires` is the way back to the other behaviour
+# for somebody who wants it.
+unit_order_within() {
+  local id
+  UNIT_ORDER=()
+  UNIT_MARK=()
+  UNIT_ORDER_SET=()
+  UNIT_ORDER_RESTRICT=1
+  for id in "$@"; do UNIT_ORDER_SET["$id"]=1; done
+  for id in "$@"; do unit_visit "$id"; done
 }
 
 unit_visit() {
@@ -104,11 +136,34 @@ unit_visit() {
       ui_bad "unit '$id' requires '$dep', which does not exist" >&2
       exit 1
     fi
+    if (( UNIT_ORDER_RESTRICT )) && [[ -z ${UNIT_ORDER_SET[$dep]:-} ]]; then
+      continue
+    fi
     unit_visit "$dep"
   done < <("${id}_requires")
 
   UNIT_MARK[$id]="done"
   UNIT_ORDER+=("$id")
+}
+
+# Requirements of the given units that are NOT among them and are not already
+# ok, as "<id>\t<state>". What `apply` prints instead of quietly growing.
+unit_unmet_requires() {
+  local id dep state seen=()
+  declare -A want=()
+  for id in "$@"; do want["$id"]=1; done
+
+  for id in "$@"; do
+    while IFS= read -r dep; do
+      [[ -z $dep ]] && continue
+      [[ -n ${want[$dep]:-} ]] && continue
+      [[ " ${seen[*]} " == *" $dep "* ]] && continue
+      seen+=("$dep")
+      state="$(unit_state "$dep")"
+      [[ "$(unit_state_kind "$state")" == ok ]] && continue
+      printf '%s\t%s\n' "$dep" "$state"
+    done < <("${id}_requires")
+  done
 }
 
 # ---------------------------------------------------------------------------
@@ -164,7 +219,7 @@ unit_print_row() {
   # replacing the other. A row reading "drift  symlinks  15 in the way" is a
   # sentence with no subject the first time you see it; the unit's own name for
   # itself is what makes the count mean something.
-  printf '  %s%-8s%s %-14s %s%s\n' \
+  printf '  %s%-8s%s %-15s %s%s\n' \
     "$colour" "$kind" "$C_RESET" "$id" "$(unit_title "$id")" \
     "${note:+ -- $note}"
 }
