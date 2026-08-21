@@ -53,8 +53,10 @@ PanelWindow {
         return Config.barWidget(bar.screenKey, name);
     }
 
-    // The namespace Hyprland matches on for the blur, see the
-    // blur-quickshell rule in hyprland.lua.
+    // The namespace Hyprland matches on to pick the blur's PARAMETERS -- see
+    // the blur-quickshell rule in hyprland.lua. WHERE the blur goes is asked
+    // for by this surface, a few lines down, and reads the same under both
+    // compositors.
     WlrLayershell.namespace: "quickshell-bar"
     WlrLayershell.layer: WlrLayer.Top
 
@@ -82,9 +84,34 @@ PanelWindow {
         item: surface
     }
 
-    // Transparent window, opaque surface below: the alpha belongs to the
-    // Rectangle so Hyprland's blur has something to work behind.
+    // Transparent window, translucent surface below: the alpha belongs to the
+    // Rectangle so the blur has something to work behind.
     color: "transparent"
+
+    // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
+    //
+    // ext-background-effect: the client names the region behind it that should
+    // be blurred, and both compositors here implement it -- niri since 26.04,
+    // Hyprland since 0.56.0. It replaces the guessing a compositor has to do
+    // from outside, which is what a layer-rule or a layerrule amounts to: they
+    // are handed a rectangle and have to work out from the alpha in it which
+    // pixels were meant.
+    //
+    // Deliberately NOT the whole window. It is a corner radius taller than the
+    // bar, and that extra strip is the fillets -- mostly transparent, since a
+    // fillet is what is left of a square after a quarter circle is taken out of
+    // it. Blur the rectangle and the strip lights up across the full width of
+    // the screen, just under the bar.
+    //
+    // So: the bar proper, plus each fillet in the shape the fillet is actually
+    // drawn. See components/WedgeRegion.qml for how the second half is built
+    // and what was checked on screen to trust it.
+    BackgroundEffect.blurRegion: Region {
+        item: surface
+
+        WedgeRegion { wedge: leftFillet }
+        WedgeRegion { wedge: rightFillet }
+    }
 
     // One popout for the whole bar: it moves under whichever widget was
     // clicked and swaps its content, instead of every widget owning a window.
@@ -120,7 +147,13 @@ PanelWindow {
 
     // The fillets that carry the bar down into the sides of the screen. Same
     // colour as the bar, and outside `surface` so they are not clipped by it.
+    //
+    // Named, because the blur region above is built from them: it reads each
+    // one's `radius` and `corner` rather than being told those numbers a
+    // second time.
     CornerWedge {
+        id: leftFillet
+
         anchors.left: parent.left
         anchors.top: surface.bottom
         corner: "topLeft"
@@ -129,6 +162,8 @@ PanelWindow {
     }
 
     CornerWedge {
+        id: rightFillet
+
         anchors.right: parent.right
         anchors.top: surface.bottom
         corner: "topRight"

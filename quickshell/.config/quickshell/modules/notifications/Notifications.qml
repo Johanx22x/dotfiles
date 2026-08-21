@@ -248,10 +248,37 @@ PanelWindow {
         item: panel
     }
 
+    // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
+    //
+    // ext-background-effect: the client names the region behind it that should
+    // be blurred, and both compositors here implement it. This window is one
+    // corner radius wider than the panel, and that strip is the single fillet
+    // welding the panel to the bar on its open side -- mostly transparent,
+    // since a fillet is a square with a quarter circle taken out of it.
+    //
+    // One fillet and not two: the panel is flush with the right edge of the
+    // screen, so there is no angle to fill on that side.
+    BackgroundEffect.blurRegion: Region {
+        item: panel
+
+        // The panel's own rounding. Docked, the top corners are pushed up
+        // behind the bar and the compositor clips them, which is exactly what
+        // the paint does; undocked, all four round and the blur rounds with
+        // them.
+        radius: Theme.barCornerRadius
+
+        WedgeRegion { wedge: fillet }
+    }
+
     // Welds the panel to the bar on its open side: material ADDED outside the
     // panel, filling the angle. The bottom corners are the panel's own
     // rounding, which is the opposite operation.
+    // Named, because the blur region above is built from it: it reads this
+    // item's `radius`, `corner` and `visible` rather than being told any of
+    // it twice.
     CornerWedge {
+        id: fillet
+
         anchors.left: parent.left
         anchors.top: parent.top
         corner: "topRight"
@@ -259,7 +286,9 @@ PanelWindow {
         fillColor: panel.color
 
         // Only when there is a bar to weld to. Over a fullscreen window this
-        // fillet is a wedge of panel colour joined to nothing.
+        // fillet is a wedge of panel colour joined to nothing. The blur region
+        // follows this same property, so an undocked panel does not leave a
+        // frosted square hanging off its corner.
         visible: !root.undocked
     }
 
