@@ -1161,13 +1161,34 @@ include optional=true "~/.config/niri/opacity.kdl"
 // look different from Hyprland's rather than identical; that is a thing to look
 // at on screen rather than reason about here.
 //
-// THE NAMESPACE LIST IS THE SAME ONE hyprland.lua MATCHES, and both come from
-// the WlrLayershell.namespace lines in the shell. Screen corners and the click
-// catcher are left out on purpose: one is opaque black, the other is invisible.
+// THE NAMESPACE LIST IS SHORTER THAN hyprland.lua's, and that is the whole
+// difference between the two compositors here. Screen corners and the click
+// catcher were always left out -- one is opaque black, the other invisible --
+// but launcher, popout and notifications had to come out too, on screen.
+//
+// WHY THOSE THREE. Their surface is deliberately bigger than the panel you see.
+// The launcher asks for `panel.implicitWidth + Theme.barCornerRadius * 2` and
+// then paints concave fillets into that extra strip so the panel looks welded to
+// the bar; Popout and Notifications do the same. Under Hyprland the strip stays
+// invisible because `ignore_alpha` tells the compositor not to blur what is
+// transparent. niri has no such knob for a layer-rule -- see the paragraph above
+// -- so it blurs the whole rectangle, and the transparent part of each fillet
+// came out as a lit, round-cornered band flanking the panel. Two of them, one per
+// side, appearing the moment the launcher opened.
+//
+// So the surfaces that stay are the ones whose rectangle IS what they paint: the
+// bar, and the three full-screen sheets, where frosting everything behind a modal
+// is the point rather than a bug.
+//
+// THE REAL FIX IS ext-background-effect, per the paragraph above: a surface that
+// asks for its own blur gets it on the region it actually paints, and then this
+// rule can go away and all seven namespaces get frosted under both compositors.
+// That work belongs in the shell, not here.
+//
 // A namespace missing from here does not merely go unblurred, it goes flat --
 // see the note in hyprland.lua for what that looked like the last time.
 layer-rule {
-    match namespace="^quickshell-(bar|popout|notifications|powermenu|launcher|cheatsheet|wallpaper)$"
+    match namespace="^quickshell-(bar|powermenu|cheatsheet|wallpaper)$"
     background-effect { blur true; }
 }
 
