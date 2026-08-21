@@ -102,6 +102,14 @@ QtObject {
         // so "record a window" means clicking the window rather than dragging a
         // rectangle around it by eye. Without it that mode still works, it just
         // stops snapping.
+        //
+        // THE METHOD BEHIND IT IS windowBoxes(), and it has not always existed.
+        // The flag was declared here and answered nowhere: the recorder tested
+        // it and then ran `hyprctl monitors -j | jq ... | hyprctl clients -j`
+        // itself, which is the exact knowledge this layer exists to hold. A
+        // capability with nothing behind it is worse than no capability -- it
+        // reads as though the facade covers the case, and every caller has to
+        // reinvent the part it does not.
         windowGeometry: false,
         // Does a layer surface holding an exclusive keyboard grab receive keys
         // NO MATTER WHICH MONITOR the user is focused on?
@@ -204,6 +212,36 @@ QtObject {
     // Re-read what is bound. Called when the cheatsheet opens, since a config
     // reload between two openings is exactly what a cached list gets wrong.
     function refreshBinds(): void {}
+
+    // ---- Windows on screen, as rectangles ---------------------------------
+    //
+    // The boxes a region selector can snap to, in slurp's own spelling --
+    // "X,Y WxH", one per window, visible workspaces only. It is the whole of
+    // what `windowGeometry` promises: given them, "record a window" is a
+    // click; given none, it is the same free-hand drag as region mode.
+    //
+    // A FUNCTION AND NOT A PROPERTY, unlike everything else on this contract.
+    // The rest of this file is state the shell paints continuously and a
+    // binding is the right shape for that; this is asked once, at the moment a
+    // selector is about to be put on screen, and a bound list of every window
+    // rectangle in the session would be recomputed on every move and drag for
+    // an answer nobody is reading.
+    //
+    // EMPTY IS AN ANSWER AND NOT A FAILURE. It is what a compositor with no
+    // window geometry returns, and equally what one that has it returns for a
+    // workspace with nothing on it. Callers must treat the two the same, which
+    // they can, because the fallback is identical: no snapping.
+    function windowBoxes(): var {
+        return [];
+    }
+
+    // Ask the compositor for fresh window positions, for the same reason
+    // refreshBinds() exists: a backend may be serving windowBoxes() out of a
+    // model that events keep up to date, and a window moved between two
+    // selections is exactly what a cached rectangle gets wrong. Called ahead
+    // of the selector rather than inside windowBoxes(), because the answer
+    // arrives over IPC and this call cannot wait for it.
+    function refreshWindows(): void {}
 
     // ---- Implemented once, for everyone -----------------------------------
     //

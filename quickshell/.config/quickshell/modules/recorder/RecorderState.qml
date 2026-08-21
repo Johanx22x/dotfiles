@@ -14,7 +14,10 @@
 // one comes back.
 //
 // A cancelled selection prints nothing, which is the whole cancellation
-// protocol: no geometry, no recording, no notification.
+// protocol: no geometry, no recording, no notification. What it DOES print is
+// on stderr and in slurp's own words -- "selection cancelled" -- which is how
+// this file now tells a cancel apart from a slurp that is not installed. See
+// the selector's onExited.
 //
 // THE INDICATOR IS NOT WIRED UP HERE, AND THAT IS DELIBERATE.
 // The island already lights up when anything captures the screen, because it
@@ -70,9 +73,11 @@ Singleton {
         // Quickshell inherits -- it blocks in read() before it ever creates a
         // surface. The process is alive, `hyprctl layers` shows nothing on the
         // overlay level, and there is simply no selector on screen to click.
-        // This is why `window` was the one target that ever worked: `slurp -r`
-        // is fed by a pipe that closes, so it got its EOF for free.
+        // This is why `window` was the one target that ever worked: it is fed
+        // by a pipe that closes, so it got its EOF for free.
         let command = "";
+        let boxes = [];
+
         switch (target) {
         case "region":
             command = `exec slurp < /dev/null`;
@@ -91,25 +96,34 @@ Singleton {
             // its Window carries sizes but `tile_pos_in_workspace_view` is null
             // even for windows plainly on screen, measured across six of them,
             // and a size with no position is not a rectangle.
-            if (Compositor.can("windowGeometry")) {
-                // Every window on every VISIBLE workspace, not just the focused
-                // monitor's. Filtering by the active workspace meant the other
-                // screen's windows were not offered at all -- slurp can only
-                // snap to boxes it was given.
-                command = `WS=$(hyprctl monitors -j | jq -c '[.[].activeWorkspace.id]'); ` +
-                    `hyprctl clients -j | jq -r --argjson ws "$WS" ` +
-                    `'.[] | select((.workspace.id as $id | $ws | index($id)) != null and .mapped and (.hidden | not)) | ` +
-                    `"\\(.at[0]),\\(.at[1]) \\(.size[0])x\\(.size[1])"' | slurp -r`;
-            } else {
-                command = `exec slurp < /dev/null`;
-            }
+            //
+            // WHERE THE RECTANGLES COME FROM IS NOT THIS FILE'S BUSINESS, and
+            // it used to be: this branch ran `hyprctl monitors -j`, a jq
+            // program and `hyprctl clients -j` in a pipeline built here, under
+            // a `Compositor.can("windowGeometry")` guard -- asking the facade
+            // whether the feature existed and then going around it to use the
+            // feature. The capability has a method behind it now, so the test
+            // and the answer come from the same place. The `can()` check is
+            // gone with the pipeline: an empty list IS the answer for a
+            // compositor that cannot do this, and it falls through to the same
+            // free-hand slurp the guard used to select.
+            boxes = Compositor.windowBoxes();
+            command = boxes.length > 0 ? `printf '%s\\n' "$@" | slurp -r`
+                : `exec slurp < /dev/null`;
             break;
 
         default:
             command = `exec slurp -o < /dev/null`;
         }
 
-        selector.command = ["sh", "-c", command];
+        // THE BOXES GO IN AS ARGUMENTS, for the reason the geometry does in
+        // record() below: "1102,310 1251x1348" is one value with a space in
+        // it, and anything that pastes it into the script has the shell split
+        // it into three words. `printf` writes them and closes the pipe, which
+        // is where this slurp gets its EOF. The extra arguments are harmless
+        // in the branches that ignore them, so there is one call site rather
+        // than three.
+        selector.command = ["sh", "-c", command, "slurp", ...boxes];
         selector.running = true;
     }
 
@@ -125,6 +139,18 @@ Singleton {
 
     function startDelayed(target: string): void {
         root.pendingTarget = target;
+
+        // Ask the compositor for fresh window positions while the panel is
+        // getting out of the way. The answer comes back over IPC and this call
+        // cannot wait for it -- which is exactly what the 150 ms below is: a
+        // delay that already exists, doing a second job for free. If it has
+        // not landed by then the boxes are one event stale, which costs a
+        // rectangle that snaps to where a window was a moment ago; the
+        // selection is on screen before it is committed, so that is visible
+        // rather than silent.
+        if (target === "window")
+            Compositor.refreshWindows();
+
         grabRelease.restart();
     }
 
@@ -160,18 +186,65 @@ Singleton {
             root.start(target);
     }
 
-    // Selection. Its stdout is the geometry and its exit code is not consulted:
-    // a cancelled slurp and a failed one both print nothing, and "nothing" is
-    // the only answer that has to be acted on differently.
+    // Selection. Its stdout is the geometry; a selection that produced none is
+    // where the two answers this file used to confuse each other live.
+    //
+    // A CANCEL AND A MISSING slurp BOTH PRINT NOTHING ON stdout, and for a
+    // long time that was the end of it: pressing Escape and never having
+    // installed slurp were the same event, so a machine without it had a
+    // keybinding that did nothing at all, silently, forever. They are not the
+    // same on stderr. slurp says "selection cancelled" in those words -- it is
+    // in the binary, `strings /usr/bin/slurp` -- and a shell that cannot find
+    // it says so instead, with 127.
+    //
+    // So stderr is collected and read at exit. THE ORDER IS NOT ASSUMED: a
+    // throwaway Quickshell probe running `echo out; echo err >&2; exit 3` was
+    // watched printing stdout-finished, then stderr-finished, then exited, so
+    // both collectors have their text by the time this handler runs. The
+    // geometry is still acted on in onStreamFinished rather than here, so the
+    // path that works today does not depend on that ordering at all -- only
+    // the wording of a failure does, and an empty stderr degrades to the exit
+    // code rather than to nothing.
     Process {
         id: selector
 
         stdout: StdioCollector {
+            id: selectorOut
+
             onStreamFinished: {
                 const geometry = text.trim();
                 if (geometry !== "")
                     root.record(geometry);
             }
+        }
+
+        stderr: StdioCollector {
+            id: selectorErr
+        }
+
+        onExited: exitCode => {
+            // A selection happened; the recorder has it.
+            if (selectorOut.text.trim() !== "")
+                return;
+
+            const reason = selectorErr.text.trim();
+
+            // The cancellation protocol, unchanged: no geometry, no recording,
+            // NO NOTIFICATION. Escape is an answer, and a desktop that pops up
+            // a message every time somebody changes their mind is one people
+            // stop reading messages from.
+            if (reason.includes("cancelled") || reason.includes("canceled"))
+                return;
+
+            // Anything else is a selector that could not run, which is worth
+            // exactly one line. The last line of stderr rather than all of it:
+            // sh prefixes its own "line 1:" noise and the useful part is at the
+            // end.
+            const detail = reason === "" ? `slurp exited with ${exitCode}`
+                : reason.split("\n").pop().trim();
+
+            Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-u", "critical",
+                "-i", "camera-video", "Nothing was selected", detail]);
         }
     }
 
@@ -202,6 +275,17 @@ Singleton {
     Process {
         id: recorder
 
+        // WHY IT FAILED AND NOT ONLY THAT IT DID. "wf-recorder exited with 1"
+        // is the same sentence for a codec the machine cannot encode, a
+        // directory that could not be created and a program that is not
+        // installed, and the one that matters is the first: the settings page
+        // can offer a container, and a container the muxer refuses has to say
+        // so here or the page is a set of switches with no consequence anybody
+        // can see.
+        stderr: StdioCollector {
+            id: recorderErr
+        }
+
         onExited: exitCode => {
             // 0 is what wf-recorder exits with after finalising on SIGINT, so
             // this is the success case and not a special one. Anything else is
@@ -210,10 +294,17 @@ Singleton {
             if (exitCode === 0) {
                 Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-i", "camera-video",
                     "Recording saved", root.lastPath.split("/").pop()]);
-            } else {
-                Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-u", "critical",
-                    "-i", "camera-video", "Recording failed", `wf-recorder exited with ${exitCode}`]);
+                return;
             }
+
+            // The LAST line, because wf-recorder narrates what it is doing on
+            // the way up and the complaint is what it says on the way out.
+            const reason = recorderErr.text.trim();
+            const detail = reason === "" ? `wf-recorder exited with ${exitCode}`
+                : reason.split("\n").pop().trim();
+
+            Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-u", "critical",
+                "-i", "camera-video", "Recording failed", detail]);
         }
     }
 
