@@ -120,9 +120,9 @@ services-system_apply() {
   # and that is answered at the next boot.
   for unit in "${pending[@]}"; do
     if [[ $unit == sddm.service ]]; then
-      run sudo systemctl enable "$unit" && ui_did "   enabled $unit (from the next boot)" \
+      run_sudo systemctl enable "$unit" && ui_did "   enabled $unit (from the next boot)" \
         || { ui_bad "   could not enable $unit"; failed+=("$unit"); }
-    elif run sudo systemctl enable --now "$unit"; then
+    elif run_sudo systemctl enable --now "$unit"; then
       ui_did "   enabled $unit"
     else
       ui_bad "   could not enable $unit"

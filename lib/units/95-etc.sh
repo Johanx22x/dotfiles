@@ -237,7 +237,7 @@ etc_apply_copy() {
 
   # -D makes the parent directory, which /etc/sddm.conf.d needs on a machine
   # that has never had one.
-  if run sudo install -Dm "$mode" "$DOT/system/$src" "$dst"; then
+  if run_sudo install -Dm "$mode" "$DOT/system/$src" "$dst"; then
     ui_did "   installed $dst"
     return 0
   fi
@@ -300,7 +300,7 @@ etc_post() {
       # told to boot. The message it used to leave -- one red line saying do
       # not reboot -- was printed at the very end of a long run and then had
       # the hand-off paragraph printed underneath it.
-      run sudo mkinitcpio -P || fail_stop "etc" \
+      run_sudo mkinitcpio -P || fail_stop "etc" \
         "mkinitcpio failed, so /boot may hold an initramfs that is half written. DO NOT REBOOT." \
         "Run 'sudo mkinitcpio -P' again and read what it says -- a missing firmware package or a module name in /etc/mkinitcpio.conf that no longer exists. Only reboot once it has finished cleanly."
     else
@@ -322,7 +322,7 @@ etc_post() {
       # once it has finished, so a failure leaves the previous menu intact and
       # bootable. The machine still boots exactly as it did this morning; what
       # is lost is the change.
-      run sudo grub-mkconfig -o /boot/grub/grub.cfg \
+      run_sudo grub-mkconfig -o /boot/grub/grub.cfg \
         || fail_note "etc" "grub-mkconfig failed, so /boot/grub/grub.cfg is still the previous menu" \
              "sudo grub-mkconfig -o /boot/grub/grub.cfg   -- the machine boots as before until it succeeds"
     else

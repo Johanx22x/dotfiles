@@ -60,6 +60,27 @@ run() {
   "$@"
 }
 
+# And the one place a command that needs ROOT goes through, so that "ask for the
+# password at the moment it is first needed" is one condition here instead of a
+# thing every caller has to remember.
+#
+# WHY THERE IS A SECOND WRAPPER AND NOT JUST `run sudo`. run_units called
+# sudo_begin before every list of units it was handed, whatever was in the list,
+# so `./install.sh apply symlinks` -- stow, into a home directory, root nowhere
+# near it -- opened with a password prompt. A password asked for to do something
+# that does not need one is how people learn to type it without reading what is
+# asking.
+#
+# sudo_begin is idempotent, so the first of these pays for the prompt and starts
+# the keepalive and every one after it is free. Everything that argued for
+# asking early is still true: the timestamp is still held open for the length of
+# the run, which is what an AUR build half an hour in depends on, and `check`
+# and --dry-run still never reach a sudo that executes.
+run_sudo() {
+  sudo_begin
+  run sudo "$@"
+}
+
 # ---------------------------------------------------------------------------
 source "$DOT/lib/ui.sh"
 # After ui.sh, which it prints through; before everything that records a
@@ -281,22 +302,32 @@ fi
 (( EUID == 0 )) && { ui_bad "Do not run this as root. It asks for sudo when it needs it."; exit 1; }
 
 # ---------------------------------------------------------------------------
-# SUDO, ONCE, AT THE TOP, AND KEPT ALIVE.
+# SUDO, ONCE, AT THE FIRST THING THAT NEEDS IT, AND KEPT ALIVE UNTIL THE END.
 #
 # Between the first sudo and the end of an AUR build there can be half an hour,
 # which is well past the five-minute default timeout -- so pacman stops in the
 # middle of a run and sits waiting for a password behind a wall of build output,
-# on a terminal nobody is watching any more.
+# on a terminal nobody is watching any more. That is what the keepalive is for
+# and it has not changed.
 #
-# NOT CALLED FOR `check` OR UNDER `--dry-run`, and that is the point of it
-# living here rather than inside pkg_install: those two must be runnable by
-# anybody at any time, and a password prompt is a side effect like any other.
+# WHAT CHANGED IS WHO CALLS IT. This used to run at the top of run_units, for
+# every list of units, so a run that needed no root at all still opened with a
+# password prompt. It is called from run_sudo now, which means the prompt lands
+# on the first command that actually needs root and never appears at all in a
+# run that has none.
+#
+# IDEMPOTENT, because that is what makes calling it from every root command
+# cheap: the second call finds the keepalive already running and returns.
+#
+# NEVER FOR `check` OR UNDER `--dry-run`: neither reaches a run_sudo that
+# executes anything, and the DRY_RUN branch below is the belt to that brace.
 SUDO_KEEPALIVE_PID=""
 
 sudo_begin() {
   (( DRY_RUN )) && return 0
+  [[ -n $SUDO_KEEPALIVE_PID ]] && return 0
 
-  ui_say "   This needs sudo for the packages. Asking once, now."
+  ui_say "   This step needs root. Asking for sudo once, now."
   # ALREADY FATAL BEFORE ANY OF THIS EXISTED, and now it says so in the same
   # shape as every other stop. Nothing below installs, links or enables
   # anything without it, so there is no half of the run left to attempt.
@@ -346,7 +377,6 @@ notice_unmet_requires() {
 # Shared by `apply` and the full run so that the two cannot drift apart.
 run_units() {
   local id
-  sudo_begin
   for id in "$@"; do
     if ! "${id}_available" >/dev/null; then
       ui_dim "  $id does not apply to this machine, skipped"
