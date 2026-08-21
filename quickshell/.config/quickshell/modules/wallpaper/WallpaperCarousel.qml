@@ -420,12 +420,29 @@ PanelWindow {
             live: false
             visible: false
 
-            // The one thing that can change under it: a different monitor, and
-            // so a different card size. Without this the mask keeps the shape
-            // it was first rendered at and the corners stop matching.
+            // RENDERED ONCE IS NOT RENDERED FOR EVER, and this is the bill for
+            // `live: false`. Hiding the sheet destroys its layer surface and
+            // with it the scene graph resources behind it -- this texture
+            // included -- and a source that is not live never asks for another
+            // one. The mask came back EMPTY on the second opening, and an
+            // empty mask means MultiEffect cuts away everything it is given:
+            // cards with a border and a name and no picture inside them.
+            //
+            // So it is scheduled on every opening, and on the two other things
+            // that can change under it: a different monitor, and so a
+            // different card size.
             onWidthChanged: cardMask.scheduleUpdate()
             onHeightChanged: cardMask.scheduleUpdate()
             Component.onCompleted: cardMask.scheduleUpdate()
+
+            Connections {
+                target: WallpaperState
+
+                function onIsOpenChanged(): void {
+                    if (WallpaperState.isOpen)
+                        cardMask.scheduleUpdate();
+                }
+            }
         }
 
         PathView {
