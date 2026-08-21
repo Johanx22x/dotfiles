@@ -248,6 +248,62 @@ menu "--yes says yes without reading anything" '' 'yes' \
      'ASSUME_YES=1; ui_confirm "well?" n >/dev/null 2>&1 && echo yes || echo no'
 
 # ---------------------------------------------------------------------------
+say "--yes does not turn an offer into a loop"
+
+# THE ONE CASE HERE THAT SOURCES install.sh, because what it is about is a loop
+# in that file rather than a function in lib/ui.sh. tui_optional ends by
+# offering to open a group and pick packages one at a time, and the offer is a
+# `while ui_confirm ...` -- which under ASSUME_YES returns 0 without reading
+# anything, so the answer can never be no and the loop can never end. Measured
+# before it was fixed, on a pty with --yes and only Enter arriving: 1,864
+# openings in fifteen seconds, and no way out of it but ^C.
+#
+# WHAT IS ASSERTED IS THAT IT COMES BACK AT ALL, which is why this is shaped
+# differently from everything above: the failure is a hang, so the evidence is a
+# file that only gets written after tui_optional returns.
+#
+# `check` is the mode install.sh is sourced with because it is the one that
+# writes nothing -- what is wanted is the function definitions, and the mode has
+# to be something. HOME and the XDG variables point into the scratch directory
+# so the profile it reads is the one written here.
+#
+# ui_have_gum is turned off on purpose. gum has its own assertions above; here
+# it would sit in raw mode waiting for the keypress this case is specifically
+# about not needing.
+loop_home="$WORK/home"
+mkdir -p "$loop_home/.local/state"
+printf 'group.apps\t1\nunit.optional\t1\n' > "$loop_home/.local/state/dotfiles-profile"
+
+loop_inner="$WORK/loop.sh"
+loop_done="$WORK/loop-returned"
+{
+    printf 'set -uo pipefail\n'
+    printf 'export HOME=%q\n' "$loop_home"
+    printf 'export XDG_CONFIG_HOME=%q\n' "$loop_home/.config"
+    printf 'export XDG_STATE_HOME=%q\n'  "$loop_home/.local/state"
+    printf 'export XDG_DATA_HOME=%q\n'   "$loop_home/.local/share"
+    printf 'export XDG_CACHE_HOME=%q\n'  "$loop_home/.cache"
+    printf 'source %q check >/dev/null 2>&1 || true\n' "$REPO/install.sh"
+    printf 'ui_have_gum() { return 1; }\n'
+    printf 'ASSUME_YES=1\n'
+    printf 'state_load\n'
+    printf 'tui_optional >/dev/null 2>&1\n'
+    printf 'printf returned > %q\n' "$loop_done"
+} > "$loop_inner"
+
+rm -f "$loop_done"
+# One Enter, which is all the groups menu needs, and then nothing. Twenty
+# seconds is a hundred times what this takes when it works.
+printf '\n' | TERM=xterm-256color timeout 20 script -qec "bash $loop_inner" /dev/null \
+    >/dev/null 2>&1 || true
+
+if [[ -f $loop_done ]]; then
+    pass "tui_optional under --yes comes back instead of asking forever"
+else
+    bad "tui_optional under --yes comes back instead of asking forever"
+fi
+
+# ---------------------------------------------------------------------------
 if (( FAILURES )); then
     printf '\ninstaller-menus: %d assertion(s) failed\n' "$FAILURES" >&2
     exit 1

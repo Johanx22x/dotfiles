@@ -688,9 +688,27 @@ tui_optional() {
     state_set "group.${groups[i]}" "$wanted"
   done
 
-  # The drill-down. Only offered where there is a terminal to drill with; a
-  # non-interactive run has already had its answer from the profile.
+  # ---------------------------------------------------------------------
+  # THE DRILL-DOWN, AND THE TWO RUNS IT IS NOT FOR.
+  #
+  # No terminal: there is nothing to drill with, and a run with nobody at the
+  # keyboard has already had its answer from the profile.
+  #
+  # --yes: ui_confirm returns 0 under ASSUME_YES without reading anything,
+  # which is exactly right for "shall I do this?" and fatal for a loop whose
+  # condition is "shall I ask you again?" -- the answer can never be no, so the
+  # loop can never end. On a pty with --yes and nothing typed it asked this
+  # 1,864 times in fifteen seconds and had to be killed. The fix is not a
+  # bound on the loop: --yes means "do not ask me", and a sub-menu that exists
+  # only to be typed into is the one thing --yes cannot answer for. So it is
+  # declined, out loud, and the packs above stand as the answer.
   ui_has_tty || return 0
+  if (( ASSUME_YES )); then
+    ui_dim "   --yes: the per-package menu needs typing, so it is skipped."
+    ui_dim "   The packs above are the answer; edit $(state_path) to disagree."
+    return 0
+  fi
+
   while ui_confirm "  Open one of them and pick packages one at a time?" n; do
     group="$(ui_choose_one 1 "${groups[@]}")"
     tui_optional_packages "$group"
