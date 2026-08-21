@@ -1,0 +1,55 @@
+name: Checks
+
+# What runs before a pull request can be merged.
+#
+# Everything lands here through a pull request, so `pull_request` covers the
+# whole repository: there is no other way in. This is the opposite case from
+# notify-discord.yml next door -- that one carries secrets and therefore must
+# never check out the branch; this one checks out the branch and therefore
+# carries no secrets. Do not merge the two.
+#
+# IN AN ARCH CONTAINER, because what is being checked is an Arch desktop. The
+# checks ask the real tools the real questions -- Hyprland whether it accepts
+# its own config, pacman whether these package names exist -- and none of those
+# can be asked on Ubuntu. base-devel rather than base for makepkg's
+# dependencies, which is what packages/ is built with.
+#
+# Every check lives in tests/ as a script that runs on its own, which is
+# deliberate: a check that can only be run by pushing a branch is a check
+# nobody runs before pushing.
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+# A second push to the same branch makes the first run pointless.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+
+    steps:
+      # BEFORE THE CHECKOUT, because actions/checkout falls back to downloading
+      # a tarball when git is missing, and a tarball is not a repository.
+      #
+      # lua is not decoration here: the bind check runs hyprland.lua rather
+      # than reading it. See tests/hl-stub.lua.
+      - name: Install what the checks need
+        run: pacman -Syu --needed --noconfirm git python lua
+
+      - uses: actions/checkout@v7
+
+      - name: Let git own the checkout
+        # The job runs as root inside the container over a directory the runner
+        # created outside it. Without this, git refuses every command with
+        # "detected dubious ownership".
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Keybinds are the same under both compositors
+        run: tests/bind-parity.py

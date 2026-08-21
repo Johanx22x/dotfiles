@@ -1,0 +1,126 @@
+# The keybinds that are deliberately NOT the same in both compositors.
+#
+# tests/bind-parity.py fails on any chord bound on one side and not the other,
+# and on any chord labelled on one side and not the other. Everything listed
+# here is excused from that, and nothing is excused without a reason: an
+# undeclared exception is the check being switched off quietly, which is worse
+# than the divergence it hides.
+#
+# An entry that stops applying is also a failure -- the check says so and names
+# the line. Delete it when that happens rather than leaving it: a stale
+# exception is what waves through the day somebody deletes the bind for real.
+#
+# WHAT IS NOT IN HERE, AND WHY. The four Hyprland actions niri has no
+# equivalent for -- pseudotile, togglesplit, pin, the magic scratchpad -- are
+# not exceptions. Their chords were reused rather than left dead, so both sides
+# bind SUPER + P, SUPER + J, SUPER + SHIFT + T and SUPER + M and this check is
+# satisfied by all four. What differs there is what the chord DOES, which is
+# written up beside each bind in config.kdl and in the README, and which this
+# check does not look at on purpose.
+#
+#   [[chord]]  the chord exists on one side only
+#   [[label]]  both sides bind it, only one gives it a human label
+#   side       the side the thing EXISTS on, not the side it is missing from
+#
+# `chords` takes a list where one reason covers a group; `chord` takes one.
+
+# ---------------------------------------------------------------------------
+# Hyprland only
+# ---------------------------------------------------------------------------
+
+[[chord]]
+chords = ["SUPER + mouse:272", "SUPER + mouse:273"]
+side = "hyprland"
+reason = """
+Drag to move and drag to resize. niri does the same two things with the same
+modifier held, but as compositor gestures rather than as binds -- Mod and the
+right button resizes from anywhere in the window, Mod and the middle button
+scrolls the view -- so there is no line in config.kdl for this to match
+against. Gestures are not configurable there, which is also why this cannot be
+fixed by adding one.
+"""
+
+# ---------------------------------------------------------------------------
+# niri only
+# ---------------------------------------------------------------------------
+# All of these sit on chords that were free in hyprland.lua, which is what
+# makes them additions rather than divergences: nothing a hand learned under
+# Hyprland does something else here. The README says the same thing in prose
+# under Compositors, and each bind carries its own reasoning in config.kdl.
+
+[[chord]]
+chords = ["Mod+Shift+Left", "Mod+Shift+Right", "Mod+Shift+Up", "Mod+Shift+Down"]
+side = "niri"
+reason = """
+Move the focused column or window, mirroring the focus arrows. Hyprland has
+movewindow and it was never bound: dwindle moves a window by swapping it with
+a neighbour, which is worth a chord in a layout where position is meaningful
+and much less so in one where it is not.
+"""
+
+[[chord]]
+chords = ["Mod+Comma", "Mod+Period", "Mod+Shift+P"]
+side = "niri"
+reason = """
+Columns are the unit niri is built around and Hyprland has nothing shaped like
+one: pull the neighbour into this column, push this window out of it, and
+cycle the heights inside it. There is no dwindle equivalent to bind these to.
+"""
+
+[[chord]]
+chords = ["Mod+Home", "Mod+End", "Mod+R", "Mod+Shift+R", "Mod+X"]
+side = "niri"
+reason = """
+The strip: its two ends, and the three ways a column takes width on it
+(maximize, fill what is free, centre). All of it is scrollable tiling talking
+about itself -- a dynamic layout has no strip to reach the end of, and no
+column to widen without taking that width from a sibling.
+"""
+
+[[chord]]
+chord = "Mod+Tab"
+side = "niri"
+reason = """
+The overview: every workspace and every window at once, zoomed out. Hyprland
+has no equivalent -- hyprexpo is a plugin and this repo installs no plugins.
+Left on Tab next to the other "show me what is open" gesture, and Alt+Tab
+stays with the applications that want it.
+"""
+
+[[chord]]
+chords = ["Mod+Ctrl+Left", "Mod+Ctrl+Right",
+          "Mod+Ctrl+Shift+Left", "Mod+Ctrl+Shift+Right"]
+side = "niri"
+reason = """
+Focus a monitor and send a column to one. Hyprland has focusmonitor and
+movewindowtomonitor and neither was ever bound, so these are new rather than
+missing on the other side -- the note beside them in config.kdl says exactly
+that.
+"""
+
+[[chord]]
+chord = "Mod+Ctrl+Shift+Escape"
+side = "niri"
+reason = """
+Quit niri. It is the way out when the shell is not running, which is the one
+case the power menu on SUPER + SHIFT + ESCAPE cannot cover. Hyprland's
+`exit` dispatcher is deliberately unbound there: the same escape hatch under
+uwsm is `loginctl terminate-user`, and a chord that ends the session without a
+confirmation is what SUPER + SHIFT + ESCAPE was moved away from in the first
+place.
+"""
+
+# ---------------------------------------------------------------------------
+# Labels
+# ---------------------------------------------------------------------------
+# Nothing yet, and that is the point: every chord either carries a label on
+# both sides or on neither. The multimedia keys are the "neither" case -- a row
+# saying the volume key changes the volume is one nobody goes looking for -- and
+# the workspace binds label only the first of each ten, in both files.
+#
+# The shape, for when one is genuinely needed:
+#
+#   [[label]]
+#   chord = "SUPER + X"
+#   side = "niri"          # the side that HAS the label
+#   reason = "..."
