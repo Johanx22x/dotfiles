@@ -161,6 +161,53 @@ qs kill && qs -d -p ~/.config/quickshell/shell.qml    # Quickshell
 
 `~/.config/nvim` is a separate repository and updates on its own.
 
+### Without a terminal
+
+Everything above is the second time onward, which is exactly the part that was
+tedious: none of it announces itself, so keeping a machine current meant
+remembering to go and ask. The shell asks instead.
+
+There is a widget on the bar — **Updates**, next to the gear — carrying the
+number of units that are not `ok`, in the same colours the check table uses:
+yellow for `missing`, red for `drift`. Clicking it opens the **Updates** page in
+the settings window, which is the check table with a chip per row, the optional
+packs as boxes you can open package by package, and a button.
+
+It runs `./install.sh check --json` — the same read-only mode, taking the same
+three seconds — and it does **not** run it on a timer. It checks once a quarter
+of a minute into a session, when the machine comes back from suspend, when the
+page is looked at, after it has applied anything, and whenever it is asked:
+
+```sh
+qs ipc call updates check     # look again now
+qs ipc call updates status    # what it last found, as a sentence
+qs ipc call updates open      # open the page
+```
+
+**It never runs anything as root.** The units that write into `$HOME` —
+`symlinks`, `seeds`, `nvim`, `cursors`, `palette`, `services-user`, `laptop`,
+`monitors` — run from the button, in your session, as you. The ones that install
+packages or change your login shell open a terminal running the same command you
+would have typed:
+
+```sh
+kitty --hold --directory ~/dotfiles -e ./install.sh apply packages
+```
+
+`pkexec` and the polkit agent are deliberately not used. They would run the
+whole installer as root, and a `~/.config` owned by root is how a desktop stops
+being editable by the person who owns it — which is why `install.sh` refuses to
+run as root at all. Splitting privilege inside one process is worse than not
+splitting it.
+
+Ticking a pack writes the same `${XDG_STATE_HOME:-~/.local/state}/dotfiles-profile`
+that `update` reads, so the window and the terminal are two ways of saying one
+thing rather than two places to say it.
+
+Two things it will not do. **A first install is still a terminal** — a fresh
+clone has no desktop to draw on. And it never offers to apply `etc`, which
+reports and does not write.
+
 ## Compositors
 
 Two flavors, chosen at install time and switched at the display manager. They
