@@ -55,13 +55,23 @@ EOF
     exit 2
 }
 
+# 10# ON EVERY NUMBER THAT CAME FROM OUTSIDE, and it is not decoration. A
+# leading zero makes bash read a literal as OCTAL, and `^[0-9]+$` lets one
+# through: `08` and `09` pass the pattern and then blow up on the comparison
+# with "value too great for base (error token is \"08\")". Here that is the read
+# path, and the whole `if` fails, so a file saying 08 silently reports 30
+# minutes while the timer runs on whatever the drop-in says. On the write path
+# below the person typing it gets the raw bash error.
+#
+# 10#$value forces base ten. The value is normalised on the way out as well as
+# on the way in, so nothing downstream ever sees the zero again.
 current() {
     local value
     if [[ -r $STATE_FILE ]]; then
         read -r value < "$STATE_FILE" || value=""
         if [[ $value =~ ^[0-9]+$ ]] \
-            && (( value >= MIN_MINUTES && value <= MAX_MINUTES )); then
-            printf '%s' "$value"
+            && (( 10#$value >= MIN_MINUTES && 10#$value <= MAX_MINUTES )); then
+            printf '%s' "$((10#$value))"
             return
         fi
     fi
@@ -104,13 +114,29 @@ case "${1:-show}" in
 
     *)
         [[ $1 =~ ^[0-9]+$ ]] || usage
-        (( $1 >= MIN_MINUTES && $1 <= MAX_MINUTES )) || {
+
+        # Base ten before anything compares it -- see the note on current().
+        # Kept in its own variable so the drop-in and the state file both get
+        # the normalised number rather than the digits as typed.
+        minutes=$((10#$1))
+
+        (( minutes >= MIN_MINUTES && minutes <= MAX_MINUTES )) || {
             echo "wallpaper-interval: must be between $MIN_MINUTES and $MAX_MINUTES minutes." >&2
             exit 2
         }
 
+        # THE DROP-IN FIRST AND THE STATE FILE AFTER. The state file is not the
+        # setting, it is the RECORD of it -- the settings window reads the
+        # interval back out of it, and this script's own `show` does too. Written
+        # first, a failure in apply (an unwritable ~/.config, a full disk) left
+        # both of them reporting an interval that no timer had been told about,
+        # and nothing later reconciles the two. Written second, the record only
+        # ever describes a drop-in that exists. set -e is what enforces the
+        # order: apply's writes are unguarded, so it never returns after failing
+        # one.
+        apply "$minutes"
+
         mkdir -p "$STATE_DIR"
-        printf '%s\n' "$1" > "$STATE_FILE"
-        apply "$1"
+        printf '%s\n' "$minutes" > "$STATE_FILE"
         ;;
 esac
