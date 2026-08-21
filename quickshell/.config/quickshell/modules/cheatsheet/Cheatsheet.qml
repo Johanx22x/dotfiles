@@ -21,9 +21,11 @@
 // LAYOUT
 // Three columns, filled shortest-first rather than in order, so they end at
 // roughly the same height instead of leaving one long and two stubby. There
-// is no scrolling: at 38 binds the tallest column is around a third of the
-// screen, and the sheet would have to grow past twice its current size before
-// height became a question worth solving.
+// is no scrolling: at the thirty-odd described binds each compositor has, the
+// tallest column is around a third of the screen, and the sheet would have to
+// grow past twice its current size before height became a question worth
+// solving. A number was written out here and went stale the first time a bind
+// was added.
 
 import Quickshell
 import Quickshell.Io

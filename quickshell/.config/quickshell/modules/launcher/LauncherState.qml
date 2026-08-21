@@ -83,9 +83,5 @@ Singleton {
         function clipboard(): void {
             root.openPicker("clipboard");
         }
-
-        function wallpaper(): void {
-            root.openPicker("wallpaper");
-        }
     }
 }

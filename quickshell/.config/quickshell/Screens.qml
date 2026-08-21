@@ -2,10 +2,11 @@
 // QUICKSHELL - which screen the shell lives on
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 //
-// The bar, the launcher, the power menu, the notifications and the cheatsheet
-// all go on ONE monitor. Four of those take an exclusive keyboard grab, and
-// two copies of any of them would be two surfaces fighting over the keyboard;
-// the bar is one monitor for taste rather than necessity.
+// The bar, the launcher, the power menu, the notifications, the cheatsheet and
+// the wallpaper carousel all go on ONE monitor. Four of those take an exclusive
+// keyboard grab -- everything but the bar and the notifications -- and two
+// copies of any of them would be two surfaces fighting over the keyboard; the
+// bar is one monitor for taste rather than necessity.
 //
 // WHY THIS IS NOT A MODEL NAME ANY MORE
 // It used to be `screen.model === "PG32QF2B"`, written out five times in
@@ -110,10 +111,11 @@ Singleton {
     // filtering out of shell.qml.
     readonly property var mainOnly: root.main ? [root.main] : []
 
-    // WHERE THE GRABBING SURFACES GO -- the launcher, the power menu and the
-    // cheatsheet. One of them at a time, always; the only question is which
-    // screen it appears on, and that depends on the compositor rather than on
-    // taste.
+    // WHERE THE GRABBING SURFACES GO -- the launcher, the power menu, the
+    // cheatsheet and the wallpaper carousel. One of them at a time, always --
+    // each of those singletons closes the others -- and the only question is
+    // which screen it appears on, which depends on the compositor rather than
+    // on taste.
     //
     // Where the keyboard grab is session-wide, a fixed screen is right: the
     // surface is heard wherever the user happens to be looking, and pinning it
@@ -142,9 +144,9 @@ Singleton {
 
     // The screens carrying a bar. NOT the same filter as mainOnly: the bar is
     // the one surface here that can exist several times over, because it is the
-    // only one that never takes a keyboard grab. The launcher, the power menu
-    // and the cheatsheet all do, and two of those on two monitors would be two
-    // surfaces fighting over the keyboard -- see the header.
+    // only one that never takes a keyboard grab. The launcher, the power menu,
+    // the cheatsheet and the carousel all do, and two of those on two monitors
+    // would be two surfaces fighting over the keyboard -- see the header.
     //
     // Falls back to the main screen when the chosen monitors are all
     // disconnected. Coming back from an undocked laptop, or from a monitor that
