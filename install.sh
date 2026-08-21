@@ -739,19 +739,20 @@ mode_setup() {
   report_failures
   cat <<'END'
 
-Left to do by hand:
+One thing is still yours, and it is a decision rather than a chore:
 
-  1. /etc  — see system/. The fstab UUIDs belong to the original machine: do
-             NOT copy it as is.
-  2. The GPU driver. Deliberately not installed here: it is the one thing that
-             depends on hardware nothing in this repo can see, and a driver for
-             a card you do not have is not a harmless mistake.
+  The monitor layout, if the table above listed a screen as not recorded.
+  Which screen is the main one and where the others sit around it cannot be
+  read off an EDID. Arrange them, then:
 
-               lspci -k | grep -A2 -E '(VGA|3D)'
-               sudo pacman -S --needed $(sed 's/#.*//' packages/gpu/nvidia.txt)
+      desktop-monitors seed
 
-  3. zsh as the default shell, if it is not already:
-             chsh -s /usr/bin/zsh
+  or do it from the settings window, SUPER + C, which applies a change live and
+  puts it back unless you confirm it.
+
+Everything else has a unit. To see where this machine stands at any moment:
+
+      ./install.sh check
 END
 }
 
