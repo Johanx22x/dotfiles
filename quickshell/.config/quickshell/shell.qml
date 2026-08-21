@@ -47,6 +47,17 @@ ShellRoot {
         Component.onCompleted: Microphone.armed
     }
 
+    // THE BACKLIGHT IS WATCHED FROM LOGIN, and this line is what lets it, for
+    // the third time and for the same reason. Nothing asks for Brightness until
+    // the dashboard's slider is drawn, and the island cannot ask -- it only
+    // reacts to what this singleton reports, so a watcher created on demand
+    // would come into being already holding the value it was supposed to have
+    // noticed changing. On a machine with no backlight it costs one process
+    // spawn that prints nothing; see the header there.
+    Scope {
+        Component.onCompleted: Brightness.armed
+    }
+
     // A Bar on each screen that is meant to have one -- the main screen alone
     // until the Bar page says otherwise. See Screens.qml for how the main one
     // is chosen and why it is no longer a model name written out five times.
