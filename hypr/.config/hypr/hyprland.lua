@@ -644,6 +644,28 @@ hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }), { descript
 hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }),    { description = "Windows: move focus up" })
 hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }),  { description = "Windows: move focus down" })
 
+-- Move the window itself with the same four arrows plus SHIFT, which is the
+-- pairing every one of these binds already uses: SUPER acts on the focus,
+-- SUPER + SHIFT acts on the window under it -- exactly as SUPER + 1 and
+-- SUPER + SHIFT + 1 do for workspaces a few lines below.
+--
+-- `movewindow` takes a direction and swaps the focused window with the
+-- neighbour that way, in whichever layout is active; `hl.dsp.window.move` is
+-- the same dispatcher already used with `{ workspace = ... }` further down,
+-- reached through its other argument. Hyprland names the accepted set itself
+-- if it is handed anything else:
+--
+--     hl.window.move: unrecognized arguments. Expected one of: direction,
+--     x+y(+relative), workspace, into_group, out_of_group
+--
+-- The four chords were free. They are bound under niri and the note there
+-- filed them as something Hyprland could not do, which was never true -- the
+-- dispatcher has existed the whole time and nobody had reached for it.
+hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.move({ direction = "left" }),  { description = "Windows: move the window left" })
+hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.move({ direction = "right" }), { description = "Windows: move the window right" })
+hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.move({ direction = "up" }),    { description = "Windows: move the window up" })
+hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.move({ direction = "down" }),  { description = "Windows: move the window down" })
+
 -- Switch workspaces with mainMod + [0-9]
 -- Move active window to a workspace with mainMod + SHIFT + [0-9]
 --
@@ -768,6 +790,19 @@ hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = tr
 hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
 hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
 hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
+
+
+-- ---- Session ---------------------------------------------------------------
+-- The power menu on SUPER + SHIFT + ESCAPE is the way out, same as in niri.
+-- This is the escape hatch for when the shell is not running, which is the one
+-- case that bind cannot cover: the menu lives inside Quickshell, so with `qs`
+-- dead SUPER + SHIFT + ESCAPE does nothing at all and the only remaining way
+-- out of the session was a TTY.
+--
+-- FOUR MODIFIERS AND A KEY NOBODY RESTS A FINGER ON, deliberately: this one
+-- has no confirmation of its own -- `exit` ends the session where it stands --
+-- so the chord has to be the protection. It is the same one niri uses.
+hl.bind(mainMod .. " + CTRL + SHIFT + ESCAPE", hl.dsp.exit(), { description = "Session: exit the compositor" })
 
 
 --------------------------------
