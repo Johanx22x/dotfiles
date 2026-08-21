@@ -580,8 +580,11 @@ binds {
     Mod+Shift+Escape hotkey-overlay-title="Shell: power menu" { spawn "qs" "ipc" "call" "powermenu" "toggle"; }
 
     // ---- Look (parity) --------------------------------------------------
-    Mod+Shift+W hotkey-overlay-title="Look: next wallpaper" { spawn "sh" "-c" "$HOME/.local/bin/wallpaper-switch next"; }
-    Mod+Shift+A hotkey-overlay-title="Look: random wallpaper" { spawn "sh" "-c" "$HOME/.local/bin/wallpaper-switch random"; }
+    // ONE BIND WHERE THERE WERE TWO. This stepped to the next image
+    // alphabetically and Mod+Shift+A picked at random, and neither could show
+    // you what you were about to get. It opens the shell's fullscreen
+    // carousel now; random survives as a launcher command.
+    Mod+Shift+W hotkey-overlay-title="Look: choose a wallpaper" { spawn "qs" "ipc" "call" "wallpaper" "toggle"; }
 
     // The keyboard layout, one step along the cycle.
     //

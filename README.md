@@ -232,11 +232,26 @@ A wallpaper can also be a video: `mp4` `webm` `mkv` play through mpvpaper with
 hardware decoding, pausing when covered or when anything goes fullscreen, while
 stills and animated GIFs go through awww.
 
+You pick one by looking at it. **SUPER + SHIFT + W** opens a fullscreen
+carousel of the collection — five cards at a time, the middle one large and, if
+it is a live wallpaper, playing. Enter applies, Escape leaves the desktop as it
+was. The settings window keeps what is around the collection: which folder it
+is, how often it rotates by itself, and which wallpaper is on the desktop now.
+
 ```sh
 wallpaper-switch next | prev | random | reapply
 wallpaper-switch set ~/Pictures/Wallpapers/loop.mp4
 wallpaper-switch dir pick            # move the collection somewhere else
+wallpaper-switch still               # freeze a live wallpaper where it is
+wallpaper-switch thumbs              # rebuild the caches the carousel draws
 ```
+
+Those caches are three, under `~/.cache`: a 960 px thumbnail of every
+wallpaper, because decoding a 4K PNG to fill a card costs a fifth of a second;
+a still frame of every video, because nothing else can draw one; and a short
+960x540 copy of every video, which is what the carousel actually plays instead
+of a 4K file. They are built in the background, skipped when they are already
+newer than their source, and swept when a wallpaper goes away.
 
 ## Per-machine
 

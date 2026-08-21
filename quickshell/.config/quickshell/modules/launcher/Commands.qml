@@ -28,6 +28,10 @@ import QtQuick
 // glyph and the whole list comes out empty, with a single ReferenceError as
 // the only clue.
 import "root:/"
+// The carousel's state singleton, which is what the wallpaper entry opens.
+// A singleton is not in scope just because it is one -- its directory has to
+// be imported, exactly like Icons above.
+import "root:/modules/wallpaper"
 
 Singleton {
     id: root
@@ -41,9 +45,13 @@ Singleton {
             // The folder is a setting, so the description reads it rather
             // than naming one. A ~ for $HOME because that is how a person
             // writes the path they are being shown.
-            description: `Pick from ${Config.wallpaperDir.replace(Quickshell.env("HOME"), "~")}`,
+            description: `Browse ${Config.wallpaperDir.replace(Quickshell.env("HOME"), "~")} full screen`,
             glyph: Icons.image,
-            picker: "wallpaper"
+            // NO LONGER A PICKER. This used to open a strip of small
+            // thumbnails inside the launcher panel; it now closes the launcher
+            // and raises the carousel, which shows the pictures at a size you
+            // can actually judge them at. See modules/wallpaper.
+            picker: ""
         },
         {
             id: "random",
@@ -93,6 +101,13 @@ Singleton {
     // Runs a command that has no picker behind it.
     function run(id: string): void {
         switch (id) {
+        case "wallpaper":
+            // The launcher has already closed itself by the time this runs --
+            // see activate() in Launcher.qml -- so the carousel is not opening
+            // underneath a panel that still holds the keyboard.
+            WallpaperState.open();
+            break;
+
         case "random":
             Quickshell.execDetached(["wallpaper-switch", "random"]);
             break;

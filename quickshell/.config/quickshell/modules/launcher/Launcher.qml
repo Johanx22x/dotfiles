@@ -167,10 +167,11 @@ PanelWindow {
 
     function move(dx: int, dy: int): void {
         if (root.picker !== "") {
-            // The picker says which axis it walks on, because they do not
-            // agree: the wallpaper strip is horizontal and the clipboard is a
-            // vertical list. Handing the horizontal step to both left the
-            // clipboard dead to the arrow keys.
+            // The picker says which axis it walks on. There is one picker
+            // left -- the clipboard, a vertical list -- and the question
+            // survives its horizontal sibling on purpose: this used to hand
+            // the horizontal step to both, which left the clipboard dead to
+            // the arrow keys.
             //
             // Through the Loader's `item`, not through an id: an id declared
             // inside a Component belongs to that Component's scope and is not
@@ -208,7 +209,7 @@ PanelWindow {
                 // question, and the answer is the next screen.
                 //
                 // The search box is cleared and RE-POINTED at the picker: one
-                // field searches whatever is on screen. Leaving ">wallpaper"
+                // field searches whatever is on screen. Leaving ">clipboard"
                 // in it would be a box showing a command that already ran,
                 // and giving the picker a second field of its own would be
                 // two places to type in one window.
@@ -424,8 +425,6 @@ PanelWindow {
                             // screen, and the placeholder is the only thing
                             // that can say which.
                             text: {
-                                if (root.picker === "wallpaper")
-                                    return "Search wallpapers";
                                 if (root.picker === "clipboard")
                                     return "Search clipboard";
                                 if (root.commandMode)
@@ -442,9 +441,10 @@ PanelWindow {
 
             // ---------------- Results ----------------
             // Three screens in one place, and only one of them is up at a
-            // time. Loaders rather than visibility: the wallpaper picker
-            // decodes ten images, and it should not be doing that while the
-            // application grid is what is on screen.
+            // time. A Loader rather than visibility for the last of them: the
+            // clipboard picker spawns a decode per image row, and it should
+            // not be doing that while the application grid is what is on
+            // screen.
 
             // The application grid.
             GridView {
@@ -636,12 +636,12 @@ PanelWindow {
                 }
             }
 
-            // The wallpaper strip.
-            // Whichever picker a command opened. One Loader and not one per
-            // kind: only one is ever up, and an inactive Loader costs nothing
-            // -- which matters here because the clipboard picker spawns a
-            // decode per image row and the wallpaper strip decodes ten
-            // photographs.
+            // Whichever picker a command opened. STILL A LOADER WITH A
+            // COMPONENT BESIDE IT although there is only one picker left: the
+            // wallpaper strip that used to be the other one is now a
+            // fullscreen carousel of its own (see modules/wallpaper), and what
+            // the Loader buys is that the clipboard's decodes do not happen
+            // while the application grid is what is on screen.
             Loader {
                 id: pickerLoader
 
@@ -649,24 +649,7 @@ PanelWindow {
                 active: root.picker !== ""
                 visible: active
 
-                sourceComponent: root.picker === "wallpaper" ? wallpaperComponent : clipboardComponent
-            }
-
-            Component {
-                id: wallpaperComponent
-
-                WallpaperPicker {
-                    width: layout.width
-                    filter: root.query
-
-                    onPicked: path => {
-                        LauncherState.close();
-                        // wallpaper-switch and not awww: the script is what
-                        // also regenerates the palette and pushes the new
-                        // border colour into Hyprland.
-                        Quickshell.execDetached(["wallpaper-switch", "set", path]);
-                    }
-                }
+                sourceComponent: clipboardComponent
             }
 
             Component {

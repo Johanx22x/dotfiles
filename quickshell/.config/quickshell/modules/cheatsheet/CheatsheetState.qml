@@ -19,6 +19,10 @@
 // The dashboard is reached through LauncherState.dashboardOpen, which Bar.qml
 // keeps wired to the popout in both directions.
 //
+// WHICH IS WHY THE WALLPAPER CAROUSEL IS NOT LISTED ABOVE. It arrived after
+// this file and owns its own half of the arbitration, in WallpaperState, by the
+// same convention: it closes this sheet, and this sheet opening closes it.
+//
 // DO NOT name an IPC function `show`: `qs ipc show` is a CLI subcommand and it
 // swallows the call, printing the handler listing and exiting 0. It looks
 // exactly like a call that ran and did nothing. See PowerMenuState.
