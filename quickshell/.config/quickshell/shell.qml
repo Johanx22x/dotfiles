@@ -25,6 +25,7 @@ import "modules/launcher"
 import "modules/powermenu"
 import "modules/recorder"
 import "modules/settings"
+import "modules/wallpaper"
 
 ShellRoot {
     // THE INSTANT REPLAY ARMS ITSELF, and this line is what lets it.
@@ -74,6 +75,15 @@ ShellRoot {
         model: Screens.grabScreens
 
         PowerMenu {}
+    }
+
+    // The wallpaper carousel, on the same screen as the bar. One monitor for
+    // the same reason as the power menu: it takes an exclusive keyboard grab,
+    // and two of them would be two sheets fighting over the keyboard.
+    Variants {
+        model: Screens.grabScreens
+
+        WallpaperCarousel {}
     }
 
     // The keybind cheatsheet, on the same screen as the bar. One monitor for

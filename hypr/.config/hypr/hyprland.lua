@@ -667,11 +667,18 @@ end
 hl.bind(mainMod .. " + M",         hl.dsp.workspace.toggle_special("magic"), { description = "Workspaces: show or hide the magic scratchpad" })
 hl.bind(mainMod .. " + SHIFT + M", hl.dsp.window.move({ workspace = "special:magic" }), { description = "Workspaces: send the window to the scratchpad" })
 
--- Wallpapers: SUPER+SHIFT+W goes to the next one, SUPER+SHIFT+A picks at
--- random. Each change regenerates the accent palette (the shell, kitty,
--- window borders).
-hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd(wallpaperSwitch .. " next"), { description = "Look: next wallpaper" })
-hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd(wallpaperSwitch .. " random"), { description = "Look: random wallpaper" })
+-- Wallpapers: SUPER+SHIFT+W opens the carousel, the shell's fullscreen picker.
+-- Applying one from there regenerates the accent palette (the shell, kitty,
+-- window borders), because it goes through wallpaper-switch like everything
+-- else does.
+--
+-- IT USED TO BE TWO BINDS THAT CHANGED THE WALLPAPER WITHOUT SHOWING IT --
+-- this one stepped to the next image alphabetically and SUPER+SHIFT+A picked
+-- at random. With fifty pictures in the collection that is a lottery played
+-- one keypress at a time, so the chord that people already reach for now opens
+-- the thing that lets you look. Random survives as a launcher command, where
+-- it reads as the deliberate "surprise me" it is.
+hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("qs ipc call wallpaper toggle"), { description = "Look: choose a wallpaper" })
 
 -- The keyboard layout, one step along the cycle configured in the settings
 -- window (SUPER + C, Input). K for keyboard, and it was free.
