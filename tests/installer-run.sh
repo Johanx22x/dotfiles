@@ -329,6 +329,11 @@ sed 's/^/installer-run:   | /' "$first"
 want_not "the first run reports no failed units" \
          grep -qF 'thing(s) to know' "$first"
 
+# ONCE, AND AT THE FIRST THING THAT NEEDED IT. sudo used to be asked for at the
+# top of every list of units run_units was handed, whatever was in the list.
+want_eq "the run asks for root once, not once per unit" \
+        "1" "$(grep -c 'This step needs root' "$first" || true)"
+
 want "the first run applies the packages unit"     grep -q '== Packages ==' "$first"
 want "the first run applies the symlinks unit"     grep -q '== Symlinks ==' "$first"
 want "the first run applies the seeds unit"        grep -q '== Seeds ==' "$first"
@@ -560,6 +565,11 @@ fi
 sed 's/^/installer-run:   | /' "$repair"
 
 want "apply symlinks puts the link back"      test -L "$HOME_DIR/.zshrc"
+# AND IT DID NOT ASK FOR A PASSWORD TO DO IT. stow links into a home directory
+# and root comes nowhere near it; asking for a password to do something that
+# does not need one is how people learn to type it without reading what asked.
+want_not "apply symlinks does not ask for root" \
+         grep -q 'needs root' "$repair"
 want_not "apply symlinks reports no failures" grep -qF 'thing(s) to know' "$repair"
 
 # APPLY DOES NOT CHAIN, and that is the design: it is what somebody reaches for

@@ -248,7 +248,7 @@ pkg_ensure_yay() {
   command -v yay >/dev/null && return 0
 
   local tmp built=1
-  sudo pacman -S --needed --noconfirm git base-devel
+  run_sudo pacman -S --needed --noconfirm git base-devel
   tmp="$(mktemp -d)"
   if git clone --depth 1 https://aur.archlinux.org/yay.git "$tmp/yay" &&
      ( cd "$tmp/yay" && makepkg -si --noconfirm ); then
@@ -323,7 +323,7 @@ pkg_install() {
   # --needed skips what is already installed, which is what makes re-running
   # this cheap enough to be the normal way to use it.
   if (( ${#repo[@]} )); then
-    if run sudo pacman -S --needed "${confirm[@]}" "${repo[@]}"; then
+    if run_sudo pacman -S --needed "${confirm[@]}" "${repo[@]}"; then
       ui_did "   $label: ${#repo[@]} package(s) from the repositories"
     else
       mapfile -t failed < <(pkg_still_missing "${repo[@]}")
