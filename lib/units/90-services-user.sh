@@ -109,20 +109,29 @@ services-user_check() {
 }
 
 services-user_apply() {
-  local unit failed=()
+  local unit units=() failed=()
 
   # A unit file that arrived through stow since the manager last looked is
   # invisible until this runs, which on a first install is every one of them.
   run systemctl --user daemon-reload || true
 
-  while IFS= read -r unit; do
+  # THE LIST IS READ WHOLE BEFORE ANYTHING IS RUN, for the reason written out
+  # at length in optional_apply: a `while read ... done < <(list)` hands the
+  # LIST to the stdin of every command in the body. It was harmless here --
+  # `systemctl --user enable` reads nothing -- and it is the shape that is the
+  # defect, not the command that happened to be inside it. Two units apart
+  # with the same shape, one of them fatal, is how the next person learns the
+  # wrong lesson from the harmless one.
+  mapfile -t units < <(services-user_units)
+
+  for unit in "${units[@]}"; do
     if run systemctl --user enable --now "$unit"; then
       ui_did "   enabled $unit"
     else
       ui_bad "   could not enable $unit"
       failed+=("$unit")
     fi
-  done < <(services-user_units)
+  done
 
   if (( ${#failed[@]} )); then
     # BY NAME, WHICH A COUNT NEVER WAS. This used to record "$failures unit(s)

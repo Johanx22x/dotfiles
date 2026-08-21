@@ -92,6 +92,14 @@ aur-patched_apply() {
   ui_say "   Building $aur_patched_pkgname $want from packages/xwayland-satellite/."
   ui_say "   -s pulls clang and rust as build dependencies."
 
+  # ASKED FOR NOW AND NOT IN TWENTY MINUTES. makepkg's -i runs `pacman -U`
+  # through sudo ITSELF, at the very end, once clang and rust have finished --
+  # so this is the one root command in the repository that run_sudo cannot
+  # wrap. Left alone, the password prompt arrives after a long silent build, on
+  # a terminal nobody is still watching, and the timestamp taken here is what
+  # stops it arriving at all.
+  sudo_begin
+
   # In a subshell so the working directory of the run is not moved underneath
   # every unit that comes after this one.
   if ( cd "$dir" && run makepkg -si --noconfirm ); then

@@ -175,3 +175,148 @@ jobs:
       # qmllint where Quickshell's imports live, which is work in quickshell/
       # and not work in CI. Until then this is left out rather than shipped
       # permanently red, or permanently meaningless.
+
+  # ---------------------------------------------------------------------------
+  # THE ONE CHECK THAT RUNS install.sh.
+  #
+  # Everything in the job above is about the repository's CONTENT: that both
+  # compositors accept their configuration, that every package name still
+  # resolves, that stow could link the tree. None of it runs the installer. So
+  # until this existed, install.sh -- rewritten from a 789-line linear script
+  # into a unit-based installer with three modes -- had `check` covered by hand
+  # and `apply` covered by nothing at all. It had never been executed for real
+  # by anybody, only under --dry-run, which by design does nothing.
+  #
+  # A SECOND JOB AND NOT A SECOND WORKFLOW. What gates a pull request should be
+  # answerable by opening one file, and this has the same trigger and the same
+  # purpose as the checks above -- it is not a schedule and it carries no
+  # secrets, which is what the other two workflows in this directory are for.
+  # A job rather than more steps because jobs run in parallel: a install that
+  # takes minutes must not be sat in front of a shellcheck that takes seconds,
+  # and because the container needs setting up quite differently.
+  #
+  # AS A USER AND NOT AS ROOT. The container runs as root, install.sh refuses
+  # to run as root by design -- everything it does writes into a home directory
+  # and doing that as root leaves files the owner cannot edit -- and it asks
+  # for sudo at the moment it needs it. So there is an unprivileged user here
+  # with passwordless sudo, which is the shape of the machine this is written
+  # for.
+  installer:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+
+    # The failure mode of a menu waiting for a key that will never come is a
+    # hang, not an error. tests/installer-menus.sh puts a timeout around each
+    # of its own, and this is the backstop for everything else -- a real run
+    # takes a few minutes.
+    timeout-minutes: 25
+
+    steps:
+      - name: Install what the installer needs to be run at all
+        run: |
+          set -euo pipefail
+
+          # MULTILIB, for the same reason the job above enables it: a disabled
+          # repository is missing from `pacman -Sl` in exactly the way a
+          # package that does not exist is, so without it every lib32-* name
+          # is looked for in the AUR. install.sh has a branch that says so in
+          # words, and tests/installer-run.sh puts a lib32 package in its
+          # substitute list precisely so that branch is not the one taken.
+          printf '[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
+
+          # DELIBERATELY SHORT. Everything the installer itself needs -- stow,
+          # curl, and git for the Neovim clone -- is left out so that the
+          # packages unit is the thing that installs them, which is the only
+          # way the dependency between it and the units after it is real
+          # rather than assumed.
+          #
+          # gum is here because it is the whole point of half of
+          # tests/installer-menus.sh: lib/ui.sh carries two implementations of
+          # its tick-box menu, and the gum one has never been run anywhere,
+          # because gum is not installed on the machine these dotfiles come
+          # from. It is one package in extra. jq is what reads
+          # `check --json` back.
+          pacman -Syu --needed --noconfirm git jq sudo gum
+
+          # THE UNPRIVILEGED USER. Passwordless because install.sh keeps a
+          # sudo timestamp alive for the length of a run rather than asking
+          # again halfway through an AUR build, and there is nobody here to
+          # type a password into either one.
+          useradd --create-home --shell /bin/bash ci
+          printf 'ci ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/ci
+          chmod 0440 /etc/sudoers.d/ci
+
+      - uses: actions/checkout@v7
+
+      - name: Hand the checkout to that user
+        # The runner creates the workspace outside the container and it arrives
+        # owned by root. tests/installer-run.sh copies the tree with `cp -a`,
+        # which as a non-root user cannot preserve an owner it is not, and
+        # fails rather than warning.
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          chown -R ci:ci "$GITHUB_WORKSPACE"
+
+      # `!cancelled()` on both, so a pull request that broke the menus and the
+      # install says both in one run rather than one per push.
+      #
+      # INSTALLER_TEST_INSTALL=1 is the test's own safety catch: it runs
+      # install.sh for real, and the packages step means sudo and pacman, so it
+      # refuses to start anywhere without being told that is wanted.
+      - name: install.sh installs, and installs again to no effect
+        if: ${{ !cancelled() }}
+        run: |
+          sudo -u ci -H env INSTALLER_TEST_INSTALL=1 \
+            "$GITHUB_WORKSPACE/tests/installer-run.sh"
+
+      - name: Both tick-box menus answer a keyboard
+        if: ${{ !cancelled() }}
+        run: sudo -u ci -H "$GITHUB_WORKSPACE/tests/installer-menus.sh"
+
+      # ---------------------------------------------------------------------
+      # WHAT THIS JOB DOES NOT PROVE, written down here rather than left to be
+      # discovered by whoever trusts a green tick.
+      #
+      # THE REAL PACKAGE LISTS ARE NOT INSTALLED. Well over a hundred required
+      # names, four of them AUR builds behind a `yay` that has to compile
+      # itself first, is twenty minutes and a red run every time something
+      # breaks upstream -- which is a fact about the AUR, not about this
+      # repository. tests/package-lists.sh already asks whether every one of
+      # those names exists; the run here uses a handful of stand-ins so the
+      # question it answers is whether install.sh's own machinery works. The
+      # one thing it does build for real is packages/xwayland-satellite/,
+      # because that unit has no other way of being tested at all.
+      #
+      # NOTHING IS ALLOWED NEAR /etc, AND THAT IS THE RISKIEST GAP HERE. The
+      # etc unit writes system files -- pacman.conf, fstab, the mkinitcpio and
+      # grub configuration -- and offers to run `mkinitcpio -P` and
+      # `grub-mkconfig` afterwards. It could be run in a container, and the
+      # result would mean almost nothing: a container's /etc is not the /etc
+      # anybody boots, the initramfs would be built for a kernel that is not
+      # the running one, and grub-mkconfig would enumerate the runner's disks.
+      # "The commands did not error" is the most a green tick could say, and it
+      # would be bought by letting a test rewrite pacman.conf and fstab on the
+      # machine it happens to be running on. So the unit is unticked in the
+      # profile the run is driven with, tests/installer-run.sh asserts that
+      # /etc/pacman.conf and /etc/fstab came out byte-identical, and etc_apply
+      # and etc_post REMAIN UNPROVEN. services-system is left out for the same
+      # reason: it enables system units and writes into /etc, and a container
+      # with no running systemd cannot say whether that worked.
+      #
+      # THE palette UNIT IS NEVER APPLIED. It wants matugen, a wallpaper daemon
+      # and a running compositor in order to generate eleven files from an
+      # image, and none of the three is here. It is unticked for the same
+      # reason the others are, so palette_apply has nothing behind it.
+      #
+      # NOR IS gpu, which installs a graphics driver: the run must be safe on a
+      # real machine as well as in a container, and a driver for a card you do
+      # not have is not a harmless mistake. shell is `na` wherever zsh is not in
+      # /etc/shells, and its apply is `chsh`, which authenticates through PAM
+      # with a password no test has.
+      #
+      # services-user AND monitors SAY `na` HERE and are not exercised: one
+      # needs a running `systemd --user` and the other a compositor to ask over
+      # a socket. That is the correct answer for a container and it is also the
+      # answer on any machine being set up from a TTY, so what is covered is
+      # that they decline cleanly rather than that they work.
