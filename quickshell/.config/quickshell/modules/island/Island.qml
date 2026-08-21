@@ -209,13 +209,11 @@ Item {
             root.popout.toggleAt(root.mapToItem(null, root.width / 2, 0).x, dashboardComponent);
         }
 
-        // Open, never toggle -- see IslandState.openDashboard. Anchored on the
-        // island all the same, even though what asked for it was the badge
-        // beside it: the dashboard is the island's panel and it should come
-        // out of the same place every time, whichever door was used.
-        function onDashboardOpenRequested(): void {
-            root.popout.openAt(root.mapToItem(null, root.width / 2, 0).x, dashboardComponent);
-        }
+        // An onDashboardOpenRequested was here, opening rather than toggling
+        // for the one caller that sent you to a named tab. That caller was the
+        // do-not-disturb badge and the tab was Notifications, which is now a
+        // widget of its own at the right end of the bar; nothing asks for this
+        // panel by tab any more. See IslandState.dashboardTabs.
     }
 
     Rectangle {
