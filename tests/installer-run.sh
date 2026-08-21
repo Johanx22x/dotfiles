@@ -313,17 +313,21 @@ say "the first real run"
 # own. tests/stow-conflicts.sh has already established that the two stow
 # packages can coexist, so a failure here is install.sh's.
 first="$SANDBOX/run-1.txt"
-installer -y --compositor=both > "$first" 2>&1
+# ASKED FOR, NOW THAT IT MEANS SOMETHING. Every mode ends on fail_clean, so a
+# run with anything at all in its summary exits non-zero -- this used to be
+# `update` alone and the other two succeeded whatever happened. Both halves are
+# read: the status, which is what a script sees, and the banner, which is what a
+# person sees, because a status that agreed with a summary nobody printed would
+# be its own kind of wrong.
+if installer -y --compositor=both > "$first" 2>&1; then
+    pass "the first run exits zero"
+else
+    bad "the first run exits zero"
+fi
 sed 's/^/installer-run:   | /' "$first"
 
-# THE EXIT STATUS IS NOT ASKED FOR HERE, AND THAT IS DELIBERATE. install.sh's
-# apply and setup modes end on report_failures, which succeeds whether or not
-# it had anything to report -- so a run in which four units failed still exits
-# 0 and the status says nothing about it. (`update`, further down, is the one
-# mode that does return a real status, and there it IS asked for.) What every
-# mode prints is the "N thing(s) did not work" banner, so that is what is read.
 want_not "the first run reports no failed units" \
-         grep -q 'did not work' "$first"
+         grep -qF 'thing(s) to know' "$first"
 
 want "the first run applies the packages unit"     grep -q '== Packages ==' "$first"
 want "the first run applies the symlinks unit"     grep -q '== Symlinks ==' "$first"
@@ -467,7 +471,7 @@ sed 's/^/installer-run:   | /' "$update"
 
 want "update has nothing left to do"      grep -qF 'nothing to do' "$update"
 want_not "update applies nothing"         grep -q '^== Packages ==' "$update"
-want_not "update reports no failures"     grep -q 'did not work' "$update"
+want_not "update reports no failures"     grep -qF 'thing(s) to know' "$update"
 
 # ---------------------------------------------------------------------------
 say "and so does a second trip through the menu"
@@ -477,13 +481,17 @@ say "and so does a second trip through the menu"
 # conclusion -- the intersection of "ticked" and "not already in place" is
 # empty, and it says so in one sentence rather than doing the lot again.
 second="$SANDBOX/run-2.txt"
-installer -y --compositor=both > "$second" 2>&1
+if installer -y --compositor=both > "$second" 2>&1; then
+    pass "the second run exits zero"
+else
+    bad "the second run exits zero"
+fi
 sed 's/^/installer-run:   | /' "$second"
 
 want "the second run has nothing left to do" \
      grep -qF 'Nothing to do: everything ticked is already in place.' "$second"
 want_not "the second run applies nothing"     grep -q '^== Packages ==' "$second"
-want_not "the second run reports no failures" grep -q 'did not work' "$second"
+want_not "the second run reports no failures" grep -qF 'thing(s) to know' "$second"
 
 # And neither of them quietly rewrote the profile into something else.
 want_eq "the profile is unchanged by running again" \
@@ -544,11 +552,15 @@ rm -f "$HOME_DIR/.zshrc"
 want_not "the link really is gone" test -e "$HOME_DIR/.zshrc"
 
 repair="$SANDBOX/apply-symlinks.txt"
-installer apply symlinks -y > "$repair" 2>&1
+if installer apply symlinks -y > "$repair" 2>&1; then
+    pass "apply symlinks exits zero"
+else
+    bad "apply symlinks exits zero"
+fi
 sed 's/^/installer-run:   | /' "$repair"
 
 want "apply symlinks puts the link back"      test -L "$HOME_DIR/.zshrc"
-want_not "apply symlinks reports no failures" grep -q 'did not work' "$repair"
+want_not "apply symlinks reports no failures" grep -qF 'thing(s) to know' "$repair"
 
 # APPLY DOES NOT CHAIN, and that is the design: it is what somebody reaches for
 # after reading one wrong row in the check table, and expanding `symlinks` into
@@ -558,7 +570,11 @@ want_not "apply on its own does not pull in what it requires" \
 
 # --with-requires is the way back, and says so before it does it.
 chained="$SANDBOX/apply-chained.txt"
-installer apply seeds --with-requires -y > "$chained" 2>&1
+if installer apply seeds --with-requires -y > "$chained" 2>&1; then
+    pass "apply --with-requires exits zero"
+else
+    bad "apply --with-requires exits zero"
+fi
 want "--with-requires says what it pulled in" \
      grep -q 'with what they require:.*symlinks' "$chained"
 
@@ -579,6 +595,30 @@ before="$(snapshot)"
 installer apply symlinks seeds laptop -y -n >/dev/null 2>&1 || true
 after="$(snapshot)"
 want_eq "a dry run left the home directory exactly as it found it" "$before" "$after"
+
+# ---------------------------------------------------------------------------
+say "and a run that could not do what it was asked says so in its status"
+
+# THE OTHER HALF OF THE SAME CLAIM, and the one that would have caught this.
+# Everything above asks whether a run that worked exits zero, which was true
+# before fail_clean reached these modes as well. What was not true is the
+# converse: `apply` ended on fail_report and succeeded whatever it had just
+# printed.
+#
+# laptop is the cheapest unit to make fail on purpose and the only one whose
+# failure touches nothing: with laptop-modules not executable it records a note
+# saying so, writes nothing, and returns. The bit is put back afterwards.
+chmod -x "$MINI/bin/.local/bin/laptop-modules"
+noted="$SANDBOX/apply-noted.txt"
+if installer apply laptop -y > "$noted" 2>&1; then
+    bad "a unit that failed makes apply exit non-zero"
+else
+    pass "a unit that failed makes apply exit non-zero"
+fi
+sed 's/^/installer-run:   | /' "$noted"
+want "and the summary names the unit that did it" \
+     grep -qF 'laptop-modules is not in the repo' "$noted"
+chmod +x "$MINI/bin/.local/bin/laptop-modules"
 
 # ---------------------------------------------------------------------------
 if (( FAILURES )); then
