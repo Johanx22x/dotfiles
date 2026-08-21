@@ -309,6 +309,32 @@ Singleton {
     readonly property string bell: String.fromCodePoint(0xF009C)         // nf-md-bell_outline
     readonly property string bellOff: String.fromCodePoint(0xF0A91)      // nf-md-bell_off_outline
 
+    // ---------------- Installer ----------------
+    // The bar widget that counts what `./install.sh check` found, its page in
+    // the settings window, and the button that hands the privileged half of a
+    // run to a terminal.
+    //
+    // Read out of the font's cmap before being written down, the same way the
+    // two corrections above were found:
+    //
+    //   python -c "from fontTools.ttLib import TTFont; \
+    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
+    //       .getBestCmap().get(0xF06B0))"      # -> md-update
+    //
+    // ONE GLYPH FOR THE WIDGET AND FOR THE PAGE, deliberately. The widget is
+    // the only way most people will ever reach the page, and a flag on the bar
+    // that does not look like the rail entry it opens is a flag nobody
+    // connects to anything.
+    readonly property string update: String.fromCodePoint(0xF06B0)       // nf-md-update
+    // The packs on the installer page. md-package_variant and not md-package
+    // (0xF03D3), which is a closed cardboard box and reads as "a file" beside
+    // a label; the open one reads as a set of things.
+    readonly property string packages: String.fromCodePoint(0xF03D6)     // nf-md-package_variant
+    // "Here is a prompt", for the rows this window refuses to run itself. A
+    // console and not a Tux or a shell glyph: what is being offered is a
+    // terminal, not a distribution and not a login shell.
+    readonly property string terminal: String.fromCodePoint(0xF018D)     // nf-md-console
+
     // ---------------- Cheatsheet ----------------
     // One per category heading. The names on the LEFT are the categories as
     // they are spelled in the descriptions in hyprland.lua -- that is the join
