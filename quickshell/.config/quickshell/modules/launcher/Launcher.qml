@@ -272,6 +272,36 @@ PanelWindow {
         item: panel
     }
 
+    // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
+    //
+    // ext-background-effect: the client names the region behind it that should
+    // be blurred, and both compositors here implement it. This window is a
+    // corner radius wider than the panel on each side, and what lives in those
+    // two strips is a fillet -- a square with a quarter circle taken out of it,
+    // so mostly transparent.
+    //
+    // THIS IS THE SURFACE THE BANDS CAME FROM. Asked to blur the rectangle,
+    // niri blurred the strips too and the launcher opened with a lit,
+    // round-cornered band down each side of the panel. `mask` did not help:
+    // it stops input there, not painting, and a compositor blurring from
+    // outside never sees it.
+    //
+    // So the region is the panel and the two fillets, each in the shape it is
+    // drawn -- and the fillets drop out of it by themselves when the panel
+    // detaches, because they stop being visible and WedgeRegion follows that.
+    BackgroundEffect.blurRegion: Region {
+        item: panel
+
+        // The panel's own rounding, so the blur stops at the curve instead of
+        // squaring off the corners it was given. Welded, the top two are above
+        // the window and the compositor clips them away, which is the same
+        // trick that makes the drawn edge come out straight.
+        radius: Theme.cardRadius
+
+        WedgeRegion { wedge: leftFillet }
+        WedgeRegion { wedge: rightFillet }
+    }
+
     // Reset on every opening. A launcher that remembers the last search is a
     // launcher that shows yesterday's answer to today's keystroke.
     onVisibleChanged: {
@@ -293,7 +323,12 @@ PanelWindow {
         }
     }
 
+    // Named, because the blur region above is built from them: it reads each
+    // one's `radius`, `corner` and `visible` rather than being told any of it
+    // twice.
     CornerWedge {
+        id: leftFillet
+
         visible: root.barVisible
 
         anchors.left: parent.left
@@ -304,6 +339,8 @@ PanelWindow {
     }
 
     CornerWedge {
+        id: rightFillet
+
         visible: root.barVisible
 
         anchors.right: parent.right
