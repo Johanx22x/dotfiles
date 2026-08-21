@@ -111,9 +111,21 @@ SettingsPage {
     // rebuilt and means the same thing on both sides.
     //
     // EMPTY IS THE NORMAL STATE, not an error: it means "nobody has picked",
-    // and editScreen below answers it. Nothing writes it on load, so the page
+    // and barScreen below answers it. Nothing writes it on load, so the page
     // has no opinion until somebody presses a segment.
-    property string editing: ""
+    //
+    // NOT CALLED `editing`, WHICH IS THE NAME THIS FILE USED FOR THE SCOPE.
+    // That property held "" for "All" and a screen key otherwise, and the
+    // widget rows handed it straight to Config.setBarWidget. The name is
+    // deliberately not reused, because a row written against the old meaning
+    // and dropped into this file would still compile: an empty `editing` meant
+    // the base and an empty `barChoice` means nobody has pressed a segment, so
+    // such a row would read the seed, write nothing, and look like a switch
+    // that does not stick. There are branches in flight that still say
+    // `root.editing` -- they predate the change that removed the base. Under
+    // this name they fail to resolve and say so, which is the failure worth
+    // having.
+    property string barChoice: ""
 
     // The bar being edited, resolved rather than stored, which is what makes
     // the switched-off case fall out instead of needing handling. Three steps,
@@ -129,7 +141,7 @@ SettingsPage {
     //
     // Step 1 failing is not only somebody switching a bar off. A monitor
     // unplugged -- a laptop off its dock, a KVM on the other input -- takes
-    // its bar out of the list too, and then `editing` still names it. That is
+    // its bar out of the list too, and then `barChoice` still names it. That is
     // deliberate and it is the same judgement the display page makes about a
     // monitor it has a saved mode for: the choice stays put, the page falls
     // back to a bar that is actually there, and plugging the screen back in
@@ -137,12 +149,12 @@ SettingsPage {
     // where the choice is genuinely revoked, and the Monitors section below
     // clears it there rather than leaving a hidden pointer at a bar that no
     // longer exists.
-    readonly property var editScreen: {
+    readonly property var barScreen: {
         const screens = Screens.barScreens;
         if (screens.length === 0)
             return null;
 
-        const picked = screens.find(screen => Config.screenKey(screen) === root.editing);
+        const picked = screens.find(screen => Config.screenKey(screen) === root.barChoice);
         if (picked)
             return picked;
 
@@ -154,11 +166,11 @@ SettingsPage {
     // give "" -- there is no screen at all, which is a shell with nothing on
     // it -- and Config handles that end: barWidget("") answers from the seed
     // and setBarWidget("") writes nothing.
-    readonly property string editKey: Config.screenKey(root.editScreen)
+    readonly property string barKey: Config.screenKey(root.barScreen)
 
     // Guarded, because screenLabel() reaches into the screen and the no-screen
     // case above hands back null.
-    readonly property string editLabel: root.editScreen ? root.screenLabel(root.editScreen) : ""
+    readonly property string barLabel: root.barScreen ? root.screenLabel(root.barScreen) : ""
 
     // ---------------- Monitors ----------------
     //
@@ -186,13 +198,13 @@ SettingsPage {
                 onToggled: value => {
                     Config.setBarOnScreen(Config.screenKey(modelData), value, Screens.mainKey);
 
-                    // Switching off the bar somebody is editing revokes the
-                    // choice rather than parking it: see editScreen for why an
+                    // Switching off the bar somebody has picked revokes the
+                    // choice rather than parking it: see barScreen for why an
                     // unplugged monitor is treated the other way round. Without
                     // this the picker would fall back while the page is open
                     // and then silently jump back the moment the bar returned.
-                    if (!value && Config.screenKey(modelData) === root.editing)
-                        root.editing = "";
+                    if (!value && Config.screenKey(modelData) === root.barChoice)
+                        root.barChoice = "";
                 }
             }
         }
@@ -263,8 +275,8 @@ SettingsPage {
                     label: root.screenLabel(screen),
                     value: Config.screenKey(screen)
                 }))
-                value: root.editKey
-                onChosen: value => root.editing = value
+                value: root.barKey
+                onChosen: value => root.barChoice = value
             }
         }
 
@@ -302,15 +314,15 @@ SettingsPage {
         ToggleRow {
             glyph: Icons.arch
             label: "Distribution logo"
-            checked: Config.barWidget(root.editKey, "logo")
-            onToggled: value => Config.setBarWidget(root.editKey, "logo", value)
+            checked: Config.barWidget(root.barKey, "logo")
+            onToggled: value => Config.setBarWidget(root.barKey, "logo", value)
         }
 
         ToggleRow {
             glyph: Icons.window
             label: "Focused window title"
-            checked: Config.barWidget(root.editKey, "activeWindow")
-            onToggled: value => Config.setBarWidget(root.editKey, "activeWindow", value)
+            checked: Config.barWidget(root.barKey, "activeWindow")
+            onToggled: value => Config.setBarWidget(root.barKey, "activeWindow", value)
         }
 
         // The island, and this is the row the second bar is for: the pill in
@@ -322,8 +334,8 @@ SettingsPage {
         ToggleRow {
             glyph: Icons.widgets
             label: "Island"
-            checked: Config.barWidget(root.editKey, "island")
-            onToggled: value => Config.setBarWidget(root.editKey, "island", value)
+            checked: Config.barWidget(root.barKey, "island")
+            onToggled: value => Config.setBarWidget(root.barKey, "island", value)
         }
 
         // Same shape as the note under the settings button: a switch that can
@@ -332,7 +344,7 @@ SettingsPage {
         // island -- which is worth saying before somebody reads their staying
         // as the switch not having worked.
         Text {
-            visible: !Config.barWidget(root.editKey, "island")
+            visible: !Config.barWidget(root.barKey, "island")
 
             x: Theme.groupPadding
             width: parent.width - Theme.groupPadding * 2
@@ -354,15 +366,15 @@ SettingsPage {
         ToggleRow {
             glyph: Icons.apps
             label: "System tray"
-            checked: Config.barWidget(root.editKey, "tray")
-            onToggled: value => Config.setBarWidget(root.editKey, "tray", value)
+            checked: Config.barWidget(root.barKey, "tray")
+            onToggled: value => Config.setBarWidget(root.barKey, "tray", value)
         }
 
         ToggleRow {
             glyph: Icons.battery
             label: "Peripheral battery"
-            checked: Config.barWidget(root.editKey, "battery")
-            onToggled: value => Config.setBarWidget(root.editKey, "battery", value)
+            checked: Config.barWidget(root.barKey, "battery")
+            onToggled: value => Config.setBarWidget(root.barKey, "battery", value)
         }
 
         // The switch is here; WHICH layouts it cycles through is on the Input
@@ -375,12 +387,12 @@ SettingsPage {
         ToggleRow {
             glyph: Icons.keyboard
             label: "Keyboard layout"
-            checked: Config.barWidget(root.editKey, "keyboardLayout")
-            onToggled: value => Config.setBarWidget(root.editKey, "keyboardLayout", value)
+            checked: Config.barWidget(root.barKey, "keyboardLayout")
+            onToggled: value => Config.setBarWidget(root.barKey, "keyboardLayout", value)
         }
 
         Text {
-            visible: Config.barWidget(root.editKey, "keyboardLayout") && Config.keyboardLayouts.length < 2
+            visible: Config.barWidget(root.barKey, "keyboardLayout") && Config.keyboardLayouts.length < 2
 
             x: Theme.groupPadding
             width: parent.width - Theme.groupPadding * 2
@@ -402,15 +414,15 @@ SettingsPage {
         ToggleRow {
             glyph: Icons.clock
             label: "Clock"
-            checked: Config.barWidget(root.editKey, "clock")
-            onToggled: value => Config.setBarWidget(root.editKey, "clock", value)
+            checked: Config.barWidget(root.barKey, "clock")
+            onToggled: value => Config.setBarWidget(root.barKey, "clock", value)
         }
 
         ToggleRow {
             glyph: Icons.settings
             label: "Settings button"
-            checked: Config.barWidget(root.editKey, "settingsButton")
-            onToggled: value => Config.setBarWidget(root.editKey, "settingsButton", value)
+            checked: Config.barWidget(root.barKey, "settingsButton")
+            onToggled: value => Config.setBarWidget(root.barKey, "settingsButton", value)
         }
 
         // The one switch that can hide its own way back, so it says where the
@@ -425,7 +437,7 @@ SettingsPage {
         // two bars it would be a false one -- the other screen still has its
         // gear. The line is otherwise the one that was here.
         Text {
-            visible: !Config.barWidget(root.editKey, "settingsButton")
+            visible: !Config.barWidget(root.barKey, "settingsButton")
 
             x: Theme.groupPadding
             width: parent.width - Theme.groupPadding * 2
@@ -477,16 +489,16 @@ SettingsPage {
         // titled "Widgets" would read as the page's reset, which is the one
         // reading it must not have.
         ActionRow {
-            visible: !Config.barIsDefault(root.editKey)
+            visible: !Config.barIsDefault(root.barKey)
 
             glyph: Icons.restore
             label: "This bar's widgets"
             description: root.barCount > 1
-                ? `Back to the set a new bar starts with. ${root.editLabel} only — every other bar keeps what it has.`
+                ? `Back to the set a new bar starts with. ${root.barLabel} only — every other bar keeps what it has.`
                 : "Back to the set a new bar starts with."
             actionText: "Reset"
             actionGlyph: Icons.restore
-            onTriggered: Config.resetBar(root.editKey)
+            onTriggered: Config.resetBar(root.barKey)
         }
     }
 
