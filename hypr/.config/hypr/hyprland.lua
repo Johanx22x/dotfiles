@@ -295,8 +295,14 @@ hl.config({
         -- Set to true to enable resizing windows by clicking and dragging on borders and gaps
         resize_on_border = false,
 
-        -- Please see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Tearing/ before you turn this on
-        allow_tearing = false,
+        -- NO allow_tearing HERE, and that is the point: it is declared once, in
+        -- gaming.lua, next to the note explaining when you would want it and
+        -- next to the `immediate` window rule you have to uncomment with it.
+        -- It used to be declared in both files with the same value, which is
+        -- fine until the day they disagree -- gaming.lua loads after this
+        -- block, so it would have won silently, and the file you edited would
+        -- have been the one that did nothing. Hyprland's own default is false,
+        -- so tearing stays off even if gaming.lua fails to load.
 
         layout = "dwindle",
     },
@@ -465,19 +471,11 @@ hl.config({
     },
 })
 
--- See https://wiki.hypr.land/Configuring/Layouts/Master-Layout/ for more
-hl.config({
-    master = {
-        new_status = "master",
-    },
-})
-
--- See https://wiki.hypr.land/Configuring/Layouts/Scrolling-Layout/ for more
-hl.config({
-    scrolling = {
-        fullscreen_on_one_column = true,
-    },
-})
+-- The master and scrolling blocks were here, tuning two layouts that are
+-- never selected: `general.layout` is "dwindle" above and nothing anywhere
+-- switches it. They came from the upstream template. Add them back the day
+-- the layout changes, not before -- a setting that configures nothing reads
+-- like a setting that works.
 
 ----------------
 ----  MISC  ----
@@ -539,12 +537,13 @@ hl.gesture({
     action = "workspace"
 })
 
--- Example per-device config
--- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Devices/ for more
-hl.device({
-    name        = "epic-mouse-v1",
-    sensitivity = -0.5,
-})
+-- The example hl.device for "epic-mouse-v1" was here, straight from the
+-- upstream template (/usr/share/hypr/hyprland.lua). It is Hyprland's made-up
+-- name in its own documentation, and nothing of the sort is attached here:
+-- no device by that name appears in /proc/bus/input/devices, so the block set
+-- the sensitivity of nothing. The DualSense rule below is
+-- what a real per-device block looks like, and `hyprctl devices` is where the
+-- names come from.
 
 -- The kernel's hid-playstation driver exposes the DualSense touchpad as a
 -- real pointer device (its own evdev node with POINTER + BUTTONPAD), so the
@@ -829,8 +828,14 @@ hl.layer_rule({
     -- falls through to the GLOBAL decoration.blur, which has different
     -- parameters and no xray, and the surface ends up visibly blurrier than
     -- the bar it is supposed to belong to. That is how the power menu looked
-    -- before it was added to this list.
-    match = { namespace = "^quickshell-(bar|popout|notifications|powermenu|launcher|cheatsheet)$" },
+    -- before it was added to this list, and how the wallpaper carousel looked
+    -- until `wallpaper` was added to it -- a full-screen sheet of
+    -- Theme.glass(Theme.surface) is the largest possible place to notice.
+    --
+    -- The list is the WlrLayershell.namespace lines in the shell, minus the two
+    -- surfaces with no glass in them: quickshell-screen-corner is opaque black
+    -- and quickshell-click-catcher draws nothing at all.
+    match = { namespace = "^quickshell-(bar|popout|notifications|powermenu|launcher|cheatsheet|wallpaper)$" },
 
     blur          = true,
 
@@ -866,14 +871,12 @@ hl.layer_rule({
 -- "quickshell-notifications" and is covered by blur-quickshell above.
 -- Nothing on this system creates a bare "notifications" layer any more.
 
--- Hyprland-run windowrule
-hl.window_rule({
-    name  = "move-hyprland-run",
-    match = { class = "hyprland-run" },
-
-    move  = "20 monitor_h-120",
-    float = true,
-})
+-- The move-hyprland-run rule was here, also from the upstream template. The
+-- binary exists (hyprland-guiutils ships /usr/bin/hyprland-run) but nothing on
+-- this desktop starts it: the launcher is the shell's own, `qs ipc call
+-- launcher toggle`, bound on SUPER + SPACE, and it is a layer surface rather
+-- than a window -- see the blur rule above, not a window rule. So the rule
+-- placed a window that never opens.
 
 -- Helper apps kept out of the tiling: they are opened briefly and closed,
 -- and tiled they would reshuffle the rest of the workspace on every launch.
@@ -1060,12 +1063,84 @@ hl.window_rule({
     center   = true,
 })
 
+-- DaVinci Resolve. Ported from the niri config, where the two rules and the
+-- long story behind them live in full (search that file for "DaVinci"); what
+-- follows is what this side needs plus what does not carry across.
+--
+-- THE CLASS IS `resolve`, not "davinci-resolve" and not "DaVinci Resolve". It
+-- is the X11 WM_CLASS, and the shipped DaVinciResolve.desktop records it as
+-- StartupWMClass=resolve.
+--
+-- ALWAYS ON THE LANDSCAPE MONITOR. The other one is rotated to portrait and is
+-- 1080 px wide; Resolve's UI is a wide timeline under two viewers and no
+-- arrangement of it fits in that. MONITOR_MAIN rather than the EDID string, so
+-- this follows whatever the settings window last wrote into monitors.lua --
+-- the same indirection the game rules in gaming.lua use.
+--
+-- suppress_event = "fullscreen" is the port of niri's `open-fullscreen false`.
+-- Resolve asks for fullscreen itself at startup, and a fullscreen window here
+-- has no border, no rounding and no gaps, which reads as "none of these rules
+-- matched" rather than as the app getting what it asked for. suppressevent
+-- drops the CLIENT's request and nothing else: SUPER + F still works once the
+-- window is open.
+--
+-- maximize is the port of `open-maximized`, and it is also what keeps the
+-- window wide. niri needs a `min-width 1280` next to it because SUPER + P
+-- cycles a column through preset widths and a third of 2560 collapses the page
+-- tabs along the bottom; that chord is pseudotile here and there is no width
+-- cycle to defend against. min_size is NOT ported for the same reason and for
+-- a second one: Hyprland clamps tiled windows to minsize/maxsize only when
+-- misc:size_limits_tiled is on, and that defaults to false (ConfigValues.cpp,
+-- v0.56.2). This desktop is dwindle, so the rule would have been decoration.
+hl.window_rule({
+    name  = "resolve-main",
+    match = { class = "^resolve$" },
+
+    monitor        = MONITOR_MAIN,
+    maximize       = true,
+    suppress_event = "fullscreen",
+})
+
+-- The project manager, which is a SECOND TOPLEVEL and not a modal drawn inside
+-- the main window. Tiled, it takes a share of the workspace and splits the
+-- screen in two on every launch; floating is what it wants to be, at the size
+-- the niri rule gives it.
+--
+-- Matched by title ON TOP OF the class: every Resolve window answers to
+-- `resolve`, so a class-only rule here would float the main window too.
+hl.window_rule({
+    name  = "float-resolve-project-manager",
+    match = { class = "^resolve$", title = "^Project Manager$" },
+
+    float  = true,
+    size   = "1600 1000",
+    center = true,
+})
+
 
 ---------------
 ---- GAMING ----
 ---------------
 -- Render, environment and window rules for games.
 -- See ~/.config/hypr/gaming.lua
+--
+-- BARE, and not pcall(dofile, ...) like the four other includes -- which looks
+-- like the odd one out and is not. Measured on 0.56.2 rather than assumed:
+-- Hyprland's `require` catches whatever the module throws and files it as a
+-- config error instead of letting it propagate. Appending a syntax error to
+-- gaming.lua, and separately a call to a nil global, printed
+-- `require("gaming"): ...` in the parsing result and the rest of THIS file
+-- still ran -- a deliberately broken rule added after this line was still
+-- reached and still reported. So tweaks.lua and local.lua below survive a
+-- broken gaming.lua on their own; there is nothing here for a pcall to save.
+--
+-- Wrapping it would in fact cost something: pcall SWALLOWS the message, and
+-- gaming.lua is the file most often edited -- every new game adds a rule to
+-- it. Left as it is, a mistake in there shows up in `hyprctl configerrors`
+-- and in the red banner. `require` rather than a path is also what keeps
+-- `Hyprland --verify-config -c` on a checkout elsewhere reading THAT
+-- checkout's gaming.lua: it resolves through package.path, which Hyprland
+-- points at the directory of the config it actually loaded.
 require("gaming")
 
 
