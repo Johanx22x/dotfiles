@@ -692,6 +692,294 @@ SettingsPage {
         }
     }
 
+    // A row whose value is a KEY, chosen by pressing it.
+    //
+    // WHY IT LIVES HERE AND NOT IN components/. Everything in components/ is
+    // ignorant of where its value comes from; this one knows what an xkb
+    // keysym is called and which keys a compositor bind can be written on,
+    // which is knowledge about the thing being configured rather than about
+    // settings rows. Same argument as VolumeLine above.
+    //
+    // PRESSING THE KEY, not choosing it from a list. The list would be a
+    // thousand keysyms long, and the question "which key do I want to hold" is
+    // one the fingers answer faster than the eyes.
+    component KeyPickerRow: Rectangle {
+        id: picker
+
+        property string glyph: ""
+        property string label: ""
+        property string keyName: ""
+
+        // True while the next key press is the answer rather than a keystroke.
+        property bool capturing: false
+        // Set when a key was pressed that cannot be written into a bind, and
+        // cleared a moment later. It replaces the value in the chip, so the
+        // refusal appears where the answer would have.
+        property bool refused: false
+
+        signal picked(string keysym)
+
+        width: parent ? parent.width : implicitWidth
+        implicitWidth: 320
+        implicitHeight: Theme.groupHeight
+
+        radius: Theme.groupRadius
+        color: pickerMouse.containsMouse || picker.capturing ? Theme.surfaceContainerHigh : "transparent"
+
+        Behavior on color {
+            ColorAnimation { duration: Theme.animDuration }
+        }
+
+        // The keys that cannot be the answer, and the reason is the same for
+        // both halves: the bind is written with ignore_mods, which means the
+        // modifiers are not looked at when it is matched. A bind ON a modifier
+        // would be asking the compositor to match the thing it was told to
+        // ignore.
+        readonly property var modifierKeys: [Qt.Key_Shift, Qt.Key_Control, Qt.Key_Alt,
+            Qt.Key_AltGr, Qt.Key_Meta, Qt.Key_Super_L, Qt.Key_Super_R,
+            Qt.Key_Hyper_L, Qt.Key_Hyper_R, Qt.Key_CapsLock, Qt.Key_NumLock,
+            Qt.Key_ScrollLock, Qt.Key_Mode_switch]
+
+        // Qt's key code to the name xkb -- and therefore the bind -- uses.
+        //
+        // RETURNS EMPTY FOR ANYTHING IT DOES NOT KNOW, and the row refuses
+        // rather than falling back to `code:NN`. The keycode is the tempting
+        // fallback because it always exists, but Qt's nativeScanCode and
+        // Hyprland's `code:` do not provably agree about the offset between
+        // evdev numbering and X11 numbering, and a bind on the wrong key is
+        // worse than a bind that was never written -- it would open the
+        // microphone on a key nobody is watching. `desktop-tweak` still
+        // accepts code:NN by hand for whoever wants to check it.
+        function keysymFor(key: int): string {
+            if (key >= Qt.Key_A && key <= Qt.Key_Z)
+                return String.fromCharCode(97 + (key - Qt.Key_A));
+            if (key >= Qt.Key_0 && key <= Qt.Key_9)
+                return String.fromCharCode(48 + (key - Qt.Key_0));
+            // Contiguous in Qt, and F13 upwards is the interesting half here:
+            // a keyboard that can send one has a key nothing else wants.
+            if (key >= Qt.Key_F1 && key <= Qt.Key_F35)
+                return `F${key - Qt.Key_F1 + 1}`;
+
+            switch (key) {
+            case Qt.Key_Space:        return "space";
+            case Qt.Key_Backslash:    return "backslash";
+            case Qt.Key_Bar:          return "bar";
+            case Qt.Key_Slash:        return "slash";
+            case Qt.Key_Question:     return "question";
+            case Qt.Key_Semicolon:    return "semicolon";
+            case Qt.Key_Colon:        return "colon";
+            case Qt.Key_Apostrophe:   return "apostrophe";
+            case Qt.Key_QuoteDbl:     return "quotedbl";
+            case Qt.Key_BracketLeft:  return "bracketleft";
+            case Qt.Key_BracketRight: return "bracketright";
+            case Qt.Key_BraceLeft:    return "braceleft";
+            case Qt.Key_BraceRight:   return "braceright";
+            case Qt.Key_Comma:        return "comma";
+            case Qt.Key_Period:       return "period";
+            case Qt.Key_Minus:        return "minus";
+            case Qt.Key_Underscore:   return "underscore";
+            case Qt.Key_Equal:        return "equal";
+            case Qt.Key_Plus:         return "plus";
+            case Qt.Key_QuoteLeft:    return "grave";
+            case Qt.Key_AsciiTilde:   return "asciitilde";
+            case Qt.Key_Less:         return "less";
+            case Qt.Key_Greater:      return "greater";
+            case Qt.Key_Exclam:       return "exclam";
+            case Qt.Key_At:           return "at";
+            case Qt.Key_NumberSign:   return "numbersign";
+            case Qt.Key_Dollar:       return "dollar";
+            case Qt.Key_Percent:      return "percent";
+            case Qt.Key_AsciiCircum:  return "asciicircum";
+            case Qt.Key_Ampersand:    return "ampersand";
+            case Qt.Key_Asterisk:     return "asterisk";
+            case Qt.Key_ParenLeft:    return "parenleft";
+            case Qt.Key_ParenRight:   return "parenright";
+            case Qt.Key_Tab:          return "Tab";
+            case Qt.Key_Return:       return "Return";
+            case Qt.Key_Enter:        return "Return";
+            case Qt.Key_Backspace:    return "BackSpace";
+            case Qt.Key_Insert:       return "Insert";
+            case Qt.Key_Delete:       return "Delete";
+            case Qt.Key_Home:         return "Home";
+            case Qt.Key_End:          return "End";
+            case Qt.Key_PageUp:       return "Page_Up";
+            case Qt.Key_PageDown:     return "Page_Down";
+            case Qt.Key_Up:           return "Up";
+            case Qt.Key_Down:         return "Down";
+            case Qt.Key_Left:         return "Left";
+            case Qt.Key_Right:        return "Right";
+            case Qt.Key_Menu:         return "Menu";
+            case Qt.Key_Print:        return "Print";
+            case Qt.Key_Pause:        return "Pause";
+            default:                  return "";
+            }
+        }
+
+        function startCapture(): void {
+            picker.refused = false;
+            picker.capturing = true;
+            picker.forceActiveFocus();
+        }
+
+        function cancelCapture(): void {
+            picker.capturing = false;
+            picker.refused = false;
+            // THE FOCUS HAS TO GO BACK TOO, not just the flag. Leaving it here
+            // is what made the row keep the window's keyboard after it had
+            // stopped listening.
+            picker.focus = false;
+        }
+
+        // Focus leaving is a cancel. Clicking anywhere else in the window while
+        // waiting for a key has to mean "never mind" -- the alternative is a
+        // row that is still listening after the user has moved on, and the
+        // next thing they type lands in it.
+        onActiveFocusChanged: {
+            if (!picker.activeFocus)
+                picker.cancelCapture();
+        }
+
+        // AND LEAVING THE PAGE IS A CANCEL AS WELL, which is not the same
+        // event. SettingsPage hides a page it is not showing rather than
+        // destroying it, and an item that is hidden KEEPS its active focus --
+        // measured. Without this, clicking away from Sound mid-capture left
+        // the row listening from a page nobody could see: every key in the
+        // window was swallowed, and the first one it recognised silently
+        // became the new push-to-talk key.
+        onVisibleChanged: {
+            if (!picker.visible)
+                picker.cancelCapture();
+        }
+
+        Keys.onPressed: event => {
+            if (!picker.capturing)
+                return;
+
+            // Swallowed whichever branch is taken below, including the
+            // refusals: while this row is listening, the keyboard is its own.
+            event.accepted = true;
+
+            if (event.isAutoRepeat)
+                return;
+
+            if (event.key === Qt.Key_Escape) {
+                picker.cancelCapture();
+                return;
+            }
+
+            if (picker.modifierKeys.indexOf(event.key) >= 0) {
+                picker.refused = true;
+                refusalTimer.restart();
+                return;
+            }
+
+            const keysym = picker.keysymFor(event.key);
+            if (keysym === "") {
+                picker.refused = true;
+                refusalTimer.restart();
+                return;
+            }
+
+            picker.capturing = false;
+            picker.refused = false;
+            picker.focus = false;
+            picker.picked(keysym);
+        }
+
+        // Long enough to be read, short enough that the row is listening again
+        // before the finger has decided what to try instead.
+        Timer {
+            id: refusalTimer
+
+            interval: 1400
+            onTriggered: picker.refused = false
+        }
+
+        Row {
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.groupPadding
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.itemSpacing
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: picker.glyph !== ""
+                text: picker.glyph
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.iconSize
+                color: Theme.textOnSurfaceVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: picker.label
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize
+                font.weight: Theme.fontWeight
+                color: Theme.textOnSurface
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+            }
+        }
+
+        // The chip carries the value, the invitation and the refusal in turn,
+        // rather than a chip plus a button plus a line of helper text: all
+        // three are answers to "what key", so they belong in the same place.
+        Rectangle {
+            id: chip
+
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.groupPadding
+            anchors.verticalCenter: parent.verticalCenter
+
+            implicitWidth: chipText.implicitWidth + Theme.groupPadding * 2
+            implicitHeight: Theme.groupHeight - 8
+            radius: height / 2
+
+            color: picker.capturing ? Theme.primaryContainer : "transparent"
+            border.width: picker.capturing ? 0 : 1
+            border.color: Theme.outlineVariant
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.animDuration }
+            }
+
+            Text {
+                id: chipText
+
+                anchors.centerIn: parent
+
+                text: picker.refused ? "Not that key"
+                    : picker.capturing ? "Press a key"
+                    : picker.keyName
+
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize - 1
+                font.weight: Theme.fontWeight
+                color: picker.capturing ? Theme.textOnPrimaryContainer : Theme.textOnSurfaceVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+            }
+        }
+
+        MouseArea {
+            id: pickerMouse
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: picker.capturing ? picker.cancelCapture() : picker.startCapture()
+        }
+    }
+
     // ---------------- Output ----------------
     SettingsSection {
         width: parent.width
@@ -874,6 +1162,46 @@ SettingsPage {
 
                     onChosen: Pipewire.preferredDefaultAudioSource = modelData
                 }
+            }
+        }
+    }
+
+    // ---------------- Push to talk ----------------
+    //
+    // A LOADER AND NOT `visible: Compositor.can(...)`, and the difference is
+    // the search field. SettingsSearch walks the page's object tree looking
+    // for anything with a label, and it does not test visibility -- it cannot,
+    // because every page that is not the current one is already invisible and
+    // testing would find nothing at all. So a hidden section is still a found
+    // section, and on niri typing "push to talk" would offer a row that is not
+    // on the page. A Loader that is not active has no children to walk.
+    Loader {
+        width: parent.width
+        active: Compositor.can("pushToTalk")
+        // Or the Column counts it as a row and leaves the section's spacing
+        // behind on a compositor that never draws the section.
+        visible: active
+
+        sourceComponent: SettingsSection {
+            width: parent.width
+            glyph: Icons.microphone
+            title: "Push to talk"
+
+            ToggleRow {
+                glyph: Config.pushToTalk ? Icons.microphoneOff : Icons.microphone
+                label: "Hold a key to talk"
+                checked: Config.pushToTalk
+                // Through the tweak store, which writes the compositor binds
+                // and reloads them. The switch does not touch the microphone
+                // itself -- Microphone.qml watches this value and closes it.
+                onToggled: value => Config.setTweak("ptt", value ? "1" : "0")
+            }
+
+            KeyPickerRow {
+                glyph: Icons.keyboard
+                label: "Push-to-talk key"
+                keyName: Config.pushToTalkKey
+                onPicked: keysym => Config.setTweak("ptt-key", keysym)
             }
         }
     }

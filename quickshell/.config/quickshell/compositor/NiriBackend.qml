@@ -120,6 +120,24 @@ CompositorBackend {
         // nothing at all while the user is focused on the other monitor -- the
         // window appears and typing goes nowhere.
         globalKeyboardGrab: false,
+        // FALSE on niri 26.04, and this one is a hole in the compositor rather
+        // than a shape it chose. There is no way to run anything when a key is
+        // RELEASED: `niri validate` rejects on-release, release, key-up and
+        // hold, it does not implement hyprland-global-shortcuts-v1 -- no such
+        // string in the binary -- and the portal route dead-ends, because
+        // xdg-desktop-portal-gnome proxies GlobalShortcuts to org.gnome.Shell
+        // and niri publishes only .Introspect and .Screenshot of that.
+        //
+        // Upstream niri-wm/niri#3621 adds press and release binds and is
+        // approved but not merged; its own example is this exact feature. When
+        // it lands, this becomes true, desktop-tweak grows a generate_niri
+        // counterpart to ptt_lua, and nothing else changes -- the microphone
+        // half already lives in the shell.
+        //
+        // The alternative that works today is an evdev reader outside the
+        // compositor (xremap and friends), which is a daemon reading the
+        // keyboard, and it is not worth that to avoid waiting for #3621.
+        pushToTalk: false,
         logout: true
     })
 
