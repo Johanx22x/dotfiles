@@ -130,12 +130,27 @@ Rectangle {
         }
     }
 
+    // THE BAND IS THE LABEL LINE AND NOT THE WHOLE ROW, which is what makes
+    // this row different from the others. A ChoiceRow is two storeys: the
+    // label with its mark on top, the segment track underneath. A note
+    // measured off the whole row would open below the segments, a long way
+    // from the mark that asked for it and with a control in between; measured
+    // off the label line it opens right under the words it is explaining, and
+    // covers the segments, which is fine -- they are still there when it
+    // fades.
+    //
+    // Which is also why the band matters rather than just a y: when there is
+    // no room below, Tooltip flips it above the LABEL LINE, not above the
+    // segments, so the note stays attached to the same end of the row either
+    // way.
     Tooltip {
         text: root.hint
         shown: hintMouse.containsMouse
 
         x: Theme.groupPadding
-        y: labelRow.y + labelRow.height + 2
+        anchorY: labelRow.y
+        anchorHeight: labelRow.height
+        gap: 2
         z: 200
     }
 
