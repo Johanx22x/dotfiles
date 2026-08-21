@@ -1,0 +1,37 @@
+# Everything between the power button and a desktop: display manager, network,
+# bluetooth, audio.
+#
+# This is the list that decides whether a fresh install has sound and a way to
+# log in, so it is required under either compositor. The four pipewire entries
+# go together: pipewire-pulse and pipewire-jack are the shims that let anything
+# written for PulseAudio or JACK keep working, and wireplumber is the session
+# manager that actually routes anything -- without it PipeWire runs and the
+# desktop is mute.
+#
+# THE TWO xorg-* ENTRIES ARE NOT A LEFTOVER. The SDDM greeter runs on Xorg
+# (system/sddm-Xsetup arranges the monitors with xrandr before it starts), and
+# `xrdb -merge` is how a running Steam is told the pointer theme changed --
+# see the cursor scripts in bin/. Both are small and both have a caller.
+
+archlinux-xdg-menu
+blueman
+bluez
+bluez-utils
+gst-plugin-pipewire
+hyprpolkitagent
+libpulse
+network-manager-applet
+networkmanager
+pavucontrol
+pipewire
+pipewire-alsa
+pipewire-jack
+pipewire-pulse
+sddm
+sof-firmware
+upower
+wireplumber
+wpa_supplicant
+xdg-utils
+xorg-xrandr
+xorg-xrdb

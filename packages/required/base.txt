@@ -1,0 +1,33 @@
+# The machine underneath the desktop: kernels, boot, filesystem, snapshots.
+#
+# Nothing in here draws anything. This is what a box needs in order to boot,
+# update itself and get back out of a bad update. Two kernels side by side on
+# purpose -- the LTS is the plan B, which is why system/linux-lts.preset gives
+# it no fallback initramfs of its own -- and snap-pac plus grub-btrfs so every
+# pacman transaction leaves a snapshot with a boot entry pointing at it.
+#
+# base and base-devel are listed even though the Arch installer already put
+# them there: base-devel is what makepkg needs, and the AUR half of this
+# desktop is not optional.
+
+base
+base-devel
+btrfs-progs
+dkms
+efibootmgr
+git
+grub
+grub-btrfs
+intel-ucode
+linux
+linux-firmware
+linux-headers
+linux-lts
+linux-lts-headers
+mkinitcpio
+pacman-contrib
+reflector
+snap-pac
+snapper
+sudo
+zram-generator
