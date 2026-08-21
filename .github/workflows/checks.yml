@@ -230,21 +230,20 @@ jobs:
       # one thing it does build for real is packages/xwayland-satellite/,
       # because that unit has no other way of being tested at all.
       #
-      # NOTHING IS ALLOWED NEAR /etc, AND THAT IS THE RISKIEST GAP HERE. The
-      # etc unit writes system files -- pacman.conf, fstab, the mkinitcpio and
-      # grub configuration -- and offers to run `mkinitcpio -P` and
-      # `grub-mkconfig` afterwards. It could be run in a container, and the
-      # result would mean almost nothing: a container's /etc is not the /etc
-      # anybody boots, the initramfs would be built for a kernel that is not
-      # the running one, and grub-mkconfig would enumerate the runner's disks.
-      # "The commands did not error" is the most a green tick could say, and it
-      # would be bought by letting a test rewrite pacman.conf and fstab on the
-      # machine it happens to be running on. So the unit is unticked in the
-      # profile the run is driven with, tests/installer-run.sh asserts that
-      # /etc/pacman.conf and /etc/fstab came out byte-identical, and etc_apply
-      # and etc_post REMAIN UNPROVEN. services-system is left out for the same
-      # reason: it enables system units and writes into /etc, and a container
-      # with no running systemd cannot say whether that worked.
+      # NOTHING WRITES TO /etc, AND NOTHING IN THE INSTALLER TRIES TO ANY
+      # MORE. The etc unit used to write system files -- pacman.conf, fstab,
+      # the mkinitcpio and grub configuration -- and then offer to run
+      # `mkinitcpio -P` and `grub-mkconfig`, none of which a container can say
+      # anything useful about: a container's /etc is not the /etc anybody
+      # boots, the initramfs would be built for a kernel that is not the
+      # running one, and grub-mkconfig would enumerate the runner's disks. It
+      # prints the diff and the command now and runs neither, which IS
+      # checkable here, so tests/installer-run.sh drives it by name and asserts
+      # that not one file under /etc moved.
+      #
+      # services-system is still left out: it enables system units and writes
+      # into /etc, and a container with no running systemd cannot say whether
+      # that worked.
       #
       # THE palette UNIT IS NEVER APPLIED. It wants matugen, a wallpaper daemon
       # and a running compositor in order to generate eleven files from an
