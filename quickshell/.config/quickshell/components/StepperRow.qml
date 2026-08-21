@@ -185,12 +185,22 @@ Rectangle {
             onTriggered: root.nudge(-root.step)
         }
 
-        // FIXED WIDTH, because the number is between two buttons and both of
-        // them would shift sideways every time it went from 9 to 10. Wide
-        // enough for three digits plus the suffix.
+        // A FLOOR, NOT A FIXED WIDTH. The number sits between two buttons and
+        // both of them would shift sideways every time it went from 9 to 10, so
+        // it holds a width rather than hugging its text. Fifty-two is what three
+        // digits and a short suffix need, and it is what every row here used to
+        // be given outright.
+        //
+        // OUTRIGHT WAS WRONG the first time a suffix was longer than " px". The
+        // recording page asks for " Mbit/s", and `40 Mbit/s` is nine characters
+        // in a box built for six: it overflowed in both directions at once and
+        // was drawn straight through the minus and the plus, which is how it was
+        // noticed. Growing past the floor moves the buttons apart on that row
+        // and nowhere else -- the jitter this guards against is between one
+        // value and the next, not between one row and another.
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            width: 52
+            width: Math.max(52, implicitWidth)
             horizontalAlignment: Text.AlignHCenter
             text: root.display !== "" ? root.display : `${root.value}${root.suffix}`
             font.family: Theme.fontFamily
