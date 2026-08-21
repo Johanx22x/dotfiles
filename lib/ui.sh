@@ -129,3 +129,178 @@ ui_choose_one() {
   ui_warn "   Taking the default." >&2
   printf '%s\n' "${options[$(( default - 1 ))]}"
 }
+
+# ---------------------------------------------------------------------------
+# TICK BOXES.
+#
+# TWO IMPLEMENTATIONS OF ONE FUNCTION, and the plain one is the real one. `gum`
+# is extra/gum, 13.21 MiB, and depends on nothing but glibc -- so it is a
+# perfectly good thing to want and a terrible thing to need. The machine this
+# installer is for is a fresh Arch install; if the menu that installs packages
+# needs a package, there is nothing to be done about it from inside the menu.
+#
+# So the fallback is not a degraded mode. It is what gets tested, and it is what
+# runs here, because gum is not installed on the machine this was written on.
+ui_have_gum() { command -v gum >/dev/null; }
+
+# Asked once and remembered, so a machine that has said no is not asked again
+# every time the menu opens. Never asked without a terminal, and never during
+# --dry-run: offering to install something is only useful where the answer can
+# be acted on.
+ui_offer_gum() {
+  ui_have_gum && return 0
+  ui_has_tty || return 0
+  (( ${DRY_RUN:-0} )) && return 0
+  [[ "$(state_get ui.gum ask)" == ask ]] || return 0
+
+  ui_dim "   The menu below is plain bash. 'gum' draws a nicer one -- 13 MiB"
+  ui_dim "   from extra, depending on nothing but glibc."
+  if ui_confirm "   Install gum?" n; then
+    if sudo pacman -S --needed --noconfirm gum; then
+      state_set ui.gum yes
+    else
+      ui_bad "   gum could not be installed; carrying on with the plain menu."
+      state_set ui.gum no
+    fi
+  else
+    state_set ui.gum no
+  fi
+  state_save
+}
+
+# A comma-separated list back into one item per line. The separator is a comma
+# because that is what `gum choose --selected` takes; nothing this menu shows
+# contains one, and the labels are built in this file so it stays that way.
+ui_csv_lines() {
+  local csv="$1"
+  [[ -z $csv ]] && return 0
+  printf '%s\n' "${csv//,/$'\n'}"
+}
+
+# ui_multi_select <header> <preselected-csv> <label>...
+#
+# Prints the chosen labels on stdout, one per line, and everything else on
+# stderr -- same rule as ui_choose_one, and for the same reason.
+#
+# NO TERMINAL MEANS THE PRESELECTION STANDS. That is the honest answer: the
+# boxes come from the profile, or from the state of the machine on a first run,
+# and a mode with nobody at the keyboard has nothing to add to them. It is also
+# what makes the whole thing usable from a script.
+ui_multi_select() {
+  local header="$1" preselected="$2"; shift 2
+  local labels=("$@")
+
+  if ! ui_has_tty; then
+    ui_no_tty_notice >&2
+    ui_dim "   $header: keeping the boxes as they are" >&2
+    ui_csv_lines "$preselected"
+    return 0
+  fi
+
+  if ui_have_gum; then
+    ui_multi_select_gum "$header" "$preselected" "${labels[@]}"
+  else
+    ui_multi_select_plain "$header" "$preselected" "${labels[@]}"
+  fi
+}
+
+# NOT TESTED, AND SAID SO PLAINLY. gum is not installed on the machine this was
+# written on, so this path has been written against `gum choose`'s documented
+# flags and never run. They are: --no-limit for tick boxes rather than a single
+# choice, --selected for the boxes that start ticked, --output-delimiter so the
+# answer comes back one per line instead of joined by a comma that would have to
+# be split again, and `--` so a label beginning with a dash could never be read
+# as a flag.
+#
+# gum exits non-zero when the menu is cancelled with Escape or ^C, and that is
+# treated as "leave the boxes alone" rather than as an error -- the same answer
+# the plain menu gives to an empty line.
+ui_multi_select_gum() {
+  local header="$1" preselected="$2"; shift 2
+  local out
+  if out="$(gum choose --no-limit \
+              --header "$header" \
+              --selected "$preselected" \
+              --output-delimiter=$'\n' \
+              -- "$@")"; then
+    printf '%s' "$out"
+    [[ -n $out ]] && printf '\n'
+    return 0
+  fi
+  ui_csv_lines "$preselected"
+}
+
+# ---------------------------------------------------------------------------
+# THE PLAIN ONE. A numbered list with boxes, toggled by typing numbers.
+#
+# TYPING A NUMBER TOGGLES, IT DOES NOT SELECT. The difference matters on a first
+# run: the boxes arrive already ticked -- everything that is not `ok` -- so the
+# common answer is Enter, and the second most common is "all of it except that
+# one". A menu where typing 4 meant "only 4" would make the common case the
+# longest thing to type.
+#
+# Ranges and several numbers at once are accepted because a dozen entries is
+# enough that "2 5 7-9" is worth having, and because it costs one loop.
+ui_multi_select_plain() {
+  local header="$1" preselected="$2"; shift 2
+  local labels=("$@")
+  local on=() i reply token lo hi
+
+  # The starting boxes. Compared whole-line, so a label with spaces in it --
+  # all of them have -- is matched as one thing rather than word by word.
+  for i in "${!labels[@]}"; do
+    on[i]=0
+    while IFS= read -r token; do
+      [[ $token == "${labels[i]}" ]] && on[i]=1
+    done < <(ui_csv_lines "$preselected")
+  done
+
+  while true; do
+    printf '\n%s%s%s\n' "$C_BLUE" "$header" "$C_RESET" >&2
+    for i in "${!labels[@]}"; do
+      if (( on[i] )); then
+        printf '  %2d) %s[x]%s %s\n' "$(( i + 1 ))" "$C_GREEN" "$C_RESET" "${labels[i]}" >&2
+      else
+        printf '  %2d) [ ] %s%s%s\n' "$(( i + 1 ))" "$C_DIM" "${labels[i]}" "$C_RESET" >&2
+      fi
+    done
+    printf '%s  numbers toggle (2 5 7-9), a = all, n = none, Enter = accept%s\n' \
+      "$C_DIM" "$C_RESET" >&2
+
+    # `|| reply=""` so that a stdin that ends mid-menu -- a pipe closing, a
+    # terminal going away -- accepts what is on screen instead of spinning.
+    read -rp "$(printf '%s==> %s' "$C_YELLOW" "$C_RESET")" reply || reply=""
+    [[ -z $reply ]] && break
+
+    case "$reply" in
+      a|A) for i in "${!labels[@]}"; do on[i]=1; done; continue ;;
+      n|N) for i in "${!labels[@]}"; do on[i]=0; done; continue ;;
+    esac
+
+    # Deliberately unquoted: this is the one place where splitting the answer on
+    # whitespace is the point.
+    # shellcheck disable=SC2206
+    for token in $reply; do
+      if [[ $token =~ ^([0-9]+)-([0-9]+)$ ]]; then
+        lo="${BASH_REMATCH[1]}"; hi="${BASH_REMATCH[2]}"
+      elif [[ $token =~ ^[0-9]+$ ]]; then
+        lo="$token"; hi="$token"
+      else
+        ui_bad "  '$token' is not a number or a range." >&2
+        continue
+      fi
+      for (( i = lo; i <= hi; i++ )); do
+        if (( i >= 1 && i <= ${#labels[@]} )); then
+          on[i-1]=$(( 1 - on[i-1] ))
+        else
+          ui_bad "  there is no $i." >&2
+        fi
+      done
+    done
+  done
+
+  for i in "${!labels[@]}"; do
+    (( on[i] )) && printf '%s\n' "${labels[i]}"
+  done
+  return 0
+}

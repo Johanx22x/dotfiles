@@ -11,8 +11,8 @@
 #
 # It buys the mode this repository did not have. `check` is a read-only doctor:
 # it asks every unit how it is, needs no sudo, writes nothing, and can be run at
-# any moment on a working machine. Four things were quietly wrong on the machine
-# this repo comes from when that mode was first written, and it found all four.
+# any moment on a working machine. Three things were quietly wrong on the
+# machine this repo comes from the first time it ran, and it found all three.
 #
 # Idempotent throughout. Every unit is safe to apply twice, so re-running this
 # after a pull is the normal way to use it rather than an emergency measure.
@@ -50,6 +50,7 @@ run() {
 
 # ---------------------------------------------------------------------------
 source "$DOT/lib/ui.sh"
+source "$DOT/lib/state.sh"
 source "$DOT/lib/pkg.sh"
 source "$DOT/lib/units.sh"
 
@@ -76,11 +77,11 @@ unset unit_file
 # "both" costs one extra directory and buys the ability to try the second one
 # without dismantling the first.
 #
-# DETECTED BEFORE IT IS ASKED, which is new and is what `check` needs. A doctor
-# that opened with a question would be useless in a script and tiresome at a
-# terminal, and the machine already knows the answer: whichever compositor is
-# installed is the one this machine chose. The flag overrides the detection, and
-# only a machine with neither installed gets asked.
+# DETECTED BEFORE IT IS ASKED, which is what `check` needs. A doctor that opened
+# with a question would be useless in a script and tiresome at a terminal, and
+# the machine already knows the answer: whichever compositor is installed is the
+# one this machine chose. The flag beats the profile, the profile beats the
+# detection, and only a machine with none of the three gets asked.
 compositor_detect() {
   local hypr=0 niri=0
   pkg_is_installed hyprland && hypr=1
@@ -96,6 +97,9 @@ compositor_detect() {
 compositor_resolve() {
   local mode="$1"
 
+  [[ -n $COMPOSITOR ]] && return 0
+
+  COMPOSITOR="$(state_get compositor)"
   [[ -n $COMPOSITOR ]] && return 0
 
   COMPOSITOR="$(compositor_detect)"
@@ -143,8 +147,9 @@ USAGE
   ./install.sh apply <unit>... [OPTS] apply named units and what they require
 
 MODES
-  (none)    Every unit that applies to this machine and is not already ok gets
-            applied, in dependency order, after showing you the list.
+  (none)    The menu. Every unit with its state and a box, the boxes remembered
+            in the profile, then everything ticked that is not already in place,
+            in dependency order.
   check     Asks every unit how it is and prints a table. Uses no sudo, writes
             nothing, and is safe to run at any moment. Exits 1 when a unit that
             applies to this machine is not ok.
@@ -154,8 +159,10 @@ OPTIONS
   -y, --yes             Answer yes to everything. Needed when there is no
                         terminal to ask on.
   -n, --dry-run         Say what would be done and do none of it.
-      --compositor=X    hyprland, niri or both. Detected from what is installed
-                        when it is not given.
+      --compositor=X    hyprland, niri or both. Taken from the profile, or from
+                        what is installed, when it is not given.
+      --profile=PATH    Somewhere other than
+                        ${XDG_STATE_HOME:-~/.local/state}/dotfiles-profile.
       --json            check only. A JSON array instead of the table, for
                         anything that would rather read this than look at it.
   -h, --help            This.
@@ -204,6 +211,9 @@ while (( $# )); do
       ;;
     --compositor)
       ui_bad "write it as --compositor=hyprland" >&2; exit 2 ;;
+    --profile=*)   PROFILE_PATH="${1#*=}" ;;
+    --profile)
+      ui_bad "write it as --profile=/path/to/file" >&2; exit 2 ;;
     -h|--help)     usage; exit 0 ;;
     --)            shift; UNIT_ARGS+=("$@"); break ;;
     -*)
@@ -387,29 +397,212 @@ mode_apply() {
 }
 
 # ---------------------------------------------------------------------------
-# The full run: everything that applies here and is not already in place.
-mode_setup() {
-  local id state kind todo=()
-
-  compositor_resolve setup
-  stow_packages_resolve
-
-  ui_head "$COMPOSITOR"
-  echo
+# THE MENU. Every unit with its state and a box, the boxes remembered, and one
+# confirmation before anything happens.
+#
+# THE BOX AND THE WORK ARE NOT THE SAME QUESTION, and keeping them apart is what
+# makes the profile worth having. A ticked box means "this machine wants this
+# unit" -- it is an intention, it survives into the profile, and it is what
+# `update` reads later on a machine with nobody at the keyboard. Whether that
+# unit needs doing right now is what `_check` answered a moment ago. So the
+# boxes are the intention and the run is the intersection: ticked AND not
+# already ok.
+#
+# ON A FIRST RUN there is no profile to read, so a box starts ticked when the
+# unit is not ok -- which makes the first Enter mean "yes, set this machine up",
+# and every Enter after it mean "yes, catch up on what has changed".
+tui_units() {
+  local id state kind labels=() ids=() pre="" chosen=() label had_work=()
 
   for id in "${UNIT_IDS[@]}"; do
     state="$(unit_state "$id")"
     kind="$(unit_state_kind "$state")"
     unit_print_row "$id" "$state"
-    [[ $kind == ok || $kind == na ]] || todo+=("$id")
+
+    # A unit that does not apply to this MACHINE is shown -- knowing that the
+    # monitors cannot be read from a TTY is worth knowing -- and is not offered
+    # as a choice, because there is nothing to choose.
+    #
+    # ASKED OF _available AND NOT OF THE STATE, which are two different `na`s
+    # and were worth separating. `monitors` says na because there is no
+    # compositor to ask, and nothing anybody ticks will change that. `optional`
+    # says na because no group has been chosen yet -- and ticking it is exactly
+    # how that gets fixed, so leaving it out of the menu would make the one
+    # thing it exists for unreachable.
+    "${id}_available" >/dev/null || continue
+
+    label="$(printf '%-14s %s' "$id" "$(unit_title "$id")")"
+    ids+=("$id")
+    labels+=("$label")
+
+    # THE DEFAULT BOX IS "THERE IS WORK HERE": missing or drift start ticked, ok
+    # and na start empty. na is not work -- a unit with nothing to say about
+    # itself has nothing to do either -- and that is what makes the optional
+    # groups opt-in rather than something a first Enter switches on.
+    if [[ $kind == missing || $kind == drift ]]; then
+      had_work+=("$id")
+      state_unit_wanted "$id" 1 && pre+="${pre:+,}$label"
+    else
+      state_unit_wanted "$id" 0 && pre+="${pre:+,}$label"
+    fi
   done
   echo
 
+  (( ${#ids[@]} )) || return 0
+
+  ui_offer_gum
+  mapfile -t chosen < <(ui_multi_select "What should this machine have?" "$pre" "${labels[@]}")
+
+  # Back from labels to ids, by exact string.
+  #
+  # AN EMPTY BOX IS NOT ALWAYS A "NO", and writing it down as one was a real
+  # mistake in the first version of this. The units that are already `ok` arrive
+  # with their boxes empty because there is nothing to do -- so recording that
+  # as `unit.seeds 0` would tell `update`, months later, that this machine does
+  # not want its seeds, and the day one of them went missing nothing would put
+  # it back.
+  #
+  # So a "no" is only written when there was something to say no TO: the unit
+  # had work outstanding and the box was left empty anyway. Everything else
+  # leaves the profile as it found it, which is also what keeps the file down to
+  # the lines that mean something.
+  local i wanted
+  for i in "${!ids[@]}"; do
+    wanted=0
+    for label in "${chosen[@]}"; do
+      [[ $label == "${labels[i]}" ]] && wanted=1
+    done
+
+    if (( wanted )); then
+      state_set "unit.${ids[i]}" 1
+    elif [[ " ${had_work[*]} " == *" ${ids[i]} "* ]]; then
+      state_set "unit.${ids[i]}" 0
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------
+# THE OPTIONAL GROUPS, at two levels.
+#
+# The first is the one anybody wants: four boxes, one per pack. The second is
+# for the case no set of groups drawn by somebody else can cover -- "gaming, but
+# not Steam" -- and is deliberately behind a question, because a menu of a
+# hundred package names as the FIRST thing anybody sees would be a worse menu
+# for everybody in order to serve the exception.
+#
+# Both levels land in the profile, and the rule between them is that a package
+# with no line of its own follows its group. So a pkg. line is only ever written
+# when it disagrees with the group, which is what keeps the file readable and
+# what lets a package added to a list in a later release reach the machines that
+# ticked its group.
+tui_optional() {
+  local groups=() labels=() chosen=() pre="" group label count i wanted
+
+  mapfile -t groups < <(optional_groups)
+  (( ${#groups[@]} )) || return 0
+
+  for i in "${!groups[@]}"; do
+    group="${groups[i]}"
+    count="$(pkg_read_list "$(optional_list "$group")" | wc -l)"
+    # No comma anywhere in a label: the preselection is handed to `gum choose
+    # --selected` as a comma-separated list, and a label carrying one would
+    # split into two names that match nothing.
+    label="$(printf '%-10s %s packages' "$group" "$count")"
+    labels+=("$label")
+    state_group_wanted "$group" && pre+="${pre:+,}$label"
+  done
+
+  mapfile -t chosen < <(ui_multi_select "Optional packages -- each one is a pack" "$pre" "${labels[@]}")
+
+  for i in "${!groups[@]}"; do
+    wanted=0
+    for label in "${chosen[@]}"; do
+      [[ $label == "${labels[i]}" ]] && wanted=1
+    done
+    state_set "group.${groups[i]}" "$wanted"
+  done
+
+  # The drill-down. Only offered where there is a terminal to drill with; a
+  # non-interactive run has already had its answer from the profile.
+  ui_has_tty || return 0
+  while ui_confirm "  Open one of them and pick packages one at a time?" n; do
+    group="$(ui_choose_one 1 "${groups[@]}")"
+    tui_optional_packages "$group"
+  done
+}
+
+# One group, package by package. What is written down is only the disagreement:
+# a package that matches its group's answer has its line REMOVED rather than
+# written as the same value, so the file says what is unusual about this machine
+# and nothing else.
+tui_optional_packages() {
+  local group="$1" names=() chosen=() pre="" name label wanted group_default=0
+
+  mapfile -t names < <(pkg_read_list "$(optional_list "$group")")
+  (( ${#names[@]} )) || return 0
+  state_group_wanted "$group" && group_default=1
+
+  for name in "${names[@]}"; do
+    state_pkg_wanted "$group" "$name" && pre+="${pre:+,}$name"
+  done
+
+  mapfile -t chosen < <(ui_multi_select "$group -- ${#names[@]} packages" "$pre" "${names[@]}")
+
+  for name in "${names[@]}"; do
+    wanted=0
+    for label in "${chosen[@]}"; do
+      [[ $label == "$name" ]] && wanted=1
+    done
+    if (( wanted == group_default )); then
+      state_unset "pkg.$group.$name"
+    else
+      state_set "pkg.$group.$name" "$wanted"
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------
+# The full run: the menu, then everything ticked that is not already in place.
+mode_setup() {
+  local id todo=() kind
+
+  state_load
+  compositor_resolve setup
+  state_set compositor "$COMPOSITOR"
+  stow_packages_resolve
+
+  ui_head "$COMPOSITOR"
+  echo
+
+  tui_units
+
+  # ASKED BEFORE THE PROFILE IS SAVED AND BEFORE ANYTHING RUNS, because the
+  # groups decide what the optional unit will install and there is no sense
+  # ticking the unit and then being asked nothing.
+  if state_unit_wanted optional 0; then
+    tui_optional
+  fi
+
+  state_save
+
+  # THE INTERSECTION. Ticked says what this machine wants; _check says what it
+  # is short of. Applying a unit that is already ok is harmless -- every one of
+  # them is idempotent -- but it is also half an hour of pacman saying "there is
+  # nothing to do", which is how a run stops being worth watching.
+  for id in "${UNIT_IDS[@]}"; do
+    kind="$(unit_state_kind "$(unit_state "$id")")"
+    [[ $kind == ok || $kind == na ]] && continue
+    state_unit_wanted "$id" 0 && todo+=("$id")
+  done
+
   if (( ${#todo[@]} == 0 )); then
-    ui_ok "  Nothing to do: everything that applies here is already in place."
+    echo
+    ui_ok "  Nothing to do: everything ticked is already in place."
+    ui_dim "  The profile is at $(state_path)"
     return 0
   fi
 
+  echo
   ui_say "  Would apply: ${todo[*]}"
   ui_confirm "  Go ahead?" || { ui_say "  Nothing done."; return 0; }
 
