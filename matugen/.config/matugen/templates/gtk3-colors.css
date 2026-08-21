@@ -2,8 +2,11 @@
    Template: ~/.config/matugen/templates/gtk3-colors.css
    Wallpaper: {{image}}
 
-   GTK3 ONLY, and the mirror image of gtk4-colors.css: no CSS rules here,
-   just the colour names the theme exposes.
+   GTK3 ONLY: no CSS rules here at all, just the colour names the theme
+   exposes. This file is the strict one of the pair -- gtk4-colors.css does
+   carry a short block of rules, for things libadwaita gives no colour name
+   for, each anchored so it cannot reach an app it was not written for.
+   Nothing in GTK3 needs that, so nothing here gets it.
 
    READ THIS BEFORE ADDING A SELECTOR
    ----------------------------------
@@ -172,8 +175,13 @@
 @define-color accent_fg_color  {{colors.on_primary.default.hex}};
 
 /* ---- Semantic: NOT harmonised ----
-   Same as warning/critical in waybar (see config.toml): an alert has to look
-   the same always, even over a red wallpaper. */
+   An alert has to look the same always, even over a red wallpaper: for
+   these four the colour IS the meaning, so deriving them from the image
+   would throw away the only thing they carry. The same call is made in
+   quickshell/Theme.qml, which hardcodes `warning` and `critical` rather than
+   reading M3's error role, and it is written out under [config] in
+   config.toml. (That comment used to point at waybar's #custom-system.
+   waybar is gone.) */
 @define-color destructive_color     #f7768e;
 @define-color destructive_bg_color  #f7768e;
 @define-color destructive_fg_color  #1a1b26;
