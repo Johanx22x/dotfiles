@@ -205,7 +205,16 @@ SettingsPage {
         // CIELAB rather than by hue, which is why a wallpaper that lands
         // between two blues does not pick the wrong one.
         //
-        // Gated on the same count as the row below: with nothing to choose
+        // NO PICKER BESIDE IT ANY MORE. There was one, and it was a ChoiceRow
+        // -- segments, sized for the three or four options every other choice
+        // on this page has. This machine installs a pack of them, and at that
+        // count the segments are dots: a control you cannot read and cannot
+        // aim at. The pointer is chosen by the wallpaper, so the row was
+        // answering a question nobody was asking often enough to pay for it.
+        // `desktop-tweak set cursor-theme` still picks one by hand, and still
+        // turns the matching off by doing so.
+        //
+        // Gated on the theme count all the same: with nothing to choose
         // between, matching has no answer to give and the switch would be a
         // control over an empty set.
         ToggleRow {
@@ -217,33 +226,6 @@ SettingsPage {
             onToggled: value => Config.setTweak("cursor-auto", value ? 1 : 0)
         }
 
-        // THE THEME ROW IS ONLY THERE WHEN THERE IS A CHOICE. An icon theme
-        // with no cursors/ directory is never offered, so a machine carrying
-        // only the distribution's Adwaita sees no row at all: a picker with
-        // one entry is not a setting, it is a label pretending to be one.
-        // Install a second and it appears on its own.
-        //
-        // PICKING ONE TURNS THE MATCHING OFF, in the same gesture and without
-        // a second trip to the switch above. The alternative is a row that
-        // takes a choice and quietly loses it at the next wallpaper change,
-        // which reads as the window being broken rather than as the setting
-        // above doing what it says.
-        ChoiceRow {
-            visible: root.cursorThemes.length > 1
-
-            glyph: Icons.palette
-            label: "Cursor theme"
-            options: root.cursorThemes
-            value: Config.cursorTheme
-
-            hint: "Choosing one here stops the pointer from following the "
-                + "wallpaper."
-
-            onChosen: value => {
-                Config.setTweak("cursor-theme", value);
-                Config.setTweak("cursor-auto", 0);
-            }
-        }
     }
 
     SettingsSection {
