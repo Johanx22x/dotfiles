@@ -72,7 +72,11 @@ cd "$REPO"
 # point -- it is not smuggling in a new gate. What it buys is that the eleven
 # notes are gone and the warning sweep is now saying something true about the
 # other side of a `source`, which is the only reason the sweep is printed.
-SHELLCHECK_OPTS_COMMON=(-x -P SCRIPTDIR --format=gcc)
+#
+# NOT NAMED SHELLCHECK_OPTS. That is an environment variable shellcheck reads
+# on its own, and a shell array by that name one export away from becoming a
+# string is a trap for whoever edits this next.
+SHELLCHECK_ARGS=(-x -P SCRIPTDIR --format=gcc)
 
 # --- Collect the shell scripts ---------------------------------------------
 scripts=()
@@ -98,7 +102,8 @@ echo "shell-lint: ${#scripts[@]} shell script(s)"
 # --- Advisory: everything at warning level ---------------------------------
 # `|| true` because shellcheck exits non-zero whenever it has something to say,
 # and here it is allowed to have something to say.
-warnings="$(shellcheck "${SHELLCHECK_OPTS_COMMON[@]}" --severity=warning "${scripts[@]}" || true)"
+warnings="$(shellcheck "${SHELLCHECK_ARGS[@]}" --severity=warning \
+    "${scripts[@]}" || true)"
 if [[ -n $warnings ]]; then
     echo
     echo "shell-lint: warnings (not gating, see the header of this script):"
@@ -107,7 +112,7 @@ fi
 
 # --- The gate: errors only --------------------------------------------------
 echo
-if shellcheck "${SHELLCHECK_OPTS_COMMON[@]}" --severity=error "${scripts[@]}"; then
+if shellcheck "${SHELLCHECK_ARGS[@]}" --severity=error "${scripts[@]}"; then
     echo "shell-lint: no errors"
 else
     echo
