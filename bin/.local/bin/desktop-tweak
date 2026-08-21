@@ -231,6 +231,12 @@ RELOAD_BINDS=0
 # looking for a different language. -100..100 here is Hyprland's -1.0..1.0 and
 # niri's accel-speed, which are the same libinput range, divided again on the
 # way into the generated file.
+# shellcheck disable=SC2154  # `[gaps-in]=` is a KEY, not `$gaps` and `$in`.
+# The unquoted subscript of an associative-array literal is read as an
+# arithmetic expression, and a bare word in one is a variable -- so every
+# hyphenated key here comes back as two variables that were never assigned.
+# Quoting the subscripts would silence it, and would also make this the only
+# array literal in the repository written that way.
 readonly -A NUMERIC=(
     [gaps-in]="0|40|5"
     [gaps-out]="0|80|20"
@@ -243,6 +249,8 @@ readonly -A NUMERIC=(
 )
 
 # The ones that are not numbers, with their accepted values.
+# shellcheck disable=SC2154  # `[natural-scroll]=` is a KEY -- see the same
+# note over NUMERIC above.
 readonly -A CHOICES=(
     [accel]="adaptive flat"
     [natural-scroll]="0 1"
