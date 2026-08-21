@@ -35,18 +35,19 @@ PanelWindow {
 
     screen: modelData
 
-    // WHICH BAR THIS IS, in the spelling Config stores its per-monitor
-    // exceptions under. There can be one of these per monitor now, and each
-    // reads its own widget set: the seven switches on the Bar page are the base
-    // every bar shows, and a monitor may disagree about any of them.
+    // WHICH BAR THIS IS, in the spelling Config stores each bar's widgets
+    // under. There can be one of these per monitor, and each reads its own
+    // complete set: there is no longer a base above them that a monitor
+    // disagrees with, so this key is the whole of the question -- see the
+    // widget section in Config.qml for why the base went.
     //
     // A FUNCTION USED INSIDE `visible:` BINDINGS, which is reactive and not a
     // one-off read: the engine records every QML property touched while a
-    // binding evaluates, including inside the functions it calls, and both the
-    // base switches and the overrides map are properties on Config. Flipping
-    // one re-runs these. That is also why Config assigns barOverrides whole
-    // instead of writing into the object it already holds -- a mutation in
-    // place changes nothing the engine is watching.
+    // binding evaluates, including inside the functions it calls, and the map
+    // this reads through is a property on Config. Flipping a switch re-runs
+    // these. That is also why Config assigns barWidgetsByMonitor whole instead
+    // of writing into the object it already holds -- a mutation in place
+    // changes nothing the engine is watching.
     readonly property string screenKey: Config.screenKey(bar.modelData)
 
     function widget(name: string): bool {
@@ -241,11 +242,12 @@ PanelWindow {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
 
-            // Switchable per monitor, which is what it is for: a second island
-            // on a second bar narrates the same desktop twice. SUPER + D still
-            // opens the dashboard with the island gone -- see the note on
-            // Config.barWidgets about why this one may be switched off and the
-            // power button may not.
+            // Switchable per bar, which is what it is for: a second island on
+            // a second bar narrates the same desktop twice. That argument is
+            // now also why a NEW bar starts without one -- see the seed in
+            // Config's defaults. SUPER + D still opens the dashboard with the
+            // island gone, which is the note on Config.barWidgets about why
+            // this one may be switched off and the power button may not.
             //
             // THE TWO BADGES SURVIVE IT. They anchor to this Row's edges rather
             // than to the island, so with the island hidden the Row is zero
