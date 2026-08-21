@@ -96,18 +96,23 @@ SettingsPage {
 
     // ---------------- The scanner ----------------
     //
-    // THE PAGE'S OWN `visible`, AND THAT IS THE WHOLE TRAP. The settings
-    // window builds every page at startup and keeps them all alive, showing
-    // one at a time -- see the note above the Flickable in Settings.qml about
-    // why a Loader was rejected. So a page that is not on screen is still
-    // fully constructed, still has its bindings live, and would happily leave
-    // the radio scanning forever if this were tied to anything else.
+    // THE PAGE BEING ON SCREEN, AND THAT IS THE WHOLE TRAP. The settings window
+    // builds every page at startup and keeps them all alive, showing one at a
+    // time. So a page that is not on screen is still fully constructed, still
+    // has its bindings live, and would happily leave the radio scanning
+    // forever if this were tied to anything else.
     //
     // `Component.onCompleted` is therefore wrong (it fires once, for a page
-    // nobody is looking at), and so is the window being open: three of its
-    // four pages are open too. The only thing that tracks "someone is actually
-    // reading this list" is this item's own visible flag, which the window
-    // drives from the selected page.
+    // nobody is looking at), and so is the window being open on its own:
+    // twelve other pages are open too.
+    //
+    // AND `root.visible` IS NOT ENOUGH EITHER, WHICH IS WHAT THIS SAID UNTIL
+    // NOW. It answers "is this the selected page", not "is anyone looking":
+    // hiding a window does not make its content item invisible in Qt, so the
+    // selected page stayed visible=true with the settings window shut and this
+    // scanner ran until the shell was restarted. `root.onScreen` is that flag
+    // AND the window being open -- see SettingsPage.qml, which carries the
+    // measurement that made this obvious on the sound page.
     //
     // A Binding and not an onVisibleChanged handler: the adapter can appear
     // AFTER the page is built -- a USB dongle, or NetworkManager still coming
@@ -116,7 +121,7 @@ SettingsPage {
     Binding {
         target: root.wifiDevice
         property: "scannerEnabled"
-        value: root.visible && Networking.wifiEnabled
+        value: root.onScreen && Networking.wifiEnabled
     }
 
     // ---------------- Password state, held HERE and not in the row ----------------
