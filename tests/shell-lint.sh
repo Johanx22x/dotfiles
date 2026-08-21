@@ -119,3 +119,5 @@ else
     echo "shell-lint: the findings above are errors, not style. Fix them." >&2
     exit 1
 fi
+
+# Probe commit for the stacked-trigger verification. Deleted with its branch.
