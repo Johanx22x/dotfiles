@@ -355,12 +355,14 @@ Singleton {
     // box in this window and a box in the terminal menu mean the same thing. A
     // unit nobody has answered for is wanted; a group nobody has answered for
     // is not, because the packs are opt-in.
+    //
+    // READ AND NEVER WRITTEN, which is the one asymmetry in this block. The
+    // settings page draws the units as a report of the machine and the packs
+    // as choices, so a unit's box is a thing the terminal menu owns and this
+    // window obeys. A setter here with nothing calling it would be an
+    // invitation to add that box without having had the argument.
     function unitWanted(id: string): bool {
         return root.profileGet(`unit.${id}`, "1") === "1";
-    }
-
-    function setUnitWanted(id: string, wanted: bool): void {
-        root.profileSet(`unit.${id}`, wanted ? "1" : "0");
     }
 
     function groupWanted(group: string): bool {
@@ -398,10 +400,12 @@ Singleton {
 
     // ---------------- The optional packs ----------------
     //
-    // Names, one-line descriptions and contents of packages/optional/*.txt, so
-    // that the drill-down can exist. No mode of install.sh prints this:
+    // Names, descriptions and contents of packages/optional/*.txt, so that the
+    // drill-down can exist. No mode of install.sh prints this:
     // `optional_groups` and `pkg_read_list` are shell functions, and the CLI
-    // has no surface that hands them over.
+    // has no surface that hands them over. Each entry is `name`, `summary` --
+    // the list's own opening comment, joined back into one sentence -- and
+    // `packages`.
     property var groups: []
 
     // ---------------- Talking to the engine ----------------
