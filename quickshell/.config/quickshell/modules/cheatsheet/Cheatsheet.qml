@@ -42,9 +42,9 @@ PanelWindow {
     readonly property int columnCount: 3
     readonly property int columnWidth: 540
     readonly property int columnGap: 30
-    // The keys sit in a fixed-width gutter and are laid out RIGHT to left, so
-    // the actual key is always the chip nearest its own description and every
-    // description in a column starts at the same x.
+    // The keys sit in a fixed-width gutter and are flush with its right edge,
+    // so the actual key is always the chip nearest its own description and
+    // every description in a column starts at the same x.
     //
     // MEASURED, NOT GUESSED, and that changed the day this had to serve two
     // compositors. It was 150, taken off the widest chord Hyprland bound --
@@ -52,17 +52,81 @@ PanelWindow {
     // (SUPER CTRL SHIFT Left), and a fixed number sized for the old worst case
     // pushed those chips out of the card entirely, off the left edge.
     //
-    // So the gutter asks the rows how wide they actually are and takes the
-    // largest, which is correct for whatever the compositor turns out to bind
-    // -- including a fifth modifier nobody has thought of yet. The floor keeps
-    // short lists looking the way they always did rather than letting a sheet
-    // of two-chip chords close up.
-    property int keyGutter: 150
+    // The first answer to that was to ask the ROWS how wide they had come out
+    // and keep the largest. It fixed the overflow and it left a defect of its
+    // own: a running maximum can only ever grow. It holds the widest thing it
+    // has ever seen, so it is right until something gets SMALLER and then it
+    // is stuck. Measured, on this machine's fifty-two described binds: the
+    // sheet opens with a gutter of 226, the type size is taken to 16pt and it
+    // becomes 298, the type size is put back to 11pt -- and the widest chord
+    // is 226 again while the gutter stays at 298, which is seventy-two pixels
+    // of nothing in front of every description in all three columns, for the
+    // rest of the session.
+    //
+    // So the gutter is added up from the chords instead of collected from the
+    // rows: the label's advance width plus the chip padding for each chip,
+    // plus the spacing between them, over every chord the sheet is showing.
+    // It is an ordinary binding, so it goes down as readily as up, and it is
+    // still correct for whatever the compositor turns out to bind -- including
+    // a fifth modifier nobody has thought of yet. The same shape as the
+    // keybinds settings page, which had the opposite half of this bug: a
+    // gutter that was a constant and could not move at all.
+    readonly property int keyGutter: {
+        // THE FONT IS NAMED HERE and not only inside chipMetrics below. A
+        // binding re-runs when a property it READ changes, not when a property
+        // some function it CALLED read changes, and advanceWidth() is a
+        // function call -- without this the sheet would be measured once, at
+        // whatever size it first opened at. chipMetrics' own font rather than
+        // Theme's, though they hold the same value, so it is read after the
+        // metrics have caught up rather than racing them.
+        if (chipMetrics.font.family === "" || chipMetrics.font.pointSize <= 0)
+            return root.keyGutterFloor;
 
-    // Reported by the rows as they measure themselves; see BindRow.
-    function noteGutter(width: int): void {
-        if (width > root.keyGutter)
-            root.keyGutter = width;
+        let widest = 0;
+
+        for (const group of root.groups) {
+            for (const bind of group.binds) {
+                if (bind.keys.length === 0)
+                    continue;
+
+                let chord = root.chipSpacing * (bind.keys.length - 1);
+                for (const key of bind.keys)
+                    chord += chipMetrics.advanceWidth(key) + root.chipPadding;
+
+                widest = Math.max(widest, chord);
+            }
+        }
+
+        // Rounded up ONCE, at the end. A chip is as wide as its label plus the
+        // padding and a label is a fractional number of pixels; rounding each
+        // one first adds up to a gutter a little wider than the row it is
+        // measuring, and a model that is allowed to disagree with the thing it
+        // models cannot be used to catch the two drifting apart.
+        return Math.max(root.keyGutterFloor, Math.ceil(widest));
+    }
+
+    // A FLOOR AND NOT A DEFAULT. It keeps a short list looking the way it
+    // always did rather than letting a sheet of two-chip chords close up, and
+    // it is what the gutter reads as before the compositor has answered.
+    readonly property int keyGutterFloor: 150
+
+    // The chip's own geometry, HERE AND NOT AS LITERALS IN BindRow, because
+    // the gutter above is an arithmetic model of a chip: a model that does not
+    // add up the numbers the chip is drawn with is a model that drifts, and it
+    // drifts silently -- the chords would simply start hanging off the edge
+    // again. Handed to BindRow, which is where they are used.
+    readonly property int chipPadding: 14
+    readonly property int chipSpacing: 5
+
+    // The chip label's font, so advanceWidth() measures the text with the face
+    // it will actually be drawn in. Kept in step with the Text inside BindRow
+    // by hand -- FontMetrics takes a font, not a component.
+    FontMetrics {
+        id: chipMetrics
+
+        font.family: Theme.fontFamily
+        font.pointSize: Theme.fontSize - 1.5
+        font.weight: Theme.fontWeight
     }
     readonly property int cardPadding: 30
 
@@ -455,8 +519,8 @@ PanelWindow {
                                             keys: modelData.keys
                                             label: modelData.text
                                             gutterWidth: root.keyGutter
-                                            onNaturalWidthChanged: root.noteGutter(naturalWidth)
-                                            Component.onCompleted: root.noteGutter(naturalWidth)
+                                            chipPadding: root.chipPadding
+                                            chipSpacing: root.chipSpacing
                                         }
                                     }
                                 }
