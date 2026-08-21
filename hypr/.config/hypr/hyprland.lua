@@ -1066,6 +1066,60 @@ hl.window_rule({
     center   = true,
 })
 
+-- DaVinci Resolve. Ported from the niri config, where the two rules and the
+-- long story behind them live in full (search that file for "DaVinci"); what
+-- follows is what this side needs plus what does not carry across.
+--
+-- THE CLASS IS `resolve`, not "davinci-resolve" and not "DaVinci Resolve". It
+-- is the X11 WM_CLASS, and the shipped DaVinciResolve.desktop records it as
+-- StartupWMClass=resolve.
+--
+-- ALWAYS ON THE LANDSCAPE MONITOR. The other one is rotated to portrait and is
+-- 1080 px wide; Resolve's UI is a wide timeline under two viewers and no
+-- arrangement of it fits in that. MONITOR_MAIN rather than the EDID string, so
+-- this follows whatever the settings window last wrote into monitors.lua --
+-- the same indirection the game rules in gaming.lua use.
+--
+-- suppress_event = "fullscreen" is the port of niri's `open-fullscreen false`.
+-- Resolve asks for fullscreen itself at startup, and a fullscreen window here
+-- has no border, no rounding and no gaps, which reads as "none of these rules
+-- matched" rather than as the app getting what it asked for. suppressevent
+-- drops the CLIENT's request and nothing else: SUPER + F still works once the
+-- window is open.
+--
+-- maximize is the port of `open-maximized`, and it is also what keeps the
+-- window wide. niri needs a `min-width 1280` next to it because SUPER + P
+-- cycles a column through preset widths and a third of 2560 collapses the page
+-- tabs along the bottom; that chord is pseudotile here and there is no width
+-- cycle to defend against. min_size is NOT ported for the same reason and for
+-- a second one: Hyprland clamps tiled windows to minsize/maxsize only when
+-- misc:size_limits_tiled is on, and that defaults to false (ConfigValues.cpp,
+-- v0.56.2). This desktop is dwindle, so the rule would have been decoration.
+hl.window_rule({
+    name  = "resolve-main",
+    match = { class = "^resolve$" },
+
+    monitor        = MONITOR_MAIN,
+    maximize       = true,
+    suppress_event = "fullscreen",
+})
+
+-- The project manager, which is a SECOND TOPLEVEL and not a modal drawn inside
+-- the main window. Tiled, it takes a share of the workspace and splits the
+-- screen in two on every launch; floating is what it wants to be, at the size
+-- the niri rule gives it.
+--
+-- Matched by title ON TOP OF the class: every Resolve window answers to
+-- `resolve`, so a class-only rule here would float the main window too.
+hl.window_rule({
+    name  = "float-resolve-project-manager",
+    match = { class = "^resolve$", title = "^Project Manager$" },
+
+    float  = true,
+    size   = "1600 1000",
+    center = true,
+})
+
 
 ---------------
 ---- GAMING ----
