@@ -63,7 +63,19 @@ Singleton {
         borderSize: 2,
         use24Hour: true,
         showDate: true,
+        // THREE, ONE PER URGENCY, and the middle one keeps the bare name it
+        // has always had: a file written before the other two existed says
+        // `notificationTimeout: 6` and meant "how long an ordinary
+        // notification stays up", which is exactly what it still lands on.
+        // Nothing to migrate.
+        //
+        // The other two default to what the code used to hardcode -- low
+        // shared the one setting, critical was 30 seconds inside
+        // NotificationCard -- so adding the controls moves nothing until
+        // somebody moves it.
+        notificationTimeoutLow: 10,
         notificationTimeout: 10,
+        notificationTimeoutCritical: 30,
         // Evening to morning, which is the only schedule anybody sets. See
         // the note on `dueNow` in NightLight.qml about why a window whose
         // start is later than its end is the normal case here rather than a
@@ -1221,16 +1233,28 @@ Singleton {
 
     // ---------------- Notifications ----------------
 
+    // HOW LONG A NOTIFICATION STAYS UP, one number per urgency: the spec
+    // defines three (0 low, 1 normal, 2 critical) and each of them is a
+    // different question, so each of them gets its own answer. Which one a
+    // card reads, and why it is three rather than one, is at the top of
+    // NotificationCard.qml.
+    //
     // In SECONDS here, milliseconds at the point of use. The file is meant to
     // be readable by hand and 10 is; 10000 invites the mistake that already
     // happened once in NotificationCard, where a value in milliseconds was
     // multiplied by 1000 and every notification stayed up for half an hour.
     //
-    // This is the DEFAULT, applied to senders that express no preference
+    // These are DEFAULTS, applied to senders that express no preference
     // (expireTimeout -1). One that asks for a specific timeout still gets it,
-    // and critical notifications still get their longer window: see the
-    // header of NotificationCard.qml.
+    // whatever its urgency.
+    //
+    // NORMAL KEEPS THE UNSUFFIXED NAME, which is the whole migration: it was
+    // the only setting when there was only one, what it was set to was an
+    // answer about ordinary notifications, and a config written then lands on
+    // the setting it was written for. See the defaults at the top.
+    property alias notificationTimeoutLow: adapter.notificationTimeoutLow
     property alias notificationTimeout: adapter.notificationTimeout
+    property alias notificationTimeoutCritical: adapter.notificationTimeoutCritical
 
     // ---------------- Night light ----------------
     //
@@ -1388,7 +1412,9 @@ Singleton {
         root.setTweak("border", root.defaults.borderSize);
         adapter.use24Hour = root.defaults.use24Hour;
         adapter.showDate = root.defaults.showDate;
+        adapter.notificationTimeoutLow = root.defaults.notificationTimeoutLow;
         adapter.notificationTimeout = root.defaults.notificationTimeout;
+        adapter.notificationTimeoutCritical = root.defaults.notificationTimeoutCritical;
         adapter.nightLightScheduled = root.defaults.nightLightScheduled;
         adapter.nightLightFrom = root.defaults.nightLightFrom;
         adapter.nightLightTo = root.defaults.nightLightTo;
@@ -1503,7 +1529,9 @@ Singleton {
 
             property bool use24Hour: true
             property bool showDate: true
+            property int notificationTimeoutLow: 10
             property int notificationTimeout: 10
+            property int notificationTimeoutCritical: 30
             property bool nightLightScheduled: false
             property int nightLightFrom: 1200
             property int nightLightTo: 420
