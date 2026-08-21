@@ -49,16 +49,6 @@ fixed by adding one.
 # under Compositors, and each bind carries its own reasoning in config.kdl.
 
 [[chord]]
-chords = ["Mod+Shift+Left", "Mod+Shift+Right", "Mod+Shift+Up", "Mod+Shift+Down"]
-side = "niri"
-reason = """
-Move the focused column or window, mirroring the focus arrows. Hyprland has
-movewindow and it was never bound: dwindle moves a window by swapping it with
-a neighbour, which is worth a chord in a layout where position is meaningful
-and much less so in one where it is not.
-"""
-
-[[chord]]
 chords = ["Mod+Comma", "Mod+Period", "Mod+Shift+P"]
 side = "niri"
 reason = """
@@ -96,18 +86,6 @@ Focus a monitor and send a column to one. Hyprland has focusmonitor and
 movewindowtomonitor and neither was ever bound, so these are new rather than
 missing on the other side -- the note beside them in config.kdl says exactly
 that.
-"""
-
-[[chord]]
-chord = "Mod+Ctrl+Shift+Escape"
-side = "niri"
-reason = """
-Quit niri. It is the way out when the shell is not running, which is the one
-case the power menu on SUPER + SHIFT + ESCAPE cannot cover. Hyprland's
-`exit` dispatcher is deliberately unbound there: the same escape hatch under
-uwsm is `loginctl terminate-user`, and a chord that ends the session without a
-confirmation is what SUPER + SHIFT + ESCAPE was moved away from in the first
-place.
 """
 
 # ---------------------------------------------------------------------------
