@@ -133,42 +133,64 @@ Singleton {
         // changing it moves the bars nobody has customised and leaves the rest
         // alone. See the widget section below for the whole shape.
         //
-        // WHY THESE FIVE AND NOT ALL EIGHT. The question asked of each widget
-        // was whether a SECOND copy of it, on a screen plugged in beside the
-        // first, is worth anything -- because that is the case this seed is
-        // for, and the case the old base never had to answer.
+        // WHY THESE SEVEN AND NOT ALL NINE. ONE SEED SERVES TWO BARS THAT WANT
+        // DIFFERENT THINGS, and every line below is that tension. It is what a
+        // fresh clone comes up with -- the FIRST bar, the only one most
+        // machines will ever have, and the whole of what somebody who has just
+        // installed this sees. It is also what a fourth monitor plugged in at
+        // somebody else's desk arrives with, where the question is whether a
+        // SECOND copy of a widget, beside the first, is worth anything. Where
+        // the two answers differ, the first bar wins: it is the one that is
+        // always there, and the fourth screen is the one with somebody sitting
+        // in front of it who has already seen what the widget does.
         //
         // Three of them read the screen they are on, so a second copy says
-        // something new: the focused window title, and the clock and the logo
-        // that make a strip of pixels read as this desktop's bar rather than
-        // as a gap. The other two are ways back rather than readings. The
-        // settings button is the only pointer-reachable way into this window,
-        // which is the same argument the power button already wins; the tray
-        // is where an application with no window of its own lives, and a
-        // session where Discord is minimised to a tray that is not drawn is a
-        // session with no way to reach it.
+        // something new either way: the focused window title, and the clock
+        // and the logo that make a strip of pixels read as this desktop's bar
+        // rather than as a gap. Three more are ways back rather than readings
+        // -- see the note on `notifications` below for the third. The settings
+        // button is the only pointer-reachable way into this window, which is
+        // the same argument the power button already wins; the tray is where
+        // an application with no window of its own lives, and a session where
+        // Discord is minimised to a tray that is not drawn is a session with
+        // no way to reach it.
         //
-        // The three that start off are the three that would say it twice. The
-        // island narrates the desktop and there is only one desktop -- its own
-        // header has made that argument since the bar learned to repeat, and
-        // SUPER + D opens the dashboard whether or not it is drawn. The
+        // THE ISLAND IS THE ONE THE SECOND-COPY QUESTION GETS WRONG, and it is
+        // on. That it narrates the desktop and there is only one desktop is
+        // still true -- its own header has been making that argument since the
+        // bar learned to repeat, and a fourth island is a fourth copy of one
+        // sentence. What that question leaves out is the first bar. Off there
+        // costs the shipped desktop its volume acknowledgement, its capture
+        // indicator and what is playing -- the whole ladder in IslandState.qml
+        // -- on the one screen where none of it is a repeat, and it costs it
+        // the centre of the bar, which the rest of the layout is arranged
+        // around being occupied. SUPER + D still opens the dashboard with the
+        // island off, but a keybind is not a readout: nothing is on screen, so
+        // nothing prompts you to look.
+        //
+        // THE ASYMMETRY IS WHAT DECIDES IT. A duplicate island on a second
+        // screen is one switch away from gone, thrown by somebody who has
+        // watched it narrate for a while and knows they do not want two. A
+        // first bar with no island is a feature nobody finds, because there is
+        // nothing drawn to suggest the switch exists. Being wrong towards ON
+        // costs a click; being wrong towards OFF costs the feature. So this
+        // seed is wrong towards ON.
+        //
+        // The two that start off are the two with nothing to lose by it. The
         // peripheral battery is a fact about the mouse, not about the monitor,
         // and this repo has already had to stop it warning once per bar. The
         // keyboard layout is one layout for the whole session and hides itself
-        // below two of them anyway.
+        // below two of them anyway. Neither is a reading a first bar wants
+        // either, so neither needs the trade the island needed.
         //
-        // THIS CHANGES WHAT A FRESH CLONE COMES UP WITH, and that is the cost
-        // being accepted rather than an oversight. The bar used to arrive with
-        // everything on -- "the bar as designed", with the switches there to
-        // take things away. One seed now has to serve the first bar and the
-        // fourth, and a seed tuned for the first would put a second island and
-        // a second tray on every screen anybody adds. Nobody with an existing
-        // config sees this: what they had is written out per monitor the first
-        // time this version loads.
+        // NOBODY WITH AN EXISTING CONFIG SEES ANY OF THIS. A seed is read only
+        // by a bar that has never had a switch touched on it; what a monitor
+        // was already showing was written out per monitor the first time the
+        // per-bar shape loaded, and stays whatever it was.
         barWidgets: ({
             logo: true,
             activeWindow: true,
-            island: false,
+            island: true,
             tray: true,
             battery: false,
             keyboardLayout: false,

@@ -209,10 +209,12 @@ PanelWindow {
 
             // Switchable per bar, which is what it is for: a second island on
             // a second bar narrates the same desktop twice. That argument is
-            // now also why a NEW bar starts without one -- see the seed in
-            // Config's defaults. SUPER + D still opens the dashboard with the
-            // island gone, which is the note on Config.barWidgets about why
-            // this one may be switched off and the power button may not.
+            // why this one may be switched off and the power button may not,
+            // and SUPER + D still opens the dashboard with the island gone.
+            // It is NOT why a new bar starts with one or without: a new bar
+            // starts WITH it, because the same seed serves the first bar and
+            // the first bar is the one a fresh clone comes up with. The whole
+            // trade is written out over the seed in Config's defaults.
             //
             // THE BADGES SURVIVE IT. They anchor to this Row's edges rather
             // than to the island, so with the island hidden the Row is zero
