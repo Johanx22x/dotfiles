@@ -23,7 +23,23 @@
 #   <id>_apply      does it. 0 on success. Must be safe to run twice.
 #
 # and the sixth, <id>_post, is optional: reload hooks that run after a
-# successful apply and are never allowed to fail the run.
+# successful apply, whose RETURN VALUE is never allowed to fail the run.
+#
+# HOW A UNIT SAYS HOW BADLY IT FAILED, which is not part of the six. Returning
+# non-zero from _apply means "this did not work" and nothing more; the runner
+# records it as a note and goes on. A unit that has found something a person
+# must deal with before the machine is usable calls fail_stop itself, which
+# prints the reason with what to do about it and ends the run. That is
+# available from _apply and from _post alike -- a _post whose return value
+# cannot fail the run can still have discovered that /boot is half written --
+# and it is deliberately not a seventh function here, because severity belongs
+# to the individual failure and not to the unit: `etc` refusing to write a
+# system file and `etc` declining to rebuild the initramfs are not the same
+# kind of news. See lib/fail.sh.
+#
+# NEITHER MAY BE CALLED FROM _check OR _available. Both of those run in command
+# substitutions, where `exit` ends only the subshell; they report their troubles
+# by what they print, which is what the four words above are for.
 #
 # WHY `_check` IS THE HARD ONE. It is called by `check`, which must be safe to
 # run at any moment on a working machine, and by the menu, which calls it for
@@ -259,10 +275,24 @@ unit_print_json() {
 # APPLYING. One unit, with the dry run and the failure bookkeeping in one place
 # so that no unit has to remember either.
 #
-# A UNIT THAT FAILS DOES NOT STOP THE RUN. The units are ordered by _requires,
-# so anything that genuinely could not proceed said so through that; everything
-# else is independent, and abandoning the symlinks because an AUR package would
-# not build is how this script used to lose the part that mattered.
+# A UNIT THAT MERELY RETURNS NON-ZERO DOES NOT STOP THE RUN, and that is a
+# statement about what silence means rather than about how serious failures
+# are. The units are ordered by _requires, so anything that genuinely could not
+# proceed said so through that; everything else is independent, and abandoning
+# the symlinks because an AUR package would not build is how this script used
+# to lose the part that mattered.
+#
+# A UNIT THAT MEANS "STOP" SAYS SO ITSELF, by calling fail_stop, which does not
+# return. That is deliberately NOT a seventh member of the contract at the top
+# of this file: a `<id>_severity` would be one answer for a whole unit, and the
+# units that have a fatal path have a non-fatal one beside it -- `etc` refusing
+# to write a system file is not the same as `etc` declining to rebuild the
+# initramfs. The severity belongs to the failure, so it is chosen where the
+# failure is detected, and this file goes on knowing the name of no unit at all.
+#
+# So the entry below is the DEFAULT, and it is the mild one on purpose: a unit
+# that returned non-zero without saying anything about how bad it was has not
+# earned the right to end the run.
 UNIT_POST=()
 
 unit_apply() {
@@ -273,7 +303,8 @@ unit_apply() {
 
   if ! "${id}_apply"; then
     ui_bad "   $id did not finish"
-    FAILED+=("$id: did not finish")
+    fail_note "$id" "it did not finish, and did not say why" \
+      "./install.sh apply $id   -- the output above it is the only account of what happened"
     return 0
   fi
 
@@ -295,7 +326,13 @@ unit_run_post() {
   local id
   (( ${#UNIT_POST[@]} )) || return 0
   for id in "${UNIT_POST[@]}"; do
-    "${id}_post" || ui_warn "   $id: the reload step did not work, which is not fatal"
+    # RECORDED AS WELL AS PRINTED, WHICH IT WAS NOT BEFORE. Never fatal, by the
+    # contract above -- but a reload that silently did not happen is the exact
+    # shape of "it looks applied and does not behave applied", and a line in
+    # yellow half an hour up the screen is not a report.
+    "${id}_post" || fail_note "$id" \
+      "the reload step did not work, so the change is on disk and not in effect" \
+      "Log out and back in, or run: ./install.sh apply $id"
   done
   UNIT_POST=()
 }

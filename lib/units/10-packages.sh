@@ -58,8 +58,21 @@ packages_apply() {
     ui_say "   $(pkg_read_list "$list" | wc -l) in ${list#"$DOT"/}"
   done
 
+  # STOP, AND THE ARGUMENT FOR IT IS A DIRECTORY NAME. What separates
+  # packages/required/ from packages/optional/ is written down in
+  # 15-optional.sh as "one question -- does the desktop still work without it",
+  # and the answer for everything installed here is no. A name in required/
+  # that the desktop DOES work without is a name in the wrong directory, and
+  # the fix for that is to move the file, not to teach the installer to shrug.
+  # That is the trade the classification is making: one flaky build in
+  # required/ now ends the run, and the pressure that puts is on the list
+  # rather than on the person re-reading a summary.
+  #
+  # The compositor's own list comes through here too, which settles it on its
+  # own: there is no useful sense in which this repository has been installed
+  # on a machine that has no compositor.
   mapfile -t names < <(packages_names)
-  pkg_install "required" "${names[@]}"
+  pkg_install stop packages "required" "${names[@]}"
 }
 
 unit_register packages

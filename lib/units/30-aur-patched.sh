@@ -98,7 +98,13 @@ aur-patched_apply() {
     ui_did "   built and installed"
   else
     ui_bad "   the build failed, see the output above"
-    FAILED+=("aur-patched: makepkg did not finish")
+    # NOT FATAL. This whole unit exists so that DaVinci Resolve can be opened
+    # under niri -- one application, and the PKGBUILD's own header says the
+    # directory is meant to be deleted the day the fix reaches the
+    # repositories. The desktop, including niri itself, comes up on the stock
+    # xwayland-satellite from extra.
+    fail_note "aur-patched" "makepkg could not build the patched $aur_patched_pkgname $want" \
+      "cd packages/xwayland-satellite && makepkg -si   -- the output says which build dependency is missing"
   fi
 }
 
