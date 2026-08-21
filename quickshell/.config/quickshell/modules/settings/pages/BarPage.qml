@@ -55,12 +55,14 @@
 // line on each to say the connector; this one offers only the screens that
 // already carry a bar, which is at most one segment per monitor and usually
 // two. ChoiceRow's own header puts its ceiling at about four options at this
-// width: at 820px the card leaves roughly 540px of track, so four segments are
-// about 133px each and "PG32QF2B (DP-3)" measures well inside that at the
-// default font size. Four bars is the ceiling and it is a real one -- a long
-// model name at a large interface font elides -- but four bars is also four
-// monitors with a bar switched on apiece, and the segments are the smaller
-// problem at that point.
+// width, and that was measured here rather than taken on trust. At the window's
+// default 820px a segment gives its label 260px with two bars; "PG32QF2B
+// (DP-3)" wants 117 and "GS27FA (HDMI-A-1)" wants 133, so two fit twice over
+// and three still fit. Four segments leave about 125px, which the first of
+// those clears and the second does not -- so four bars is a real ceiling and
+// the fourth label elides to its model name. Four bars is also four monitors
+// with a bar switched on apiece, and at that point the segments are the smaller
+// problem.
 //
 // WHAT IT DOES NOT DO IS APPEAR WHEN THERE IS ONE BAR. A picker between one
 // thing is the same furniture "All" was on a single-monitor machine, and
@@ -232,18 +234,38 @@ SettingsPage {
         // and a list whose monitors are all unplugged falls back to it too. It
         // also means an unplugged monitor's segment simply goes, taking with
         // it the old problem of switches pointed at a screen that is not there.
-        ChoiceRow {
-            // Nothing to pick between with one bar; see the header.
+        // NOT BUILT AT ALL WITH ONE BAR, AND NOT MERELY HIDDEN, which is a
+        // Loader for one reason: SettingsSearch cannot tell the difference.
+        // Its walk recurses `children` and indexes anything with a `label`,
+        // and it deliberately does NOT look at `visible` -- it cannot. Every
+        // page but the one the rail has selected is invisible, and an item's
+        // visibility is inherited from its parent, so a walk that skipped
+        // invisible items would return results from the current page only.
+        //
+        // A `visible: false` picker is therefore still a search result: type
+        // "bar" on a single-monitor machine and "Bar being edited" comes back,
+        // leading to a page with no such control on it. That is a dead offer,
+        // which is the thing this whole section is about not making. An
+        // inactive Loader has no item under it, so there is nothing to walk.
+        //
+        // `visible` as well as `active`, because a Column still spends its
+        // spacing on a zero-height child that is visible.
+        Loader {
+            width: parent.width
+
+            active: root.barCount > 1
             visible: root.barCount > 1
 
-            glyph: Icons.monitor
-            label: "Bar being edited"
-            options: Screens.barScreens.map(screen => ({
-                label: root.screenLabel(screen),
-                value: Config.screenKey(screen)
-            }))
-            value: root.editKey
-            onChosen: value => root.editing = value
+            sourceComponent: ChoiceRow {
+                glyph: Icons.monitor
+                label: "Bar being edited"
+                options: Screens.barScreens.map(screen => ({
+                    label: root.screenLabel(screen),
+                    value: Config.screenKey(screen)
+                }))
+                value: root.editKey
+                onChosen: value => root.editing = value
+            }
         }
 
         // SAID OUT LOUD RATHER THAN LEFT TO BE INFERRED, because the shape of
@@ -256,6 +278,13 @@ SettingsPage {
 
             x: Theme.groupPadding
             width: parent.width - Theme.groupPadding * 2
+            // A TOP PADDING, WHICH THE OTHER NOTES ON THIS PAGE DO NOT HAVE,
+            // because the row above this one is not shaped like the rows above
+            // those. A ToggleRow centres its label in a tall row and leaves
+            // slack under it; a ChoiceRow's segment track ends four pixels from
+            // its own bottom edge, so without this the sentence is printed
+            // against the track.
+            topPadding: 6
             bottomPadding: 6
 
             text: "Each bar keeps its own complete set, so these switches "
