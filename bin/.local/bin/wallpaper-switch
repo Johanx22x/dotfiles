@@ -9,7 +9,8 @@
 #   wallpaper-switch still    freeze the current one to a still frame (see below)
 #   wallpaper-switch dir      print the collection's folder
 #   wallpaper-switch dir PATH use a different folder from now on
-#   wallpaper-switch thumbs   pre-extract the still frame of every video
+#   wallpaper-switch thumbs   pre-build the thumbnail of every wallpaper, plus
+#                             the still frame and preview clip of every video
 #
 # The collection lives in ~/Pictures/wallpapers unless told otherwise. WHERE
 # THAT IS TOLD is a state file, ~/.local/state/wallpaper-dir, and not this
@@ -20,10 +21,10 @@
 # ---- Two backends, one entry point ----
 # A still goes to awww and a video goes to mpvpaper, and which one runs is
 # decided here from the file extension rather than by the caller. Every way of
-# changing the wallpaper -- the keybinds, the rotation timer, the launcher's
-# strip, the settings grid -- already goes through this script because it is
-# what regenerates the palette as well; making the caller also pick a backend
-# would have been four places to teach about videos instead of one.
+# changing the wallpaper -- the keybind, the rotation timer, the carousel, the
+# settings page -- already goes through this script because it is what
+# regenerates the palette as well; making the caller also pick a backend would
+# have been four places to teach about videos instead of one.
 #
 # Animated GIFs are NOT videos here. awww decodes them itself ("Sends an image
 # (or animated gif)", per its own --help), so they take the still path and keep
@@ -38,6 +39,11 @@ DEFAULT_DIR="$HOME/Pictures/wallpapers"
 # Precedence, highest first: the environment, the state file, the default.
 # The environment comes first so a single run can be pointed elsewhere without
 # changing what every other run does.
+# Remembered because the CACHE SWEEP has to know: a run pointed somewhere else
+# by the environment must not decide what the caches of the real collection are
+# allowed to keep. See the sweep in the `thumbs` mode.
+DIR_FROM_ENV="${WALLPAPER_DIR:-}"
+
 if [[ -z "${WALLPAPER_DIR:-}" && -r "$DIR_STATE" ]]; then
     WALLPAPER_DIR="$(<"$DIR_STATE")"
 fi
@@ -90,14 +96,82 @@ MPVPAPER_OUTPUT="${MPVPAPER_OUTPUT:-ALL}"
 # ~/.config/quickshell/Config.qml, which is the same list on the other side.
 # The shell reads the folder itself through Qt and has no way to ask a script
 # what it accepts, so the duplication is down to two copies and not four --
-# the launcher's strip and the settings grid both read Config's.
+# the carousel and the settings page both read Config's.
 STILL_EXT=(jpg jpeg png webp bmp gif)
 VIDEO_EXT=(mp4 webm mkv)
 
 # A still frame per video, extracted once and reused: matugen needs one to
-# build the palette, and the QML pickers need one to draw a thumbnail. Two
-# consumers, one cache, so a video is never decoded twice for the same frame.
+# build the palette, and the carousel needs one to draw a card that is not
+# moving. Two consumers, one cache, so a video is never decoded twice for the
+# same frame.
 FRAME_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-frames"
+
+# A SMALL COPY OF EACH STILL, for the carousel to draw.
+#
+# WHY A PICTURE NEEDS A CACHE AT ALL. These wallpapers are 4K and about half of
+# them are PNG, which has no scaled decoding: asked for a 960 px thumbnail of
+# one, Qt decodes all 8.3 million pixels and then throws most of them away.
+# Measured at 170 to 220 ms and some 35 MB per image -- and the carousel builds
+# a card every time one slides into the fan, so that is the price of a single
+# press of the arrow key. Against a 960 px JPEG it is about 5 ms and 1.5 MB.
+#
+# JPEG AND NOT PNG even for wallpapers that came as PNG: this is a thumbnail of
+# a photograph, quality 4 is indistinguishable at this size, and it keeps the
+# whole cache for sixty-odd wallpapers around 5 MB.
+#
+# THE WIDTH IS THE PREVIEW'S WIDTH, for the reason spelled out under
+# PREVIEW_WIDTH: it is the widest a card gets on a 1440p screen, and a 4K
+# monitor upscales it rather than every other monitor paying for that one.
+#
+# NOT rounded, and not cropped to the shape of the card. The carousel crops to
+# whatever monitor it is on -- a card is a scale model of the screen -- and it
+# cuts the corners itself with one shared mask. Baking either into the file
+# would tie the cache to one monitor.
+THUMB_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-thumbs"
+THUMB_WIDTH="${WALLPAPER_THUMB_WIDTH:-960}"
+
+# A SMALL, SILENT COPY OF EACH VIDEO, for the carousel to play.
+#
+# WHY NOT JUST PLAY THE WALLPAPER ITSELF. The collection is 4K -- one of these
+# files is 4K at 120 fps and 40 Mbit/s -- and the carousel draws five cards at
+# once, the largest of them under a thousand pixels wide. Playing the originals
+# means five 4K decoders running to fill five thumbnails: measured at about
+# two thirds of a core EACH, before any of them has been scaled down.
+#
+# A 720p30 copy decodes in 0.34 s of CPU per twenty seconds of video -- call it
+# 2% of one core in real time, so all five together cost a fraction of what one
+# original did. It is built once, in the background, and reused for good.
+#
+# THE NUMBERS ARE SIZED BY WHAT COSTS, and what costs is not the decoding.
+# Measured with five previews playing at once: the h264 threads sit at nearly
+# nothing because the decode lands on NVDEC, and the process' MAIN thread --
+# the one that also runs the carousel's animation -- carries 25 to 40% of a
+# core taking each decoded frame and turning it into a texture. That work is
+# pixels per second and nothing else, so that is the number to cut:
+#
+#   WIDTH    960, which is the width of the largest card on a 1440p screen. A
+#            preview wider than the card it is drawn in is pixels decoded,
+#            uploaded and then thrown away by the scaler. On a 4K monitor the
+#            centre card is wider than this and the preview is upscaled: a
+#            deliberate trade, since sizing every clip for the largest monitor
+#            anyone might plug in costs every other monitor the difference.
+#   FPS      24. These are ambient loops -- clouds, rain, a character breathing
+#            -- and the 120 fps original is not carrying information a
+#            thumbnail needs. Together with the width this is less than half
+#            the pixels per second of the first version (1280 at 30), and the
+#            carousel's movement is what got that time back.
+#   SECONDS  12. Long enough to read as motion rather than as a GIF, short
+#            enough that the longest wallpaper here (nearly two minutes) does
+#            not cost two minutes of decoding to convert.
+#   CRF      30, at this size, which lands around 300 KB for the twelve seconds.
+#   THREADS  4 and nice 19, because this runs while someone is using the
+#            machine. Unrestrained it takes every core for four seconds.
+PREVIEW_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-previews"
+PREVIEW_WIDTH="${WALLPAPER_PREVIEW_WIDTH:-960}"
+PREVIEW_FPS="${WALLPAPER_PREVIEW_FPS:-24}"
+PREVIEW_SECONDS="${WALLPAPER_PREVIEW_SECONDS:-12}"
+PREVIEW_CRF="${WALLPAPER_PREVIEW_CRF:-30}"
+PREVIEW_THREADS="${WALLPAPER_PREVIEW_THREADS:-4}"
 
 # The frozen frame `still` puts up, which is NOT one of those thumbnails and so
 # deliberately does not live among them: `thumbs` sweeps FRAME_CACHE for PNGs
@@ -187,6 +261,157 @@ extract_frame() {
     # frame_for's freshness check forever.
     rm -f "$out"
     return 1
+}
+
+# Path of the cached thumbnail for a still. Named the way the video caches are
+# -- the whole source path with its slashes flattened -- so all three answer to
+# the same question and none of them can confuse two files of the same basename.
+thumb_path() {
+    local flat="${1#/}"
+    printf '%s/%s.jpg' "$THUMB_CACHE" "${flat//\//_}"
+}
+
+# Build that thumbnail if it is missing or older than the wallpaper, and print
+# where it is. Checked for CONTENT and not for an exit code, like everything
+# else that shells out to ffmpeg here, and an empty file is removed rather than
+# left behind: it would be newer than the source and so pass the freshness test
+# above for ever.
+thumb_for() {
+    local src="$1" out
+    out="$(thumb_path "$src")"
+
+    if [[ -f "$out" && "$out" -nt "$src" ]]; then
+        printf '%s\n' "$out"
+        return 0
+    fi
+
+    command -v ffmpeg >/dev/null || return 1
+    mkdir -p "$THUMB_CACHE"
+
+    # WRITTEN BESIDE ITSELF AND MOVED INTO PLACE. Encoding straight over the
+    # cached file means a run that is killed halfway -- or a full disk -- takes
+    # a perfectly good thumbnail with it and leaves nothing. A rename is atomic;
+    # the worst case becomes "the old one is still there".
+    #
+    # An animated GIF is a still here -- awww animates it on the desktop -- so
+    # -frames:v 1 is what stops this writing a numbered file per frame.
+    nice -n 19 ffmpeg -y -loglevel error -i "$src" -frames:v 1 \
+        -vf "scale=w='min($THUMB_WIDTH,iw)':h=-2" -q:v 4 "$out.part.jpg" >/dev/null 2>&1
+
+    if [[ ! -s "$out.part.jpg" ]]; then
+        rm -f "$out.part.jpg"
+        return 1
+    fi
+
+    mv -f "$out.part.jpg" "$out"
+    printf '%s\n' "$out"
+}
+
+# Path of the cached preview clip for a video. Named the same way the still
+# frame is -- the whole source path with its slashes flattened -- so the two
+# caches answer to the same question and neither can confuse two videos of the
+# same basename.
+preview_path() {
+    local flat="${1#/}"
+    printf '%s/%s.mp4' "$PREVIEW_CACHE" "${flat//\//_}"
+}
+
+# Build that clip if it is missing or older than the video, and print where it
+# is. See the note on PREVIEW_CACHE for what the numbers are for.
+#
+# THE FILE IS CHECKED FOR CONTENT, not the exit code, for the same reason
+# extract_frame does it: ffmpeg has ways of exiting 0 having written nothing,
+# and an empty file left behind would be newer than the video and so pass the
+# freshness test above forever.
+#
+# scale takes min(width, iw) so a video that is already smaller than the
+# preview width is copied rather than blown up.
+#
+# IT STARTS WHERE THE STILL FRAME WAS TAKEN, two seconds in, and that is not a
+# detail: the carousel draws the still and then crossfades the clip in over it,
+# so if the clip began at zero the fade would be a cut from one picture to a
+# different one -- which is what a "flash when it starts playing" is. Starting
+# both at the same second makes the two nearly the same picture and the fade
+# invisible. The same fallback as extract_frame for a clip too short to seek
+# into, and for the same reason: seeking past the end is not an error to
+# ffmpeg, it just writes nothing.
+preview_for() {
+    local src="$1" out seek=2 duration
+    out="$(preview_path "$src")"
+
+    if [[ -f "$out" && "$out" -nt "$src" ]]; then
+        printf '%s\n' "$out"
+        return 0
+    fi
+
+    command -v ffmpeg >/dev/null || return 1
+    mkdir -p "$PREVIEW_CACHE"
+
+    # ONLY SHORTEN THE SEEK WHEN THE DURATION IS KNOWN AND SMALL. No ffprobe,
+    # or a container that answers "N/A", used to fall through to seek 0 -- and
+    # a clip starting at zero against a still frame taken at two seconds is
+    # exactly the mismatch the carousel's crossfade turns into a flash. Unknown
+    # means keep the seek; the empty-output check below catches a clip too
+    # short for it.
+    if command -v ffprobe >/dev/null; then
+        duration="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$src" 2>/dev/null)"
+        awk -v d="${duration:-0}" 'BEGIN { exit !(d + 0 > 0 && d + 0 < 6) }' && seek=0
+    fi
+
+    # Beside itself and moved into place, so a run that is killed halfway does
+    # not destroy a working clip -- see thumb_for.
+    nice -n 19 ffmpeg -y -loglevel error \
+        -ss "$seek" -t "$PREVIEW_SECONDS" -i "$src" \
+        -an -sn -threads "$PREVIEW_THREADS" \
+        -vf "scale=w='min($PREVIEW_WIDTH,iw)':h=-2,fps=$PREVIEW_FPS" \
+        -c:v libx264 -preset veryfast -crf "$PREVIEW_CRF" -pix_fmt yuv420p \
+        -movflags +faststart "$out.part.mp4" >/dev/null 2>&1
+
+    # A seek past the end is not an error to ffmpeg: it exits 0 having written
+    # nothing. So the retry is on the FILE, and it is what covers a clip whose
+    # duration could not be read.
+    if [[ ! -s "$out.part.mp4" && "$seek" != 0 ]]; then
+        seek=0
+        nice -n 19 ffmpeg -y -loglevel error \
+            -ss "$seek" -t "$PREVIEW_SECONDS" -i "$src" \
+            -an -sn -threads "$PREVIEW_THREADS" \
+            -vf "scale=w='min($PREVIEW_WIDTH,iw)':h=-2,fps=$PREVIEW_FPS" \
+            -c:v libx264 -preset veryfast -crf "$PREVIEW_CRF" -pix_fmt yuv420p \
+            -movflags +faststart "$out.part.mp4" >/dev/null 2>&1
+    fi
+
+    if [[ ! -s "$out.part.mp4" ]]; then
+        rm -f "$out.part.mp4"
+        return 1
+    fi
+
+    mv -f "$out.part.mp4" "$out"
+    printf '%s\n' "$out"
+}
+
+# Delete everything in $1 matching $2 that is not one of the paths given after
+# them, and print how many went. Three caches hold one file each per wallpaper
+# -- a thumbnail for every one of them, a frame and a clip for the videos -- and
+# a rename orphans an entry in all of them.
+#
+# ONLY inside the given directory, only that one pattern, and only files the
+# caller did not just vouch for. These directories belong to this script alone
+# -- they are not somewhere the user keeps anything -- but a delete loop
+# deserves the narrow version regardless of who owns the folder.
+sweep_cache() {
+    local dir="$1" pattern="$2" gone=0 cached keep
+    shift 2
+
+    if [[ -d "$dir" ]]; then
+        while IFS= read -r -d '' cached; do
+            for keep in "$@"; do
+                [[ "$cached" == "$keep" ]] && continue 2
+            done
+            rm -f -- "$cached" && gone=$(( gone + 1 ))
+        done < <(find "$dir" -maxdepth 1 -type f -name "$pattern" -print0)
+    fi
+
+    printf '%s\n' "$gone"
 }
 
 # THE FRAME THAT IS ACTUALLY ON SCREEN, full size, written to $1.
@@ -285,49 +510,88 @@ fi
 # ---------------------------------------------------------------
 mapfile -t WALLPAPERS < <(collect "$WALLPAPER_DIR")
 
-(( ${#WALLPAPERS[@]} == 0 )) && die "no wallpapers in $WALLPAPER_DIR"
+# EXCEPT FOR `thumbs`, which has work to do precisely when the folder is empty:
+# every cached thumbnail, frame and clip in there belongs to a wallpaper that is
+# no longer in the collection, and the sweep below is the only thing that ever
+# collects them. Dying here left the caches orphaned for good -- megabytes of
+# preview clips, not the kilobytes the frame cache used to be.
+if (( ${#WALLPAPERS[@]} == 0 )) && [[ "$MODE" != "thumbs" ]]; then
+    die "no wallpapers in $WALLPAPER_DIR"
+fi
 
 # ---------------------------------------------------------------
-# 1b. Thumbnails, on request
+# 1b. Thumbnails and previews, on request
 # ---------------------------------------------------------------
-# The QML pickers draw a thumbnail with an Image, and an Image cannot decode an
-# mp4 -- a video entry would be a blank rectangle in the strip, which for a
-# picker whose entire job is choosing by LOOKING is the same as not listing it.
-# So they run this first and then point at frame_path() themselves.
+# THREE CACHES, ONE PASS. Every wallpaper gets a thumbnail, because decoding a
+# 4K PNG to draw a card costs a fifth of a second. A video gets two more: a
+# still frame, because an Image cannot decode an mp4 and the card has to show
+# something, and a small preview clip, because the card in the middle of the
+# carousel plays and the original is 4K at up to 120 fps.
 #
-# A separate mode and not something every run does in passing: extracting
-# frames for a folder of videos is seconds of ffmpeg, and `wallpaper-switch
-# next` on a keybind has to be instant.
+# All three are named after the file they came from, all three are rebuilt when
+# it is newer, and all three are swept when it goes away, so they are built
+# together.
+#
+# A separate mode and not something every run does in passing: this is a
+# fraction of a second of ffmpeg per still and seconds per video, and the
+# rotation timer's `wallpaper-switch random` has to be over before anyone
+# notices it ran. The shell calls it
+# when the collection changes and then points at thumb_path(), frame_path() and
+# preview_path() itself.
 if [[ "$MODE" == "thumbs" ]]; then
+    THUMBS=0
     MADE=0
-    KEEP=()
+    CLIPS=0
+    KEEP_THUMBS=()
+    KEEP_FRAMES=()
+    KEEP_PREVIEWS=()
+
     for W in "${WALLPAPERS[@]}"; do
-        is_video "$W" || continue
-        KEEP+=("$(frame_path "$W")")
-        [[ -f "$(frame_path "$W")" && "$(frame_path "$W")" -nt "$W" ]] && continue
-        frame_for "$W" >/dev/null && MADE=$(( MADE + 1 ))
+        if ! is_video "$W"; then
+            THUMB="$(thumb_path "$W")"
+            KEEP_THUMBS+=("$THUMB")
+
+            if [[ ! -f "$THUMB" || ! "$THUMB" -nt "$W" ]]; then
+                thumb_for "$W" >/dev/null && THUMBS=$(( THUMBS + 1 ))
+            fi
+
+            continue
+        fi
+
+        FRAME="$(frame_path "$W")"
+        PREVIEW="$(preview_path "$W")"
+        KEEP_FRAMES+=("$FRAME")
+        KEEP_PREVIEWS+=("$PREVIEW")
+
+        if [[ ! -f "$FRAME" || ! "$FRAME" -nt "$W" ]]; then
+            frame_for "$W" >/dev/null && MADE=$(( MADE + 1 ))
+        fi
+
+        if [[ ! -f "$PREVIEW" || ! "$PREVIEW" -nt "$W" ]]; then
+            preview_for "$W" >/dev/null && CLIPS=$(( CLIPS + 1 ))
+        fi
     done
 
     # ---- Sweep ----
-    # A frame is named after the video it came from, so renaming or deleting a
-    # video orphans its frame and nothing would ever collect it. Rename a few
-    # downloads and the cache keeps a copy of each old name for good.
+    # A cached file is named after the wallpaper it came from, so renaming or
+    # deleting one orphans its entries and nothing would ever collect them.
+    # Rename a few downloads and the caches keep a copy under each old name for
+    # good -- which for the previews is megabytes, not kilobytes.
     #
-    # ONLY inside FRAME_CACHE and only *.png, and only files this run did not
-    # just vouch for. The directory belongs to this script alone -- it is not
-    # somewhere the user keeps anything -- but a delete loop deserves the
-    # narrow version regardless of who owns the folder.
+    # NOT WHEN THE FOLDER CAME FROM THE ENVIRONMENT. This run vouches only for
+    # the folder it just scanned, so `WALLPAPER_DIR=/tmp/x wallpaper-switch
+    # thumbs` -- a one-off look at some other folder, which is what that
+    # variable is for -- would take every cached file of the REAL collection
+    # for an orphan and delete it. Recovering from that is a full re-encode of
+    # every preview.
     GONE=0
-    if [[ -d "$FRAME_CACHE" ]]; then
-        while IFS= read -r -d '' CACHED; do
-            for K in ${KEEP[@]+"${KEEP[@]}"}; do
-                [[ "$CACHED" == "$K" ]] && continue 2
-            done
-            rm -f -- "$CACHED" && GONE=$(( GONE + 1 ))
-        done < <(find "$FRAME_CACHE" -maxdepth 1 -type f -name '*.png' -print0)
+    if [[ -z "$DIR_FROM_ENV" ]]; then
+        GONE=$(sweep_cache "$THUMB_CACHE" '*.jpg' ${KEEP_THUMBS[@]+"${KEEP_THUMBS[@]}"})
+        GONE=$(( GONE + $(sweep_cache "$FRAME_CACHE" '*.png' ${KEEP_FRAMES[@]+"${KEEP_FRAMES[@]}"}) ))
+        GONE=$(( GONE + $(sweep_cache "$PREVIEW_CACHE" '*.mp4' ${KEEP_PREVIEWS[@]+"${KEEP_PREVIEWS[@]}"}) ))
     fi
 
-    echo "wallpaper thumbnails: $MADE extracted, $GONE stale removed"
+    echo "wallpaper thumbnails: $THUMBS stills, $MADE frames, $CLIPS previews, $GONE stale removed"
     exit 0
 fi
 
