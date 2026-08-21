@@ -24,15 +24,19 @@
 # =============================================================
 set -euo pipefail
 
+# `die` and `note` come from the library beside this script, resolved through
+# readlink rather than through $PATH: the settings window in Quickshell is a
+# caller and its environment is the compositor's, not a login shell's.
+BIN_DIR="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=../lib/desktop-lib.sh
+. "$BIN_DIR/../lib/desktop-lib.sh"
+
 FACE="$HOME/.face"
 
 # The cap on either side. 512 is well past what anything draws this at -- the
 # sidebar uses 38, a display manager a hundred and something -- and leaves room
 # for a screen that scales.
 MAX_SIDE=512
-
-die() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; exit 1; }
-note() { printf '  %s\n' "$*"; }
 
 # Copied, then moved into place. A half-written ~/.face is a broken image in
 # the sidebar, and the copy of a large file over a network mount is long

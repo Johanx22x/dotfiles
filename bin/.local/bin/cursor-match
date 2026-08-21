@@ -38,10 +38,20 @@
 
 set -uo pipefail
 
+# The library beside this script, for state_get -- see the two reads further
+# down. Resolved through readlink rather than $PATH because the one caller that
+# matters is wallpaper-switch, which runs from a systemd timer.
+BIN_DIR="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=../lib/desktop-lib.sh
+. "$BIN_DIR/../lib/desktop-lib.sh"
+
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cursor-match"
 MATCHER="$DATA_DIR/color_match.py"
 THEMES="$DATA_DIR/themes.json"
 PALETTE="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/colors.json"
+
+# desktop-tweak's store, read directly. See the note above the first read.
+TWEAKS="${XDG_STATE_HOME:-$HOME/.local/state}/desktop-tweaks"
 
 # The installed themes are named for the project they come from, and the file
 # they are listed in is not: themes.json says `Sky-Blue`, the directory under
@@ -95,10 +105,31 @@ missing() {
 [[ -r $MATCHER && -r $THEMES ]] || missing "the matcher is not installed in $DATA_DIR"
 command -v python3 >/dev/null || missing "python3 is not installed"
 
-# The setting is read straight from the store rather than being cached here:
-# the settings window writes it, and a copy in a second file is a copy that
-# goes stale. `show` prints one key per line, key and value tab-separated.
-auto=$(desktop-tweak show 2>/dev/null | awk '$1 == "cursor-auto" { print $2 }')
+# THE STORE ITSELF, NOT `desktop-tweak show`. The setting is read straight from
+# the file rather than cached here -- the settings window writes it, and a copy
+# in a second file is a copy that goes stale -- but this used to reach it by
+# parsing the output of `desktop-tweak show`, and that was wrong twice.
+#
+# `show` prints a PADDED THREE-COLUMN TABLE, not the tab-separated pairs the
+# comment here claimed, and awk's default splitting does not care which. It
+# works for a key whose value is set. It does not work for `cursor-theme` with
+# nothing set: that row's value column is blank, so `$2` is the first word of
+# the RANGE column instead, and the "has the answer moved?" test below was
+# comparing the theme against `Adwaita` on any machine that had never chosen
+# one. Measured on a store with no cursor-theme in it:
+#
+#     $ desktop-tweak show | awk '$1 == "cursor-theme" { print $2 }'
+#     Adwaita
+#
+# And it cost two whole runs of desktop-tweak per wallpaper change, each of
+# which asks `compositor` which session is up and scans every directory under
+# /usr/share/icons to build the range column neither read wanted.
+#
+# state_get reads the row and nothing else. An unset key comes back empty,
+# which is the honest answer and the one both tests below want: empty is not 0,
+# so an untouched machine still gets the automatic pointer that cursor-auto
+# defaults to.
+auto=$(state_get "$TWEAKS" cursor-auto)
 if [[ $auto == 0 ]]; then
     (( DRY_RUN )) && echo "cursor-match: cursor-auto is 0 -- the theme was chosen by hand" >&2
     exit 0
@@ -156,7 +187,7 @@ fi
 # and niri reloads its config every time one of those files is touched. Two
 # wallpapers from the same family would otherwise make the pointer flicker
 # through a reload for no change at all.
-current=$(desktop-tweak show 2>/dev/null | awk '$1 == "cursor-theme" { print $2 }')
+current=$(state_get "$TWEAKS" cursor-theme)
 [[ $current == "$theme" ]] && exit 0
 
 desktop-tweak set cursor-theme "$theme"

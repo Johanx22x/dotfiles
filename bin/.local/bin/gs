@@ -50,6 +50,15 @@
 # =============================================================
 set -euo pipefail
 
+# Found NEXT TO THIS SCRIPT and not through $PATH: Steam does not necessarily
+# have ~/.local/bin on it. readlink resolves the stow symlink back into the
+# repo, so the library is found whether this was started from ~/.local/bin or
+# straight out of the checkout. `wait_until` and the path to the `compositor`
+# helper come out of it.
+BIN_DIR="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=../lib/desktop-lib.sh
+. "$BIN_DIR/../lib/desktop-lib.sh"
+
 # Steam passes "gs -- <command>"; swallow the leading --.
 [[ ${1:-} == "--" ]] && shift
 
@@ -169,6 +178,8 @@ start_wallpaper_watchdog() {
     setsid -f bash -c "$1" >/dev/null 2>&1
 }
 
+mpvpaper_gone() { ! pgrep -x mpvpaper >/dev/null 2>&1; }
+
 freeze_video_wallpaper() {
     [[ ${GS_WALLPAPER:-0} == 1 ]] && return 0
     pgrep -x mpvpaper >/dev/null 2>&1 || return 0
@@ -194,10 +205,12 @@ freeze_video_wallpaper() {
     # awww is already up by the time `still` returns, but mpvpaper exiting is
     # what releases the memory, and a game that starts a moment early measures
     # a card that is still 2 GB short of what it is about to be given.
-    for _ in {1..20}; do
-        pgrep -x mpvpaper >/dev/null 2>&1 || break
-        sleep 0.05
-    done
+    #
+    # `|| true` because running out of attempts is not a reason to refuse to
+    # launch the game, which is what the bare `break` in the loop this replaced
+    # also meant. pgrep only READS the process table here; nothing in this file
+    # signals anything by name.
+    wait_until 20 0.05 mpvpaper_gone || true
 
     echo "gs: video wallpaper frozen to a still, freeing its VRAM (GS_WALLPAPER=1 keeps it playing)" >&2
 }
@@ -260,13 +273,13 @@ fi
 # The fallback keeps the old numbers for the case there is nothing to ask --
 # running this from a TTY, or from a compositor that cannot be queried.
 
-# Found NEXT TO THIS SCRIPT and not through $PATH: Steam does not necessarily
-# have ~/.local/bin on it, and a `compositor` that cannot be run would degrade
-# to the fallback resolution without saying so. readlink resolves the stow
-# symlink back into the repo, so the helper is found whether this was started
-# from ~/.local/bin or straight out of the checkout.
-BIN_DIR="$(dirname "$(readlink -f "$0")")"
-compositor() { host "$BIN_DIR/compositor" "$@"; }
+# THE LIBRARY'S OWN `compositor` CANNOT BE USED HERE, and this is the one place
+# in the layer where that is true. It runs the helper directly; this has to put
+# `host` in front of it first -- see the paragraph below on Steam's loader
+# environment. So the path comes from the library and the wrapping stays here.
+# A `compositor` that could not be run would degrade to the fallback resolution
+# without saying so, which is why it is resolved rather than looked up.
+compositor() { host "$COMPOSITOR_BIN" "$@"; }
 
 # ASKING THE COMPOSITOR HAS TO HAPPEN OUTSIDE STEAM'S LOADER ENVIRONMENT.
 # Steam exports its own LD_LIBRARY_PATH into everything it launches, this script

@@ -73,21 +73,19 @@
 # =============================================================
 set -euo pipefail
 
-SELF="${0##*/}"
-
-die() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; exit 1; }
-note() { printf '  %s\n' "$*"; }
-
 # FOUND NEXT TO THIS SCRIPT AND NOT THROUGH $PATH. ~/.local/bin is on the PATH
 # of a login shell and of very little else: the settings window in Quickshell
 # inherits the compositor's environment, install.sh calls these scripts by
 # absolute path with whatever PATH it was started with, and a systemd --user
-# unit gets neither. The same shim is in gs, gaming-check, desktop-opacity and
-# wallpaper-switch, and desktop-opacity's copy explains why at length. readlink
-# resolves the stow symlink back into the repo, so the helper is found whether
-# this was started from ~/.local/bin or straight out of the checkout.
+# unit gets neither. readlink resolves the stow symlink back into the repo, so
+# the library is found whether this was started from ~/.local/bin or straight
+# out of the checkout.
+#
+# `compositor`, `die`, `note` and `SELF` all come out of it -- SELF stays the
+# basename of $0, which is what makes `hypr-monitor` report the new name.
 BIN_DIR="$(dirname "$(readlink -f "$0")")"
-compositor() { "$BIN_DIR/compositor" "$@"; }
+# shellcheck source=../lib/desktop-lib.sh
+. "$BIN_DIR/../lib/desktop-lib.sh"
 
 # WHICH COMPOSITOR, asked of the helper rather than of XDG_CURRENT_DESKTOP --
 # see the header of `compositor` for why the socket is proof and the desktop
@@ -447,23 +445,21 @@ generate_niri() {
   done < "$STATE_FILE"
 }
 
+# Written whole through a temporary file in the destination's own directory and
+# moved into place, so a crash halfway leaves the previous file rather than half
+# of the new one. Under niri this matters more than it looks: the compositor
+# WATCHES this file, so it would read whatever is there the instant it is
+# touched, and a truncated KDL block is a config error on screen.
+#
+# This is where write_generated came from -- it was this function, and it is now
+# shared with desktop-tweak, which writes two files niri watches for the same
+# reason. What it adds over the version that lived here is that the generator's
+# exit status is checked before the move.
 generate() {
-  mkdir -p "$(dirname "$OUT_FILE")"
-
-  # Written whole through a temporary file and moved into place, so a crash
-  # halfway leaves the previous file rather than half of the new one. Under niri
-  # this matters more than it looks: the compositor WATCHES this file, so it
-  # would read whatever is there the instant it is touched, and a truncated KDL
-  # block is a config error on screen.
-  local tmp
-  tmp="$(mktemp "$(dirname "$OUT_FILE")/.desktop-monitors.XXXXXX")"
-
   case "$FLAVOR" in
-    hyprland) generate_hyprland > "$tmp" ;;
-    niri)     generate_niri     > "$tmp" ;;
+    hyprland) write_generated "$OUT_FILE" generate_hyprland ;;
+    niri)     write_generated "$OUT_FILE" generate_niri ;;
   esac
-
-  mv "$tmp" "$OUT_FILE"
 }
 
 # ---------------------------------------------------------------------------
@@ -652,7 +648,23 @@ current_vrr() {
 # it quietly stops being recorded the next time any OTHER monitor is set.
 # Verified both ways on a three-line file: without -a the middle line is gone,
 # with -a all three survive.
+#
+# AND ALL OF IT UNDER THE STORE'S LOCK, which is what makes the read and the
+# write one step rather than two. The body reads the whole file and then
+# replaces it, so two of these at once -- `set` for one monitor while `forget`
+# runs for another -- would each write a file built from what they read before
+# the other started, and one of the two records would simply not be there. The
+# atomic move stops a reader seeing half a store; only the lock stops a writer
+# overwriting another writer.
+#
+# state_lock runs its command in a subshell, which is why the `die` below still
+# ends the script rather than only the body: the message reaches stderr, the
+# subshell exits 1, and this file's `set -e` does the rest.
 rewrite_store() {
+  state_lock "$STATE_FILE" rewrite_store_locked "$@"
+}
+
+rewrite_store_locked() {
   local desc="$1" line="${2:-}" tmp status=0
 
   mkdir -p "$STATE_DIR"
@@ -845,8 +857,11 @@ case "${1:-show}" in
     [[ "$desc" != desc:* ]] \
       || die "Drop the 'desc:' prefix: $SELF main '${desc#desc:}'"
 
-    mkdir -p "$STATE_DIR"
-    printf '%s\n' "$desc" > "$MAIN_FILE"
+    # Replaced rather than truncated and refilled, like the store beside it.
+    # read_main goes out of its way to survive a truncated write -- see its
+    # comment about a multi-line string literal -- and this is the other half of
+    # that: there is no longer a moment when the file is short to read.
+    printf '%s\n' "$desc" | state_write "$MAIN_FILE"
     generate
 
     printf 'Main monitor: %s\n' "$desc"
