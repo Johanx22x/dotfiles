@@ -24,9 +24,25 @@
 // WHICH IS WHY IT REAPS FIRST. An armed replay is a permanent child process,
 // and a permanent child process outlives the shell that started it: killing
 // Quickshell reparents it to init, where nothing in this UI can reach it and it
-// keeps capturing forever. Every start therefore begins by stopping whatever
-// gsr is already running -- with SIGINT, so a stray never writes a file nobody
-// asked for.
+// keeps capturing forever. Every start therefore begins by stopping the
+// recorder this shell left behind -- with SIGINT, so a stray never writes a
+// file nobody asked for.
+//
+// BY A PID THIS SHELL WROTE DOWN, AND NEVER BY NAME. That reaper used to be
+// `pkill -INT -f "(^|/)gpu-screen-recorder "`, with a paragraph explaining how
+// the pattern had been tuned -- which is the tell: a kill that needs a tuned
+// pattern is a kill aimed at whatever matches it. The standing rule on this
+// desktop is that processes are ended by a pid somebody recorded, and it was
+// written after `pkill -x kitty` closed every terminal on the machine at once.
+// The pid goes to a file in the state directory when the recorder starts,
+// because the fact that has to survive the shell is precisely which process it
+// started; the file is read back synchronously at launch and the pid is
+// checked against /proc before anything is signalled.
+//
+// The difference is not only tidiness. The pattern killed EVERY
+// gpu-screen-recorder on the machine, including one started by hand from a
+// terminal to record something else; this ends the one that is this shell's
+// and leaves everything else alone.
 
 pragma Singleton
 
@@ -67,16 +83,27 @@ Singleton {
             return;
 
         config.seconds = value;
+        root.reapply();
+    }
 
-        // The new length only exists on the next process, so an armed buffer
-        // is restarted -- and the thirty seconds it was holding are gone. That
-        // is the honest cost of changing the setting, and the alternative
-        // (waiting until it is next disarmed) would be a setting that appears
-        // to do nothing.
-        if (root.armed) {
-            root.rearm = true;
-            root.disarm();
-        }
+    // PUT THE NEW FLAG ON THE RECORDER. Everything gpu-screen-recorder is told
+    // is a command-line argument, so none of it can change under a running
+    // process: the length, the screen, the microphone and every codec the
+    // settings page offers exist only on the NEXT one. So changing any of them
+    // takes the recorder down and brings it back, and the seconds it was
+    // holding are gone.
+    //
+    // That is the honest cost of changing a setting here, and the alternative
+    // -- waiting until the buffer is next switched off -- would be a settings
+    // page whose controls appear to do nothing. Not armed means there is
+    // nothing to reapply: the next arm() builds the command line from whatever
+    // the settings say then.
+    function reapply(): void {
+        if (!root.armed)
+            return;
+
+        root.rearm = true;
+        root.disarm();
     }
 
     property bool rearm: false
@@ -169,8 +196,7 @@ Singleton {
     // holding are gone.
     onMonitorChanged: {
         if (root.armed) {
-            root.rearm = true;
-            root.disarm();
+            root.reapply();
             return;
         }
 
@@ -216,6 +242,40 @@ Singleton {
                 return root.preferredMicrophone;
 
         return "default_input";
+    }
+
+    // THE ANSWER ABOVE IS LIVE AND THE RECORDER'S COPY OF IT WAS NOT. This is
+    // the same fault the monitor had, in the same file, and it survived the fix
+    // to that one because the two were never read side by side: `monitor` got
+    // an onMonitorChanged and thirty lines saying why a buffer that resolves a
+    // flag once and keeps the process built from it is a buffer recording the
+    // wrong thing -- and `microphone`, resolved exactly once for exactly the
+    // same reason, got nothing.
+    //
+    // What it looked like from the desk: the buffer is armed at boot, before
+    // PipeWire has announced the USB microphone, so it comes up with
+    // default_input; the microphone appears a second later, this binding
+    // notices and nothing else does. Every clip saved for the rest of the
+    // session has whatever the system felt like as its input, and the setting
+    // that names the right device is sitting there looking correct. With a
+    // picker on the settings page it stops being an inconvenience: choosing a
+    // microphone would visibly do nothing until something else happened to
+    // restart the buffer.
+    //
+    // DEBOUNCED, WHICH THE MONITOR IS NOT. PipeWire announces its nodes over
+    // several turns as the graph is built, so this binding settles through two
+    // or three answers at startup rather than one, and a restart per answer is
+    // a buffer that spends its first seconds being torn down. Half a second is
+    // long enough to cover the enumeration and short enough that a device
+    // plugged in by hand is in the recording before the reason for plugging it
+    // in has happened.
+    onMicrophoneChanged: micSettled.restart()
+
+    Timer {
+        id: micSettled
+
+        interval: 500
+        onTriggered: root.reapply()
     }
 
     property string lastClip: ""
@@ -283,21 +343,87 @@ Singleton {
 
     // Arm on startup. The buffer only has to exist before the thing worth
     // keeping does, so there is nothing to wait for.
-    Component.onCompleted: root.arm()
+    Component.onCompleted: {
+        // FOR THE SIDE EFFECT, and it is the whole reason the pid survives a
+        // restart: this is what makes the FileView above load, synchronously,
+        // before the reaper's command line is built from what is in it. The
+        // string it returns is of no interest -- the JsonAdapter is what was
+        // wanted, and it is populated by the time this returns. See the note
+        // on processFile.
+        processFile.text();
+
+        root.arm();
+    }
+
+    // ---------------- The pid, kept across the shell's own life ----------------
+    //
+    // ONE NUMBER ON DISK, and it is there for exactly one moment: the instant
+    // after this shell has been restarted and before it starts a recorder of
+    // its own, when the only thing that knows which process is still capturing
+    // is a file. Everything else about the recorder is in this singleton
+    // already.
+    //
+    // blockLoading, WHICH IS THE ONLY BLOCKING READ IN THIS SHELL. arm() runs
+    // from Component.onCompleted, and an asynchronous read would land after
+    // it: the reap would go out with pid 0, the orphan would survive, and the
+    // two recorders would fight over the encoder. It is one short file in the
+    // state directory, read once at startup.
+    //
+    // AND blockLoading ON ITS OWN DOES NOT DO IT, which was measured rather
+    // than trusted. A probe with exactly this FileView, a file already on
+    // disk holding a pid, and a read of the adapter property from
+    // Component.onCompleted printed 0 -- then 12345 four hundred
+    // milliseconds later. The flag says HOW to load, not WHEN: nothing had
+    // asked the FileView for anything yet, so nothing had loaded. Calling
+    // text() is what forces it, and onLoaded fires inside that call. See
+    // Component.onCompleted below, which does exactly that and throws the
+    // string away.
+    //
+    // 0 IS "NOBODY", the same way an empty screenKey is in Config: the file
+    // absent, the recorder stopped cleanly, or a shell that has never armed
+    // one.
+    FileView {
+        id: processFile
+
+        path: Quickshell.statePath("replay-process.json")
+        blockLoading: true
+        printErrors: false
+
+        onAdapterUpdated: writeAdapter()
+        onLoadFailed: writeAdapter()
+
+        JsonAdapter {
+            id: lastProcess
+
+            property int pid: 0
+        }
+    }
 
     Process {
         id: reaper
 
-        // MATCHED ON THE FULL COMMAND LINE, and the pattern is fussy for two
-        // reasons found the hard way. -x cannot be used because the process
-        // name is 21 characters and the kernel truncates comm at 15, so an
-        // exact-name match finds nothing; and the line does not start with the
-        // name either, because it is spawned resolved to /usr/bin. The
-        // trailing space is what keeps this from also killing
-        // gpu-screen-recorder-gtk and friends.
-        command: ["pkill", "-INT", "-f", "(^|/)gpu-screen-recorder "]
+        // KILL BY THE PID, AND ONLY AFTER ASKING /proc WHAT IT IS. A pid is
+        // reused, and the one written down before a reboot may well belong to
+        // something else by now -- so the name is checked first, and this is
+        // the ONE place a name is allowed to appear, because it is being used
+        // to decide NOT to kill.
+        //
+        // "gpu-screen-reco" and not the whole name: the kernel truncates comm
+        // at 15 characters and gpu-screen-recorder is 21. Measured rather than
+        // counted -- a copy of /usr/bin/sleep renamed gpu-screen-recorder was
+        // run and its /proc/<pid>/comm read back as exactly that string.
+        //
+        // A shell and not a bare `kill`, because the check and the signal have
+        // to happen together; there is no way to read /proc from QML without
+        // asking a FileView for a path that only exists sometimes.
+        command: ["sh", "-c",
+            `pid=$1; ` +
+            `[ "$pid" -gt 0 ] 2>/dev/null || exit 0; ` +
+            `[ "$(cat /proc/$pid/comm 2>/dev/null)" = "gpu-screen-reco" ] || exit 0; ` +
+            `kill -INT "$pid"`,
+            "reap", `${lastProcess.pid}`]
 
-        // Whether it killed anything (0) or found nothing (1) is equally fine;
+        // Whether it signalled anything or found nothing is equally fine;
         // either way the field is clear.
         onExited: {
             replay.command = ["gpu-screen-recorder",
@@ -345,7 +471,18 @@ Singleton {
                 replay.startedAt = Date.now();
         }
 
+        // The pid goes down as soon as there is one, not when the shell is on
+        // its way out: a shell that is killed does not get to run anything, and
+        // that is the case the file exists for.
+        onStarted: lastProcess.pid = replay.processId ?? 0
+
         onExited: {
+            // This recorder is gone, whatever ended it, so the number stops
+            // naming it. Left standing it would name whichever process the
+            // kernel handed the pid to next -- and the /proc check in the
+            // reaper is the second line of defence, not the first.
+            lastProcess.pid = 0;
+
             // Asked for by setSeconds or by the monitor changing: straight back
             // up with the new flag.
             if (root.rearm) {
@@ -389,13 +526,34 @@ Singleton {
             // at, so a screen appearing or the choice changing gets one more
             // go rather than nothing at all. See onMonitorChanged.
             if (root.failures >= 3) {
+                // WITH THE REASON, because without it this notification is a
+                // dead end. "gpu-screen-recorder keeps failing to start" was
+                // true of a monitor that had gone away, of a GPU with no
+                // encoder, and of a codec this card cannot do -- and the last
+                // of those is now something a settings page can put in front
+                // of somebody, so the message has to be able to say that the
+                // codec is why nothing is being kept.
+                //
+                // The LAST line of stderr: gsr narrates its startup there and
+                // the complaint is what it says on the way out.
+                const reason = replayErr.text.trim();
+                const detail = reason === "" ? "gpu-screen-recorder keeps failing to start"
+                    : reason.split("\n").pop().trim();
+
                 Quickshell.execDetached(["notify-send", "-a", "Quickshell", "-u", "critical",
-                    "-i", "camera-video", "Instant replay stopped",
-                    "gpu-screen-recorder keeps failing to start"]);
+                    "-i", "camera-video", "Instant replay stopped", detail]);
                 return;
             }
 
             revive.restart();
+        }
+
+        // WHY IT DIED, kept for the notification above. A StdioCollector and
+        // not a SplitParser: only the end of it is ever read, and there is no
+        // reason to walk into QML once per line for a stream nothing watches
+        // while things are going well.
+        stderr: StdioCollector {
+            id: replayErr
         }
 
         stdout: SplitParser {
