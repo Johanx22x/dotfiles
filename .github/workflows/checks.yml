@@ -66,6 +66,17 @@ jobs:
       # `!cancelled()` on every check so one failure does not hide the rest. A
       # pull request that broke two things should say both in one run, rather
       # than one per push.
+      # FIRST, BECAUSE IT IS THE ONLY CHECK HERE WHOSE FAILURE CANNOT BE
+      # UNDONE. Every other one guards against something a later commit fixes:
+      # a broken config, a renamed package, a stow collision. A passphrase or a
+      # credentialed repository URL merged into a PUBLIC repository is in the
+      # history, on GitHub, and in every clone taken since -- and removing it
+      # afterwards removes nothing. This is the last moment at which it is
+      # still only a diff.
+      - name: The backup configuration holds no secret
+        if: ${{ !cancelled() }}
+        run: tests/backup-secrets.sh
+
       - name: Keybinds are the same under both compositors
         if: ${{ !cancelled() }}
         run: tests/bind-parity.py

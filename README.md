@@ -264,7 +264,7 @@ has one, so the inner gap maps directly and the outer becomes a strut.
 ```
 zsh   hypr    niri        quickshell  kitty   matugen  shell
 gtk   media   openrgb     systemd     bin     ranger   icons   zen
-gaming
+gaming        backup
 ```
 
 Six are not, and the difference matters:
@@ -315,6 +315,101 @@ a still frame of every video, because nothing else can draw one; and a short
 960x540 copy of every video, which is what the carousel actually plays instead
 of a 4K file. They are built in the background, skipped when they are already
 newer than their source, and swept when a wallpaper goes away.
+
+## Backups
+
+`borg` for the archives and `borgmatic` for the policy around them, on a daily
+user timer. What is saved is the irreplaceable and only that — `~/.ssh`,
+`~/.gnupg`, `~/Projects`, `~/Documents`, `~/Pictures`, about 2.7 GB — because
+everything else on this machine is a package, a lockfile or a download away
+from coming back.
+
+`backup/.config/borgmatic/config.yaml` is tracked and holds the whole policy:
+the sources, the excludes, how long archives are kept and how often borg is
+asked to verify itself. Every choice in it is commented with the measurement
+behind it — `~/Projects` is 189,883 files, and 176,342 of those are inside a
+`node_modules`, which is why one exclude line takes the nightly walk down to
+13,541 files and 2.1 GB.
+
+**The two values that belong to one machine are never committed.** Where the
+archives go and what opens them live in `~/.config/borgmatic/local.env`, which
+is gitignored, and the tracked config reads them as `${BORG_REPO}` and
+`${BORG_PASSPHRASE}`. This repository is public, so `tests/backup-secrets.sh`
+runs in CI and fails the pull request if either one is ever written out as a
+literal.
+
+```sh
+backup            # what the last run did, and when the next one is
+backup run        # create, prune and check now — what the timer calls
+backup list       # the archives in the repository, newest last
+backup restore    # print the recipe for getting a file back, run nothing
+```
+
+### Setting it up
+
+Nothing starts by itself. These are the commands, in order, and they are the
+only ones — after the last of them the machine backs itself up nightly.
+
+```sh
+# 1. The tools. ./install.sh apply optional, with the backup group ticked,
+#    does the same thing.
+sudo pacman -S --needed borg borgmatic
+
+# 2. Link the configuration and the units. `backup` is not in the installer's
+#    stow list yet, so it is linked by hand.
+cd ~/dotfiles && stow --no-folding -t ~ backup systemd bin
+
+# 3. This machine's own two values, with a fresh passphrase. Change the path
+#    to wherever the archives should go — a second disk, an external drive.
+install -d -m 700 ~/.config/borgmatic
+install -m 600 /dev/null ~/.config/borgmatic/local.env   # mode first, contents after
+printf 'BORG_REPO=%s\nBORG_PASSPHRASE=%s\n' \
+    /mnt/datos-nvme/borg "$(openssl rand -base64 32)" \
+    > ~/.config/borgmatic/local.env
+
+# 4. READ IT NOW AND PUT THE PASSPHRASE SOMEWHERE THAT IS NOT THIS MACHINE.
+#    A password manager, a piece of paper, anywhere else. Step 5 encrypts the
+#    repository with it and there is no way back in without it — including,
+#    and especially, on the day this machine is the thing that died.
+cat ~/.config/borgmatic/local.env
+
+# 5. Create the repository. `repokey` puts the encrypted key inside the
+#    repository itself, so the passphrase from step 4 is the only thing that
+#    has to survive independently — with `keyfile` the key would live in
+#    ~/.config/borg/keys on this machine, and a dead disk would take the key
+#    and the only copy of it at once.
+BORG_REPO="$(sed -n 's/^BORG_REPO=//p' ~/.config/borgmatic/local.env)"
+BORG_PASSPHRASE="$(sed -n 's/^BORG_PASSPHRASE=//p' ~/.config/borgmatic/local.env)"
+export BORG_REPO BORG_PASSPHRASE
+borgmatic repo-create --encryption repokey
+
+# 6. The first backup, watched.
+backup run
+
+# 7. Nightly from here on.
+systemctl --user daemon-reload
+systemctl --user enable --now backup.timer
+```
+
+`backup.timer` is `OnCalendar=daily` with `Persistent=true`, so a machine that
+is switched off at midnight is backed up as soon as it comes back rather than
+skipped. It is a **user** timer, so it runs while somebody is logged in;
+`loginctl enable-linger $USER` is what makes it run without a session, and is
+only worth it on a machine that is left on and logged out.
+
+### What this does and does not protect against
+
+A copy on a disk inside this machine **does not** survive theft, fire or the
+whole machine dying. What it does survive is the main NVMe failing and, far
+more likely, deleting or overwriting something and noticing months later —
+which is what the retention is sized for: two weeks of daily archives, two
+months of weekly, a year of monthly.
+
+The way out of that limitation is one entry, not a rewrite. borg pushes to a
+remote over SSH, so a second line under `repositories:` —
+`ssh://user@host/./name.borg` — adds an offsite copy with the same sources, the
+same excludes and the same retention, sending only the chunks the far end does
+not already have.
 
 ## Per-machine
 

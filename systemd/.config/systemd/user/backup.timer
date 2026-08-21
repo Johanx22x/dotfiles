@@ -1,0 +1,27 @@
+[Unit]
+Description=Back up once a day
+
+[Timer]
+# ON A CALENDAR, AND THAT IS THE DIFFERENCE FROM THE OTHER TWO TIMERS HERE.
+# wallpaper-rotate and airpods-battery are session cadences -- every 30 minutes
+# of desktop, every 3 minutes of earphones -- and a tick they miss is a tick
+# nobody wanted. This one is an obligation with a date on it: the question it
+# answers is "has today been backed up", and the answer has to survive the
+# machine being switched off at midnight.
+#
+# So OnCalendar, and Persistent=true with it: systemd remembers the last run in
+# ~/.local/share/systemd/timers/ and fires as soon as the user manager comes up
+# if the moment went by while the machine was off. Without that line a desktop
+# that is never on at 00:00 would be backed up never, and would say so nowhere.
+OnCalendar=daily
+Persistent=true
+
+# Up to half an hour after midnight, drawn once and then stable for as long as
+# the timer stays enabled. It keeps the backup off the same instant as every
+# other daily job on the machine -- pacman mirrors, snapper cleanup -- which
+# all pile onto 00:00 by default.
+RandomizedDelaySec=30m
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
