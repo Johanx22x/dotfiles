@@ -847,11 +847,29 @@ hl.window_rule({
 -- overlayLayerRule:set_enabled(false)
 
 
--- Blur for the Quickshell bar under trial on the portrait monitor.
--- Its namespace is set in QML, not by the process name: see
--- WlrLayershell.namespace in ~/.config/quickshell/modules/bar/Bar.qml.
--- Remove this rule together with the quickshell stow package if the trial
--- does not end in a migration.
+-- HOW the Quickshell surfaces are blurred. WHERE is not decided here any more.
+--
+-- The shell names its own blur region through ext-background-effect -- see
+-- BackgroundEffect.blurRegion in ~/.config/quickshell/modules/bar/Bar.qml and
+-- its six siblings -- and Hyprland has implemented that protocol since 0.56.0
+-- (0.56.2 installed; `strings /usr/bin/Hyprland` has
+-- ext_background_effect_manager_v1). A client region takes priority over what
+-- a rule would have blurred, so from here on this rule answers one question
+-- only: with which parameters.
+--
+-- WHY IT DOES NOT SIMPLY GO AWAY, the way its opposite number in
+-- niri/config.kdl did. The protocol carries a region and nothing else -- its
+-- one capability is `blur` -- so there is no way for a surface to ask for
+-- xray, and xray is the parameter this rule cannot lose. Drop the rule and the
+-- namespaces fall through to the GLOBAL decoration.blur, which has different
+-- parameters and no xray at all.
+--
+-- So the two flavours reach the same look by two routes, and that is worth
+-- knowing before changing either: the shell says where under both, and under
+-- Hyprland alone a rule still says how.
+--
+-- The namespace is set in QML, not by the process name: see
+-- WlrLayershell.namespace in the files above.
 hl.layer_rule({
     name  = "blur-quickshell",
     -- The popouts, the notification panel and the power menu share the bar's
@@ -867,6 +885,11 @@ hl.layer_rule({
     -- until `wallpaper` was added to it -- a full-screen sheet of
     -- Theme.glass(Theme.surface) is the largest possible place to notice.
     --
+    -- STILL THE FULL LIST even though the surfaces now ask for themselves,
+    -- because that is what this rule is for. A namespace dropped from here
+    -- keeps its blur and loses its parameters, which is the blurrier-than-the-
+    -- bar failure above, not a flat tint.
+    --
     -- The list is the WlrLayershell.namespace lines in the shell, minus the two
     -- surfaces with no glass in them: quickshell-screen-corner is opaque black
     -- and quickshell-click-catcher draws nothing at all.
@@ -877,16 +900,24 @@ hl.layer_rule({
     -- 0.84: JUST UNDER the surfaces' own alpha (Theme.glassAlpha = 0.85).
     -- These two numbers are tied; move one and move the other.
     --
-    -- Hyprland blurs the WHOLE rectangle of a layer surface. It has no idea
-    -- the shell drew a rounded corner inside it, so the blur carries on into
-    -- the transparent area outside the curve and juts out past the edge --
-    -- the sawtooth sticking out beyond the border. ignore_alpha is what
-    -- excludes pixels from the blur: at 0 (what was here) nothing is
-    -- excluded and the whole corner bleeds; just below the fill's alpha, only
-    -- the solid interior gets blurred and the antialiased edge is left alone.
+    -- WHAT THIS WAS FOR, and it is now the belt rather than the braces.
+    -- Hyprland blurs the WHOLE rectangle of a layer surface unless told
+    -- otherwise. It had no idea the shell drew a rounded corner inside it, so
+    -- the blur carried on into the transparent area outside the curve and
+    -- jutted out past the edge -- the sawtooth sticking out beyond the border.
+    -- ignore_alpha excludes pixels from the blur by their alpha: at 0 (what was
+    -- here) nothing is excluded and the whole corner bleeds; just below the
+    -- fill's alpha, only the solid interior gets blurred and the antialiased
+    -- edge is left alone.
     --
-    -- It is not enough on its own: with passes at 3 the corner steps again
-    -- whatever this is set to. Both changes are needed.
+    -- The surfaces now hand over the shape directly, which answers the same
+    -- question without guessing from a threshold. This is kept anyway: it costs
+    -- nothing, it is what protects any surface that ever stops asking, and the
+    -- number is one half of a pair -- Theme.glassAlpha is the other, and a
+    -- comment in PowerMenu.qml points back here.
+    --
+    -- It was never enough on its own: with passes at 3 the corner steps again
+    -- whatever this is set to. Both changes were needed.
     ignore_alpha  = 0.84,
     blur_popups   = true,
 
@@ -897,6 +928,13 @@ hl.layer_rule({
     -- surface at 85% opacity shows what is behind it. Measured: bar
     -- rgb(39,44,37) against popout rgb(25,28,25). With xray both composite
     -- over the same wallpaper and match.
+    --
+    -- THIS LINE IS WHY THE RULE IS STILL HERE. ext-background-effect carries a
+    -- region and nothing else, so a surface cannot ask for this. niri has the
+    -- same knob and has never had it on for these namespaces, which did not
+    -- matter while its popouts were not blurred at all -- see the note at the
+    -- end of the LAYER RULES section in niri/config.kdl for what to do if the
+    -- mismatch shows up there now that they are.
     xray = true,
 })
 
