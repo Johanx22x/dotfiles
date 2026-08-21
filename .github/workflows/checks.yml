@@ -257,16 +257,6 @@ jobs:
       # /etc/shells, and its apply is `chsh`, which authenticates through PAM
       # with a password no test has.
       #
-      # THE optional UNIT NEVER INSTALLS ANYTHING NEW, because on this branch it
-      # cannot: optional_apply calls pkg_install from inside a
-      # `while read ... done < <(optional_groups)`, so pacman's stdin is the
-      # list of group names and it reads the next one as the answer to
-      # "Proceed with installation? [Y/n]". The pack this run ticks therefore
-      # asks for a package the required list has already put in, which covers
-      # the unit's own machinery and the group half of the profile and leaves
-      # the installing itself uncovered. tests/installer-run.sh says beside the
-      # list what to change once that is fixed.
-      #
       # services-user AND monitors SAY `na` HERE and are not exercised: one
       # needs a running `systemd --user` and the other a compositor to ask over
       # a socket. That is the correct answer for a container and it is also the

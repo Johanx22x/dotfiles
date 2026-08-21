@@ -126,9 +126,17 @@ etc_boots_the_machine() {
 # whether a machine boots; a silent bulk copy over them is the one thing this
 # unit exists to prevent.
 etc_apply() {
-  local src dst mode kind touched=()
+  local src dst mode kind rows=() row unlisted=() touched=()
 
-  while IFS=$'\t' read -r src dst mode kind; do
+  # READ WHOLE FIRST, same as optional_apply, and here it is `sudo install`
+  # rather than pacman that would have been handed the table: a sudo whose
+  # timestamp has expired reads the password from ITS stdin, and the next row
+  # of system/README.md is not the password. See the note in 15-optional.sh.
+  mapfile -t rows < <(etc_rows)
+  mapfile -t unlisted < <(etc_unlisted)
+
+  for row in "${rows[@]}"; do
+    IFS=$'\t' read -r src dst mode kind <<<"$row"
     [[ -z $src ]] && continue
 
     case "$kind" in
@@ -144,16 +152,16 @@ etc_apply() {
                  fail_note "etc" "system/README.md gives system/$src the unknown kind '$kind', so it was skipped" \
                    "Change that row's fourth column to copy, reference or recipe" ;;
     esac
-  done < <(etc_rows)
+  done
 
-  while IFS= read -r src; do
+  for src in "${unlisted[@]}"; do
     [[ -z $src ]] && continue
     ui_bad "   system/$src has no row in system/README.md and was skipped"
     # Same reasoning as the unknown kind above: a file nobody wired up is a
     # gap in the repository. Nothing on the machine is worse for it.
     fail_note "etc" "system/$src has no row in system/README.md, so it was skipped" \
       "Add a row for it to the table in system/README.md, then: ./install.sh apply etc"
-  done < <(etc_unlisted)
+  done
 
   # Handed to _post through a file rather than a variable, because _post runs
   # after every unit in the run has finished and this array will be long gone.

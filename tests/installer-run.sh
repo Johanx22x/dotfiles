@@ -47,11 +47,10 @@
 #
 # WHICH UNITS CAN REACH `ok` WITH NOBODY LOGGED IN. packages, optional,
 # aur-patched, symlinks, seeds, nvim, cursors and laptop all can, and every one
-# of them is driven here for real -- with one asterisk on `optional`, which is
-# written out beside its substitute list below: a bug in optional_apply's stdin
-# means that unit cannot install a package it does not already have, on a
-# terminal or anywhere else, so what it is driven with is a package that is
-# already in. The rest are handled rather than ignored:
+# of them is driven here for real -- `optional` included, with a pack that asks
+# for a package nothing else in this file installs, so that what is proven is
+# the installing and not only the bookkeeping around it. The rest are handled
+# rather than ignored:
 #
 #   palette          wants matugen, a wallpaper daemon and a running compositor
 #                    in order to generate eleven files from an image. Unticked
@@ -94,7 +93,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # What the substitute lists ask pacman for. Small, in the official
 # repositories, and dull enough that installing them on the machine running
 # this is not an imposition.
-readonly WANTED_PACKAGES="git stow curl tree lib32-glibc cowsay sl"
+readonly WANTED_PACKAGES="git stow curl tree lib32-glibc cowsay sl figlet"
 
 if [[ ${INSTALLER_TEST_INSTALL:-0} != 1 ]]; then
     cat >&2 <<EOF
@@ -184,31 +183,25 @@ lib32-glibc
 EOF
 printf '# Stand-in for the Hyprland list.\ncowsay\n' > "$MINI/packages/compositor/hyprland.txt"
 printf '# Stand-in for the niri list.\nsl\n'          > "$MINI/packages/compositor/niri.txt"
-# THE TICKED PACK ASKS FOR A PACKAGE THE REQUIRED LIST HAS ALREADY PUT IN, AND
-# THAT IS NOT LAZINESS. optional_apply calls pkg_install from inside
+# THE TICKED PACK ASKS FOR A PACKAGE NOTHING ELSE HERE INSTALLS, which is the
+# only way this unit's own work gets covered. It used to ask for `tree`, which
+# the required list above has already put in, so `pacman -S --needed` found
+# nothing to do and returned before it could ask anything -- and it had to,
+# because optional_apply called pkg_install from inside
 #
 #     while IFS= read -r group; do ... done < <(optional_groups)
 #
-# so everything in that loop body -- pacman included -- has the LIST OF GROUP
-# NAMES on stdin rather than the run's own. pacman asks "Proceed with
-# installation? [Y/n]", reads the next group name, and the log says it plainly:
+# which put the LIST OF GROUP NAMES on pacman's stdin. pacman read `gaming` as
+# the answer to "Proceed with installation? [Y/n]", took it for a no, and the
+# groups it had swallowed never got their turn:
 #
 #     :: Proceed with installation? [Y/n] gaming
 #        apps: pacman did not finish, see the output above
 #
-# It answers "gaming", takes that for a no, gives up -- and the groups it
-# swallowed never get their turn either. That happens on a terminal as much as
-# in a script, because the redirection is on the loop and not on the terminal,
-# so the optional unit cannot install a package it does not already have.
-#
-# Not fixed here: this branch does not touch lib/. What the substitute list
-# does is ask for something already present, so `pacman -S --needed` finds
-# nothing to do and returns before it can ask anything -- which leaves
-# optional_apply, optional_wanted and the group half of the profile covered,
-# and leaves the actual installing of an optional package as the one thing in
-# this unit still standing on nothing. Put a package that is genuinely missing
-# back in here the day pkg_install stops sharing that loop's stdin.
-printf '# Stand-in for the apps pack.\ntree\n'        > "$MINI/packages/optional/apps.txt"
+# optional_apply reads the group list into an array now, so the pack can name
+# something that is genuinely missing and the assertion further down is that it
+# arrived. figlet: 102 KiB, in extra, depends on glibc and sh.
+printf '# Stand-in for the apps pack.\nfiglet\n'      > "$MINI/packages/optional/apps.txt"
 printf '# Stand-in for the gaming pack.\nbc\n'        > "$MINI/packages/optional/gaming.txt"
 printf '# Stand-in for the hardware pack.\nlolcat\n'  > "$MINI/packages/optional/hardware.txt"
 printf '# Stand-in for the neovim pack.\ncowsay\n'    > "$MINI/packages/optional/neovim.txt"
@@ -353,6 +346,11 @@ want "pacman installed what the packages unit asked for"      pacman -Qq tree
 # would be processed here and `bc` would be on the machine.
 want "the ticked optional pack is the one that was processed" \
      grep -qF 'apps: 1 package(s)' "$first"
+# AND IT REALLY INSTALLED IT. figlet is in no container image and in none of
+# the required lists above, so the only thing that can have put it here is
+# optional_apply -- which is the half of this unit that stood on nothing until
+# pkg_install stopped sharing that loop's stdin.
+want "the ticked optional pack really installed its package" pacman -Qq figlet
 want_not "an optional pack nobody ticked was not processed" \
      grep -qF 'gaming: 1 package(s)' "$first"
 want_not "the optional packs that were not ticked stayed out" pacman -Qq bc

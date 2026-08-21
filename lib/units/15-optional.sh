@@ -80,9 +80,30 @@ optional_check() {
 # pack it came from. "gaming failed" is a sentence somebody can act on;
 # "optional failed" across four unrelated groups is not.
 optional_apply() {
-  local group names=() any=0
+  local group groups=() names=() any=0
 
-  while IFS= read -r group; do
+  # READ WHOLE FIRST, AND THIS IS THE BUG THAT PAID FOR THE LINE. The obvious
+  # shape here is `while IFS= read -r group; do ... done < <(optional_groups)`,
+  # and it puts THE LIST OF GROUP NAMES on the stdin of everything in the loop
+  # body -- pacman included. pacman ends its transaction with ":: Proceed with
+  # installation? [Y/n]", reads the next group name as the answer, and the log
+  # said so plainly:
+  #
+  #     :: Proceed with installation? [Y/n] gaming
+  #        apps: pacman did not finish, see the output above
+  #
+  # It answers "gaming", takes that for a no and gives up -- and the groups it
+  # swallowed never get their turn either, because the loop's own `read` finds
+  # end of file. That happened on a terminal exactly as much as in a script:
+  # the redirection is on the loop, not on the terminal. So the optional
+  # packages -- the whole reason this unit exists -- could not install anything
+  # this machine did not already have.
+  #
+  # An array costs four group names' worth of memory and leaves the run's own
+  # stdin where every unit expects it.
+  mapfile -t groups < <(optional_groups)
+
+  for group in "${groups[@]}"; do
     mapfile -t names < <(optional_wanted_in "$group")
     (( ${#names[@]} )) || continue
     any=1
@@ -93,7 +114,7 @@ optional_apply() {
     # the Neovim group. A group that failed is named, with the packages in it,
     # and the run carries on to the units that matter.
     pkg_install note optional "$group" "${names[@]}"
-  done < <(optional_groups)
+  done
 
   if (( ! any )); then
     ui_say "   No optional group is ticked. Run ./install.sh to pick some."
