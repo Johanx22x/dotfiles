@@ -44,14 +44,50 @@ palette_check() {
   fi
 }
 
-palette_apply() {
-  ui_say "   Needs at least one image in ~/Pictures/wallpapers."
-  run mkdir -p "$HOME/Pictures/wallpapers"
+# WHERE THE COLLECTION IS, ASKED RATHER THAN ASSUMED -- same reasoning as
+# palette_outputs above. wallpaper-switch keeps the folder in a state file so it
+# can be moved (`wallpaper-switch dir pick`, which the README documents), and a
+# machine that has moved it would otherwise be told its wallpapers do not exist
+# while they sit somewhere else entirely.
+palette_dir() {
+  local state="${XDG_STATE_HOME:-$HOME/.local/state}/wallpaper-dir"
+  if [[ -r $state ]]; then
+    local dir; dir="$(<"$state")"
+    [[ -n $dir ]] && { printf '%s\n' "$dir"; return 0; }
+  fi
+  printf '%s\n' "$HOME/Pictures/wallpapers"
+}
 
-  if ! find -L "$HOME/Pictures/wallpapers" -maxdepth 2 -type f \
-       \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
-       | grep -q .; then
-    ui_bad "   No images in ~/Pictures/wallpapers."
+# WHAT COUNTS AS A WALLPAPER, READ OUT OF THE SCRIPT THAT DECIDES IT. This used
+# to be four extensions written out here, and it was wrong in both directions:
+# it missed bmp and gif, which are stills, and it missed mp4, webm and mkv,
+# which are live wallpapers played through mpvpaper. A collection of animated
+# wallpapers read as an empty folder, and the step failed telling the user to
+# drop in an image they already had.
+palette_exts() {
+  local ws="$DOT/bin/.local/bin/wallpaper-switch"
+  [[ -r $ws ]] || { printf '%s\n' jpg jpeg png webp bmp gif mp4 webm mkv; return 0; }
+  grep -oP '^(STILL|VIDEO)_EXT=\(\K[^)]+' "$ws" | tr ' ' '\n' | grep -v '^$'
+}
+
+palette_apply() {
+  local dir; dir="$(palette_dir)"
+  ui_say "   Needs at least one wallpaper in $dir."
+
+  # Only ever create the DEFAULT. If a state file names somewhere else and that
+  # place is gone, making it here would hide the real problem behind an empty
+  # folder -- and on a case-sensitive filesystem it is how you end up with
+  # Wallpapers and wallpapers side by side, one of them empty.
+  [[ -e $dir ]] || run mkdir -p "$dir"
+
+  local -a find_args=(); local ext first=1
+  while IFS= read -r ext; do
+    (( first )) || find_args+=(-o)
+    find_args+=(-iname "*.$ext"); first=0
+  done < <(palette_exts)
+
+  if ! find -L "$dir" -maxdepth 2 -type f \( "${find_args[@]}" \) 2>/dev/null | grep -q .; then
+    ui_bad "   No wallpapers in $dir."
     ui_say "   Drop one in and then run: wallpaper-switch random"
     FAILED+=("palette: no wallpapers to generate it from")
     return 0
