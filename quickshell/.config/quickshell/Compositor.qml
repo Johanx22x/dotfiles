@@ -70,6 +70,19 @@ Singleton {
         backend?.refreshBinds();
     }
 
+    // The rectangles a region selector can snap to, and the request to freshen
+    // them. Forwarded like everything else: the recorder asks this singleton
+    // what the windows on screen are and never learns which compositor
+    // answered. See windowBoxes() in CompositorBackend.qml -- an empty list is
+    // the answer where there is no window geometry, not an error.
+    function windowBoxes(): var {
+        return backend?.windowBoxes() ?? [];
+    }
+
+    function refreshWindows(): void {
+        backend?.refreshWindows();
+    }
+
     // The question the shell should be asking. `Compositor.can("monitorConfig")`
     // rather than a name check -- see the header of CompositorBackend.qml for
     // why that difference is the whole point of this layer.
