@@ -37,6 +37,7 @@ pragma Singleton
 import Quickshell
 import Quickshell.Io
 import QtQuick
+import "root:/"
 
 Singleton {
     id: root
@@ -48,8 +49,38 @@ Singleton {
     readonly property bool selecting: selector.running
 
     // Where the files land, and under the name they are most useful with:
-    // sorted by name is sorted by time.
-    readonly property string directory: `${Quickshell.env("HOME")}/Videos/recordings`
+    // sorted by name is sorted by time. Empty in the config means the
+    // directory recordings have always gone to.
+    readonly property string directory: Config.recordingDirectory
+        || `${Quickshell.env("HOME")}/Videos/recordings`
+
+    // TWO OF THE RECORDING SETTINGS REACH THIS PROGRAM, AND ONLY TWO. The
+    // recording page owns a container, a framerate, a codec, a bitrate mode, a
+    // bitrate and two audio switches; wf-recorder can honestly be given the
+    // first of those and half of the last, and the rest belong to
+    // gpu-screen-recorder alone. The page says so beside the controls rather
+    // than leaving somebody to find out from a file.
+    //
+    //   CONTAINER   -f names the file and the muxer follows its extension, so
+    //               mp4 or mkv is the same decision here as it is for a replay
+    //               clip -- and it is a real one: DaVinci Resolve on Linux
+    //               refuses MKV outright.
+    //   DESKTOP     -a takes ONE device. "The computer's sound" is the default
+    //   AUDIO       sink's monitor and that is what it gets; off means no -a at
+    //               all, which is a silent recording rather than a broken one.
+    //
+    //   MICROPHONE  Not offered here, because -a cannot merge two sources the
+    //               way gsr's `default_output|device:NAME` does; a second -a
+    //               would give a file with two tracks, of which most players
+    //               play the first.
+    //   FRAMERATE   wf-recorder's -r forces CONSTANT frame rate, which is a
+    //               different recording rather than the same one at a chosen
+    //               rate. Left alone, it follows the screen.
+    //   CODEC       The names it wants are ffmpeg's -- libx264, h264_vaapi --
+    //   AND         and not the ones `gpu-screen-recorder --info` prints.
+    //   BITRATE     Translating between them would be a layer able to produce a
+    //               recorder that refuses to start for a reason neither program
+    //               ever said.
 
     property string lastPath: ""
 
@@ -262,12 +293,19 @@ Singleton {
     // changes when the headset connects.
     function record(geometry: string): void {
         const stamp = Qt.formatDateTime(new Date(), "yyyy-MM-dd_HH-mm-ss");
-        root.lastPath = `${root.directory}/${stamp}.mp4`;
+        root.lastPath = `${root.directory}/${stamp}.${Config.recordingContainer}`;
 
-        recorder.command = ["sh", "-c",
-            `mkdir -p "$1" || exit 1; ` +
-            `AUDIO="$(pactl get-default-sink).monitor"; ` +
-            `exec wf-recorder -g "$2" --audio="$AUDIO" -f "$3"`,
+        // TWO SCRIPTS AND NOT ONE WITH A CONDITIONAL, because the audio switch
+        // decides whether a flag EXISTS rather than what is in it:
+        // `--audio=""` is not "no audio", it is a device with no name.
+        const script = Config.recordingDesktopAudio
+            ? `mkdir -p "$1" || exit 1; ` +
+              `AUDIO="$(pactl get-default-sink).monitor"; ` +
+              `exec wf-recorder -g "$2" --audio="$AUDIO" -f "$3"`
+            : `mkdir -p "$1" || exit 1; ` +
+              `exec wf-recorder -g "$2" -f "$3"`;
+
+        recorder.command = ["sh", "-c", script,
             "record", root.directory, geometry, root.lastPath];
         recorder.running = true;
     }
