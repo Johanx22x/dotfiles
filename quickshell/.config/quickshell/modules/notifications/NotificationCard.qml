@@ -35,21 +35,43 @@ Rectangle {
     //
     // "Never" is NOT honoured. Applications reach for it far too easily
     // (browser notifications especially) and the result is a panel that only
-    // grows. Critical gets a longer window instead of an infinite one, so
-    // even something important eventually clears itself.
+    // grows. Every setting below is bounded at both ends, so even something
+    // important eventually clears itself.
     //
-    // The default is Config.notificationTimeout, in SECONDS there and
-    // multiplied here -- the one place in the shell that conversion happens,
-    // so there is one place to get it wrong.
+    // ONE DEFAULT PER URGENCY, and this is where the file changed its mind.
+    // It used to say that critical did not follow the setting, because "how
+    // long do I want to read a chat notification" is not an answer to "how
+    // long should the recorder's failure stay up". Those are still two
+    // different questions -- which is the argument for giving them two
+    // different ANSWERS, not for hardcoding one of them. A number written
+    // into the source is not an answer to a question nobody can ask; it only
+    // makes the question unaskable. So the settings page asks all three and
+    // each urgency carries its own number.
     //
-    // Critical keeps its own longer window and does NOT follow the setting: a
-    // preference set for "how long do I want to read a chat notification" is
-    // not an answer to "how long should the recorder's failure stay up".
+    // The old behaviour is what the defaults still are: 10 seconds for low
+    // and normal, 30 for critical. Nothing moves until somebody moves it.
+    //
+    // Anything the spec does not define falls to normal, which is the closest
+    // true answer for an urgency this shell has never heard of.
+    readonly property int timeoutSeconds: {
+        switch (root.notification.urgency) {
+        case NotificationUrgency.Low:
+            return Config.notificationTimeoutLow;
+        case NotificationUrgency.Critical:
+            return Config.notificationTimeoutCritical;
+        default:
+            return Config.notificationTimeout;
+        }
+    }
+
+    // SECONDS in Config and multiplied HERE -- the one place in the shell
+    // that conversion happens, so there is one place to get it wrong. Three
+    // settings and still one `* 1000`.
     readonly property int timeout: {
         const asked = root.notification.expireTimeout;
         if (asked > 0)
             return asked;
-        return root.critical ? 30000 : Config.notificationTimeout * 1000;
+        return root.timeoutSeconds * 1000;
     }
 
     readonly property bool critical: root.notification.urgency === NotificationUrgency.Critical
