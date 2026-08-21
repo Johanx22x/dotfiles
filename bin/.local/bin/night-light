@@ -317,7 +317,15 @@ case "${1:-show}" in
         # Only reaches the screen when the filter is on. Choosing a warmth
         # with the filter off is setting what it will be, not turning it on by
         # the side door.
-        (( enabled )) && apply
+        #
+        # AN `if` AND NOT `(( enabled )) && apply`. This is the last statement
+        # of the branch, so its status is the script's, and the && form hands
+        # back the failed test: `night-light temp 4000` with the filter off
+        # exited 1 after doing exactly what was asked. The settings window fires
+        # this on every drag of the warmth slider.
+        if (( enabled )); then
+            apply
+        fi
         ;;
 
     apply)  apply ;;
