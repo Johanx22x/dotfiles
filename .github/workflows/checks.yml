@@ -10,9 +10,9 @@ name: Checks
 #
 # IN AN ARCH CONTAINER, because what is being checked is an Arch desktop. The
 # checks ask the real tools the real questions -- Hyprland whether it accepts
-# its own config, pacman whether these package names exist -- and none of those
-# can be asked on Ubuntu. base-devel rather than base for makepkg's
-# dependencies, which is what packages/ is built with.
+# its own config, niri whether it accepts its own, pacman whether these package
+# names exist -- and none of those can be asked on Ubuntu. base-devel rather
+# than base for makepkg's dependencies, which is what packages/ is built with.
 #
 # Every check lives in tests/ as a script that runs on its own, which is
 # deliberate: a check that can only be run by pushing a branch is a check
@@ -36,20 +36,73 @@ jobs:
 
     steps:
       # BEFORE THE CHECKOUT, because actions/checkout falls back to downloading
-      # a tarball when git is missing, and a tarball is not a repository.
+      # a tarball when git is missing, and a tarball is not a repository:
+      # tests/shell-lint.sh finds what to lint with `git ls-files`.
       #
       # lua is not decoration here: the bind check runs hyprland.lua rather
       # than reading it. See tests/hl-stub.lua.
       - name: Install what the checks need
-        run: pacman -Syu --needed --noconfirm git python lua
+        run: |
+          set -euo pipefail
+
+          # MULTILIB, or every lib32-* name in packages/ comes back as a
+          # package that exists nowhere. A disabled repository is missing from
+          # `pacman -Sl` in exactly the way a non-existent package is, and this
+          # desktop needs [multilib] for Steam -- install.sh says the same
+          # thing at the point where it has to guess.
+          printf '[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
+
+          pacman -Syu --needed --noconfirm \
+            git python lua shellcheck stow hyprland niri curl
 
       - uses: actions/checkout@v7
 
       - name: Let git own the checkout
         # The job runs as root inside the container over a directory the runner
         # created outside it. Without this, git refuses every command with
-        # "detected dubious ownership".
+        # "detected dubious ownership" and the shell lint has nothing to lint.
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      # `!cancelled()` on every check so one failure does not hide the rest. A
+      # pull request that broke two things should say both in one run, rather
+      # than one per push.
       - name: Keybinds are the same under both compositors
+        if: ${{ !cancelled() }}
         run: tests/bind-parity.py
+
+      - name: Both compositors accept their configuration
+        if: ${{ !cancelled() }}
+        run: tests/config-syntax.sh
+
+      - name: Shell scripts pass shellcheck
+        if: ${{ !cancelled() }}
+        run: tests/shell-lint.sh
+
+      - name: Package names resolve
+        if: ${{ !cancelled() }}
+        run: tests/package-lists.sh
+
+      - name: stow links the tree without conflicts
+        if: ${{ !cancelled() }}
+        run: tests/stow-conflicts.sh
+
+      # NO QMLLINT, AND NOT FOR WANT OF TRYING. Neither of the two on an Arch
+      # system can answer the question:
+      #
+      #   /usr/bin/qmllint is Qt 5, from qt5-declarative. It exits 255 and
+      #   prints NOTHING on any file using a `: var` return type, which is most
+      #   of them: sweeping quickshell/ leaves 40 files "clean" and 60 exiting
+      #   non-zero with no message at all. It is not analysing them, so a green
+      #   run would mean nothing whatsoever.
+      #
+      #   /usr/lib/qt6/bin/qmllint is the real one, and it cannot resolve
+      #   Quickshell's `root:/` import scheme. Every file emits well over a
+      #   hundred messages on master -- 109 for the first one tried -- all
+      #   about types it cannot find rather than about the code.
+      #
+      # A baseline comparison against the merge base could be built on top of
+      # that: a hundred files' worth of noise wrapped in an arithmetic that
+      # goes wrong the first time an import moves. The real fix is teaching
+      # qmllint where Quickshell's imports live, which is work in quickshell/
+      # and not work in CI. Until then this is left out rather than shipped
+      # permanently red, or permanently meaningless.
