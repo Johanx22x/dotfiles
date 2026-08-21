@@ -1,9 +1,29 @@
 // The display page: what each monitor is, and the three things about it that
 // are worth changing from a settings window.
 //
+// THIS FILE IS THE COMPOSITION AND ALMOST NOTHING ELSE. It used to be 2,607
+// lines and four unrelated jobs, and the parts under pages/display/ are those
+// jobs, one per file. What is left here is the order they are drawn in, the
+// four wires between them, and the arguments that are about the page as a whole
+// rather than about any one part:
+//
+//     Monitors.qml            how a monitor is spelled -- modes, scales,
+//                             transforms, specs, and the saved-override text.
+//                             Pure, and a singleton so it can stay typed.
+//     HyprlandBlock.qml       the Lua that Copy config puts on the clipboard.
+//     Glyphs.qml              the codepoints Icons.qml has not taken yet.
+//     MonitorSource.qml       everything asked of desktop-monitors that does
+//                             not need a countdown, and the readings it fills.
+//     DisplayDraft.qml        what WOULD be, and the ten seconds to say so.
+//     ArrangementSection.qml  the drag map, and its own separate countdown.
+//     NightLightSection.qml   the blue-light filter, which touches no monitor.
+//     MonitorCard.qml         one monitor, drawn.
+//     Reading / CycleRow / Chip
+//                             the three controls this page grew in place.
+//
 // IT TALKS TO ONE SCRIPT AND TO NOTHING ELSE. Every list, every apply and every
-// write below goes through ~/.local/bin/desktop-monitors, and there is not a
-// single `hyprctl` or `niri msg` left in this file. That is the whole reason
+// write goes through ~/.local/bin/desktop-monitors, and there is not a single
+// `hyprctl` or `niri msg` left in any of these files. That is the whole reason
 // this page works on both compositors: what a monitor is set to is the same
 // question everywhere, and only the config language and the socket differ --
 // which is exactly what that script exists to absorb. A third flavor is four
@@ -32,7 +52,8 @@
 // block in an include is ignored when the main config names the same monitor,
 // measured), so the generated file is the only declaration there is and a block
 // pasted into config.kdl would shadow this page for good. Hence
-// `monitorConfigCopy`: the chip is drawn where it means something.
+// `monitorConfigCopy`: the chip is drawn where it means something, which
+// MonitorCard.qml decides and HyprlandBlock.qml fills.
 //
 // WHY IT DOES NOT WRITE THE HAND-WRITTEN CONFIG ITSELF. That file is a stow
 // symlink into a git repo and a thousand lines of hand-written commentary, in
@@ -43,24 +64,26 @@
 // git looking like something a human did. A generated file is the honest
 // boundary. The shell owns that one; the person owns theirs.
 //
-// THE REVERT TIMER IS THE POINT OF THIS PAGE, not a nicety on top of it. A
-// mode the panel cannot display leaves a black screen, and the window holding
-// the undo button is on that screen. So an apply is provisional: the spec that
-// was live is kept, a countdown starts, and unless it is confirmed the
-// compositor is put back where it was. The confirmation is the thing you have
-// to do; doing nothing is safe. That is the opposite way round from every
-// other button in this shell, and it is deliberate.
+// THE REVERT TIMER IS THE POINT OF THIS PAGE, not a nicety on top of it, and
+// there are two of them: DisplayDraft.qml holds the one that guards a mode and
+// ArrangementSection.qml holds the one that guards a layout. Both are the same
+// bargain. A mode the panel cannot display leaves a black screen, and the
+// window holding the undo button is on that screen. So an apply is provisional:
+// the spec that was live is kept, a countdown starts, and unless it is
+// confirmed the compositor is put back where it was. The confirmation is the
+// thing you have to do; doing nothing is safe. That is the opposite way round
+// from every other button in this shell, and it is deliberate.
 //
 // AND THE CONFIRMATION IS ALSO THE WRITE. Nothing reaches monitors.lua until
-// somebody has said they can see the result -- see keep(), which is where that
-// argument is made in full.
+// somebody has said they can see the result -- see DisplayDraft.keep(), which
+// is where that argument is made in full.
 //
 // THE BAR MOVES WHEN THE BIG MONITOR GOES PORTRAIT, and it looks exactly like
 // a bug the first time. Screens.qml picks the shell's screen as the largest
 // LANDSCAPE one, so rotating the main panel hands the bar, the launcher, the
 // notifications and this window's own sibling surfaces to the other monitor.
-// Correct behaviour, badly surprising -- so the rotation control says so
-// before you press it, and only when it applies.
+// Correct behaviour, badly surprising -- so the rotation control in
+// MonitorCard.qml says so before you press it, and only when it applies.
 //
 // WHAT IT DELIBERATELY WILL NOT DO: turn a monitor off. `desktop-monitors list`
 // reports the monitors that are actually being driven, on both flavors, so a
@@ -68,11 +91,8 @@
 // -- the revert timer would be the only way out of it, and a safety net is not
 // a design.
 
-import Quickshell
-import Quickshell.Io
 import QtQuick
 import "root:/"
-import "root:/components"
 // SettingsPage lives one directory UP, and QML's implicit import covers a
 // file's own directory only.
 import "root:/modules/settings"
@@ -95,16 +115,17 @@ SettingsPage {
 
     // ---------------- What the compositor said, last time it was asked ----------------
     //
+    // IT IS A READING, NOT A CONTROL. Nothing here holds a monitor's state of
+    // its own: the controls hold a DRAFT, and everything drawn as fact comes
+    // from `monitorSource.monitors`.
+    //
     // NAMED monitorSource AND NOT source, WHICH IS NOT STYLE. The card below
     // takes a `source` property, and `source: source` written inside a Repeater
     // delegate resolves the right-hand side against the DELEGATE first: the
     // card's own property, bound to itself. Qt calls it a binding loop, leaves
     // the property null, and every reading on every card comes out blank while
-    // the file that is wrong is this one. The same trap is waiting for `draft`.
-    //
-    // IT IS A READING, NOT A CONTROL. Nothing on this page holds a monitor's
-    // state of its own: the controls hold a DRAFT, and everything drawn as
-    // fact comes from `monitorSource.monitors`.
+    // the file that is wrong is this one. The same trap is waiting for `draft`,
+    // which is why the object below is `displayDraft`.
     MonitorSource {
         id: monitorSource
     }
@@ -167,6 +188,8 @@ SettingsPage {
     // beside it is the manual way to re-read; the page does it on its own
     // whenever it is opened and after every apply.
     //
+    // The other half of this note -- why the PATH is asked for rather than
+    // written down -- is in MonitorSource.qml, above the query that asks.
     Item {
         width: parent.width
         // Grows with the notice rather than clipping it, since the sentence
