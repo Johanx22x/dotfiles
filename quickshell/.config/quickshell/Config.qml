@@ -350,6 +350,29 @@ Singleton {
     // for the key, or the switch shows one thing and the script does another.
     readonly property bool cursorAuto: (root.tweaks["cursor-auto"] ?? "1") === "1"
 
+    // ---------------- Push to talk ----------------
+    //
+    // IN THE TWEAK STORE AND NOT IN config.json, although the switch that
+    // flips it is a settings row like any other. The value is not the shell's
+    // to keep: what it means is a pair of KEYBINDS in the compositor, written
+    // by desktop-tweak into the generated override file, and the shell is only
+    // the thing those binds call. A copy here would be a second answer to
+    // "is push-to-talk on" that nothing keeps in step with the binds.
+    //
+    // OFF unless the store says otherwise, and the fallback has to agree with
+    // desktop-tweak's own default for the key -- see cursorAuto above for why
+    // that agreement is load-bearing. Off is also the only safe default: on
+    // means the microphone is closed, and a machine that came up muted without
+    // anyone asking is a machine whose microphone looks broken.
+    readonly property bool pushToTalk: (root.tweaks["ptt"] ?? "0") === "1"
+
+    // The keysym the binds are written on: "backslash", "F13", or "code:NN"
+    // for a key xkb has no name for. Shown verbatim in the settings window
+    // rather than prettied up, because it is literally what goes into the
+    // bind -- a row that said "\" while the file said something else would be
+    // the harder of the two to debug.
+    readonly property string pushToTalkKey: root.tweaks["ptt-key"] ?? "backslash"
+
     // ---------------- Keyboard layouts ----------------
     //
     // THE LIST IS THE STATE AND THE FIRST ENTRY IS THE ACTIVE LAYOUT. There is
