@@ -621,6 +621,22 @@ binds {
     Mod+Up hotkey-overlay-title="Windows: move focus up" { focus-window-up; }
     Mod+Down hotkey-overlay-title="Windows: move focus down" { focus-window-down; }
 
+    // ---- Window movement (parity) ---------------------------------------
+    // The same four arrows with SHIFT, moving the window instead of the focus.
+    // Hyprland spells all four `movewindow <direction>`; niri splits them
+    // because its unit is the column, so left/right carry the WHOLE COLUMN
+    // across its neighbour while up/down move the one window inside it -- the
+    // same split the focus arrows above already make.
+    //
+    // THESE USED TO BE FILED UNDER "NATIVE", the section below for what niri
+    // can do and Hyprland cannot. That was wrong: `movewindow` is one of
+    // Hyprland's oldest dispatchers and the four chords were simply never
+    // bound there. They are now, with these exact descriptions.
+    Mod+Shift+Left hotkey-overlay-title="Windows: move the window left" { move-column-left; }
+    Mod+Shift+Right hotkey-overlay-title="Windows: move the window right" { move-column-right; }
+    Mod+Shift+Up hotkey-overlay-title="Windows: move the window up" { move-window-up; }
+    Mod+Shift+Down hotkey-overlay-title="Windows: move the window down" { move-window-down; }
+
     // ---- Window state (parity) ------------------------------------------
     Mod+T hotkey-overlay-title="Windows: float or tile" { toggle-window-floating; }
     Mod+F hotkey-overlay-title="Windows: fullscreen" { fullscreen-window; }
@@ -727,11 +743,12 @@ binds {
     // it stays with the applications that want it.
     Mod+Tab hotkey-overlay-title="Workspaces: the overview" { toggle-overview; }
 
-    // Move the focused column or window, mirroring the focus arrows above.
-    Mod+Shift+Left hotkey-overlay-title="Windows: move the column left" { move-column-left; }
-    Mod+Shift+Right hotkey-overlay-title="Windows: move the column right" { move-column-right; }
-    Mod+Shift+Up hotkey-overlay-title="Windows: move the window up" { move-window-up; }
-    Mod+Shift+Down hotkey-overlay-title="Windows: move the window down" { move-window-down; }
+    // MOVING THE FOCUSED WINDOW USED TO BE LISTED HERE and it does not belong:
+    // Hyprland's `movewindow` takes the same four directions, so the four
+    // SUPER + SHIFT + arrow chords are parity and now live in their own block
+    // up with the focus arrows. What stays below is niri-only for real --
+    // consuming and expelling, the ends of the strip, the column widths --
+    // because none of it has a Hyprland dispatcher to be parity WITH.
 
     // Columns are the unit niri is built around: pull the neighbour in, push
     // the current one out. Comma and period are the idiom the project uses.
@@ -780,7 +797,12 @@ binds {
     // The power menu on SUPER + SHIFT + ESCAPE is the way out, same as in
     // Hyprland. This is the escape hatch for when the shell is not running,
     // which is the one case that bind cannot cover.
-    Mod+Ctrl+Shift+Escape hotkey-overlay-title="Session: exit niri" { quit; }
+    //
+    // "the compositor" and not "niri", because hyprland.lua now carries the
+    // same bind and the cheatsheet is fed from whichever flavor is running.
+    // A description that named one of the two would be the row that differs
+    // between them, on the bind whose whole job is to be identical.
+    Mod+Ctrl+Shift+Escape hotkey-overlay-title="Session: exit the compositor" { quit; }
 }
 
 
