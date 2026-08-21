@@ -238,6 +238,16 @@ file first — and the display page's *Copy config* chip, which hands you a bloc
 to paste into the tracked config, is not offered there: pasting one in would
 shadow the generated file for good.
 
+The niri flavor gets a **second** generated file out of the same script and the
+same choice, `main-monitor.kdl`, and it is second because the two want opposite
+positions. It carries the main-monitor choice as `open-on-output` on the five
+window rules that have to open there — games, Big Picture, the capture card,
+RetroArch and Resolve — and a window rule has to be included *after* the rules it
+overrides, where an output block has to come *first*. With no such file those
+five rules carry no `open-on-output` and their windows open wherever niri
+decides. Hyprland needs no equivalent: `monitors.lua` reassigns `MONITOR_MAIN`
+and `gaming.lua` reads it afterwards.
+
 ### What niri cannot do
 
 Not a to-do list — these were each tried, measured and written down:
@@ -413,10 +423,11 @@ not already have.
 
 ## Per-machine
 
-No tracked file names a home directory. What belongs to one machine stays out of
-git: `hypr/monitors.lua` and `niri/monitors.kdl`, written by `desktop-monitors` or
-the settings window, and the state files under `~/.local/state` that the scripts
-and the shell share — so a value set from a terminal moves the switch in the
+No tracked file names a home directory, and none names a monitor either. What
+belongs to one machine stays out of git: `hypr/monitors.lua`, `niri/monitors.kdl`
+and `niri/main-monitor.kdl`, written by `desktop-monitors` or the settings
+window, and the state files under `~/.local/state` that the scripts and the shell
+share — so a value set from a terminal moves the switch in the
 settings window, and back.
 
 The installer keeps its own answers there too, in
