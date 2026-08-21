@@ -81,6 +81,26 @@ Singleton {
         // leaves the buffer on whichever screen the shell is on -- where it has
         // always been pointed.
         replayMonitor: "",
+        // Recording. Armed is the resting state; 0 seconds means nobody has
+        // chosen a length and 30 is used; an empty codec is gsr's own auto;
+        // an empty directory is the one the recorder has always written to;
+        // and an empty microphone is the system default rather than "none".
+        // See the Recording section below for each of them.
+        replayEnabled: true,
+        replaySeconds: 0,
+        replayStorage: "ram",
+        replayDirectory: "",
+        recordingDirectory: "",
+        recordingContainer: "mp4",
+        recordingFramerate: 60,
+        recordingCodec: "",
+        recordingBitrateMode: "cbr",
+        recordingBitrate: 40000,
+        recordingQuality: "very_high",
+        recordingDesktopAudio: true,
+        recordingMicrophone: true,
+        recordingMicrophoneDevice: "",
+        recordingAudioCodec: "aac",
         barOverrides: ({}),
         // Every widget on by default: this is the bar as designed, and the
         // switches below are for taking things away rather than for building
@@ -1082,6 +1102,143 @@ Singleton {
     property alias nightLightFrom: adapter.nightLightFrom
     property alias nightLightTo: adapter.nightLightTo
 
+    // ---------------- Recording ----------------
+    //
+    // WHAT A CAPTURE OF THIS SCREEN LOOKS LIKE, for the two programs that make
+    // one. Until the recording page existed, all of it was a literal in
+    // modules/recorder: the buffer was 30 seconds at 60 fps, h264 in mp4 at 40
+    // Mbit/s CBR with aac audio, and the microphone was one particular NZXT USB
+    // mic named in full -- on any other machine that name resolves to nothing
+    // and the preference silently falls back to default_input. None of it was
+    // wrong; none of it was reachable either.
+    //
+    // TWO PREFIXES, AND THE SPLIT IS THE PROGRAM. `replay*` is the buffer's own
+    // machinery -- whether it is armed, how long it keeps, which screen, where
+    // it saves -- and only gpu-screen-recorder has any of that. `recording*` is
+    // what a capture LOOKS like, and the buffer obeys all of it.
+    //
+    // A MANUAL RECORDING OBEYS TWO OF THE recording* VALUES, not six, and that
+    // is a fact about wf-recorder rather than a gap to fill in later. It takes
+    // the container, because the muxer follows the extension of -f; and it
+    // takes desktop audio as a yes or no, because -a takes ONE device and
+    // cannot merge a microphone into it the way gsr's `default_output|device:`
+    // does. The codec names it wants are ffmpeg's -- libx264, h264_vaapi --
+    // which are not the names gsr's --info prints, and mapping between them
+    // would be a translation layer able to produce a recorder that refuses to
+    // start for reasons neither program said. The recording page says as much
+    // beside the controls.
+    //
+    // ALL OF IT IS A COMMAND-LINE FLAG, so none of it can change under a
+    // running recorder: the buffer comes back when any of these move, and the
+    // seconds it was holding are gone. See ReplayState.reapply().
+
+    // Is the buffer meant to be armed? IT USED TO BE A FACT ABOUT THIS RUN OF
+    // THE SHELL and it is now a setting, which is a change worth naming: armed
+    // is still the resting state and the default is still true, but switching
+    // it off used to last until the next reload -- and this config reloads
+    // every time a .qml file is saved. A switch that comes back on by itself is
+    // not a switch.
+    property alias replayEnabled: adapter.replayEnabled
+
+    // How many seconds the buffer keeps.
+    //
+    // 0 MEANS NOBODY HAS CHOSEN, exactly as an empty replayMonitor does, and it
+    // is what makes the value below migratable: this setting used to live in
+    // replay.json, a file of its own next to this one, written by ReplayState
+    // through an adapter of its own. Two stores for one feature is one more
+    // than the split at the top of this file describes, so it moved here -- and
+    // a machine that had chosen 60 seconds would have been quietly reset to 30
+    // by that move, which is exactly the kind of silent loss a settings page is
+    // supposed to end. ReplayState reads the old file once and copies the
+    // answer over when this is still 0. See the note on legacy in that file.
+    property alias replaySeconds: adapter.replaySeconds
+
+    // ram or disk. gsr's own default is ram, and ram is what a replay buffer is
+    // for -- the cost is memory that scales with the length, which is the one
+    // number the island and the settings page both show. disk is there for the
+    // machine that would rather spend an SSD than 590 MB, and gsr's man page
+    // says in those words that it "may reduce SSD lifespan".
+    property alias replayStorage: adapter.replayStorage
+
+    // Where clips land. Empty means ~/Videos/Replays, which is where they have
+    // always landed; the same rule the two monitor settings above use, and for
+    // the same reason -- a fresh clone should not need this page opened before
+    // it can keep anything.
+    property alias replayDirectory: adapter.replayDirectory
+
+    // Where a manual recording lands. Empty means ~/Videos/recordings.
+    property alias recordingDirectory: adapter.recordingDirectory
+
+    // mp4 or mkv, AND IT IS A DECISION RATHER THAN A DETAIL on this machine.
+    // DaVinci Resolve on Linux refuses MKV outright, so a recording made to be
+    // edited has to be mp4 -- while mkv is the container that survives the
+    // recorder being killed, because it does not need a header rewritten at the
+    // end. mp4 stays the default: these clips are made to be sent to somebody
+    // and to be cut, and the crash case is what SIGINT and gsr's own finalising
+    // are for.
+    property alias recordingContainer: adapter.recordingContainer
+
+    // Frames per second the buffer captures at. The manual recorder is left to
+    // follow the screen: wf-recorder's -r forces CONSTANT frame rate, which is
+    // a different recording rather than the same one at a chosen rate.
+    property alias recordingFramerate: adapter.recordingFramerate
+
+    // The video codec, as gpu-screen-recorder spells it. EMPTY MEANS ITS OWN
+    // `auto`, which is h264 -- and empty is the default because the honest
+    // answer to "which codec" on a machine nobody has asked about is the one
+    // the recorder picks for itself. What can be picked here is not a literal:
+    // the recording page reads `gpu-screen-recorder --info` and offers the
+    // section=video_codecs list that THIS card reports, because offering a
+    // codec the GPU cannot do is how a buffer refuses to arm.
+    property alias recordingCodec: adapter.recordingCodec
+
+    // cbr, vbr or qp. CBR is what gsr's man page recommends for a replay buffer
+    // and it is also what makes the memory cost predictable: a buffer is its
+    // bitrate times its duration and nothing else, which is the number on the
+    // island. In qp and vbr the size varies with what is on screen, so that
+    // reading stops being a number and says so.
+    property alias recordingBitrateMode: adapter.recordingBitrateMode
+
+    // Kbit/s, and only CBR reads it. gsr's -q is overloaded: a number of kbit/s
+    // in CBR, and one of four named presets in qp and vbr. Two settings rather
+    // than one because they are two different values -- a page that stored
+    // "40000" and sent it to a qp recorder would be sending a preset name that
+    // does not exist.
+    property alias recordingBitrate: adapter.recordingBitrate
+
+    // medium, high, very_high or ultra: -q in qp and vbr. very_high is gsr's
+    // own default.
+    property alias recordingQuality: adapter.recordingQuality
+
+    // Is the machine's own sound in the recording? Both programs obey this one.
+    property alias recordingDesktopAudio: adapter.recordingDesktopAudio
+
+    // Is the microphone in it? The buffer merges it into the desktop track --
+    // gsr's `default_output|device:NAME` is ONE track containing both, because
+    // two -a flags give a file with two audio tracks and most players play only
+    // the first.
+    property alias recordingMicrophone: adapter.recordingMicrophone
+
+    // WHICH microphone, as PipeWire names the node. EMPTY IS "SYSTEM DEFAULT"
+    // and it is not the same kind of empty as the monitor settings above: this
+    // one is a real answer somebody can choose, and it means gsr's
+    // `default_input` -- follow whatever the system currently calls the input.
+    //
+    // A NAME THAT IS NOT PRESENT IS THE DANGEROUS CASE, which is why the shell
+    // resolves this against the live node list before it ever reaches a command
+    // line: gpu-screen-recorder given an audio device that does not exist
+    // REFUSES TO START AT ALL. Storing the name is still right -- it is what
+    // survives the device being unplugged over lunch -- but it is a preference
+    // and never a requirement. See ReplayState.microphone.
+    property alias recordingMicrophoneDevice: adapter.recordingMicrophoneDevice
+
+    // aac, opus or flac. AAC AND NOT THE mp4 DEFAULT OF opus, and the reason is
+    // where these clips go: opus-in-mp4 is the combination some players and
+    // some editors refuse, and a clip that will not open is worth more to fix
+    // than the bitrate it saves. flac is lossless and large; it is offered
+    // because gsr offers it, not because anything here wants it.
+    property alias recordingAudioCodec: adapter.recordingAudioCodec
+
     function restoreDefaults(): void {
         root.setOpacity(root.defaults.opacity);
         root.setFont(root.defaults.fontSize, root.defaults.fontFamily);
@@ -1113,6 +1270,32 @@ Singleton {
         // which costs the seconds it was holding, and that is the same cost
         // changing the buffer length has always had.
         adapter.replayMonitor = root.defaults.replayMonitor;
+
+        // And back to the capture this shell shipped with. EVERY ONE OF THESE
+        // RESTARTS THE BUFFER as it lands -- see ReplayState.reapply() -- so a
+        // restore costs the seconds it was holding, once, rather than once per
+        // value: they are assigned in the same turn and the recorder is taken
+        // down and brought back after it.
+        //
+        // replayEnabled IS RESET WITH THE REST, which means a buffer somebody
+        // switched off comes back armed. That is the intended reading of
+        // "restore defaults" -- armed is the state this shell ships in -- and
+        // it is visible the instant it happens, on the island and on this page.
+        adapter.replayEnabled = root.defaults.replayEnabled;
+        adapter.replaySeconds = root.defaults.replaySeconds;
+        adapter.replayStorage = root.defaults.replayStorage;
+        adapter.replayDirectory = root.defaults.replayDirectory;
+        adapter.recordingDirectory = root.defaults.recordingDirectory;
+        adapter.recordingContainer = root.defaults.recordingContainer;
+        adapter.recordingFramerate = root.defaults.recordingFramerate;
+        adapter.recordingCodec = root.defaults.recordingCodec;
+        adapter.recordingBitrateMode = root.defaults.recordingBitrateMode;
+        adapter.recordingBitrate = root.defaults.recordingBitrate;
+        adapter.recordingQuality = root.defaults.recordingQuality;
+        adapter.recordingDesktopAudio = root.defaults.recordingDesktopAudio;
+        adapter.recordingMicrophone = root.defaults.recordingMicrophone;
+        adapter.recordingMicrophoneDevice = root.defaults.recordingMicrophoneDevice;
+        adapter.recordingAudioCodec = root.defaults.recordingAudioCodec;
     }
 
     // ---------------- Persistence ----------------
@@ -1126,6 +1309,20 @@ Singleton {
     // Editing the file by hand while the shell is up works and is picked up
     // immediately -- that is what watchChanges buys, and it is the fastest
     // way to try a value that has no row in the settings window yet.
+    // HAS THE FILE BEEN READ YET? Nothing needed to know until the recorder
+    // did, and what it needs it for is worth spelling out: the read is
+    // asynchronous, so for the first turns of the shell's life every property
+    // above reads its DEFAULT rather than what is on disk. A binding that only
+    // paints is fine with that -- it repaints. A binding that SPAWNS A PROCESS
+    // built out of these values is not: the buffer would arm at the defaults,
+    // the real settings would land a moment later, and the recorder would be
+    // torn down and rebuilt for nothing at every login.
+    //
+    // True after the first read either way, because a machine with no file yet
+    // has read everything there is to read: onLoadFailed writes the defaults
+    // and those defaults are already what the properties hold.
+    property bool loaded: false
+
     FileView {
         id: file
 
@@ -1135,7 +1332,11 @@ Singleton {
 
         onFileChanged: reload()
         onAdapterUpdated: writeAdapter()
-        onLoadFailed: writeAdapter()
+        onLoaded: root.loaded = true
+        onLoadFailed: {
+            root.loaded = true;
+            writeAdapter();
+        }
 
         JsonAdapter {
             id: adapter
@@ -1151,6 +1352,23 @@ Singleton {
             property string mainMonitor: ""
             property var barMonitors: []
             property string replayMonitor: ""
+            // See the Recording section above. Every one of these was a
+            // literal in modules/recorder until this page existed.
+            property bool replayEnabled: true
+            property int replaySeconds: 0
+            property string replayStorage: "ram"
+            property string replayDirectory: ""
+            property string recordingDirectory: ""
+            property string recordingContainer: "mp4"
+            property int recordingFramerate: 60
+            property string recordingCodec: ""
+            property string recordingBitrateMode: "cbr"
+            property int recordingBitrate: 40000
+            property string recordingQuality: "very_high"
+            property bool recordingDesktopAudio: true
+            property bool recordingMicrophone: true
+            property string recordingMicrophoneDevice: ""
+            property string recordingAudioCodec: "aac"
             property var barOverrides: ({})
             property bool barLogo: true
             property bool barActiveWindow: true

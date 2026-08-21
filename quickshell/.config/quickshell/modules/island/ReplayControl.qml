@@ -175,12 +175,18 @@ Item {
         }
 
         // The price of the chip on the left of it. A buffer is its bitrate
-        // times its duration and nothing else, so this is the whole cost.
+        // times its duration and nothing else, so this is the whole cost --
+        // and the arithmetic is ReplayState's rather than this file's, because
+        // the settings page shows the same number under the same choice and
+        // two of them would drift the day the bitrate became a setting. It
+        // has: in constant bitrate this is a number, and in the other two
+        // modes gsr promises nothing about the size, so the reading says so
+        // instead of quoting an average.
         Text {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
 
-            text: `${ReplayState.megabytes} MB`
+            text: ReplayState.cost
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 3
             color: Theme.outline

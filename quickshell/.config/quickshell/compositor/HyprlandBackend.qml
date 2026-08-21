@@ -46,7 +46,9 @@ CompositorBackend {
         monitorConfigCopy: true,
         inputConfig: true,
         scratchpad: true,
-        // `hyprctl clients` reports .at and .size for every window.
+        // `hyprctl clients` reports .at and .size for every window, and
+        // windowBoxes() below reads them out of the model Quickshell fills
+        // from that very command.
         windowGeometry: true,
         // One keyboard focus for the whole session, so a grabbing surface is
         // heard from any monitor.
@@ -163,6 +165,62 @@ CompositorBackend {
     // ever go back to a hyprlang config, this is the file that has to change,
     // and the symptom will be buttons that quietly do nothing rather than an
     // error anybody can see.
+    // ---- Windows on screen, as rectangles ---------------------------------
+    //
+    // OUT OF THE MODEL RATHER THAN OUT OF A PIPELINE. This used to be four
+    // processes and a jq program built by hand in RecorderState -- `hyprctl
+    // monitors -j` for the visible workspace ids, `hyprctl clients -j` for the
+    // windows, jq to join them -- and every part of it is already here:
+    // Quickshell fills `lastIpcObject` from `hyprctl clients -j` itself, so
+    // this is that command's output without spawning it, without jq, and
+    // without a shell to quote through.
+    //
+    // VISIBLE WORKSPACES, NOT THE FOCUSED MONITOR'S. Filtering to the focused
+    // workspace meant the other screen's windows were never offered at all,
+    // and slurp can only snap to boxes it was given. `workspace.active` is
+    // exactly the old `hyprctl monitors -j | jq '[.[].activeWorkspace.id]'`
+    // test, including how it treats the special workspace: false there, so a
+    // pulled-up magic workspace is not offered. That matches what the pipeline
+    // did, so nothing changed with this move; it is worth knowing before
+    // somebody reads it as a bug.
+    //
+    // EVERY FIELD IS GUARDED. A toplevel that has not been filled in yet has
+    // no `at` and no `size`, and half a rectangle is not one -- so it is
+    // skipped rather than pushed as a box with undefined in it. Skipping all
+    // of them yields the empty list, which the recorder already handles: the
+    // selector degrades to a free-hand drag.
+    function windowBoxes(): var {
+        const boxes = [];
+
+        for (const tl of Hyprland.toplevels.values) {
+            if (tl.workspace?.active !== true)
+                continue;
+
+            const ipc = tl.lastIpcObject;
+            if (!ipc || ipc.mapped !== true || ipc.hidden === true)
+                continue;
+
+            const at = ipc.at;
+            const size = ipc.size;
+            if (!at || !size || at.length < 2 || size.length < 2)
+                continue;
+
+            boxes.push(`${at[0]},${at[1]} ${size[0]}x${size[1]}`);
+        }
+
+        return boxes;
+    }
+
+    // Hyprland announces opens, closes and moves on the event socket and
+    // Quickshell refreshes the model from them, so this is belt and braces
+    // rather than the only thing keeping the list current -- which is why the
+    // recorder can ask for it 150 ms before it reads the boxes and not care
+    // whether the answer has landed. The cost is one `hyprctl clients -j` per
+    // window selection.
+    function refreshWindows(): void {
+        Hyprland.refreshToplevels();
+    }
+
     function focusWorkspace(id: var): void {
         Hyprland.dispatch(`hl.dsp.focus({workspace = ${id}})`);
     }
