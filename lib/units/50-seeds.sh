@@ -99,13 +99,30 @@ seeds_apply() {
       ui_bad "   $dst is a dangling symlink"
       ui_say "     It pointed at the repo copy that is now a seed. Delete it and"
       ui_say "     run this step again; it is not removed for you, in case you made it."
+      # RECORDED NOW, WHICH IT WAS NOT. This printed and vanished, and the thing
+      # it describes is invisible afterwards: a dangling link is not a missing
+      # file, so the seed is never copied and nothing later complains. A note
+      # and not a stop -- what is lost is one application's defaults, and the
+      # link is deliberately left alone in case the person made it themselves.
+      fail_note "seeds" "$dst is a dangling symlink, so the seed was not copied" \
+        "rm $dst && ./install.sh apply seeds"
     elif [[ -e $dst || -L $dst ]]; then
       ui_say "   $dst already exists, left alone"
     else
-      run mkdir -p "$(dirname "$dst")"
-      run cp "$src" "$dst"
-      ui_did "   seeded $dst"
-      seeded=$(( seeded + 1 ))
+      # TESTED RATHER THAN RUN BARE, and the reason is the one thing about this
+      # runner that surprises everybody: `set -e` is suspended for the whole of
+      # an _apply, because unit_apply calls it as the condition of an `if`. So
+      # an unguarded `cp` that failed used to fall straight through to
+      # ui_did "seeded $dst" and be counted -- a failure that reported itself
+      # as a success, which is the only kind this rewrite cannot classify.
+      if run mkdir -p "$(dirname "$dst")" && run cp "$src" "$dst"; then
+        ui_did "   seeded $dst"
+        seeded=$(( seeded + 1 ))
+      else
+        ui_bad "   could not copy $src to $dst"
+        fail_note "seeds" "$dst could not be copied from seeds/$(basename "$src")" \
+          "Check the permissions on $(dirname "$dst"), then: ./install.sh apply seeds"
+      fi
     fi
   done
 
@@ -119,6 +136,11 @@ seeds_apply() {
     ui_bad "   ${#unmapped[@]} file(s) in seeds/ have no destination and were skipped:"
     printf '     %s\n' "${unmapped[@]}"
     ui_say "     Add them to SEED_DEST in this unit, and to the table in seeds/README.md."
+    # The comment above already made this call -- "loud rather than fatal ...
+    # stopping the install over it would punish the wrong person" -- and now it
+    # is loud somewhere that survives the run.
+    fail_note "seeds" "${#unmapped[@]} file(s) in seeds/ have no destination and were skipped: ${unmapped[*]}" \
+      "Add them to SEED_DEST in lib/units/50-seeds.sh and to the table in seeds/README.md"
   fi
 
   # qt6ct's colour scheme lands in ~/.config/qt6ct/colors/, which nothing else
@@ -129,7 +151,14 @@ seeds_apply() {
   # -- but it is insurance against a silent one. A palette that fails to write
   # leaves Qt applications on the factory grey with nothing on screen to say
   # why, which is a long way to walk back from.
-  run mkdir -p "$HOME/.config/qt6ct/colors"
+  # THE LAST COMMAND OF THE FUNCTION IS ITS EXIT STATUS, which used to mean a
+  # failure here was reported as "seeds did not finish" -- the generic message
+  # for a unit that says nothing about itself -- after everything else in it had
+  # worked. Tested, named, and not allowed to be the return value.
+  run mkdir -p "$HOME/.config/qt6ct/colors" || fail_note "seeds" \
+    "$HOME/.config/qt6ct/colors could not be created, so the Qt colour scheme has nowhere to land" \
+    "mkdir -p ~/.config/qt6ct/colors"
+  return 0
 }
 
 unit_register seeds

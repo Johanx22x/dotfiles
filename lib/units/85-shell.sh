@@ -53,7 +53,16 @@ shell_apply() {
     ui_did "   the login shell is zsh -- from the next login, not this session"
   else
     ui_bad "   chsh did not finish; the login shell is unchanged"
-    FAILED+=("shell: chsh did not finish")
+    # NOT FATAL, though it is the closest of the notes to being so. The desktop
+    # comes up either way: the compositor is started by the display manager and
+    # not by a login shell, and every script in this repo carries its own
+    # shebang. What is lost is the prompt, the aliases and the history in a new
+    # terminal -- daily friction, not a machine that does not work. It is also
+    # the one step here that can fail for a reason nothing can fix on the
+    # person's behalf: chsh authenticates through PAM with THEIR password, and
+    # a mistyped one is not a broken installer.
+    fail_note "shell" "chsh did not change the login shell; it is still $(getent passwd "$USER" | cut -d: -f7)" \
+      "chsh -s /usr/bin/zsh   -- it asks for your own password, not root's"
   fi
 }
 

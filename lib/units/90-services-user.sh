@@ -109,7 +109,7 @@ services-user_check() {
 }
 
 services-user_apply() {
-  local unit failures=0
+  local unit failed=()
 
   # A unit file that arrived through stow since the manager last looked is
   # invisible until this runs, which on a first install is every one of them.
@@ -120,15 +120,26 @@ services-user_apply() {
       ui_did "   enabled $unit"
     else
       ui_bad "   could not enable $unit"
-      failures=$(( failures + 1 ))
+      failed+=("$unit")
     fi
   done < <(services-user_units)
 
-  if (( failures )); then
-    # Best-effort on purpose. These units belong to packages and to the stow
-    # step, and losing the rest of the run over a timer that can be enabled
-    # later is a bad trade -- but it is written down where it will be read.
-    FAILED+=("services-user: $failures unit(s) could not be enabled")
+  if (( ${#failed[@]} )); then
+    # BY NAME, WHICH A COUNT NEVER WAS. This used to record "$failures unit(s)
+    # could not be enabled", so a summary read after the fact said that
+    # something in this list was off and left the reader to work out which --
+    # and the names were on screen once, above however much output came after.
+    #
+    # A NOTE AND NOT A STOP. Everything here is a timer or an agent that a
+    # later login or one systemctl call brings up: the wallpaper stops
+    # rotating, the AirPods battery stops updating, a polkit prompt has nothing
+    # to draw it. The desktop itself is started by the display manager and by
+    # the compositor's own autostart, neither of which is in this list, so
+    # losing the rest of the run over a timer that can be enabled at any moment
+    # is the bad trade the old comment here already named.
+    fail_note "services-user" \
+      "${#failed[@]} user unit(s) could not be enabled: ${failed[*]}" \
+      "systemctl --user status ${failed[0]}   -- then: ./install.sh apply services-user"
   fi
 
   # Said out loud because the absence is deliberate and looks like an omission.
