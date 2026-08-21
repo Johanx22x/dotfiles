@@ -170,6 +170,14 @@ readonly -A NUMERIC=(
 readonly -A CHOICES=(
     [accel]="adaptive flat"
     [natural-scroll]="0 1"
+    # THE ONE KEY NOTHING IS GENERATED FROM. Every other value in this store
+    # ends up inside tweaks.kdl or tweaks.lua; this one is read by
+    # `cursor-match`, which decides whether the wallpaper gets to choose the
+    # pointer. It lives here anyway because the settings window already reads
+    # this store and writes it through `set` -- a second state file and a
+    # second reader for one boolean is the arrangement the header of this
+    # script exists to argue against.
+    [cursor-auto]="0 1"
 )
 
 # How many layouts an xkb keymap can hold. See the header: this is the
@@ -203,11 +211,15 @@ Keys:
   gaps-in gaps-out rounding border      look
   sensitivity accel natural-scroll      mouse
   repeat-rate repeat-delay layouts      keyboard
-  cursor-theme cursor-size              pointer
+  cursor-theme cursor-size cursor-auto  pointer
 
 `accel` is adaptive or flat, `natural-scroll` is 0 or 1, `sensitivity` is in
 hundredths (-100..100 is libinput's -1.0..1.0), and `cursor-theme` is the name
 of a directory under /usr/share/icons or ~/.icons.
+
+`cursor-auto` is 0 or 1. With 1, `cursor-match` rewrites `cursor-theme` on
+every wallpaper change to whichever installed theme sits closest to the new
+accent colour. Picking a theme by hand is what turns it off.
 
 `layouts` is the whole keyboard cycle as a comma-separated list of xkb codes,
 up to four of them:
@@ -280,6 +292,12 @@ current() {
         # the distribution, and overwriting it with a guess would change the
         # pointer on a machine where nobody asked for it.
         cursor-theme)   printf '' ;;
+        # On, because a machine with the cursor pack installed and nobody
+        # having opened the settings window is a machine that wants the
+        # pointer to follow the wallpaper. Harmless without the pack:
+        # `cursor-match` finds no theme close to the accent and leaves the
+        # pointer alone.
+        cursor-auto)    printf '1' ;;
         # The same value both tracked configs carry, on purpose -- see the note
         # on the defaults above.
         layouts)        printf 'us' ;;
@@ -772,7 +790,7 @@ case "${1:-show}" in
 
     show)
         printf '%-16s %-14s %s\n' KEY VALUE RANGE
-        local_keys=(gaps-in gaps-out rounding border sensitivity accel natural-scroll repeat-rate repeat-delay layouts cursor-theme cursor-size)
+        local_keys=(gaps-in gaps-out rounding border sensitivity accel natural-scroll repeat-rate repeat-delay layouts cursor-theme cursor-size cursor-auto)
         for key in "${local_keys[@]}"; do
             if [[ -n ${NUMERIC[$key]:-} ]]; then
                 IFS='|' read -r min max _ <<< "${NUMERIC[$key]}"

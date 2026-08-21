@@ -779,4 +779,19 @@ if [[ -r "$COLORS_LUA" ]] && command -v hyprctl >/dev/null && compositor can liv
     fi
 fi
 
+# ---------------------------------------------------------------
+# 7. Point the cursor at the new accent
+# ---------------------------------------------------------------
+# AFTER matugen and not instead of it: cursor-match reads the accent out of
+# ~/.config/quickshell/colors.json, which the step above has just written.
+#
+# `|| true` is the same judgement the wallpaper backends get and the opposite
+# of the one matugen gets. A palette that cannot be generated leaves every app
+# on the machine holding the colours of the wrong image, so that one is fatal;
+# a pointer that stays the colour it already was is a wallpaper change that
+# worked. The script is quiet by design in every case it declines to act --
+# the pack not installed, the theme unchanged, the setting turned off -- so
+# nothing here has to ask whether it is worth calling.
+command -v cursor-match >/dev/null && cursor-match || true
+
 echo "wallpaper: $(basename "$TARGET")"
