@@ -430,16 +430,9 @@ SettingsPage {
                 + "which is why the shortest offered is five minutes."
         }
 
-        Text {
+        SectionNote {
             visible: text !== ""
 
-            // Aligned with the row's LABEL is what this wants and not what it
-            // gets: the label sits behind a glyph whose width is a font
-            // measurement, and StepperRow's tooltip already documents why
-            // measuring it with mapToItem does not work here. The section's
-            // own padding is close enough and is never wrong.
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
             bottomPadding: 4
 
             // "around", because the unit asks for AccuracySec=30s: systemd is
@@ -454,15 +447,6 @@ SettingsPage {
                     return "";
                 const format = Config.use24Hour ? "HH:mm" : "h:mm AP";
                 return `Next change around ${Qt.formatDateTime(root.nextChange, format)}.`;
-            }
-
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
             }
         }
     }

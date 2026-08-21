@@ -775,23 +775,12 @@ SettingsPage {
         title: "Binds"
         glyph: Icons.keyboard
 
-        Text {
+        SectionNote {
             visible: root.query !== "" && root.groups.length === 0
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
             topPadding: 4
-            bottomPadding: 6
 
             text: `Nothing bound matches “${filter.text.trim()}”.`
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         ScrollList {
@@ -952,11 +941,8 @@ SettingsPage {
         title: "Editing"
         glyph: Icons.info
 
-        Text {
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
+        SectionNote {
             topPadding: 4
-            bottomPadding: 6
 
             // THE SAME BUG AS THE ROWS ABOVE, and fixing one without the other
             // would have left the page contradicting itself: eighty rows
@@ -979,14 +965,6 @@ SettingsPage {
                 + "where it does, and loops that turn two lines into twenty binds — "
                 + "and a window that generated it would produce a correct list of "
                 + "binds while destroying the only record of why they are those binds."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
     }
 

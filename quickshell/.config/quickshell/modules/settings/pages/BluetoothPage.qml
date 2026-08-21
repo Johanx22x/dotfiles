@@ -259,13 +259,10 @@ SettingsPage {
         // urgency and in nothing else -- same place, same width, same wrap --
         // so splitting them would be four near-identical blocks whose only
         // real difference is a colour, which is what the colour binding is.
-        Text {
+        SectionNote {
             visible: text !== ""
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
             topPadding: 2
-            bottomPadding: 6
 
             text: {
                 if (!root.adapter)
@@ -289,16 +286,9 @@ SettingsPage {
                 }
             }
 
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
             color: !root.adapter || root.adapterState === BluetoothAdapterState.Blocked
                 ? Theme.warning
                 : Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         // Only when the radio is on, because it is the radio's own setting:
@@ -333,13 +323,10 @@ SettingsPage {
         // is not taken: leaving a machine permanently announcing itself is a
         // decision for the person who owns it, not a side effect of flipping a
         // switch labelled "visible".
-        Text {
+        SectionNote {
             visible: root.radioOn && (root.adapter?.discoverable ?? false)
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
             topPadding: 2
-            bottomPadding: 6
 
             text: {
                 const timeout = root.adapter?.discoverableTimeout ?? 0;
@@ -347,15 +334,6 @@ SettingsPage {
                     return "Visible until this is switched off again.";
                 return `Visible for ${timeout} seconds — BlueZ's own timeout, not this window's. `
                     + "The switch will go back off by itself.";
-            }
-
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
             }
         }
     }
@@ -368,13 +346,10 @@ SettingsPage {
         // Each case is a different thing to do about it, which is why this is
         // not one "nothing here": the radio being off is fixed by the switch
         // above, and an empty list is fixed in the section below.
-        Text {
+        SectionNote {
             visible: text !== ""
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
             topPadding: 4
-            bottomPadding: 6
 
             text: {
                 if (!root.adapter)
@@ -384,15 +359,6 @@ SettingsPage {
                 if (root.pairedDevices.length === 0)
                     return "Nothing paired yet. Devices you pair below appear here.";
                 return "";
-            }
-
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
             }
         }
 
@@ -688,23 +654,12 @@ SettingsPage {
         // Kept to what someone can act on. The reason there is no agent is in
         // this file's header, where it belongs; here it only has to say what
         // will not work and where the job lives instead.
-        Text {
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
+        SectionNote {
             topPadding: 4
-            bottomPadding: 6
 
             text: "Pairing from this window only works for devices that pair without asking a question. "
                 + "There is no way to answer a PIN or a \"do these numbers match?\" confirmation here, "
                 + "so those attempts stall silently — pair them with bluetoothctl instead."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         // The escape hatch, and it OPENS rather than just being named --
@@ -773,13 +728,10 @@ SettingsPage {
             onToggled: value => root.scanning = value
         }
 
-        Text {
+        SectionNote {
             visible: text !== ""
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
             topPadding: 4
-            bottomPadding: 6
 
             text: {
                 if (!root.radioOn)
@@ -789,15 +741,6 @@ SettingsPage {
                 if (root.availableDevices.length === 0)
                     return "Looking…";
                 return "";
-            }
-
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
             }
         }
 
