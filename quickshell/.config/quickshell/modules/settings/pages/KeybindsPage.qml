@@ -516,9 +516,17 @@ SettingsPage {
             // Hung off the left edge and not off the mark, for the reason in
             // StepperRow: a note starting two thirds of the way across the
             // pane runs off the right edge, where the window's Flickable
-            // clips it. It can hang below this row because this row is near
-            // the top of the page -- Tooltip's own header is explicit that
-            // the same trick at the bottom would be clipped away.
+            // clips it.
+            //
+            // Vertically it says only how far into the row to bite -- 2px, so
+            // the note reads as hanging off this row rather than floating
+            // under it. WHICH SIDE is Tooltip's decision, and this call site
+            // no longer has to know that it happens to sit near the top of a
+            // page. It did know, once: the note here was placed below
+            // unconditionally with the comment "it can hang below because
+            // this row is near the top", which was true and was also exactly
+            // the kind of local reasoning that broke the moment a row further
+            // down wanted a note.
             Tooltip {
                 text: "Same submap, same modifiers, same key. Whether a bind is "
                     + "locked or non-consuming is not part of it: those change what "
@@ -529,7 +537,7 @@ SettingsPage {
                 shown: ruleMouse.containsMouse
 
                 x: Theme.groupPadding
-                y: parent.height - 2
+                gap: -2
             }
         }
 

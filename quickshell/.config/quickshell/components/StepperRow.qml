@@ -142,23 +142,31 @@ Rectangle {
         }
     }
 
-    // Under the row and aligned with the label, NOT with the mark that opens
-    // it. Hanging it off the mark is the obvious arrangement and it does not
-    // fit: the mark sits after the label, two thirds of the way across a row
-    // that is itself most of the pane's width, so a note wide enough to read
-    // would start there and run off the right edge -- where the Flickable
-    // clips it. Aligned left it is always inside, whatever the label says.
+    // Aligned with the label, NOT with the mark that opens it. Hanging it off
+    // the mark is the obvious arrangement and it does not fit: the mark sits
+    // after the label, two thirds of the way across a row that is itself most
+    // of the pane's width, so a note wide enough to read would start there and
+    // run off the right edge -- where the Flickable clips it. Aligned left it
+    // is always inside, whatever the label says.
     //
     // The left margin is repeated from the Row above rather than measured off
     // it: mapToItem is not a binding, it is a function evaluated once, and
     // here that once is before anything has been laid out. It read 0 and the
     // note happened to land in the right place for the wrong reason.
+    //
+    // AND THAT SAME SENTENCE IS WHY THERE IS NO `y` HERE ANY MORE. This row
+    // used to place the note at `root.height - 4`, unconditionally below, and
+    // on the last row of a page with no scroll left the Flickable cut it in
+    // half. The vertical decision is Tooltip's now: the band it must not
+    // cover is this whole row, the -4 is the overlap that used to be written
+    // into the y, and it hangs below or flips above depending on the room
+    // left in the viewport -- reactively, which the y it replaced was not.
     Tooltip {
         text: root.hint
         shown: hintMouse.containsMouse
 
         x: Theme.groupPadding
-        y: root.height - 4
+        gap: -4
     }
 
     Row {
