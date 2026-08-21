@@ -34,6 +34,13 @@ hl.config({ cursor = { no_hardware_cursors = 0, use_cpu_buffer = 1 } })
 -- Tearing: disabled. With 165 Hz + VRR it is not needed and it causes
 -- artefacts. If you play competitively and want the lowest possible latency,
 -- set it to true and uncomment the "immediate" rule below.
+--
+-- THE ONLY PLACE THIS IS DECLARED. hyprland.lua's general block used to set it
+-- too, with the same value, and this file loads after that one -- so on the
+-- day the two disagreed this line would have won without saying anything, and
+-- turning it on over there would have looked broken. It lives here because
+-- this is where the reason to change it is, and because the `immediate` rule
+-- that has to be uncommented with it is in this file too.
 hl.config({ general = { allow_tearing = false } })
 
 
