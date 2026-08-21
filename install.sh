@@ -82,56 +82,175 @@ want_hyprland() { [[ $COMPOSITOR == hyprland || $COMPOSITOR == both ]]; }
 want_niri()     { [[ $COMPOSITOR == niri     || $COMPOSITOR == both ]]; }
 
 # ---------------------------------------------------------------------------
-# pacman aborts the WHOLE transaction over a single package it cannot find, so
-# one entry that does not exist on this machine means nothing at all gets
-# installed -- which is exactly what happened the first time this ran on a box
-# without the multilib repo: ten unavailable names took the other 129 with
-# them. Everything that is available is installed and the rest is reported.
+# READING A LIST. The files under packages/ are grouped by PURPOSE -- what the
+# entry is there to do -- and not by where it comes from, because "which
+# repository is gimp in" is a question the machine can answer and nobody should
+# have to keep in their head. Each list carries a header saying what the group
+# is for and why the awkward entries are in it, so comments and blank lines are
+# stripped before the names are used.
 #
-# This also covers the case the lists cannot anticipate: a package renamed or
-# dropped from the repos.
+# The comment strip runs to end of line rather than only on whole lines: a
+# pacman package name cannot contain '#', so there is nothing to lose by it and
+# it means a note can sit beside the name it is about.
+read_list() {
+  sed -e 's/#.*//' -e 's/[[:space:]]*$//' -e '/^[[:space:]]*$/d' "$1"
+}
+
+# ---------------------------------------------------------------------------
+# WHERE EACH NAME COMES FROM. The lists say what the machine needs; working out
+# where to get it is this script's job. There are three answers -- a configured
+# pacman repository, the AUR, or [multilib] on a machine that has not enabled
+# it -- and only the first two can be acted on.
 #
-# WHY -Slq AND NOT -Si
+# WHY `pacman -Sl` AND NOT `pacman -Si`
 # The first version of this asked `pacman -Si` for each package and read the
 # name back out of the "Name : foo" line. That output is TRANSLATED: on a
 # Spanish system the field is "Nombre", the match found nothing, and the script
 # announced that all 129 packages were unavailable -- failing silently in the
 # worst possible direction, since "skip it" is what it does with a package it
-# cannot see. -Slq prints one package name per line and no field labels at all,
-# so there is nothing left to translate. It costs one call and 0.13s for the
-# ~15k names in the sync repos.
-install_list() {
-  local file="$1" label="$2" pkgs=() available=() missing=()
+# cannot see. `pacman -Sl` prints "<repo> <name> <version>" with no field
+# labels at all, so there is nothing left to translate, and it hands over the
+# repository name for free. One call, 0.13s for the ~15k names in the repos.
+declare -A PKG_REPO=()
 
-  mapfile -t pkgs < <(grep -v '^[[:space:]]*$' "$file")
-  (( ${#pkgs[@]} )) || return 0
+load_repo_index() {
+  local repo name rest
+  while read -r repo name rest; do
+    PKG_REPO["$name"]="$repo"
+  done < <(pacman -Sl 2>/dev/null)
 
-  mapfile -t available < <(
-    comm -12 <(printf '%s\n' "${pkgs[@]}" | sort -u) <(pacman -Slq | sort -u))
-  mapfile -t missing < <(
-    comm -23 <(printf '%s\n' "${pkgs[@]}" | sort -u) <(printf '%s\n' "${available[@]}"))
-
-  if (( ${#missing[@]} )); then
-    red "   not available in your repos, skipped:"
-    printf '     %s\n' "${missing[@]}"
+  # EMPTY SYNC DATABASES READ AS "NOTHING EXISTS ANYWHERE", and that is exactly
+  # the machine this script is written for. A box that has never run
+  # `pacman -Sy` prints nothing here, every single name falls through to the
+  # AUR branch, and yay is asked to build the whole desktop from source. The
+  # version of this that compared against `pacman -Slq` had the same hole and
+  # was quieter about it: it reported all 129 packages as unavailable, skipped
+  # them, and carried on to the stow step as if nothing had happened.
+  if (( ${#PKG_REPO[@]} == 0 )); then
+    red "   pacman knows of no packages at all -- the sync databases are empty."
+    echo "   Run 'sudo pacman -Sy' and then this script again."
+    return 1
   fi
-
-  if (( ${#available[@]} == 0 )); then
-    red "   nothing from $label could be installed"
-    return 0
-  fi
-
-  # --needed skips the ones already installed.
-  sudo pacman -S --needed "${available[@]}"
-  green "   $label: ${#available[@]} package(s) handled"
 }
 
-blue "== 1/7  Packages from the official repos =="
-echo "   $(wc -l < "$DOT/packages/pacman.txt") packages in packages/pacman.txt"
+# Is [multilib] switched on? Asked once, because the answer changes what an
+# unresolved lib32-* name means.
+MULTILIB_ON=0
+grep -q '^\[multilib\]' /etc/pacman.conf && MULTILIB_ON=1
+
+# A DISABLED REPOSITORY IS NOT IN `pacman -Sl` EITHER, so once [multilib] is
+# off its packages are indistinguishable from names that only exist in the AUR.
+# The rule below is a heuristic and is written down as one: everything 32-bit
+# is called lib32-*, and the Steam client is a 32-bit binary, which is the
+# entire reason [multilib] is in play on this machine at all. A multilib
+# package that is neither would be handed to yay and reported as an AUR build
+# that failed -- loudly, and with the name in the message, which is a long way
+# from silence.
+needs_multilib() {
+  [[ $1 == lib32-* || $1 == steam ]]
+}
+
+# Collected as the run goes and printed once at the end. A package that cannot
+# be installed is not a reason to skip the stow step, which is the part that
+# actually matters -- but it is a reason to say so where it will still be on
+# screen when the script finishes.
+FAILED=()
+
+# yay builds itself from source the first time, which needs git and base-devel
+# and a few minutes. Only called when something in a list actually turns out to
+# come from the AUR.
+ensure_yay() {
+  command -v yay >/dev/null && return 0
+
+  local tmp built=1
+  sudo pacman -S --needed --noconfirm git base-devel
+  tmp="$(mktemp -d)"
+  if git clone --depth 1 https://aur.archlinux.org/yay.git "$tmp/yay" &&
+     ( cd "$tmp/yay" && makepkg -si --noconfirm ); then
+    green "   yay installed"
+    built=0
+  else
+    red "   yay could not be built, the AUR packages are skipped"
+  fi
+  rm -rf "$tmp"
+  return $built
+}
+
+# ---------------------------------------------------------------------------
+# INSTALL A SET OF NAMES, wherever each of them lives. Takes a label for the
+# messages and the names themselves.
+#
+# NOTHING IN HERE IS ALLOWED TO END THE SCRIPT. Under `set -e` a function that
+# returns non-zero inside an `if` body takes the whole run down with it, and
+# every caller below sits inside one -- so a single package dropped from the
+# repositories used to mean no symlinks, no seeds and no palette. Every
+# fallible command is tested rather than run bare, and what went wrong goes
+# into FAILED to be reported at the end.
+install_names() {
+  local label="$1"; shift
+  local names=("$@") repo=() aur=() blocked=() n
+
+  (( ${#names[@]} )) || return 0
+
+  for n in "${names[@]}"; do
+    if [[ -n ${PKG_REPO[$n]:-} ]]; then
+      repo+=("$n")
+    elif (( ! MULTILIB_ON )) && needs_multilib "$n"; then
+      blocked+=("$n")
+    else
+      aur+=("$n")
+    fi
+  done
+
+  if (( ${#blocked[@]} )); then
+    red "   $label: ${#blocked[@]} package(s) need [multilib], which is not enabled:"
+    printf '     %s\n' "${blocked[@]}"
+    echo "     Uncomment these two lines in /etc/pacman.conf, run 'sudo pacman -Sy',"
+    echo "     and this script again:"
+    echo
+    echo "       [multilib]"
+    echo "       Include = /etc/pacman.d/mirrorlist"
+    echo
+    FAILED+=("$label: ${blocked[*]} (needs [multilib])")
+  fi
+
+  # --needed skips the ones that are already installed, which is what makes
+  # re-running this script cheap.
+  if (( ${#repo[@]} )); then
+    if sudo pacman -S --needed "${repo[@]}"; then
+      green "   $label: ${#repo[@]} package(s) from the repositories"
+    else
+      red "   $label: pacman did not finish, see the output above"
+      FAILED+=("$label: pacman failed")
+    fi
+  fi
+
+  if (( ${#aur[@]} )); then
+    echo "   $label: ${#aur[@]} package(s) come from the AUR"
+    if ensure_yay; then
+      # THE NAMES GO AS ARGUMENTS AND NOT DOWN STDIN. `yay -S --needed -` reads
+      # the list from stdin, and then reads its own prompts -- which provider,
+      # edit the PKGBUILD, proceed with the build -- from the same stdin, which
+      # by then is at end of file. The answers it got were whatever was left of
+      # the list.
+      if yay -S --needed "${aur[@]}"; then
+        green "   $label: AUR done"
+      else
+        red "   $label: some AUR packages failed, see the output above"
+        FAILED+=("$label: an AUR build failed")
+      fi
+    else
+      FAILED+=("$label: ${#aur[@]} AUR package(s), and no yay to build them")
+    fi
+  fi
+}
+
+# ---------------------------------------------------------------------------
+blue "== 1/7  Packages =="
 
 # THE COMPOSITOR'S OWN PACKAGES LIVE IN THEIR OWN LISTS, and only the chosen
-# one is installed. pacman.txt used to carry hyprland, hyprsunset, uwsm and
-# xdg-desktop-portal-hyprland, so a machine that answered "niri" would have
+# one is installed. The shared lists used to carry hyprland, hyprsunset, uwsm
+# and xdg-desktop-portal-hyprland, so a machine that answered "niri" would have
 # pulled in the whole other compositor to leave it sitting there unused.
 #
 # The two portal backends, on the other hand, coexist happily and BOTH are
@@ -139,93 +258,55 @@ echo "   $(wc -l < "$DOT/packages/pacman.txt") packages in packages/pacman.txt"
 # its own /usr/share/xdg-desktop-portal/<name>-portals.conf and xdg-desktop-
 # portal picks the file by XDG_CURRENT_DESKTOP, so hyprland-portals.conf routes
 # ScreenCast to hyprland in one session and niri-portals.conf routes it to
-# gnome in the other, with nothing to switch by hand.
-#
-# WHICH IS WHY xdg-desktop-portal-gnome IS IN THE NIRI LIST. niri implements
-# Mutter's D-Bus screencast API rather than a wlroots one, and xdp-gnome is the
-# backend that speaks it. Without it a niri session has no ScreenCast at all --
-# no Discord screen share, no OBS window capture -- and nothing says why.
-#
-# What stayed in the shared list is the hypr* software that is NOT tied to
-# Hyprland: hyprpicker and hyprshot speak layer-shell and wlr-screencopy,
-# hyprpolkitagent is a plain D-Bus agent, and all three work under niri. The
-# ones that moved are the ones that cannot: hyprsunset drives the blue light
-# filter through hyprland-ctm-control-v1, a protocol only Hyprland implements,
-# so under niri it would run perfectly and do nothing. Its replacement is
-# wl-gammarelay-rs, which is in packages/aur.txt rather than here because it is
-# not in the official repos -- it was chosen over wlsunset because it is the
-# only one that takes a temperature imperatively, which is what the slider in
-# the settings window needs; wlsunset 0.4.0 can only be told a schedule.
-COMPOSITOR_LISTS=()
-want_hyprland && COMPOSITOR_LISTS+=("hyprland")
-want_niri     && COMPOSITOR_LISTS+=("niri")
-for name in "${COMPOSITOR_LISTS[@]}"; do
-  echo "   $(wc -l < "$DOT/packages/$name.txt") in packages/$name.txt"
+# gnome in the other, with nothing to switch by hand. The reasoning behind each
+# list is written at the top of the list itself.
+REQUIRED_LISTS=("$DOT"/packages/required/*.txt)
+want_hyprland && REQUIRED_LISTS+=("$DOT/packages/compositor/hyprland.txt")
+want_niri     && REQUIRED_LISTS+=("$DOT/packages/compositor/niri.txt")
+
+REQUIRED_NAMES=()
+for list in "${REQUIRED_LISTS[@]}"; do
+  mapfile -t -O "${#REQUIRED_NAMES[@]}" REQUIRED_NAMES < <(read_list "$list")
+  echo "   $(read_list "$list" | wc -l) in ${list#"$DOT"/}"
 done
 
 if ask "Install them (plus stow)?"; then
-  sudo pacman -S --needed --noconfirm stow
-  install_list "$DOT/packages/pacman.txt" "core"
-  for name in "${COMPOSITOR_LISTS[@]}"; do
-    install_list "$DOT/packages/$name.txt" "$name"
-  done
-fi
-
-# --- 32-bit libraries and Steam -------------------------------------------
-# Their own list because they need the multilib repo, which is off by default
-# on Arch. Enabling it means editing /etc/pacman.conf, and this script does not
-# touch /etc -- same rule as system/.
-echo
-echo "   packages/multilib.txt holds Steam and the 32-bit libraries."
-if grep -q '^\[multilib\]' /etc/pacman.conf; then
-  if ask "Install them?"; then
-    install_list "$DOT/packages/multilib.txt" "multilib"
+  # stow first and on its own: step 3 is the part that matters, and it is the
+  # one thing here with no alternative route.
+  sudo pacman -S --needed --noconfirm stow || FAILED+=("stow could not be installed")
+  if load_repo_index; then
+    install_names "required" "${REQUIRED_NAMES[@]}"
   fi
-else
-  echo "   The multilib repo is NOT enabled, so these are unavailable."
-  echo "   To enable it, uncomment these two lines in /etc/pacman.conf:"
-  echo
-  echo "     [multilib]"
-  echo "     Include = /etc/pacman.d/mirrorlist"
-  echo
-  echo "   then run 'sudo pacman -Sy' and this script again. Skipping for now."
 fi
 
 # ---------------------------------------------------------------------------
-blue "== 2/7  AUR packages =="
-# Everything from here to the end of the block is best-effort on purpose. An
-# AUR package that fails to build is a normal Tuesday, and with `set -e` a bare
-# failing command here would take the whole script down BEFORE the stow step --
-# losing the configuration linking, which is the part that actually matters --
-# over one PKGBUILD. Same rule as install_list: do what can be done, report the
-# rest.
-if ask "Install yay and the ones in packages/aur.txt?"; then
-  if ! command -v yay >/dev/null; then
-    sudo pacman -S --needed --noconfirm git base-devel
-    tmp="$(mktemp -d)"
-    if git clone --depth 1 https://aur.archlinux.org/yay.git "$tmp/yay" &&
-       ( cd "$tmp/yay" && makepkg -si --noconfirm ); then
-      green "   yay installed"
-    else
-      red "   yay could not be built, the AUR list is skipped"
-    fi
-    rm -rf "$tmp"
-  fi
+# THE OPTIONAL GROUPS. Each file under packages/optional/ is one pack, asked
+# for as a whole, and skipping any of them still leaves a desktop that works --
+# which is the line that decides whether a list belongs here or in required/.
+blue "== 2/7  Optional package groups =="
+echo "   Each one is a pack. Skipping any of them leaves a working desktop."
+echo
 
-  if command -v yay >/dev/null; then
-    # yay installs itself, dropping it from the list keeps it from rebuilding.
-    # grep exits 1 when nothing is left after that, and with `set -o pipefail`
-    # that alone would abort the script, so it is caught here.
-    aur="$(grep -v '^yay$' "$DOT/packages/aur.txt" || true)"
-    if [[ -z $aur ]]; then
-      green "   nothing in the list beyond yay itself"
-    elif yay -S --needed - <<<"$aur"; then
-      green "   done"
-    else
-      red "   some AUR packages failed, see the output above"
+for list in "$DOT"/packages/optional/*.txt; do
+  group="$(basename "$list" .txt)"
+  count="$(read_list "$list" | wc -l)"
+
+  # The first line of the header, which is the one-line description of what the
+  # group is for. Written where it cannot go out of step with the list.
+  summary="$(sed -n '1s/^# *//p' "$list")"
+  echo "   $group -- $count packages: $summary"
+
+  if ask "   Install the $group group?"; then
+    mapfile -t names < <(read_list "$list")
+    # Deferred until something is actually wanted: a run that says no to every
+    # group should not pay for the index, and a machine with empty databases
+    # should not be stopped by a question it never asked.
+    if [[ ${#PKG_REPO[@]} -gt 0 ]] || load_repo_index; then
+      install_names "$group" "${names[@]}"
     fi
   fi
-fi
+  echo
+done
 
 # ---------------------------------------------------------------------------
 blue "== 3/7  Link the configuration (stow) =="
@@ -346,7 +427,7 @@ if ask "Link them?"; then
     # transient systemd-run unit precisely so nothing binds it to
     # graphical-session.target -- a unit that did would also come up under
     # Hyprland, where it would fight hyprsunset for gamma control of the same
-    # outputs. It is in packages/aur.txt, so step 2 is what installs it.
+    # outputs. It is in packages/required/shell.txt, so step 1 is what installs it.
     echo "   niri: the blue light filter is wl-gammarelay-rs, started on demand"
   fi
   green "   done"
@@ -511,7 +592,7 @@ if compgen -G "$HOME/.icons/Bibata-Material-*" >/dev/null; then
 elif ask "Download and install them?"; then
   # curl OR wget, whichever the machine has. Neither is guaranteed: curl comes
   # in as a dependency of half of Arch but is in no list here, and wget is in
-  # packages/pacman.txt, which step 1 is free to skip.
+  # packages/optional/hardware.txt, which is a group that can be skipped whole.
   fetch=""
   command -v curl >/dev/null && fetch="curl -fL --progress-bar -o"
   [[ -z "$fetch" ]] && command -v wget >/dev/null && fetch="wget -q --show-progress -O"
@@ -631,7 +712,7 @@ if command -v niri >/dev/null && [[ -n ${NIRI_SOCKET:-} ]]; then
     echo "   $NIRI_CONF not found — run step 3 (stow) first."
   elif ! command -v jq >/dev/null; then
     echo "   jq is not installed, so the monitors cannot be read."
-    echo "   It is in packages/pacman.txt: install it and re-run this script."
+    echo "   It is in packages/required/shell.txt: install it and re-run this script."
   elif [[ ! -x $HOME/.local/bin/desktop-monitors ]]; then
     echo "   ~/.local/bin/desktop-monitors is missing — run step 3 (stow) first."
   else
@@ -689,7 +770,7 @@ elif ! command -v jq >/dev/null; then
   # discovered halfway down, where a missing jq would abort the script under
   # `set -e` and take the closing notes with it.
   echo "   jq is not installed, so the monitors cannot be read."
-  echo "   It is in packages/pacman.txt: install it and re-run this script."
+  echo "   It is in packages/required/shell.txt: install it and re-run this script."
 elif [[ ! -f $HYPR_CONF ]]; then
   echo "   $HYPR_CONF not found — run step 3 (stow) first."
 else
@@ -769,6 +850,17 @@ fi
 # ---------------------------------------------------------------------------
 echo
 green "== Ready =="
+
+# EVERYTHING THAT WENT WRONG, ONCE, AT THE BOTTOM. A package that could not be
+# installed is not a reason to skip the symlinks -- so nothing above stops the
+# run -- but half an hour of pacman output has scrolled past by now and a
+# failure buried in it is a failure nobody sees.
+if (( ${#FAILED[@]} )); then
+  red "   ${#FAILED[@]} thing(s) did not work:"
+  printf '     %s\n' "${FAILED[@]}"
+  echo
+fi
+
 cat <<'END'
 
 Left to do by hand:
@@ -783,7 +875,15 @@ Left to do by hand:
              gitignored; the tracked configs do not need editing.
   3. The GPU driver. Deliberately not installed by this script: it is the one
              thing that depends on hardware nothing here can see, and a driver
-             for a card you do not have is not a harmless mistake.
+             for a card you do not have is not a harmless mistake. The lists
+             are there for when you have looked:
+
+               lspci -k | grep -A2 -E '(VGA|3D)'
+               sudo pacman -S --needed $(sed 's/#.*//' packages/gpu/nvidia.txt)
+
+             Only packages/gpu/nvidia.txt has been run on real hardware; the
+             amd and intel lists resolve against the repositories and no more,
+             and each says so at the top.
   4. zsh as the default shell, if it is not already:
              chsh -s /usr/bin/zsh
 END

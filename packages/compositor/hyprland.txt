@@ -1,0 +1,16 @@
+# Hyprland, and the three things that are only useful under it.
+#
+# Kept out of the required lists so that a machine answering "niri" does not
+# pull in a whole second compositor to leave it sitting there. uwsm is how the
+# session is started, and hyprsunset drives the blue light filter through
+# hyprland-ctm-control-v1 -- a protocol only Hyprland implements, which is why
+# niri gets wl-gammarelay-rs in required/shell.txt instead.
+#
+# What did NOT move in here is the hypr* software that is not tied to Hyprland:
+# hyprpicker and hyprshot speak layer-shell and wlr-screencopy, hyprpolkitagent
+# is a plain D-Bus agent, and all three work under niri.
+
+hyprland
+hyprsunset
+uwsm
+xdg-desktop-portal-hyprland

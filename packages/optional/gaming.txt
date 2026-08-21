@@ -1,0 +1,28 @@
+# Steam and what it takes to run a game well: the 32-bit halves, gamescope,
+# gamemode and the overlay.
+#
+# HALF OF THIS GROUP LIVES IN [multilib], WHICH IS OFF BY DEFAULT ON ARCH. The
+# Steam client is a 32-bit binary, so steam and every lib32-* entry below come
+# from that repository and are simply not resolvable until it is enabled in
+# /etc/pacman.conf. The installer says so by name rather than reporting them as
+# missing from the AUR.
+#
+# The lib32-* entries are not decoration either: a 64-bit library on the system
+# does nothing for a 32-bit client, so lib32-pipewire is what gives Steam
+# sound and lib32-vulkan-icd-loader is what lets it find the driver at all.
+#
+# The installer ticks a group as one box, and can be opened to pick packages
+# out of it one at a time.
+
+gamemode
+gamescope
+lib32-fontconfig
+lib32-gamemode
+lib32-libpulse
+lib32-libxcrypt-compat
+lib32-mangohud
+lib32-pipewire
+lib32-vulkan-icd-loader
+mangohud
+steam
+vulkan-tools

@@ -1,0 +1,18 @@
+# Intel integrated graphics, on the in-kernel i915/xe driver.
+#
+# NOT VERIFIED ON REAL HARDWARE. Every name here resolves against the
+# configured repositories -- that much was checked -- but the Intel iGPU on the
+# machine this repository comes from has no monitor attached and has never
+# driven this desktop, so treat the list as a starting point. If you fix it,
+# the fix belongs here.
+#
+# There is no kernel module to install: i915 and xe are in the kernel already.
+# intel-media-driver is the VA-API driver for Broadwell and newer; older parts
+# want libva-intel-driver instead. The lib32-* entries are the 32-bit copies
+# Steam needs, which require [multilib] enabled.
+
+intel-media-driver
+lib32-mesa
+lib32-vulkan-intel
+mesa
+vulkan-intel
