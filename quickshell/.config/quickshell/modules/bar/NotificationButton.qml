@@ -15,19 +15,40 @@
 // pill so the power button keeps its place at the very end with nothing new
 // beside it, which is what PowerButton.qml has asked for since it moved there.
 //
-// THE COUNT IS A DEBT, and it is the same number the do-not-disturb badge used
-// to carry -- see NotificationState.unread. Only the mute ever creates one, so
-// most of the time this is a plain glyph and nothing else; when there is a
-// number, the glyph and the number take the accent so the debt is legible
-// without a second background inside a pill that already has one. The badge
-// beside the island gives the number up for as long as this widget is drawn
-// and takes it back when it is not, so exactly one thing on the bar is ever
-// saying it. See DndIndicator.showCount.
+// IT SHOWS THE MUTE, and while it is drawn it is the only thing that does.
 //
-// IT DOES NOT SHOW THE MUTE. A bell that crossed itself out while do not
-// disturb was on would be the badge's sentence said twice, at opposite ends of
-// the same bar. This one says what it opens; the badge says what is being done
-// to you.
+// This file used to argue the opposite: a bell that crossed itself out while
+// do not disturb was on would be the do-not-disturb badge's sentence said
+// twice, at opposite ends of the same bar. The observation was right and the
+// conclusion was the wrong way round. The badge grew out of the island's left
+// edge in the middle of the bar, while the bell -- the control the mute is
+// actually ABOUT, the one you press to find out what it swallowed -- sat
+// unchanged at the far right. One control carries both halves now: bellOff
+// while the mute is on, bell when it is not, which is byte for byte how the
+// dashboard's own switch draws it in island/DndControl.qml. The badge stays
+// only as a stand-in for a bar with no bell; see DndIndicator.active.
+//
+// THE ACCENT MEANS "THE MUTE IS ON", and that is not a second job for it.
+// A count can only exist inside a mute -- NotificationState.record raises
+// unread only for what it silenced, and either edge of setDnd zeroes it -- so
+// the number is never the reason the colour is there, only a refinement of it:
+// the mute is on, and it has swallowed four. The colour that WOULD be saying
+// something else is critical, and nothing here is broken; that reasoning was
+// the badge's and it still holds, because a mode you chose reads as a state
+// and not as a fault.
+//
+// COLOUR AND GLYPH, NO BACKGROUND. "A mute you cannot see is a trap" is why
+// the badge was built in the first place, and bellOff differs from bell by a
+// thin diagonal across a small monochrome glyph at the end of a bar -- a swap
+// nobody catches out of the corner of an eye. The accent is what makes it
+// survive being read at a glance. A tinted background behind it would be a
+// second background inside a pill that already has one, which is the same
+// reason the count below takes the accent instead of a badge of its own.
+//
+// THE COUNT IS A DEBT -- see NotificationState.unread. It was the badge's
+// number first, and the badge gave it up for as long as this widget is drawn
+// so that exactly one thing on the bar is ever saying it. That handoff now
+// covers the whole badge rather than only its number, for the same reason.
 
 import QtQuick
 import "root:/"
@@ -44,6 +65,12 @@ Item {
     // How many went by unseen. Read once here so the width, the two colours
     // and the label all move together off one value.
     readonly property int unread: NotificationState.unread
+
+    // Whether the mute is on. Read here beside the count for the same reason:
+    // the glyph and its colour are two properties that have to change on the
+    // same frame, and a binding each into the singleton would be two
+    // subscriptions to one fact.
+    readonly property bool muted: NotificationState.dnd
 
     // Matches SettingsButton and PowerButton beside it; the note on why the
     // disc is six under the pill rather than ten lives in SettingsButton.
@@ -132,17 +159,28 @@ Item {
         Text {
             anchors.verticalCenter: parent.verticalCenter
 
-            text: Icons.bell
+            // THE ONE THING ON THE BAR THAT SAYS THE MUTE IS ON. The same
+            // pair island/DndControl.qml draws for the same state, so the row
+            // in the dashboard and the button on the bar are recognisably one
+            // setting rather than two things that happen to be about bells.
+            text: root.muted ? Icons.bellOff : Icons.bell
+
             font.family: Theme.fontFamily
             // Theme.controlSize, matching the two buttons beside it: inside a
             // shared pill these three have to read as one row of controls.
             font.pointSize: Theme.controlSize
 
-            // ACCENT WHILE SOMETHING IS OWED, and accent on hover, which are
-            // not in conflict: hover promises "this opens something" and a
-            // debt is a reason to open it. What would be wrong is a third
-            // colour, or critical -- nothing here is broken.
-            color: root.unread > 0 || mouse.containsMouse
+            // ACCENT WHILE THE MUTE IS ON, accent while something is owed, and
+            // accent on hover -- three conditions and one meaning each time,
+            // because a debt only exists inside a mute (see the header) and
+            // hover promises "this opens something", which a debt is a reason
+            // to do. What would be wrong is a fourth colour, or critical --
+            // nothing here is broken, the mute was asked for.
+            //
+            // Animated, so switching the mute with SUPER + N from anywhere on
+            // the desktop reads as this glyph changing rather than as a
+            // different glyph having always been there.
+            color: root.muted || root.unread > 0 || mouse.containsMouse
                 ? Theme.primary
                 : Theme.textOnSurfaceVariant
 
