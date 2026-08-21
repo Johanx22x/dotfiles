@@ -17,6 +17,7 @@
 
 import QtQuick
 import "root:/"
+import "root:/components"
 // SettingsSection lives two directories UP, and QML's implicit import covers a
 // file's own directory only.
 import "root:/modules/settings"
@@ -269,25 +270,14 @@ SettingsSection {
     // big monitor on its side moves the whole shell to the other one.
     // A permanent note saying so would be skipped by the third visit;
     // this one appears exactly when the draft would cause it.
-    Text {
+    SectionNote {
         visible: (root.spec.transform === 1 || root.spec.transform === 3)
             && (root.mon.transform ?? 0) !== 1 && (root.mon.transform ?? 0) !== 3
-
-        x: Theme.groupPadding
-        width: parent.width - Theme.groupPadding * 2
-        bottomPadding: 6
 
         text: "Portrait makes this screen taller than it is wide. "
             + "The bar, the launcher and the notifications go to the largest landscape screen, "
             + "so they will move to the other monitor."
-        wrapMode: Text.WordWrap
-        font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize - 1
         color: Theme.warning
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
     }
 
     // ---------------- Actions ----------------
@@ -390,22 +380,11 @@ SettingsSection {
     // as it was pressed -- so anything worth printing here is about the
     // compositor half, which is the half that may be waiting on a
     // reload.
-    Text {
+    SectionNote {
         visible: root.source.mainNoticeFor === root.mon.name && root.source.mainNotice !== ""
 
-        x: Theme.groupPadding
-        width: parent.width - Theme.groupPadding * 2
-        bottomPadding: 6
-
         text: root.source.mainNotice
-        wrapMode: Text.WordWrap
-        font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize - 1
         color: Theme.warning
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
     }
 
     // THE SCRIPT'S OWN WORDS, printed verbatim under the monitor they
@@ -414,25 +393,14 @@ SettingsSection {
     // disagree -- and what settles them is not the same on both flavors.
     // Shown rather than paraphrased so there is one copy of that
     // sentence, in the script that knows it.
-    Text {
+    SectionNote {
         visible: root.source.forgetNoticeFor === root.mon.name && root.source.forgetNotice !== ""
 
-        x: Theme.groupPadding
-        width: parent.width - Theme.groupPadding * 2
-        bottomPadding: 6
-
         text: root.source.forgetNotice
-        wrapMode: Text.WordWrap
-        font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize - 1
         // Amber and not the ordinary muted grey, for the same reason
         // the portrait note is: this is not an error, it is a state
         // that ends when you do the thing it asks.
         color: Theme.warning
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
     }
 
     // ---------------- The way back ----------------

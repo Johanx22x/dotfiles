@@ -93,6 +93,7 @@
 
 import QtQuick
 import "root:/"
+import "root:/components"
 // SettingsPage lives one directory UP, and QML's implicit import covers a
 // file's own directory only.
 import "root:/modules/settings"
@@ -293,23 +294,13 @@ SettingsPage {
         glyph: Icons.monitor
         title: "Monitors"
 
-        Text {
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
+        SectionNote {
             topPadding: 4
             bottomPadding: 4
 
             text: "No monitors reported. `desktop-monitors list` reports the ones actually "
                 + "being driven, so a screen that is switched off in the compositor does "
                 + "not appear here."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
     }
 }
