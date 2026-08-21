@@ -185,11 +185,20 @@ hl.window_rule({
 -- 8. SHORTCUTS
 ---------------------------------------------------------------
 
+-- THE DESCRIPTIONS ARE NOT DECORATION. The cheatsheet on SUPER + / lists a
+-- bind only if it carries one, and these two are the only window actions that
+-- live in this file instead of hyprland.lua's KEYBINDINGS section -- which is
+-- how they spent so long absent from a page that claims to show everything.
+-- The wording is the niri config's hotkey-overlay-title for the same chord,
+-- word for word: the two cheatsheets have to read the same, or "every keybind
+-- is the same in both" is a claim nobody can check from the screen.
+
 -- SUPER + F  : force fullscreen on the active window.
 --              Your safety net if a game opens in a tiny window.
-hl.bind("SUPER + F", hl.dsp.window.fullscreen())
+hl.bind("SUPER + F", hl.dsp.window.fullscreen(), { description = "Windows: fullscreen" })
 
 -- SUPER + SHIFT + F : "fake" fullscreen (the game thinks it is still
 --              windowed but takes the whole screen). Fixes games that
 --              minimise on alt-tab.
-hl.bind("SUPER + SHIFT + F", hl.dsp.window.fullscreen_state({ internal = 2, client = 0 }))
+hl.bind("SUPER + SHIFT + F", hl.dsp.window.fullscreen_state({ internal = 2, client = 0 }),
+        { description = "Windows: fake fullscreen (for games that minimise)" })

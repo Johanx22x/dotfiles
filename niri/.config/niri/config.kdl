@@ -671,8 +671,13 @@ binds {
     // Scroll through workspaces with the modifier held, as in hyprland.lua.
     // cooldown-ms keeps one flick of a free-spinning wheel from crossing six
     // workspaces at once.
-    Mod+WheelScrollDown cooldown-ms=150 { focus-workspace-down; }
-    Mod+WheelScrollUp cooldown-ms=150 { focus-workspace-up; }
+    //
+    // The titles are hyprland.lua's descriptions for the same two chords, word
+    // for word. Without them the cheatsheet on SUPER + / skips these binds
+    // here and lists them under Hyprland, which turns the one page that proves
+    // both compositors answer the same keys into the page that disproves it.
+    Mod+WheelScrollDown cooldown-ms=150 hotkey-overlay-title="Workspaces: next existing workspace" { focus-workspace-down; }
+    Mod+WheelScrollUp cooldown-ms=150 hotkey-overlay-title="Workspaces: previous existing workspace" { focus-workspace-up; }
 
     // ---- Capture (parity, two of them rerouted) -------------------------
     // hyprshot survives here: it is a wrapper over grim and slurp, both of
