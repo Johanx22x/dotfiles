@@ -188,6 +188,11 @@ GENERATED_NIRI="$HOME/.config/niri/tweaks.kdl"
 # reads sockets, and the answer cannot change inside one run of this script.
 FLAVOR="$(compositor)"
 
+# Set when the value that changed is one the generated file expresses as a
+# KEYBIND rather than as config, which is a different apply path -- see
+# ptt_lua. Off by default so the ordinary case still costs one `hyprctl eval`.
+RELOAD_BINDS=0
+
 # key|minimum|maximum|default. The bounds are the settings window's range as
 # well: it reads them from nowhere, so the two have to agree, and this is the
 # copy that gets to refuse.
@@ -227,6 +232,10 @@ readonly -A CHOICES=(
     # second reader for one boolean is the arrangement the header of this
     # script exists to argue against.
     [cursor-auto]="0 1"
+    # Whether the microphone is gated by a held key at all. The key itself is
+    # `ptt-key`, which is a keysym rather than a choice and so is validated
+    # further down with the layouts and the cursor theme.
+    [ptt]="0 1"
 )
 
 # How many layouts an xkb keymap can hold. See the header: this is the
@@ -261,6 +270,7 @@ Keys:
   sensitivity accel natural-scroll      mouse
   repeat-rate repeat-delay layouts      keyboard
   cursor-theme cursor-size cursor-auto  pointer
+  ptt ptt-key                           microphone
 
 `accel` is adaptive or flat, `natural-scroll` is 0 or 1, `sensitivity` is in
 hundredths (-100..100 is libinput's -1.0..1.0), and `cursor-theme` is the name
@@ -269,6 +279,12 @@ of a directory under /usr/share/icons or ~/.icons.
 `cursor-auto` is 0 or 1. With 1, `cursor-match` rewrites `cursor-theme` on
 every wallpaper change to whichever installed theme sits closest to the new
 accent colour. Picking a theme by hand is what turns it off.
+
+`ptt` is 0 or 1 and is push-to-talk: with 1, the microphone is closed and
+`ptt-key` opens it for as long as it is held. `ptt-key` is one keysym name --
+`backslash`, `F13`, `space` -- or `code:NN` for a key xkb has no name for, and
+never a chord. HYPRLAND ONLY: niri cannot run anything on key release, so both
+keys are ignored there and the settings window does not offer them.
 
 `layouts` is the whole keyboard cycle as a comma-separated list of xkb codes,
 up to four of them:
@@ -350,6 +366,12 @@ current() {
         # The same value both tracked configs carry, on purpose -- see the note
         # on the defaults above.
         layouts)        printf 'us' ;;
+        # OFF. Turning push-to-talk on closes the microphone, and a machine
+        # where nobody asked for it must not come up muted.
+        ptt)            printf '0' ;;
+        # The key beside Enter on a us keymap. Held down it still types its
+        # backslash, because the bind is transparent -- see ptt_lua.
+        ptt-key)        printf 'backslash' ;;
     esac
 }
 
@@ -433,6 +455,26 @@ validate() {
         [[ -d /usr/share/icons/$value || -d $HOME/.icons/$value ]] || {
             echo "desktop-tweak: no cursor theme called '$value'." >&2
             echo "  Installed: $(themes | tr '\n' ' ')" >&2
+            exit 2
+        }
+        return
+    fi
+
+    if [[ $key == ptt-key ]]; then
+        # ONE KEY AND NOT A CHORD. The bind is written with ignore_mods, which
+        # makes a modifier in the chord meaningless -- it would fire with or
+        # without it -- so accepting `SUPER + backslash` here would store a
+        # value that does not mean what it reads like.
+        [[ $value != *+* ]] || {
+            echo "desktop-tweak: ptt-key takes a single key, not a chord." >&2
+            exit 2
+        }
+        # A keysym name (backslash, F13, space) or a raw keycode for the keys
+        # xkb has no name for. Not checked against a list of keysyms: xkb has
+        # thousands, the settings window sends the name it captured from the
+        # key itself, and a list kept here would be a copy going stale.
+        [[ $value =~ ^[A-Za-z0-9_]+$ || $value =~ ^code:[0-9]+$ ]] || {
+            echo "desktop-tweak: '$value' is not a keysym name or a code:NN keycode." >&2
             exit 2
         }
         return
@@ -610,6 +652,63 @@ hl.config({
 LUA
 }
 
+# The push-to-talk binds, for Hyprland only.
+#
+# NOT PART OF config_lua, although both end up in the same generated file, and
+# the difference matters: config_lua is also what `hyprctl eval` pushes into
+# the running session, and it can be pushed twice with no harm because
+# `hl.config` overwrites. Binds do not overwrite -- hl.bind APPENDS, and every
+# bind matching a chord fires -- so eval'ing this twice would open and close
+# the microphone twice per press. Changing it goes through `hyprctl reload`
+# instead, which is the one apply path that starts from an empty bind list.
+#
+# WHY THE COMPOSITOR GATES THE MICROPHONE AT ALL: Discord cannot read the
+# keyboard while it is unfocused on Wayland, so its own push-to-talk never
+# fires. It is left on voice activity and the microphone is opened and closed
+# underneath it. Its own push-to-talk shortcut has to stay UNBOUND -- with
+# both, it latches, which is an XWayland bug nothing here can undo.
+#
+# Two options carry the feel of it:
+#   transparent   the key still reaches the focused window, so holding it to
+#                 talk does not stop it typing.
+#   ignore_mods   it opens whether or not a modifier happens to be down, which
+#                 mid-game is most of the time.
+#
+# The shell does the muting rather than wpctl: it already holds the PipeWire
+# node, so nothing is spawned to flip it, and the state lives next to the
+# switch that turns it on. The cost is that this needs the shell up -- if it
+# dies with the microphone closed, XF86AudioMicMute is still bound and still
+# opens it.
+#
+# WRITTEN LAST in the generated file on purpose. Everything above it has
+# already run by the time Lua reaches this, so if a future Hyprland renames an
+# option and this line throws, the gaps and the cursor still got applied --
+# hyprland.lua reads the file through a pcall.
+ptt_lua() {
+    [[ $(current ptt) == 1 ]] || return 0
+
+    local key
+    key=$(current ptt-key)
+
+    cat <<LUA
+
+hl.bind("$key", hl.dsp.exec_cmd("qs ipc call mic open"),
+    { transparent = true, ignore_mods = true, description = "Media: hold to talk" })
+hl.bind("$key", hl.dsp.exec_cmd("qs ipc call mic close"),
+    { transparent = true, ignore_mods = true, release = true })
+LUA
+}
+
+# NO KDL COUNTERPART, and it is not an omission. niri 26.04 has no way to run
+# anything when a key is RELEASED: `niri validate` rejects on-release, release
+# and key-up, it does not implement hyprland-global-shortcuts-v1, and the
+# portal route dead-ends because xdg-desktop-portal-gnome proxies to
+# org.gnome.Shell, which niri does not expose. Upstream niri-wm/niri#3621 adds
+# press/release binds and is approved but unmerged; when it lands this becomes
+# a generate_niri counterpart and the shell side does not change. Until then
+# the settings window hides the section on niri rather than offering a switch
+# that would do nothing.
+
 # The same values as KDL, for niri. Four things are spelled differently enough
 # to be worth writing down rather than reading off the diff:
 #
@@ -721,6 +820,20 @@ apply_live() {
     # is exactly the question `compositor can live-config` answers.
     if compositor can live-config; then
         hyprctl eval "$(config_lua)" >/dev/null || true
+    fi
+
+    # A BIND CANNOT BE EVAL'D IN, only reloaded. hl.bind appends to the list
+    # instead of replacing, so pushing the new binds would leave the old ones
+    # firing too, and there is no eval that removes the bind on a key this
+    # script no longer remembers. `hyprctl reload` re-runs hyprland.lua from an
+    # empty bind list and picks up the generated file at the end of it, which
+    # is the only apply that cannot leave a stale key open.
+    #
+    # Costs a reload of everything, and that is affordable because it happens
+    # when push-to-talk is switched or rebound -- twice in the life of a
+    # machine -- and not while a slider is being dragged.
+    if (( RELOAD_BINDS )) && [[ $FLAVOR == hyprland ]]; then
+        hyprctl reload >/dev/null || true
     fi
 
     local theme size
@@ -836,6 +949,8 @@ generate_hypr() {
         fi
         echo "hl.env(\"XCURSOR_SIZE\", \"$size\")"
         echo "hl.env(\"HYPRCURSOR_SIZE\", \"$size\")"
+
+        ptt_lua
     } > "$GENERATED_HYPR"
 }
 
@@ -861,6 +976,7 @@ case "${1:-show}" in
     set)
         [[ $# -eq 3 ]] || usage
         validate "$2" "$3"
+        [[ $2 == ptt || $2 == ptt-key ]] && RELOAD_BINDS=1
         VALUES[$2]=$3
         save
         generate
@@ -869,12 +985,18 @@ case "${1:-show}" in
 
     reset)
         [[ $# -eq 2 ]] || usage
+        [[ $2 == ptt || $2 == ptt-key ]] && RELOAD_BINDS=1
         unset "VALUES[$2]"
         save
         generate
         apply_live
         ;;
 
+    # NO RELOAD HERE, although this is the command that re-applies everything.
+    # The binds are not eval'd in, they are read out of the generated file by
+    # the config itself, so a compositor that has just started already has
+    # them -- and `apply` is exactly the thing somebody would one day call from
+    # a start hook, where a reload would re-run the hook that called it.
     apply)
         generate
         apply_live
@@ -902,13 +1024,15 @@ case "${1:-show}" in
 
     show)
         printf '%-16s %-14s %s\n' KEY VALUE RANGE
-        local_keys=(gaps-in gaps-out rounding border sensitivity accel natural-scroll repeat-rate repeat-delay layouts cursor-theme cursor-size cursor-auto)
+        local_keys=(gaps-in gaps-out rounding border sensitivity accel natural-scroll repeat-rate repeat-delay layouts cursor-theme cursor-size cursor-auto ptt ptt-key)
         for key in "${local_keys[@]}"; do
             if [[ -n ${NUMERIC[$key]:-} ]]; then
                 IFS='|' read -r min max _ <<< "${NUMERIC[$key]}"
                 range="$min..$max"
             elif [[ -n ${CHOICES[$key]:-} ]]; then
                 range="${CHOICES[$key]// /, }"
+            elif [[ $key == ptt-key ]]; then
+                range="a keysym name, or code:NN"
             elif [[ $key == layouts ]]; then
                 # Not the ninety-nine codes, which would bury the rest of the
                 # table. `desktop-tweak layouts` is the list; what belongs here

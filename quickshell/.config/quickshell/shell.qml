@@ -38,6 +38,15 @@ ShellRoot {
         Component.onCompleted: ReplayState.armed
     }
 
+    // THE MICROPHONE CLOSES ITSELF, and this line is what lets it, for the
+    // same reason as the one above: nothing asks for Microphone until the
+    // push-to-talk key is pressed, and by then it is far too late -- the whole
+    // point is that the microphone was already shut when the session started.
+    // With push-to-talk off this costs one singleton and changes nothing.
+    Scope {
+        Component.onCompleted: Microphone.armed
+    }
+
     // A Bar on each screen that is meant to have one -- the main screen alone
     // until the Bar page says otherwise. See Screens.qml for how the main one
     // is chosen and why it is no longer a model name written out five times.
