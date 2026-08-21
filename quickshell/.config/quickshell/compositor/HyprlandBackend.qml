@@ -51,6 +51,9 @@ CompositorBackend {
         // One keyboard focus for the whole session, so a grabbing surface is
         // heard from any monitor.
         globalKeyboardGrab: true,
+        // `release = true` on a second bind for the same key, which is what
+        // desktop-tweak writes into the generated tweaks.lua.
+        pushToTalk: true,
         logout: true
     })
 

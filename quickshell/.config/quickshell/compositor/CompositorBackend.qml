@@ -112,6 +112,16 @@ QtObject {
         // the grab is global, and anywhere else they have to follow the focus or
         // they come up on the wrong monitor and swallow nothing.
         globalKeyboardGrab: false,
+        // Can the shell gate the microphone on a key being HELD DOWN?
+        //
+        // Push-to-talk, and the thing it really asks is whether the compositor
+        // can run something when a key is RELEASED as well as when it is
+        // pressed. Everything else about the feature is the shell's -- it owns
+        // the PipeWire node and the switch -- so this is the one part that can
+        // be missing, and where it is the settings window drops the section
+        // rather than offering a switch that would close the microphone with
+        // no way to open it again.
+        pushToTalk: false,
         // Can the session be ended by asking the compositor?
         logout: false
     })
