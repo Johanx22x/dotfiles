@@ -85,7 +85,8 @@ SettingsPage {
         "laptop", "brightness", "backlight", "keyboard", "layout",
         "language", "indicator", "monitor", "monitors", "screen",
         "display", "second monitor", "per monitor", "reset", "defaults",
-        "notifications", "notification history", "bell", "missed"]
+        "notifications", "notification history", "bell", "missed",
+        "updates", "installer", "out of date", "behind"]
 
     // How many of the connected monitors are carrying a bar. Used for two
     // things: to keep the last one from being switched off, and to decide
@@ -435,6 +436,41 @@ SettingsPage {
         }
 
         ToggleRow {
+            glyph: Icons.update
+            label: "Updates"
+            checked: Config.barWidget(root.barKey, "updates")
+            onToggled: value => Config.setBarWidget(root.barKey, "updates", value)
+        }
+
+        // The same courtesy the gear gets below, for the same reason: this
+        // switch takes away a notice rather than a control, and the whole
+        // point of that notice is that nobody has to remember to go looking.
+        // Somebody turning it off should be told what they have just made
+        // silent, and where the answer still is.
+        //
+        // "FROM THIS BAR", scoped like the line under the gear: with two bars
+        // the other screen still has its flag.
+        Text {
+            visible: !Config.barWidget(root.barKey, "updates")
+
+            x: Theme.groupPadding
+            width: parent.width - Theme.groupPadding * 2
+            bottomPadding: 6
+
+            text: "This bar will not say when the machine has fallen behind. "
+                + "The Updates page still does, and so does "
+                + "`qs ipc call updates status`."
+            wrapMode: Text.WordWrap
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize - 2
+            color: Theme.textOnSurfaceVariant
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
+            }
+        }
+
+        ToggleRow {
             glyph: Icons.settings
             label: "Settings button"
             checked: Config.barWidget(root.barKey, "settingsButton")
@@ -474,7 +510,7 @@ SettingsPage {
         // monitor's exceptions / Drop them and follow All again", which was
         // the only way to get a screen back to inheriting once it had
         // disagreed. With nothing left to inherit from, the sentence has no
-        // referent -- but the button still has a job, because eight
+        // referent -- but the button still has a job, because that many
         // switches is enough that "put this bar back" is a thing to want
         // and clicking eight times is not it.
         //
