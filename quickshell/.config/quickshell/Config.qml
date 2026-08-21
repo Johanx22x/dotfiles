@@ -101,18 +101,54 @@ Singleton {
         recordingMicrophone: true,
         recordingMicrophoneDevice: "",
         recordingAudioCodec: "aac",
-        barOverrides: ({}),
-        // Every widget on by default: this is the bar as designed, and the
-        // switches below are for taking things away rather than for building
-        // it up from nothing.
-        barLogo: true,
-        barActiveWindow: true,
-        barTray: true,
-        barBattery: true,
-        barKeyboardLayout: true,
-        barClock: true,
-        barSettingsButton: true,
-        barIsland: true
+        // The set a bar starts with, and the only thing in this file that
+        // decides what a NEW bar shows. Every bar keeps its own copy from the
+        // first switch touched on it, so this is a seed and not a live value:
+        // changing it moves the bars nobody has customised and leaves the rest
+        // alone. See the widget section below for the whole shape.
+        //
+        // WHY THESE FIVE AND NOT ALL EIGHT. The question asked of each widget
+        // was whether a SECOND copy of it, on a screen plugged in beside the
+        // first, is worth anything -- because that is the case this seed is
+        // for, and the case the old base never had to answer.
+        //
+        // Three of them read the screen they are on, so a second copy says
+        // something new: the focused window title, and the clock and the logo
+        // that make a strip of pixels read as this desktop's bar rather than
+        // as a gap. The other two are ways back rather than readings. The
+        // settings button is the only pointer-reachable way into this window,
+        // which is the same argument the power button already wins; the tray
+        // is where an application with no window of its own lives, and a
+        // session where Discord is minimised to a tray that is not drawn is a
+        // session with no way to reach it.
+        //
+        // The three that start off are the three that would say it twice. The
+        // island narrates the desktop and there is only one desktop -- its own
+        // header has made that argument since the bar learned to repeat, and
+        // SUPER + D opens the dashboard whether or not it is drawn. The
+        // peripheral battery is a fact about the mouse, not about the monitor,
+        // and this repo has already had to stop it warning once per bar. The
+        // keyboard layout is one layout for the whole session and hides itself
+        // below two of them anyway.
+        //
+        // THIS CHANGES WHAT A FRESH CLONE COMES UP WITH, and that is the cost
+        // being accepted rather than an oversight. The bar used to arrive with
+        // everything on -- "the bar as designed", with the switches there to
+        // take things away. One seed now has to serve the first bar and the
+        // fourth, and a seed tuned for the first would put a second island and
+        // a second tray on every screen anybody adds. Nobody with an existing
+        // config sees this: what they had is written out per monitor the first
+        // time this version loads.
+        barWidgets: ({
+            logo: true,
+            activeWindow: true,
+            island: false,
+            tray: true,
+            battery: false,
+            keyboardLayout: false,
+            clock: true,
+            settingsButton: true
+        })
     })
 
     // Where the cross-application state files live. Not statePath(): that
@@ -927,13 +963,45 @@ Singleton {
     property alias use24Hour: adapter.use24Hour
     property alias showDate: adapter.showDate
 
-    // Which widgets the bar shows.
+    // ---------------- Which widgets each bar shows ----------------
     //
-    // NOT EVERY WIDGET IS HERE, and the ones missing are missing on purpose.
-    // The workspaces and the power button have no switch: the first is how you
-    // know where you are, and the last is the only pointer-reachable way to end
-    // the session. A settings window that can hide the way out is a settings
-    // window that can strand somebody.
+    // ONE COMPLETE SET PER MONITOR, WITH NO SHARED BASE ABOVE THEM. Every bar
+    // is configured on its own: `barWidgetsByMonitor` maps a screenKey() to
+    // the eight answers for that screen, and nothing a bar says can move
+    // another one. A monitor with no entry shows `defaults.barWidgets`, the
+    // seed at the top of this file, and gets an entry of its own the first
+    // time a switch on it is touched.
+    //
+    // THIS REPLACES A BASE PLUS EXCEPTIONS, and the reasoning that shape had
+    // is kept here rather than deleted, because it was not wrong -- it stopped
+    // being what this desktop wanted. The old model had eight `barLogo`-style
+    // switches saying what EVERY bar showed and a sparse `barOverrides` map
+    // holding only where one monitor disagreed, per widget. What it bought was
+    // real: plugging in a monitor gave you the bar you had already designed,
+    // and changing your mind about the tray moved every bar that had never had
+    // an opinion about trays.
+    //
+    // It was dropped because the price of that is a control nobody can read.
+    // Inheritance meant every switch answered two questions at once -- what
+    // this bar shows, and whether this bar has an opinion -- and the settings
+    // page needed a scope selector saying which of the two you were editing
+    // before any switch below it meant anything. On this machine, with one bar
+    // switched on, "All" and "that monitor" did the same thing and the
+    // selector was furniture. With two bars it was worse than furniture: the
+    // switches looked identical whichever way it was pointed, and a change
+    // landing on the wrong bar is invisible from a window that covers the
+    // other screen.
+    //
+    // WHAT IS GIVEN UP, said plainly. There is no longer any way to change one
+    // thing on every bar at once; with two bars that is two visits to the same
+    // switch, and with four it is four. That is the trade accepted for a page
+    // where every switch means exactly what it is next to.
+    //
+    // NOT EVERY WIDGET IS IN THE SET, and the ones missing are missing on
+    // purpose. The workspaces and the power button have no switch: the first
+    // is how you know where you are, and the last is the only pointer-reachable
+    // way to end the session. A settings window that can hide the way out is a
+    // settings window that can strand somebody.
     //
     // THE ISLAND USED TO BE ON THAT LIST and no longer is, because the argument
     // for it stopped holding when the bar could repeat. It was "this is how you
@@ -941,139 +1009,214 @@ Singleton {
     // having one per monitor -- a second copy narrating the same desktop
     // beside the first is noise. It is also not a way out of anywhere:
     // SUPER + D opens the dashboard whether or not the island is drawn, which
-    // is the test the power button fails and this passes.
-    property alias barLogo: adapter.barLogo
-    property alias barActiveWindow: adapter.barActiveWindow
-    property alias barTray: adapter.barTray
-    property alias barBattery: adapter.barBattery
-    property alias barKeyboardLayout: adapter.barKeyboardLayout
-    property alias barClock: adapter.barClock
-    property alias barSettingsButton: adapter.barSettingsButton
-    property alias barIsland: adapter.barIsland
+    // is the test the power button fails and this passes. It is now also the
+    // clearest case for the seed starting a new bar without one.
 
-    // ---------------- ...and which of them, on which monitor ----------------
+    // The widget names, in bar order, derived from the seed rather than
+    // written out beside it. One list and one set would be two places to add a
+    // widget and one place to forget it; `Object.keys` on an object literal
+    // hands them back in the order they were written, which is the order the
+    // page draws them in.
+    readonly property var barWidgets: Object.keys(root.defaults.barWidgets)
+
+    // screenKey() -> { widget: bool }. A stored set is written whole and holds
+    // every widget, so reading one needs no second lookup and a bar cannot end
+    // up half-inheriting from something that no longer exists.
     //
-    // A BASE PLUS EXCEPTIONS, not one independent set per monitor. The seven
-    // switches above stay what every bar shows; barOverrides holds only where a
-    // given monitor disagrees. Two things follow from that shape and both are
-    // the reason for it: plugging in a monitor gives you the bar you already
-    // designed rather than an empty one to rebuild, and changing your mind
-    // about the tray moves every bar that never had an opinion about trays.
-    //
-    // So an override is stored only for the widgets actually touched on that
-    // monitor. `{}` and "same as the base" are the same state, which is what
-    // makes "reset this monitor" a deletion rather than a copy of the base.
-    readonly property var barWidgets: ["logo", "activeWindow", "island", "tray",
-        "battery", "keyboardLayout", "clock", "settingsButton"]
+    // A MONITOR IS WRITTEN IN LAZILY, on the first switch touched on it, and
+    // not when it is connected. A screen seen once at somebody else's desk
+    // should not leave a permanent record behind, and a bar nobody has
+    // customised is better described by the seed -- which can improve -- than
+    // by a frozen copy of what the seed said the day it was plugged in.
+    property alias barWidgetsByMonitor: adapter.barWidgetsByMonitor
 
-    property alias barOverrides: adapter.barOverrides
-
-    // The base value. A switch statement and not string-built property names:
-    // `root["bar" + capitalise(widget)]` would work until a widget is renamed,
-    // and then it would fail at runtime on one monitor rather than at load.
-    function barBase(widget: string): bool {
-        switch (widget) {
-        case "logo":
-            return root.barLogo;
-        case "activeWindow":
-            return root.barActiveWindow;
-        case "tray":
-            return root.barTray;
-        case "battery":
-            return root.barBattery;
-        case "keyboardLayout":
-            return root.barKeyboardLayout;
-        case "clock":
-            return root.barClock;
-        case "settingsButton":
-            return root.barSettingsButton;
-        case "island":
-            return root.barIsland;
-        }
-
-        return false;
-    }
-
-    function setBarBase(widget: string, on: bool): void {
-        switch (widget) {
-        case "logo":
-            root.barLogo = on;
-            break;
-        case "activeWindow":
-            root.barActiveWindow = on;
-            break;
-        case "tray":
-            root.barTray = on;
-            break;
-        case "battery":
-            root.barBattery = on;
-            break;
-        case "keyboardLayout":
-            root.barKeyboardLayout = on;
-            break;
-        case "clock":
-            root.barClock = on;
-            break;
-        case "settingsButton":
-            root.barSettingsButton = on;
-            break;
-        case "island":
-            root.barIsland = on;
-            break;
-        }
-    }
-
-    // What a given bar actually shows. An empty key is the base itself, which
-    // is what the settings page passes while it is on "All monitors".
+    // What a given bar actually shows. Per widget rather than per set, so a
+    // widget added to the seed after a monitor was customised appears on that
+    // monitor too, with the seed's answer, instead of being read as "off"
+    // because the stored set predates it.
     function barWidget(key: string, widget: string): bool {
-        const over = key ? root.barOverrides?.[key] : null;
+        const set = key ? root.barWidgetsByMonitor?.[key] : null;
 
-        if (over && over[widget] !== undefined)
-            return over[widget] === true;
+        if (set && set[widget] !== undefined)
+            return set[widget] === true;
 
-        return root.barBase(widget);
+        return root.defaults.barWidgets[widget] === true;
+    }
+
+    // The complete set for one bar: what is stored, over the seed for anything
+    // it does not mention. Every value comes back a real bool, because this is
+    // what gets written back and a `1` read out of a hand-edited file should
+    // not survive a round trip.
+    function barWidgetSet(key: string): var {
+        const set = {};
+
+        for (const widget of root.barWidgets)
+            set[widget] = root.barWidget(key, widget);
+
+        return set;
     }
 
     function setBarWidget(key: string, widget: string, on: bool): void {
-        if (!key) {
-            root.setBarBase(widget, on);
+        // No key is no bar. The old model read an empty key as "the base", and
+        // there is no base any more -- silently writing under "" would build a
+        // set nothing ever reads.
+        if (!key)
+            return;
+
+        // Assigned whole rather than mutated in place, at both levels:
+        // JsonAdapter watches the property, and writing through an object it
+        // already holds changes the value without ever telling it to save. It
+        // is also what makes the `visible:` bindings in Bar.qml re-run -- see
+        // the note above Bar.widget().
+        const next = Object.assign({}, root.barWidgetsByMonitor);
+        const set = root.barWidgetSet(key);
+
+        set[widget] = on;
+        next[key] = set;
+
+        root.barWidgetsByMonitor = next;
+    }
+
+    // Whether this bar is still showing the seed. Used by the settings page to
+    // decide whether "reset" has anything to undo: a reset offered on a bar
+    // that already matches is a button that does nothing, and one that has been
+    // clicked once with no visible result is one nobody trusts again.
+    function barIsDefault(key: string): bool {
+        return root.barWidgets.every(widget => root.barWidget(key, widget) === (root.defaults.barWidgets[widget] === true));
+    }
+
+    // Back to the seed, by DELETING the entry rather than by writing a copy of
+    // the seed into it. The two look identical on screen and are not the same
+    // state: a deleted entry follows the seed from then on, a copy freezes
+    // today's answer and would quietly stop matching the day a widget is added.
+    function resetBar(key: string): void {
+        if (!key || !root.barWidgetsByMonitor?.[key])
+            return;
+
+        const next = Object.assign({}, root.barWidgetsByMonitor);
+        delete next[key];
+        root.barWidgetsByMonitor = next;
+    }
+
+    // ---------------- Reading a config written before the split ----------------
+    //
+    // WHY THIS EXISTS: the old keys cannot be read through the adapter. A
+    // JsonAdapter writes every property it declares, so leaving `barLogo` and
+    // friends declared would keep them in the file forever, and removing them
+    // -- which is the point -- means the next write drops them. So the old
+    // shape is read once out of the file's raw TEXT, before any write, folded
+    // into one complete set per monitor, and never looked at again.
+    //
+    // WHICH MONITORS GET AN ENTRY: every key the old file named, plus every
+    // screen connected right now. The first is what it knew about; the second
+    // is what somebody can see. Together they cover the case that has no key
+    // anywhere in the file -- a single-monitor machine that customised its bar
+    // and never opened the display page, whose `barMonitors` is empty because
+    // empty meant "the main one".
+    //
+    // A monitor the old file did not name and that is not plugged in gets no
+    // entry, and therefore the seed if its bar is ever switched on. That is the
+    // one place the old and new models give different answers, and it is the
+    // new behaviour rather than a loss: nothing was on screen to change.
+    //
+    // The map is written out rather than built from `"bar" + capitalise()`,
+    // which is the same choice the old `barBase` switch statement made and for
+    // a reason that still holds: a name assembled at runtime fails at runtime,
+    // on one monitor, long after the rename that broke it.
+    readonly property var legacyBarKeys: ({
+        logo: "barLogo",
+        activeWindow: "barActiveWindow",
+        island: "barIsland",
+        tray: "barTray",
+        battery: "barBattery",
+        keyboardLayout: "barKeyboardLayout",
+        clock: "barClock",
+        settingsButton: "barSettingsButton"
+    })
+
+    // The parsed old shape, held until it can be folded. It usually folds on
+    // the first attempt; it is kept because the fold needs the screen list and
+    // this singleton can, in principle, be built before the compositor has
+    // named a single output -- at which point throwing the old settings away
+    // because nothing was plugged in yet would be the worst possible moment.
+    property var pendingBarMigration: null
+
+    function migrateBarWidgets(stored: var): void {
+        if (!stored || typeof stored !== "object")
+            return;
+
+        // Already in the new shape. Also the normal path on every reload after
+        // the first write, and on every launch from then on.
+        if (stored.barWidgetsByMonitor && Object.keys(stored.barWidgetsByMonitor).length > 0)
+            return;
+
+        const overrides = (stored.barOverrides && typeof stored.barOverrides === "object") ? stored.barOverrides : {};
+
+        // The base the old model resolved against. A key the file does not
+        // carry falls back to TRUE and not to the seed: true is what the old
+        // defaults said, and reconstructing that model with this model's
+        // answers would be reading the file wrong on purpose.
+        const base = {};
+        let legacy = Object.keys(overrides).length > 0;
+
+        for (const widget of root.barWidgets) {
+            const value = stored[root.legacyBarKeys[widget]];
+
+            if (typeof value === "boolean") {
+                base[widget] = value;
+                legacy = true;
+            } else {
+                base[widget] = true;
+            }
+        }
+
+        if (!legacy) {
+            root.pendingBarMigration = null;
             return;
         }
 
-        // Assigned whole rather than mutated in place: JsonAdapter watches the
-        // property, and writing through a nested object it already holds
-        // changes the value without ever telling it to save.
-        const next = Object.assign({}, root.barOverrides);
-        const forScreen = Object.assign({}, next[key]);
+        const keys = [];
+        const add = key => {
+            if (key && keys.indexOf(key) < 0)
+                keys.push(key);
+        };
 
-        // Agreeing with the base is stored as "no opinion", so a monitor that
-        // has been switched back and forth ends up inheriting again instead of
-        // carrying a frozen copy of whatever the base said at the time.
-        if (on === root.barBase(widget))
-            delete forScreen[widget];
-        else
-            forScreen[widget] = on;
+        Object.keys(overrides).forEach(add);
+        (Array.isArray(stored.barMonitors) ? stored.barMonitors : []).forEach(add);
+        if (typeof stored.mainMonitor === "string")
+            add(stored.mainMonitor);
+        Quickshell.screens.forEach(screen => add(root.screenKey(screen)));
 
-        if (Object.keys(forScreen).length === 0)
-            delete next[key];
-        else
-            next[key] = forScreen;
-
-        root.barOverrides = next;
-    }
-
-    function barHasOverride(key: string): bool {
-        const over = key ? root.barOverrides?.[key] : null;
-        return !!over && Object.keys(over).length > 0;
-    }
-
-    function resetBarOverride(key: string): void {
-        if (!root.barHasOverride(key))
+        // No key to write under yet. Keep the old shape and try again when a
+        // screen appears; see pendingBarMigration.
+        if (keys.length === 0) {
+            root.pendingBarMigration = stored;
             return;
+        }
 
-        const next = Object.assign({}, root.barOverrides);
-        delete next[key];
-        root.barOverrides = next;
+        const next = {};
+
+        for (const key of keys) {
+            const over = (overrides[key] && typeof overrides[key] === "object") ? overrides[key] : {};
+            const set = {};
+
+            for (const widget of root.barWidgets)
+                set[widget] = over[widget] !== undefined ? over[widget] === true : base[widget];
+
+            next[key] = set;
+        }
+
+        root.pendingBarMigration = null;
+        root.barWidgetsByMonitor = next;
+    }
+
+    Connections {
+        target: Quickshell
+
+        function onScreensChanged(): void {
+            if (root.pendingBarMigration)
+                root.migrateBarWidgets(root.pendingBarMigration);
+        }
     }
 
     // ---------------- Notifications ----------------
@@ -1249,14 +1392,9 @@ Singleton {
         adapter.nightLightScheduled = root.defaults.nightLightScheduled;
         adapter.nightLightFrom = root.defaults.nightLightFrom;
         adapter.nightLightTo = root.defaults.nightLightTo;
-        adapter.barLogo = root.defaults.barLogo;
-        adapter.barActiveWindow = root.defaults.barActiveWindow;
-        adapter.barTray = root.defaults.barTray;
-        adapter.barBattery = root.defaults.barBattery;
-        adapter.barKeyboardLayout = root.defaults.barKeyboardLayout;
-        adapter.barClock = root.defaults.barClock;
-        adapter.barSettingsButton = root.defaults.barSettingsButton;
-        adapter.barIsland = root.defaults.barIsland;
+        // Every bar back to the seed, which is a deletion and not eight
+        // assignments: with no shared base left there is nothing to restore
+        // TO except the seed, and an empty map is how a bar says it follows it.
         // Back to one bar on the monitor the rule picks, with no monitor
         // holding an opinion of its own. The Hyprland side is deliberately NOT
         // reset from here: desktop-monitors owns that file, and a "restore
@@ -1264,7 +1402,7 @@ Singleton {
         // rules would be reaching a long way outside the shell.
         adapter.mainMonitor = root.defaults.mainMonitor;
         adapter.barMonitors = root.defaults.barMonitors;
-        adapter.barOverrides = ({});
+        adapter.barWidgetsByMonitor = ({});
         // Back to recording whatever screen the shell ends up on. This one
         // restarts the replay buffer as it lands -- see ReplayState.monitor --
         // which costs the seconds it was holding, and that is the same cost
@@ -1332,11 +1470,33 @@ Singleton {
 
         onFileChanged: reload()
         onAdapterUpdated: writeAdapter()
-        onLoaded: root.loaded = true
+        // TWO THINGS ON LOAD, and the order matters. The migration reads the
+        // raw text and rewrites the bar shape, so it has to finish before
+        // anything is told the config is usable -- a consumer that armed itself
+        // on `loaded` would otherwise see the pre-migration values for one turn.
+        onLoaded: {
+            try {
+                root.migrateBarWidgets(JSON.parse(file.text()));
+            } catch (e) {
+                // A file this cannot parse is one FileView has already
+                // complained about; there is nothing here worth a second
+                // error, and the adapter has kept its defaults either way.
+            }
+        
+            root.loaded = true;
+        }
         onLoadFailed: {
             root.loaded = true;
             writeAdapter();
         }
+
+        // The one thing that has to happen between the file being read and
+        // anything being written back: a config in the old bar shape is folded
+        // into the new one from the RAW TEXT, because the old keys are no
+        // longer declared on the adapter and the first write would drop them.
+        // See the migration section above. It parses the file a second time,
+        // once per load, which is a few hundred bytes of JSON and is the price
+        // of not keeping a dead shape declared forever.
 
         JsonAdapter {
             id: adapter
@@ -1369,15 +1529,13 @@ Singleton {
             property bool recordingMicrophone: true
             property string recordingMicrophoneDevice: ""
             property string recordingAudioCodec: "aac"
-            property var barOverrides: ({})
-            property bool barLogo: true
-            property bool barActiveWindow: true
-            property bool barTray: true
-            property bool barBattery: true
-            property bool barKeyboardLayout: true
-            property bool barClock: true
-            property bool barSettingsButton: true
-            property bool barIsland: true
+            // One complete widget set per monitor; see the widget section
+            // above. The eight `barLogo`-style booleans and the sparse
+            // `barOverrides` map that used to sit here are gone, and a file
+            // still carrying them is folded into this one on load -- which is
+            // also why they cannot stay declared: an adapter writes back every
+            // property it declares, so the old keys would never leave the file.
+            property var barWidgetsByMonitor: ({})
         }
     }
 }
