@@ -14,6 +14,20 @@
 # at it is SC1071, an error, which would fail this check for no reason. The
 # shebang is the only thing that actually knows what a file is.
 #
+# AND THE .sh SUFFIX IS NOT A CONVENIENCE, so do not tidy it away on the
+# grounds that the shebang rule below already covers everything. It does not.
+# install.sh has a shebang and would survive; the twenty files under lib/ that
+# are now the bulk of the installer do NOT have one, because they are sourced
+# fragments and a fragment with a shebang invites somebody to execute it. Their
+# first line is `# shellcheck shell=bash`, which tells shellcheck what dialect
+# to read them in and tells this loop nothing whatsoever. Counted rather than
+# guessed: of the 49 files in the net, 28 have a shebang and 21 are here on
+# their suffix alone -- all of lib/, plus bin/.local/lib/desktop-lib.sh, which
+# is sourced by nine scripts in bin/.local/bin/ for the same reason. Drop the
+# suffix branch and the installer leaves the sweep without a word, the count
+# reads 28, and the check still prints "no errors" -- which is the failure mode
+# this whole file exists to prevent.
+#
 # WHY THE GATE IS AT -S error AND NOT -S warning. At the time this was written
 # the tree had thirty findings at warning level across seven files and, read
 # one by one, nearly all of them are shellcheck being unable to see through
@@ -33,6 +47,36 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
+
+# --- How shellcheck is asked ------------------------------------------------
+# -x FOLLOWS `source`, WHICH THIS TREE DOES A LOT OF. install.sh sources five
+# files out of lib/, every unit under lib/units/ is sourced in turn, and nine
+# scripts in bin/.local/bin/ source ../lib/desktop-lib.sh. Without -x each of
+# those files is read as if the other end did not exist, so anything it defines
+# elsewhere reads as undefined here -- and that is what the warning sweep below
+# is printing for somebody to look at.
+#
+# -P SCRIPTDIR is the half that makes -x work at all. shellcheck resolves a
+# sourced path relative to the working directory by default, and `source
+# ../lib/desktop-lib.sh` inside bin/.local/bin/gs means relative to gs, not to
+# the repository root. SCRIPTDIR says so.
+#
+# MEASURED, because "it follows sources now" is not by itself a reason:
+#
+#                      errors  warnings  SC1091 "not following"
+#   plain                   0         0                      11
+#   -x                      0         0                      11
+#   -x -P SCRIPTDIR         0         0                       0
+#
+# So it changes nothing about whether this check passes today, and that is the
+# point -- it is not smuggling in a new gate. What it buys is that the eleven
+# notes are gone and the warning sweep is now saying something true about the
+# other side of a `source`, which is the only reason the sweep is printed.
+#
+# NOT NAMED SHELLCHECK_OPTS. That is an environment variable shellcheck reads
+# on its own, and a shell array by that name one export away from becoming a
+# string is a trap for whoever edits this next.
+SHELLCHECK_ARGS=(-x -P SCRIPTDIR --format=gcc)
 
 # --- Collect the shell scripts ---------------------------------------------
 scripts=()
@@ -58,7 +102,8 @@ echo "shell-lint: ${#scripts[@]} shell script(s)"
 # --- Advisory: everything at warning level ---------------------------------
 # `|| true` because shellcheck exits non-zero whenever it has something to say,
 # and here it is allowed to have something to say.
-warnings="$(shellcheck --severity=warning --format=gcc "${scripts[@]}" || true)"
+warnings="$(shellcheck "${SHELLCHECK_ARGS[@]}" --severity=warning \
+    "${scripts[@]}" || true)"
 if [[ -n $warnings ]]; then
     echo
     echo "shell-lint: warnings (not gating, see the header of this script):"
@@ -67,7 +112,7 @@ fi
 
 # --- The gate: errors only --------------------------------------------------
 echo
-if shellcheck --severity=error --format=gcc "${scripts[@]}"; then
+if shellcheck "${SHELLCHECK_ARGS[@]}" --severity=error "${scripts[@]}"; then
     echo "shell-lint: no errors"
 else
     echo
