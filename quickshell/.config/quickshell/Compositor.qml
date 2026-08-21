@@ -65,6 +65,7 @@ Singleton {
     readonly property string captureTarget: backend?.captureTarget ?? ""
     readonly property var keyboardLayouts: backend?.keyboardLayouts ?? ({ names: [], currentIndex: 0 })
     readonly property var binds: backend?.binds ?? []
+    readonly property string bindsFile: backend?.bindsFile ?? ""
 
     function refreshBinds(): void {
         backend?.refreshBinds();

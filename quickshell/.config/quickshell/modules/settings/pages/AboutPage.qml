@@ -1,12 +1,17 @@
-// What this shell is, where it lives, and the one button that undoes
-// everything the rest of this window does.
+// What this shell is and where it lives.
 //
-// THE RESET LIVES HERE AND NOWHERE ELSE. It spent a version at the foot of
-// the sidebar, which put it a hand's width from the close button: two clicks
-// side by side, one of which throws away every value in the window. Filed at
-// the bottom of the last page it is somewhere you arrive deliberately, which
-// is the right amount of friction for an action with no undo -- and it still
-// asks before doing it.
+// THERE IS NO "RESTORE DEFAULTS" HERE ANY MORE, and the space where it was is
+// worth a note so that it is not put back. It offered to undo every value in
+// the window and undid about a third of them: the four it named in its own
+// description, and then thirty settings that have been added to this window
+// since it was written and that it never learned about. It also could not do
+// what it said even for the ones it did assign -- see the commit that removed
+// it, and Config.qml, where a JsonAdapter drops every second write made in one
+// synchronous turn.
+//
+// A control that undoes everything is a fine thing to want. It needs a way of
+// enumerating what "everything" is rather than a list somebody remembers to
+// extend, and it needs its writes spaced out; neither exists yet.
 
 import Quickshell
 import QtQuick
@@ -19,7 +24,7 @@ SettingsPage {
 
     title: "About"
     glyph: Icons.info
-    keywords: ["about", "version", "reset", "defaults", "restore", "config"]
+    keywords: ["about", "version", "config"]
 
     SettingsSection {
         width: parent.width
@@ -61,38 +66,6 @@ SettingsPage {
             description: "~/.local/state/quickshell/ for what only the shell "
                 + "reads. The desktop-* and hypr-* files beside it are the "
                 + "ones the terminal, the browser and the compositor read too."
-        }
-    }
-
-    SettingsSection {
-        width: parent.width
-        title: "Reset"
-
-        InfoRow {
-            glyph: Icons.restore
-            label: "Restore every setting to its default"
-            description: "Opacity back to 85%, type back to 11pt, the clock "
-                + "back to 24-hour with the date on, notifications back to 10 "
-                + "seconds. The wallpaper and the mute are not touched."
-        }
-
-        Item {
-            width: parent.width
-            implicitHeight: resetButton.implicitHeight + 8
-
-            ConfirmButton {
-                id: resetButton
-
-                anchors.right: parent.right
-                anchors.rightMargin: Theme.groupPadding
-                anchors.verticalCenter: parent.verticalCenter
-
-                glyph: Icons.restore
-                text: "Restore defaults"
-                confirmText: "Click again to confirm"
-
-                onConfirmed: Config.restoreDefaults()
-            }
         }
     }
 }
