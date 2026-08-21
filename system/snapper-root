@@ -1,0 +1,55 @@
+# /etc/snapper/configs/root -- the retention this machine keeps.
+#
+# A RECIPE AND NOT A COPY, for two reasons. The file is 0640 root:root, so it
+# cannot be read without sudo and `./install.sh check` would have to ask for a
+# password to compare it -- which would stop it being a check. And it is not a
+# file anybody writes by hand: `create-config` writes it from a template and
+# `set-config` edits it in place, so a copy dropped over the top would be the
+# wrong shape even if it could be read.
+#
+# Create it once, on the root subvolume:
+#
+#   sudo snapper -c root create-config /
+#
+# Everything below is a DELTA from snapper's own template, which lives at
+# /usr/share/snapper/config-templates/default. Anything not named here is left
+# at whatever that file says, on purpose: it is a moving target maintained by
+# somebody else and pinning all of it would mean carrying every change they
+# make.
+#
+#   sudo snapper -c root set-config ALLOW_USERS=<your user>
+#   sudo snapper -c root set-config SYNC_ACL=yes
+#   sudo snapper -c root set-config NUMBER_LIMIT=15
+#   sudo snapper -c root set-config NUMBER_LIMIT_IMPORTANT=8
+#   sudo snapper -c root set-config NUMBER_MIN_AGE=1800
+#
+# Read it back with `snapper -c root get-config`, which -- once ALLOW_USERS
+# names you -- works without sudo, because it goes through snapperd rather than
+# through the file.
+#
+# ALLOW_USERS + SYNC_ACL are one setting in two halves. ALLOW_USERS says who may
+# work with this config; SYNC_ACL is what actually puts an ACL on /.snapshots so
+# that user can read the snapshots. Setting the first without the second gets
+# permission from snapper and refusal from the filesystem.
+#
+# NUMBER_LIMIT 15 and NUMBER_MIN_AGE 1800, against the template's 50 and 3600.
+# These are the pre/post pairs snap-pac makes around every pacman transaction,
+# and on a machine that updates most days fifty of them is weeks of kernels and
+# NVIDIA modules held on disk inside @. Fifteen is roughly a fortnight of
+# updates, and half an hour is long enough that a snapshot taken by a mistaken
+# `pacman -S` is still there to roll back to.
+#
+# NUMBER_LIMIT_IMPORTANT 8, against 10: the "important" ones are the pairs that
+# touched the kernel or the bootloader, which are exactly the ones worth keeping
+# longer and also the largest.
+#
+# WHAT IS NOT SET HERE, and where it lives instead: the timers. Snapshots on a
+# schedule and their cleanup are snapper-timeline.timer and
+# snapper-cleanup.timer, which the `services-system` unit enables. The pre/post
+# pair on each pacman transaction is snap-pac, which is a package and needs no
+# configuration at all.
+#
+# ONE THING TO KNOW BEFORE TRUSTING ANY OF IT: /boot lives inside @ on this
+# machine -- that is what linux.preset is about -- so a rollback takes the
+# kernel and its initramfs back with it. The ESP does not, and neither does
+# anything under /mnt.
