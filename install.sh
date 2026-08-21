@@ -437,6 +437,13 @@ mode_apply() {
 
   run_units "${UNIT_ORDER[@]}"
   fail_report
+
+  # THE STATUS SAYS WHETHER IT DID WHAT IT WAS ASKED, and that is a different
+  # audience from the yellow block above. `apply` is the mode a script reaches
+  # for -- `./install.sh apply symlinks && systemctl --user restart quickshell`
+  # is an ordinary line -- and a 0 that means "the symlinks unit failed" is a
+  # lie told to the one reader that cannot read the words. See fail_clean.
+  fail_clean
 }
 
 # ---------------------------------------------------------------------------
@@ -764,6 +771,9 @@ END
   # which is how "2 thing(s) did not work" came to be something people read
   # after the fact in a screenshot.
   fail_report
+  # And the same non-zero status the other two modes give, for the same reason:
+  # `git pull && ./install.sh && reboot` is a line somebody will write.
+  fail_clean
 }
 
 # ---------------------------------------------------------------------------
