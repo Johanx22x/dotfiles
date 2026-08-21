@@ -36,7 +36,8 @@ The accent palette is generated from the wallpaper.
 
 Arch Linux or an Arch-based distribution, `git`, a user with `sudo`, and a
 network connection. Everything else the installer offers to fetch. Enable
-`[multilib]` in `/etc/pacman.conf` first if you want the Steam packages.
+`[multilib]` in `/etc/pacman.conf` first if you want the Steam packages — the
+installer says so by name when it finds one it cannot reach without it.
 
 ## Install
 
@@ -45,33 +46,72 @@ git clone https://github.com/Johanx22x/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh
 ```
 
-It opens by asking which compositor this machine gets — Hyprland, niri, or both
-— because that decides what gets installed and what gets linked. A bare Enter
-takes Hyprland, which is the default and the one everything here was built
-against. See [Compositors](#compositors) below.
+It opens with a table: every unit, what state this machine is in, and a tick
+box. The boxes arrive ticked for everything that is missing or has drifted, so
+on a clean machine the first Enter means "yes, set this up" and every Enter
+afterwards means "catch up on what has changed". What you tick is remembered, so
+the second run is shorter than the first.
 
-Then seven steps, each asking before it acts:
+The compositor is the one thing settled before the table, because it decides
+what gets installed and what gets linked — and it is **detected** rather than
+asked: whichever of Hyprland and niri is installed is the one this machine
+chose. Only a machine with neither gets the question, where a bare Enter takes
+Hyprland. `--compositor=hyprland|niri|both` overrides either way. See
+[Compositors](#compositors) below.
 
 | | |
 |---|---|
-| **1 · Packages** | `packages/required/*.txt` and the chosen compositor's list — repo or AUR, worked out per name |
-| **2 · Optional** | `packages/optional/*.txt`, one pack at a time: apps, gaming, neovim, hardware |
-| **3 · Symlinks** | `stow` links the config into `$HOME` |
-| **4 · Seeds** | copies `seeds/` where nothing exists yet — never overwrites |
-| **5 · Neovim** | clones [Johanx22x/nvim](https://github.com/Johanx22x/nvim) into `~/.config/nvim` |
-| **6 · Cursors** | downloads the Material Bibata pack into `~/.icons` so the pointer can follow the wallpaper |
-| **7 · Palette** | a first `wallpaper-switch random` so the generated colour files exist |
+| `packages` | `packages/required/*.txt` and the chosen compositor's list — repo or AUR, worked out per name |
+| `optional` | `packages/optional/*.txt`: apps, gaming, neovim, hardware. Tick a pack, or open one and tick packages inside it |
+| `gpu` | `packages/gpu/<vendor>.txt`, with the card read off the bus and `none` as a real answer |
+| `aur-patched` | builds `packages/xwayland-satellite/`, which carries a fix niri needs for DaVinci Resolve |
+| `symlinks` | `stow` links the config into `$HOME` |
+| `seeds` | copies `seeds/` where nothing exists yet — never overwrites |
+| `nvim` | clones [Johanx22x/nvim](https://github.com/Johanx22x/nvim) into `~/.config/nvim` |
+| `cursors` | downloads the Material Bibata pack into `~/.icons`, checksummed before it is unpacked |
+| `palette` | a first `wallpaper-switch random` so the generated colour files exist |
+| `shell` | `chsh -s /usr/bin/zsh` |
+| `services-user` | the wallpaper and battery timers, and the polkit agent |
+| `services-system` | SDDM, NetworkManager, bluetooth, and the snapshot, mirror and cache timers |
+| `etc` | `system/` against the machine, diffed and installed one file at a time |
+| `laptop` | battery and brightness widgets — asked, because no detection can answer it |
+| `monitors` | says whether every attached screen is recorded, and prints the command that records one |
 
-It refuses to run as root or off Arch, and skips a package it cannot find
-instead of aborting the transaction. If files are already in the way, it lists
-them and offers to move them to `~/dotfiles-replaced-<timestamp>` — it never
-deletes and never adopts.
+It refuses to run as root or off Arch. A package it cannot install is reported
+and does not take the rest of the run with it. If files are in the way of the
+symlinks it lists them and offers to move them to
+`~/dotfiles-replaced-<timestamp>` — all of them or none, never deleting and
+never adopting.
 
-Then it asks whether this is a laptop (battery and brightness widgets, off by
-default) and prints every attached monitor with the command that records it.
+**Left to you:** the monitor layout, if the table listed a screen as not
+recorded. That is a decision about where the screens physically are, and nothing
+here can guess it.
 
-**Left to you:** the GPU driver, `/etc`, `chsh -s /usr/bin/zsh`, and the
-monitors if the check listed one as unconfigured.
+## Checking
+
+```sh
+./install.sh check
+```
+
+The same table, read-only. It uses no `sudo`, writes nothing, and is safe to run
+at any moment on a working machine — which is the point of it: the way a desktop
+like this goes wrong is quietly. A file that stopped being linked because `stow`
+was never re-run, a timer that has been reporting `not-found` for a month, a
+package that left with a dependency. None of that has a symptom until the day it
+does.
+
+It exits 1 when a unit that applies to this machine is not `ok`, so it works
+from a keybind or a script, and `--json` gives the same answer to something that
+would rather read it than look at it.
+
+```sh
+./install.sh check --json | jq -r '.[] | select(.kind != "ok") | .id'
+./install.sh apply symlinks        # repair one row of the table
+```
+
+`apply` does exactly the units you name and does **not** pull in what they
+require — the point of it is fixing one thing. It says what is missing
+underneath, and `--with-requires` chains them if that is what you meant.
 
 ## Updating
 
@@ -80,9 +120,19 @@ cd ~/dotfiles && git pull
 ```
 
 The config lives in `$HOME` as symlinks back into this repo, so a pull is
-already live for every file that was linked before. Re-run `./install.sh` when a
-release adds new files or packages — it is idempotent, and steps you do not want
-can be answered no.
+already live for every file that was linked before. What a pull cannot do on its
+own is add a package, link a file that is new, or enable a unit that did not
+exist yesterday:
+
+```sh
+git pull && ./install.sh update
+```
+
+`update` asks nothing. It reads what this machine said it wanted, applies
+whatever of that is not already in place, and runs the reload hooks. **It does
+not pull by itself** — this repo is worked on from several sessions at once, and
+a `git pull` hidden inside a command that also installs things is a surprise at
+the wrong moment. `--pull` is there for an unattended run and is `--ff-only`.
 
 Nothing running picks the changes up on its own:
 
@@ -208,13 +258,25 @@ has one, so the inner gap maps directly and the outer becomes a strut.
 
 ## Layout
 
-Every top-level directory is a stow package mirroring its path under `$HOME`, so
-`stow hypr` links `~/.config/hypr/hyprland.lua` back into the repo.
+**Most** top-level directories are stow packages, mirroring their path under
+`$HOME`, so `stow hypr` links `~/.config/hypr/hyprland.lua` back into the repo:
 
 ```
-zsh   hypr    niri        quickshell  kitty  matugen  shell
-gtk   media   openrgb     systemd     bin    ranger   icons   zen
+zsh   hypr    niri        quickshell  kitty   matugen  shell
+gtk   media   openrgb     systemd     bin     ranger   icons   zen
+gaming
 ```
+
+Six are not, and the difference matters:
+
+| | |
+|---|---|
+| `seeds/` | **copied**, once, and never again — `seeds/README.md` opens by forbidding `stow seeds` in bold. These are the files applications rewrite, so a symlink into the repo would mean a dirty tree on every machine |
+| `system/` | the `/etc` layer, which pacman owns and would leave `.pacnew` files beside. Copies and recipes, installed one at a time after a diff — see `system/README.md` |
+| `packages/` | the package lists, grouped by what they are for |
+| `lib/` | the installer's own code: the unit registry and one file per unit |
+| `tests/` | the checks CI runs on every pull request |
+| `assets/` | the screenshots at the top of this file |
 
 `bin/` holds the scripts that own everything the shell can change at runtime —
 the wallpaper, the palette, the opacity, the monitors — so any of it can be
@@ -223,10 +285,11 @@ those scripts find out what they are running under.
 
 ## Wallpapers and color
 
-`wallpaper-switch` sets the wallpaper and runs matugen, which renders ten
-untracked files for kitty, GTK 3/4, Hyprland, Qt, zathura, ranger, fastfetch,
-Zen and the shell. The base palette is fixed (Tokyo Night) and matugen supplies
-only the accents, so contrast never depends on which image is set.
+`wallpaper-switch` sets the wallpaper and runs matugen, which renders eleven
+untracked files for kitty, GTK 3/4, Hyprland, **niri**, Qt, zathura, ranger,
+fastfetch, Zen and the shell. The base palette is fixed (Tokyo Night) and
+matugen supplies only the accents, so contrast never depends on which image is
+set.
 
 A wallpaper can also be a video: `mp4` `webm` `mkv` play through mpvpaper with
 hardware decoding, pausing when covered or when anything goes fullscreen, while
@@ -260,6 +323,23 @@ git: `hypr/monitors.lua` and `niri/monitors.kdl`, written by `desktop-monitors` 
 the settings window, and the state files under `~/.local/state` that the scripts
 and the shell share — so a value set from a terminal moves the switch in the
 settings window, and back.
+
+The installer keeps its own answers there too, in
+`~/.local/state/dotfiles-profile`: which compositor, which GPU, which units this
+machine wants and which optional packs. Same format as the rest — `key<TAB>value`
+per line, sorted — so it diffs, greps and can be edited by hand. A package only
+gets a line of its own when it disagrees with its group:
+
+```
+compositor        both
+gpu.vendor        nvidia
+group.gaming      1
+pkg.gaming.steam  0
+unit.optional     1
+```
+
+That is the file `update` reads. Delete it and the next `./install.sh` asks
+again from what the machine looks like.
 
 ## Keybinds
 
