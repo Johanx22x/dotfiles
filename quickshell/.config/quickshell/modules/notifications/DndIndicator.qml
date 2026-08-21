@@ -35,6 +35,19 @@ import "root:/modules/island"
 Item {
     id: root
 
+    // WHETHER THIS BADGE IS THE ONE SHOWING THE UNREAD COUNT.
+    //
+    // It used to be, unconditionally, and it was the right place for it while
+    // it was the only thing on the bar that knew the number existed. The bell
+    // at the right end of the bar shows it now -- on the door you pay the debt
+    // through, which is where a count belongs -- so the two of them on screen
+    // together would be one bar saying one thing twice.
+    //
+    // Set by Bar.qml, which is the only file that can see both, and it is
+    // FALSE rather than absent when the bell is switched off on that bar: the
+    // number then comes back here. See the note at the DndIndicator in Bar.qml.
+    property bool showCount: false
+
     // Collapses to nothing when off, so the bar has no hole in it. The width
     // animates rather than the visibility flipping: the badge grows out of the
     // island's left edge instead of appearing beside it.
@@ -100,9 +113,13 @@ Item {
             // different pieces of news, and only the first one is implied by
             // the glyph. A number that only appears when you go looking for it
             // is a number you find out about too late.
+            //
+            // Drawn here only when nothing else is drawing it -- see showCount
+            // above. The argument in the paragraph before this one is why the
+            // number has to be SOMEWHERE, not why it has to be here.
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                visible: NotificationState.unread > 0
+                visible: root.showCount && NotificationState.unread > 0
                 text: `${NotificationState.unread}`
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.fontSize

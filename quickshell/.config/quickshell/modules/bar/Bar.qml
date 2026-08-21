@@ -276,6 +276,16 @@ PanelWindow {
             anchors.right: centre.left
             anchors.rightMargin: Theme.itemSpacing
             anchors.verticalCenter: parent.verticalCenter
+
+            // WHO CARRIES THE NUMBER, decided here because this is the only
+            // place that can see both of them. The bell at the right end shows
+            // NotificationState.unread on the door you pay that debt through,
+            // and while it is drawn this badge saying the same number would be
+            // one bar saying one thing twice. Switch the bell off and the
+            // badge takes it back, so the count never simply disappears -- a
+            // mute whose only trace is a number is bad, and a mute with no
+            // trace at all is worse.
+            showCount: !bar.widget("notifications")
         }
 
         // The screen-capture badge, anchored to the island's right edge and
@@ -386,17 +396,30 @@ PanelWindow {
             // The shell's own controls, in a pill of their own. They are not
             // readings like the groups before them, and that is the point of
             // putting them together: one pill at the end says "this is where
-            // you operate the shell" instead of two loose glyphs trailing off
-            // the edge.
+            // you operate the shell" instead of three loose glyphs trailing
+            // off the edge.
             //
             // The gap INSIDE this pill is groupSpacing, not the itemSpacing a
             // group normally uses. See PowerButton: nothing may sit one
             // slipped click from it, and sharing a background does not change
-            // that.
+            // that. The bell gets the same gap for free, which is more air
+            // than it strictly needs and cheaper than a second rule.
             Group {
                 anchors.verticalCenter: parent.verticalCenter
 
                 spacing: Theme.groupSpacing
+
+                // FIRST IN THE PILL, so the two ends of it stay where they
+                // were: the gear keeps its neighbour and the power button
+                // keeps having nothing after it. The notification history
+                // opens from here -- see NotificationButton for why the list
+                // stopped being a tab of the dashboard in the middle.
+                NotificationButton {
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    visible: bar.widget("notifications")
+                    popout: barPopout
+                }
 
                 SettingsButton {
                     anchors.verticalCenter: parent.verticalCenter

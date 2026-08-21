@@ -152,6 +152,51 @@ Singleton {
         }
     }
 
+    // ---------------- Asking for the list ----------------
+    //
+    // SIGNALS AND NOT A FLAG, for the reason IslandState's header gives about
+    // the dashboard: the history is CONTENT inside the bar's shared popout,
+    // and the popout already knows whether it is open and with what. A bool
+    // here would be a second source of truth for one surface, kept in step by
+    // hand. So this singleton asks, and modules/bar/NotificationButton.qml --
+    // the only file that can see both the popout and the list -- answers.
+    //
+    // Every bar answers, which is what makes the key work on a bar where the
+    // widget is switched off. See NotificationButton.anchorX for where the
+    // panel comes out in that case.
+    signal historyToggleRequested
+    signal historyOpenRequested
+
+    // TWO ENTRY POINTS AND TWO BEHAVIOURS. A key pressed by mistake should put
+    // the panel away when it is pressed again; a badge that has already sent
+    // you to the list should not close the thing it just opened.
+    function toggleHistory(): void {
+        root.historyToggleRequested();
+    }
+
+    function openHistory(): void {
+        root.historyOpenRequested();
+    }
+
+    // The keyboard's way in, SUPER + SHIFT + N. Without it the only doors are
+    // the bell, which a bar can be told not to draw, and the do-not-disturb
+    // badge, which exists only while the mute is on -- and "what did I miss"
+    // is a question you ask when you sit back down, whether or not the mute
+    // was ever switched on.
+    //
+    // ITS OWN TARGET rather than a second function on "dnd" below: the mute
+    // and the record of what got through are two different things, and
+    // `qs ipc call dnd history` would read as the history OF the mute. It used
+    // to be `island notifications`, which was only true while the list was a
+    // tab of the island's dashboard.
+    IpcHandler {
+        target: "notifications"
+
+        function history(): void {
+            root.toggleHistory();
+        }
+    }
+
     // `enable` and `disable` rather than `on` and `off`: a QML member whose
     // name starts with "on" is parsed as a signal handler, and `on` alone is
     // the shape that invites the parser to try.
