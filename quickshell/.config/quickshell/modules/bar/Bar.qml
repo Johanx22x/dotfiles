@@ -106,6 +106,18 @@ PanelWindow {
     // So: the bar proper, plus each fillet in the shape the fillet is actually
     // drawn. See components/WedgeRegion.qml for how the second half is built
     // and what was checked on screen to trust it.
+    //
+    // AND THE RECTANGLE IS STILL FLUSH WITH THE PAINT, which the launcher, the
+    // popouts and the notification panel are deliberately not: they stand a
+    // pixel back so their rounded corners stop stepping, and the reason is in
+    // WedgeRegion.qml. It does not apply here. `surface` has no corner radius
+    // and it is anchored to three edges of the window with an integer height,
+    // so every side of it lands on a whole pixel and a straight edge on a whole
+    // pixel is rasterised exactly -- measured: no half-covered pixel anywhere
+    // along one. Standing back would buy nothing and cost a line of unblurred
+    // pixels the full width of the screen, right under the bar, which is very
+    // nearly the artifact this region was written to remove. The two fillets
+    // carry the inset because the two fillets are where the curve is.
     BackgroundEffect.blurRegion: Region {
         item: surface
 
