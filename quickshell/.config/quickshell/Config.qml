@@ -52,10 +52,24 @@ import QtQuick
 Singleton {
     id: root
 
-    // The defaults duplicated as readonly constants, so "restore defaults"
-    // has something to restore FROM. Reading them off the JsonAdapter is not
-    // an option: by the time anything asks, the adapter holds the user's
-    // values, not the initial ones.
+    // The initial values, as readonly constants.
+    //
+    // FIVE OF THEM ARE READ and the rest are not, which is a change: this
+    // block existed so that "restore defaults" had something to restore FROM,
+    // and that control is gone -- see the commit that removed it and the note
+    // at the top of AboutPage.qml. What still reads this is the four values
+    // whose live property is initialised from it (the opacity, the type size
+    // and family, the border) and `barWidgets`, which is the seed a bar that
+    // has never been touched follows and is the one entry here that is a
+    // decision rather than a starting point.
+    //
+    // The rest are now the same numbers the JsonAdapter below declares,
+    // written twice. They are left where they are on purpose rather than
+    // deleted in the same breath as the function that used them: each one
+    // carries the reasoning for the value next to it, that reasoning is worth
+    // keeping, and its home is the adapter property it explains rather than
+    // this block. Moving them is a separate edit to this file and this is not
+    // the commit to make it in.
     readonly property var defaults: ({
         opacity: 0.85,
         fontSize: 11,
@@ -1439,62 +1453,6 @@ Singleton {
     // than the bitrate it saves. flac is lossless and large; it is offered
     // because gsr offers it, not because anything here wants it.
     property alias recordingAudioCodec: adapter.recordingAudioCodec
-
-    function restoreDefaults(): void {
-        root.setOpacity(root.defaults.opacity);
-        root.setFont(root.defaults.fontSize, root.defaults.fontFamily);
-        root.setTweak("border", root.defaults.borderSize);
-        adapter.use24Hour = root.defaults.use24Hour;
-        adapter.showDate = root.defaults.showDate;
-        adapter.notificationTimeoutLow = root.defaults.notificationTimeoutLow;
-        adapter.notificationTimeout = root.defaults.notificationTimeout;
-        adapter.notificationTimeoutCritical = root.defaults.notificationTimeoutCritical;
-        adapter.nightLightScheduled = root.defaults.nightLightScheduled;
-        adapter.nightLightFrom = root.defaults.nightLightFrom;
-        adapter.nightLightTo = root.defaults.nightLightTo;
-        // Every bar back to the seed, which is a deletion and not one
-        // assignment per widget: with no shared base left there is nothing to restore
-        // TO except the seed, and an empty map is how a bar says it follows it.
-        // Back to one bar on the monitor the rule picks, with no monitor
-        // holding an opinion of its own. The Hyprland side is deliberately NOT
-        // reset from here: desktop-monitors owns that file, and a "restore
-        // defaults" in this window that silently moved the compositor's game
-        // rules would be reaching a long way outside the shell.
-        adapter.mainMonitor = root.defaults.mainMonitor;
-        adapter.barMonitors = root.defaults.barMonitors;
-        adapter.barWidgetsByMonitor = ({});
-        // Back to recording whatever screen the shell ends up on. This one
-        // restarts the replay buffer as it lands -- see ReplayState.monitor --
-        // which costs the seconds it was holding, and that is the same cost
-        // changing the buffer length has always had.
-        adapter.replayMonitor = root.defaults.replayMonitor;
-
-        // And back to the capture this shell shipped with. EVERY ONE OF THESE
-        // RESTARTS THE BUFFER as it lands -- see ReplayState.reapply() -- so a
-        // restore costs the seconds it was holding, once, rather than once per
-        // value: they are assigned in the same turn and the recorder is taken
-        // down and brought back after it.
-        //
-        // replayEnabled IS RESET WITH THE REST, which means a buffer somebody
-        // switched off comes back armed. That is the intended reading of
-        // "restore defaults" -- armed is the state this shell ships in -- and
-        // it is visible the instant it happens, on the island and on this page.
-        adapter.replayEnabled = root.defaults.replayEnabled;
-        adapter.replaySeconds = root.defaults.replaySeconds;
-        adapter.replayStorage = root.defaults.replayStorage;
-        adapter.replayDirectory = root.defaults.replayDirectory;
-        adapter.recordingDirectory = root.defaults.recordingDirectory;
-        adapter.recordingContainer = root.defaults.recordingContainer;
-        adapter.recordingFramerate = root.defaults.recordingFramerate;
-        adapter.recordingCodec = root.defaults.recordingCodec;
-        adapter.recordingBitrateMode = root.defaults.recordingBitrateMode;
-        adapter.recordingBitrate = root.defaults.recordingBitrate;
-        adapter.recordingQuality = root.defaults.recordingQuality;
-        adapter.recordingDesktopAudio = root.defaults.recordingDesktopAudio;
-        adapter.recordingMicrophone = root.defaults.recordingMicrophone;
-        adapter.recordingMicrophoneDevice = root.defaults.recordingMicrophoneDevice;
-        adapter.recordingAudioCodec = root.defaults.recordingAudioCodec;
-    }
 
     // ---------------- Persistence ----------------
     //

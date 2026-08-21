@@ -582,16 +582,21 @@ Singleton {
             "replay", root.directory, ...args];
     }
 
-    // ANY OF IT CHANGING IS THE SAME EVENT, and it is debounced for two
-    // reasons that arrive together. PipeWire announces its nodes over several
-    // turns while the graph is built, so the microphone settles through two or
-    // three answers at startup rather than one; and Config.restoreDefaults()
-    // assigns fifteen of these in a single turn. Without this, either one is a
-    // recorder torn down and rebuilt once per value.
+    // ANY OF IT CHANGING IS THE SAME EVENT, and it is debounced because
+    // PipeWire announces its nodes over several turns while the graph is
+    // built: the microphone settles through two or three answers at startup
+    // rather than one, and without this that is a recorder torn down and
+    // rebuilt once per answer.
     //
-    // Half a second is long enough to cover both and short enough that a
-    // microphone plugged in by hand is in the recording before the reason for
-    // plugging it in has happened.
+    // IT USED TO HAVE A SECOND REASON, which was Config.restoreDefaults()
+    // assigning fifteen of these in a single turn. That function is gone, and
+    // nothing else in the shell writes more than one of these at a time --
+    // every other writer is a control somebody is pointing at. The remaining
+    // reason is enough on its own.
+    //
+    // Half a second is long enough for it and short enough that a microphone
+    // plugged in by hand is in the recording before the reason for plugging it
+    // in has happened.
     onCommandChanged: settle.restart()
 
     Timer {
