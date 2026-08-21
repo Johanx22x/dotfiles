@@ -341,6 +341,14 @@ Singleton {
     // default to invent: the theme in use came from the distribution.
     readonly property string cursorTheme: root.tweaks["cursor-theme"] ?? ""
     readonly property int cursorSize: root.tweakInt("cursor-size", 24)
+    // ON when nothing says otherwise, which is the opposite default to
+    // naturalScroll above and deliberate: the machine this repository
+    // describes installs a pack of themes built from the same Material 3
+    // roles the shell paints with, and leaving them unused until somebody
+    // finds the switch is a worse first impression than the pointer simply
+    // matching. The fallback has to agree with desktop-tweak's own default
+    // for the key, or the switch shows one thing and the script does another.
+    readonly property bool cursorAuto: (root.tweaks["cursor-auto"] ?? "1") === "1"
 
     // ---------------- Keyboard layouts ----------------
     //
