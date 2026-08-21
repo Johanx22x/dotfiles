@@ -99,13 +99,34 @@
 # never sees. The indirection is what keeps a rotating value out of a tracked
 # file.
 #
-# WHAT THIS DOES NOT FIX, so it is not rediscovered as a bug: Steam loads its
-# cursors once, at startup. Rewriting the file below changes what a NEW Steam
-# picks up, not the one already running. Making a running client follow along
-# needs the theme name itself to change, which is what the XSETTINGS route
-# (xsettingsd serving Gtk/CursorThemeName) buys and what it charges a resident
-# daemon for -- one that would also take the XSETTINGS selection away from
-# xwayland-satellite and with it its DPI handling.
+# AND THEN THERE IS A FIFTH, which is what makes a client that is ALREADY
+# RUNNING follow along: one write to the X11 root window's RESOURCE_MANAGER
+# property. Chromium watches it and throws away its theme cursors on ANY change
+# to it -- its PropertyCache fires on the PropertyNotify without comparing old
+# to new -- and then re-reads, starting again from the GTK setting, which is
+# how it lands on the `default` above and finds the theme just written there.
+# The property is a doorbell; what is in it barely matters.
+#
+# THIS IS WHAT GNOME AND KDE DO. gnome-settings-daemon writes Xcursor.theme
+# into RESOURCE_MANAGER next to publishing it over XSETTINGS ("we mirror the
+# Xft properties both through XSETTINGS and through X resources", its own
+# comment); KDE's plasma-setup-xwayland is nothing but building those resources
+# and running `xrdb -merge`. It is the standard channel for telling XWayland
+# clients, not a trick.
+#
+# NOT XSETTINGS, which is the obvious answer and cannot work here: GTK's
+# XSETTINGS client compares each value against the old one and only notifies on
+# a difference, so re-publishing the same `default` would notify nobody. The
+# name would have to genuinely change on every wallpaper -- which is the thing
+# the fixed name exists to avoid -- and it would cost a resident daemon that
+# takes the XSETTINGS selection away from xwayland-satellite.
+#
+# WHAT IS STILL NOT FIXED, so it is not rediscovered as a bug: the OTHER half
+# of Steam. libXcursor reads XCURSOR_THEME once per display connection and
+# there is no way in from outside -- no property, no signal, nothing to
+# invalidate. The window frame and the resize edges keep the theme they opened
+# with until the client restarts. KDE deleted its own attempt at this rather
+# than maintain it.
 #
 #
 # THE KEYBOARD LAYOUTS ARE A LIST, AND WHICH ONE OF THEM IS ACTIVE IS KEPT IN
@@ -720,6 +741,36 @@ apply_live() {
     fi
 
     apply_default_cursor_theme "$theme"
+    poke_x11_cursor_config "$theme" "$size"
+}
+
+# Ring the doorbell that makes a running XWayland client re-read its cursors.
+# See the header for why this property and not XSETTINGS.
+#
+# `xrdb -merge` AND NOT `xprop -set`, although xprop is installed everywhere
+# and xrdb is a package to add: xprop replaces the WHOLE property, so it would
+# quietly drop anything else that ever ends up in there, while merge is what
+# the name says. It is also, to the line, what KDE runs for this.
+#
+# THE VALUE IS WRITTEN HONESTLY even though the doorbell is the point: an
+# XWayland client that reads Xcursor.theme and nothing else -- xcb-util-cursor
+# is one, and it is what xwayland-satellite loads the root cursor with -- gets
+# the right answer out of it. libXcursor clients ignore it, because the
+# compositor hands them XCURSOR_THEME and the environment wins over the
+# resource.
+#
+# Silent about everything: no X server on this session, no xrdb installed, no
+# theme set yet. A wallpaper that refused to change because a pointer could not
+# be repainted would be the worse trade -- the same argument cursor-match makes
+# about its own missing pieces.
+poke_x11_cursor_config() {
+    local theme="$1" size="$2"
+
+    [[ -n ${DISPLAY:-} && -n $theme ]] || return 0
+    command -v xrdb >/dev/null || return 0
+
+    printf 'Xcursor.theme:\t%s\nXcursor.size:\t%s\n' "$theme" "$size" \
+        | xrdb -merge 2>/dev/null || true
 }
 
 # Point the `default` cursor theme at the one in use.

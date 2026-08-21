@@ -121,6 +121,7 @@ wl-clip-persist
 wl-clipboard
 wpa_supplicant
 xdg-utils
+xorg-xrdb
 zathura
 zathura-pdf-poppler
 zenity
