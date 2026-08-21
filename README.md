@@ -73,7 +73,7 @@ Hyprland. `--compositor=hyprland|niri|both` overrides either way. See
 | `shell` | `chsh -s /usr/bin/zsh` |
 | `services-user` | the wallpaper and battery timers, and the polkit agent |
 | `services-system` | SDDM, NetworkManager, bluetooth, and the snapshot, mirror and cache timers |
-| `etc` | `system/` against the machine, diffed and installed one file at a time |
+| `etc` | `system/` against the machine: shows what differs and prints the command. It never writes to `/etc` — see below |
 | `laptop` | battery and brightness widgets — asked, because no detection can answer it |
 | `monitors` | says whether every attached screen is recorded, and prints the command that records one |
 
@@ -83,9 +83,21 @@ symlinks it lists them and offers to move them to
 `~/dotfiles-replaced-<timestamp>` — all of them or none, never deleting and
 never adopting.
 
-**Left to you:** the monitor layout, if the table listed a screen as not
-recorded. That is a decision about where the screens physically are, and nothing
-here can guess it.
+**Left to you:** two things.
+
+The monitor layout, if the table listed a screen as not recorded. That is a
+decision about where the screens physically are, and nothing here can guess it.
+
+And `/etc`. `./install.sh apply etc` shows you what differs between `system/`
+and the machine, with the diff, and prints the exact command for each one —
+`sudo install -Dm <mode> <src> <dst>`, plus `mkinitcpio -P` or `grub-mkconfig`
+where the file feeds one of those. It runs none of them. Half of `system/` is
+about **this** machine and not about a setup: `fstab` names these disks by UUID,
+`default-grub` points at a theme this repository does not carry,
+`modprobe-nvidia-gaming.conf` is for this card, `sddm-Xsetup` is where these
+screens sit. Copying those onto another box is not reproducing anything — at
+best it does nothing, at worst it does not boot. So the diff is the useful part
+and the decision is yours.
 
 ## Checking
 
@@ -287,7 +299,7 @@ Six are not, and the difference matters:
 | | |
 |---|---|
 | `seeds/` | **copied**, once, and never again — `seeds/README.md` opens by forbidding `stow seeds` in bold. These are the files applications rewrite, so a symlink into the repo would mean a dirty tree on every machine |
-| `system/` | the `/etc` layer, which pacman owns and would leave `.pacnew` files beside. Copies and recipes, installed one at a time after a diff — see `system/README.md` |
+| `system/` | the `/etc` layer, which pacman owns and would leave `.pacnew` files beside. Copies and recipes, **reported and never installed** — half of them describe this one machine. See `system/README.md` |
 | `packages/` | the package lists, grouped by what they are for |
 | `lib/` | the installer's own code: the unit registry and one file per unit |
 | `tests/` | the checks CI runs on every pull request |

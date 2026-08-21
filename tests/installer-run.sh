@@ -57,12 +57,12 @@
 #                    in the profile below -- which is what the profile is FOR,
 #                    and is the honest answer for a machine with no session.
 #                    palette_apply is therefore not covered by this.
-#   etc              writes system files and offers to run mkinitcpio and
-#                    grub-mkconfig. Unticked, and deliberately: a container's
-#                    /etc is not the /etc anybody boots, so "the commands did
-#                    not error" is the most a green result could mean, and it
-#                    would be bought by letting a test rewrite pacman.conf and
-#                    fstab. There is an assertion below that it stayed out.
+#   etc              writes nothing at all any more -- it prints the diff and
+#                    the command and stops -- so it IS driven here, by name,
+#                    with an assertion that not one file under /etc moved. It
+#                    stays unticked in the profile because its check answers
+#                    `na` wherever anything differs, which in a container is
+#                    everything, and a `na` unit is not applied by the menu.
 #   services-system  enables system units and would write into /etc for the
 #                    same non-answer. Unticked.
 #   gpu              installs a graphics driver. Unticked, because a driver for
@@ -594,6 +594,45 @@ if installer apply nosuchunit -y >/dev/null 2>&1; then
 else
     pass "apply refuses a unit that does not exist"
 fi
+
+# ---------------------------------------------------------------------------
+say "the etc unit reports and writes nothing"
+
+# THE UNIT THAT WAS THE RISKIEST THING IN THIS REPOSITORY AND THE ONLY ONE WITH
+# NO TEST AT ALL. It wrote /etc with `sudo install -Dm` and then offered to run
+# mkinitcpio -P and grub-mkconfig, and no container could ever have covered
+# that: a container's /etc boots nobody, the initramfs would be for a kernel
+# that is not running, and grub-mkconfig would enumerate the runner's disks.
+# What it does now -- print the diff and the exact command, and run neither --
+# is a thing a container can check, so it is checked.
+etc_out="$SANDBOX/apply-etc.txt"
+# `|| true` INSIDE THE PIPELINE AND NOT AFTER IT. This file runs under `set -o
+# pipefail`, and find exits non-zero the moment it meets a directory it may not
+# read -- /etc/sudoers.d is 0750 root on any Arch machine and this runs as an
+# unprivileged user. Without it the pipeline fails, the assignment fails, and
+# errexit takes the whole test out on the line that was only taking a snapshot.
+etc_snapshot() {
+    { find /etc -xdev \( -type f -o -type l \) -printf '%p %s %T@\n' 2>/dev/null || true; } |
+        LC_ALL=C sort | sha256sum
+}
+etc_all_before="$(etc_snapshot)"
+
+if installer apply etc -y > "$etc_out" 2>&1; then
+    pass "apply etc exits zero"
+else
+    bad "apply etc exits zero"
+fi
+sed 's/^/installer-run:   | /' "$etc_out"
+
+want "apply etc prints the command instead of running it" \
+     grep -qF 'sudo install -Dm' "$etc_out"
+want "apply etc says so before it prints anything" \
+     grep -qF 'Nothing here is written' "$etc_out"
+# --yes IS PASSED ON PURPOSE. The old unit asked a question per file and --yes
+# answered all of them; this one has no question to ask, so --yes must be the
+# same output as no --yes, and the assertion below is what that means in
+# practice.
+want_eq "and not one file under /etc moved" "$etc_all_before" "$(etc_snapshot)"
 
 # ---------------------------------------------------------------------------
 say "--dry-run writes nothing either"
