@@ -16,7 +16,9 @@
 // so it reads as a state and not as a fault -- while still being the one
 // coloured thing on that side of the bar.
 //
-// CLICKING IT OPENS THE HISTORY, and unmuting moved to the right button.
+// CLICKING IT OPENS THE HISTORY -- the bell's panel, at the right end of the
+// bar, which is where that list lives now rather than in a tab of the island's
+// dashboard. Unmuting moved to the right button.
 //
 // It was the other way round while there was nothing to read: the badge said
 // "you are muted", and the only useful thing to do about that was to stop
@@ -26,11 +28,14 @@
 //
 // Unmuting did not need the primary button anyway: it has SUPER + N, which is
 // how it is switched on in the first place, and a switch in the dashboard.
-// This is the only way to the list.
+//
+// It was the only way to the list for a while, and is not any more: the bell
+// at the right end of the bar is always there and this badge is not. What it
+// still is, is the way in from the place you are ALREADY looking when you find
+// out you were muted, which is worth a click of its own.
 
 import QtQuick
 import "root:/"
-import "root:/modules/island"
 
 Item {
     id: root
@@ -188,7 +193,13 @@ Item {
                 if (mouse.button === Qt.RightButton)
                     NotificationState.setDnd(false);
                 else
-                    IslandState.openDashboard("Notifications");
+                    // OPEN and not toggle, unlike the bell and unlike the key:
+                    // a click on a badge that has just sent you to the list
+                    // should not close the thing it opened. The list is the
+                    // bell's panel now, so it comes out at the right end of
+                    // the bar rather than under this badge -- one panel, one
+                    // place, whichever door was used.
+                    NotificationState.openHistory();
             }
         }
     }

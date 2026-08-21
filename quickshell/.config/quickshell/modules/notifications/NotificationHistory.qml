@@ -1,8 +1,11 @@
 // What has been through here, newest first.
 //
-// The dashboard's Notifications tab. It exists because of the mute: a switch
-// that drops notifications and leaves only a number behind is a switch that
-// loses things, and this is where the number turns back into the messages.
+// What the bell at the right end of the bar opens into -- it was a tab of the
+// island's dashboard until it earned a widget of its own, and the only thing
+// that changed for this file was the size it is given. It exists because of
+// the mute: a switch that drops notifications and leaves only a number behind
+// is a switch that loses things, and this is where the number turns back into
+// the messages.
 //
 // It is NOT a second notification panel. The one top right is for the thing
 // that just happened and is about to go away on its own; this is the record,
@@ -11,9 +14,14 @@
 // application about a notification it has already closed, so the buttons would
 // be there to fail. What is left is reading, and clearing.
 //
-// OPENING IT IS WHAT MARKS THE COUNT READ. The badge on the bar is a debt --
+// OPENING IT IS WHAT MARKS THE COUNT READ. The number on the bell is a debt --
 // "four went by while you were not listening" -- and looking is what pays it.
 // The entries stay; only the number goes.
+//
+// Paid off on `visible`, which still holds now that this is a popout rather
+// than one tab of four: the popout builds its content when it opens and
+// destroys it when it closes, so being constructed here does mean being looked
+// at. The check costs nothing and keeps the file honest about why.
 
 import Quickshell
 import QtQuick
@@ -22,10 +30,11 @@ import "root:/"
 Item {
     id: root
 
-    // Paid off the moment the tab is actually on screen, and not on
-    // Component.onCompleted: every tab of the dashboard is built when the
-    // panel opens, whichever one is showing, so construction says nothing
-    // about having been looked at.
+    // Paid off the moment this is actually on screen, and not on
+    // Component.onCompleted alone: that mattered while every tab of the
+    // dashboard was built when the panel opened, whichever one was showing, so
+    // construction said nothing about having been looked at. It is kept
+    // because nothing about this file assumes which surface is holding it.
     onVisibleChanged: if (visible)
         NotificationState.markRead()
 

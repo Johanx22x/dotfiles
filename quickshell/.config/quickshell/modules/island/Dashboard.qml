@@ -4,17 +4,21 @@
 // it inherits the welding to the bar, the outside-click dismissal and the
 // blur for free. See components/Popout.qml.
 //
-// FOUR TABS, and the split is by QUESTION rather than by widget:
+// THREE TABS, and the split is by QUESTION rather than by widget:
 //   Dashboard     what time is it, what day, and the things worth reaching
 //                 for without leaving the panel: do not disturb, volume,
 //                 wi-fi, bluetooth and starting a recording
-//   Notifications what has been through here, and what the mute swallowed
 //   Media         what is playing, and the controls for it
 //   Performance   what is this machine doing right now
 //
-// There was another, Workspaces. It went because the bar already answers
-// that question permanently and better: the dots are on screen at all times
-// and switch on a click, while the dashboard's copy needed opening first.
+// There were two others, and both left for the same reason: the bar answers
+// their question better than a tab can. Workspaces went because the dots are
+// on screen at all times and switch on a click, while the dashboard's copy
+// needed opening first. Notifications went because "what did I miss" is a
+// question you ask on its own rather than while you are already here for
+// something else -- it is a bell in the pill at the right end of the bar now,
+// opening the same list into the same popout, one press away instead of two.
+// See modules/bar/NotificationButton.qml.
 //
 // The tab strip stays put and only the panel under it changes. The panel is
 // sized PER TAB -- see tabSizes below for why that is safe here and what it
@@ -28,7 +32,6 @@ import QtQuick
 import QtQuick.Layouts
 import "root:/"
 import "root:/modules/bar"
-import "root:/modules/notifications"
 // SessionInfo, for the identity card on the Performance tab. It lives with
 // the settings window because that is where it was first needed; it is a
 // singleton, so importing the directory brings the name into scope and
@@ -67,13 +70,6 @@ Item {
                  // column with the recorder and the replay buffer, opening one
                  // shoved those off the bottom of the card. Things that grow
                  // and things that must stay put now have a column each.
-        {
-            width: 620,
-            height: 480
-        },       // Notifications: as tall as the Dashboard tab so the panel
-                 // does not shrink under you on the way in from the badge,
-                 // and narrow enough that a body wraps into two readable
-                 // lines rather than one very long one.
         {
             width: 700,
             height: 380
@@ -179,6 +175,10 @@ Item {
     // decides whether SystemStats samples the machine -- which would have gone
     // on polling /proc and nvidia-smi from the wrong tab without anything
     // looking wrong.
+    //
+    // Taking Notifications back OUT moved the same two tabs back again, and
+    // this file did not have to be read for it. That is the whole return on
+    // asking by name, and it is why the numbers are not coming back.
     readonly property string tab: root.tabs[root.currentTab] ?? root.tabs[0]
 
     Column {
@@ -476,25 +476,6 @@ Item {
                             width: parent.width
                         }
                     }
-                }
-            }
-
-            // ============ Notifications ============
-            // One card and no columns: this tab is a list, and a list wants
-            // the whole width rather than a share of it.
-            Card {
-                anchors.fill: parent
-                visible: root.tab === "Notifications"
-
-                // Its `visible` is not set here on purpose: an item's
-                // effective visibility follows its parent's, so hiding the
-                // card hides this, and the onVisibleChanged inside it -- the
-                // thing that marks the count read -- fires off that. Same
-                // mechanism WifiControl uses to only scan while it is on
-                // screen.
-                NotificationHistory {
-                    anchors.fill: parent
-                    anchors.margins: 16
                 }
             }
 

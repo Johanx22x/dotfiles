@@ -586,7 +586,9 @@ binds {
     Mod+V hotkey-overlay-title="Apps: clipboard history" { spawn "qs" "ipc" "call" "launcher" "clipboard"; }
     Mod+D hotkey-overlay-title="Shell: open the dashboard" { spawn "qs" "ipc" "call" "island" "dashboard"; }
     Mod+N hotkey-overlay-title="Shell: mute notifications (do not disturb)" { spawn "qs" "ipc" "call" "dnd" "toggle"; }
-    Mod+Shift+N hotkey-overlay-title="Shell: notification history" { spawn "qs" "ipc" "call" "island" "notifications"; }
+    // Toggles rather than only opening; the reason is in hyprland.lua next to
+    // the same bind.
+    Mod+Shift+N hotkey-overlay-title="Shell: notification history" { spawn "qs" "ipc" "call" "notifications" "history"; }
     Mod+C hotkey-overlay-title="Shell: settings" { spawn "qs" "ipc" "call" "settings" "toggle"; }
     Mod+Slash hotkey-overlay-title="Shell: this cheatsheet" { spawn "qs" "ipc" "call" "cheatsheet" "toggle"; }
     Mod+Shift+Escape hotkey-overlay-title="Shell: power menu" { spawn "qs" "ipc" "call" "powermenu" "toggle"; }
