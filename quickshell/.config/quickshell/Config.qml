@@ -1004,6 +1004,19 @@ Singleton {
     // landing on the wrong bar is invisible from a window that covers the
     // other screen.
     //
+    // THE PAGE HAS A PICKER AGAIN AND THIS IS STILL TRUE, which is worth
+    // spelling out here because the two controls look alike and only one of
+    // them was the problem. BarPage.qml draws the switches ONCE and puts a
+    // ChoiceRow above them naming which bar they are pointed at. That is not a
+    // scope: there is no "All" in it, every option is a single screen key, and
+    // nothing it can be set to writes to more than one entry in the map below.
+    // What was unreadable about the old one was the model underneath -- a
+    // switch that meant "what this bar shows" or "whether this bar has an
+    // opinion" depending on where the selector was pointed -- and that model is
+    // what this section replaced. The half of the complaint that survives is
+    // that eight switches look the same whichever bar is selected, and the page
+    // answers it rather than denying it; see its header.
+    //
     // WHAT IS GIVEN UP, said plainly. There is no longer any way to change one
     // thing on every bar at once; with two bars that is two visits to the same
     // switch, and with four it is four. That is the trade accepted for a page
