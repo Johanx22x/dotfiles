@@ -214,11 +214,12 @@ PanelWindow {
             // island gone, which is the note on Config.barWidgets about why
             // this one may be switched off and the power button may not.
             //
-            // THE TWO BADGES SURVIVE IT. They anchor to this Row's edges rather
+            // THE BADGES SURVIVE IT. They anchor to this Row's edges rather
             // than to the island, so with the island hidden the Row is zero
             // wide at the centre of the bar and they simply meet there, one on
-            // each side -- still a pair, still centred, still saying what they
-            // said.
+            // each side -- still centred, still saying what they said. On most
+            // bars only the capture badge is ever drawn: the do-not-disturb one
+            // below stands in for a bell this bar does not have.
             Island {
                 anchors.verticalCenter: parent.verticalCenter
 
@@ -232,25 +233,38 @@ PanelWindow {
         // it, the Row would grow when the badge appeared and the centre of the
         // bar would shift because you muted your notifications.
         //
-        // Left and right of the island on purpose. Both are facts that have to
-        // stay true on screen rather than take a turn in the island's one
-        // slot, and putting them on opposite sides is what keeps them from
-        // being read as the same kind of thing: one is something being done to
-        // this desktop, the other something this desktop was told to do.
+        // Left and right of the island on purpose, on the bars that draw both.
+        // Both are facts that have to stay true on screen rather than take a
+        // turn in the island's one slot, and putting them on opposite sides is
+        // what keeps them from being read as the same kind of thing: one is
+        // something being done to this desktop, the other something this
+        // desktop was told to do.
         DndIndicator {
             anchors.right: centre.left
             anchors.rightMargin: Theme.itemSpacing
             anchors.verticalCenter: parent.verticalCenter
 
-            // WHO CARRIES THE NUMBER, decided here because this is the only
-            // place that can see both of them. The bell at the right end shows
-            // NotificationState.unread on the door you pay that debt through,
-            // and while it is drawn this badge saying the same number would be
-            // one bar saying one thing twice. Switch the bell off and the
-            // badge takes it back, so the count never simply disappears -- a
-            // mute whose only trace is a number is bad, and a mute with no
-            // trace at all is worse.
-            showCount: !bar.widget("notifications")
+            // WHO SAYS THE MUTE IS ON, decided here because this is the only
+            // place that can see both of them.
+            //
+            // The bell at the right end draws bellOff in the accent while the
+            // mute is on, and carries NotificationState.unread on the door you
+            // pay that debt through. That is one control saying the whole
+            // thing, so wherever it is drawn this badge would be the same bar
+            // saying it again from the middle -- which is what it used to do,
+            // with the two of them splitting the sentence between opposite
+            // ends of one bar.
+            //
+            // Switch the bell off on this bar and the badge comes back whole,
+            // glyph and count together. It is not decoration there: the mute
+            // outlives a shell reload (see NotificationState), so a bar with
+            // nothing saying it would be a bar that is silently muted. A mute
+            // whose only trace is a number is bad; a mute with no trace at all
+            // is worse.
+            //
+            // This was `showCount` and gated only the number, back when the
+            // badge drew the glyph on every bar regardless.
+            active: !bar.widget("notifications")
         }
 
         // The screen-capture badge, anchored to the island's right edge and
