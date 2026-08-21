@@ -26,7 +26,17 @@ DOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSUME_YES=0
 DRY_RUN=0
 JSON=0
+PULL=0
+WITH_REQUIRES=0
 COMPOSITOR=""
+
+# Whether a question may be put on screen at all. `update` turns this off: it is
+# the mode meant to run from a script or out of a keybind, and a mode that is
+# non-interactive in principle and blocks on a prompt in practice is worse than
+# one that never claimed to be. With it off, every question takes its default --
+# which for anything destructive is "no" -- and --yes is still there for a run
+# that means it.
+UI_ASK=1
 
 # Everything that went wrong, collected as the run goes and printed once at the
 # end. A package that will not install is not a reason to abandon the symlinks,
@@ -144,7 +154,8 @@ Sets this desktop up on an Arch machine, and tells you whether it still is.
 USAGE
   ./install.sh [OPTIONS]              set the machine up
   ./install.sh check [--json]         read-only: say what is and is not in place
-  ./install.sh apply <unit>... [OPTS] apply named units and what they require
+  ./install.sh update [OPTIONS]       catch up on what the profile says it wants
+  ./install.sh apply <unit>... [OPTS] apply exactly the units you name
 
 MODES
   (none)    The menu. Every unit with its state and a box, the boxes remembered
@@ -153,12 +164,19 @@ MODES
   check     Asks every unit how it is and prints a table. Uses no sudo, writes
             nothing, and is safe to run at any moment. Exits 1 when a unit that
             applies to this machine is not ok.
-  apply     One or more units by id, plus whatever they require, in order.
+  update    No questions. Applies the units the profile says this machine wants
+            and whose check is not already ok, then their reload hooks. Does NOT
+            pull unless you ask it to -- see --pull.
+  apply     Exactly the units you name, in the right order among themselves.
+            It does NOT pull in their requirements -- see --with-requires --
+            because the point of it is repairing one row of the check table.
 
 OPTIONS
   -y, --yes             Answer yes to everything. Needed when there is no
                         terminal to ask on.
   -n, --dry-run         Say what would be done and do none of it.
+      --pull            update only. git pull --ff-only first.
+      --with-requires   apply only. Also apply whatever the named units require.
       --compositor=X    hyprland, niri or both. Taken from the profile, or from
                         what is installed, when it is not given.
       --profile=PATH    Somewhere other than
@@ -182,7 +200,8 @@ EXAMPLES
   ./install.sh apply symlinks     just relink the configuration
   ./install.sh -n                 what a full run would do, without doing it
 
-  git pull && ./install.sh        the normal way to take an update
+  git pull && ./install.sh        the normal way to take an update, with a menu
+  git pull && ./install.sh update the same with no questions at all
 EOF
 }
 
@@ -195,10 +214,12 @@ UNIT_ARGS=()
 
 while (( $# )); do
   case "$1" in
-    check|apply)
+    check|apply|update)
       [[ -n $MODE ]] && { ui_bad "two modes given: $MODE and $1" >&2; exit 2; }
       MODE="$1"
       ;;
+    --pull)        PULL=1 ;;
+    --with-requires) WITH_REQUIRES=1 ;;
     -y|--yes)      ASSUME_YES=1 ;;
     -n|--dry-run)  DRY_RUN=1 ;;
     --json)        JSON=1 ;;
@@ -369,9 +390,23 @@ mode_check() {
 }
 
 # ---------------------------------------------------------------------------
-# apply: named units, plus what they require.
+# apply: exactly the named units, in the right order among themselves.
+#
+# WHAT IT DOES NOT DO IS PULL IN THEIR REQUIREMENTS, and that is the whole
+# design of this mode. `apply` is what somebody reaches for after reading a
+# `check` table and seeing one row that is wrong. Expanding the request into its
+# dependencies is correct in principle and useless in practice: `symlinks`
+# requires `packages`, `packages` is not `ok` while one name out of 119 is
+# missing, and so asking to relink one file produced an offer to run
+# `pacman -S --needed` over the entire desktop plus four AUR builds. Nobody
+# takes that offer, so the mode was unusable for the thing it is best at.
+#
+# The requirements are still read: they decide the order when several units are
+# named together, and any that are outside the set and not already `ok` are
+# named on screen with their state, so a step that is about to fail for a known
+# reason says so first. `--with-requires` is the way back.
 mode_apply() {
-  local id
+  local id dep state
 
   for id in "${UNIT_ARGS[@]}"; do
     if ! unit_exists "$id"; then
@@ -383,17 +418,107 @@ mode_apply() {
 
   compositor_resolve apply
   stow_packages_resolve
-  unit_order "${UNIT_ARGS[@]}"
 
-  # WHAT WILL RUN, BEFORE IT RUNS. `apply seeds` pulling in packages and
-  # symlinks is correct and is also a surprise, so the expanded list is shown
-  # rather than discovered halfway down.
-  if (( ${#UNIT_ORDER[@]} > ${#UNIT_ARGS[@]} )); then
-    ui_dim "  with what they require: ${UNIT_ORDER[*]}"
+  if (( WITH_REQUIRES )); then
+    unit_order "${UNIT_ARGS[@]}"
+    if (( ${#UNIT_ORDER[@]} > ${#UNIT_ARGS[@]} )); then
+      ui_dim "  with what they require: ${UNIT_ORDER[*]}"
+    fi
+  else
+    unit_order_within "${UNIT_ARGS[@]}"
+    while IFS=$'\t' read -r dep state; do
+      [[ -z $dep ]] && continue
+      ui_warn "  note: this needs '$dep', which is $state"
+      ui_dim  "        ./install.sh apply $dep   -- or --with-requires to chain them"
+    done < <(unit_unmet_requires "${UNIT_ARGS[@]}")
   fi
 
   run_units "${UNIT_ORDER[@]}"
   report_failures
+}
+
+# ---------------------------------------------------------------------------
+# update: catch this machine up on what the profile says it wants, and ask
+# nobody anything.
+#
+# THIS IS THE MODE THE PROFILE EXISTS FOR. `check` says what is wrong and does
+# nothing; the menu does something and needs somebody at the keyboard. `update`
+# is the one in between -- it reads the answers that were given once, applies
+# what is both wanted and not already in place, and runs the reload hooks
+# afterwards. It is meant to be reachable from a keybind, a cron job or the end
+# of a `git pull`.
+#
+# IT DOES NOT PULL. That is a decision and not an oversight: this repository is
+# worked on from several sessions at once, and a `git pull` hidden inside a
+# command that also installs things is a surprise at exactly the wrong moment --
+# it can bring in a half-finished branch and apply it in the same breath. The
+# documented shape is two commands, so the person can see what arrived before it
+# runs:
+#
+#     git pull && ./install.sh update
+#
+# --pull is there for the unattended case, and is --ff-only so it can never
+# produce a merge commit nobody asked for.
+mode_update() {
+  local id kind todo=() again=()
+
+  # NO QUESTIONS, whatever is attached to stdin. A mode that is non-interactive
+  # in principle and blocks on a prompt in practice is worse than one that never
+  # claimed to be -- so every question takes its default, which for anything
+  # destructive is "no", and --yes remains the way to mean it.
+  UI_ASK=0
+
+  state_load
+  compositor_resolve update
+  stow_packages_resolve
+
+  if (( PULL )); then
+    ui_head "pull"
+    if ! run git -C "$DOT" pull --ff-only; then
+      ui_bad "  the pull did not fast-forward; nothing applied."
+      ui_say "  Sort the working tree out and run this again."
+      return 1
+    fi
+    # WHAT ARRIVED IS NOT WHAT IS RUNNING. Everything below this line was
+    # sourced before the pull, so a release that changes a unit would be only
+    # half in effect -- the new unit files on disk, the old ones in memory.
+    # Re-exec with the same arguments minus the pull and let what arrived do the
+    # work. Skipped under --dry-run, where nothing was pulled to re-read.
+    if (( ! DRY_RUN )); then
+      ui_dim "  re-running with what the pull brought in"
+      again=(update)
+      (( ASSUME_YES )) && again+=(--yes)
+      exec "$DOT/install.sh" "${again[@]}"
+    fi
+  fi
+
+  ui_head "update -- $COMPOSITOR"
+
+  # WANTED AND NOT ALREADY OK. The default when the profile has never heard of a
+  # unit is "yes": a machine that has never opened the menu should still be
+  # caught up by this, and the only thing that keeps a unit out is a "no" that
+  # was said out loud.
+  for id in "${UNIT_IDS[@]}"; do
+    "${id}_available" >/dev/null || continue
+    state_unit_wanted "$id" 1 || continue
+    kind="$(unit_state_kind "$(unit_state "$id")")"
+    [[ $kind == ok || $kind == na ]] && continue
+    todo+=("$id")
+  done
+
+  if (( ${#todo[@]} == 0 )); then
+    ui_ok "  nothing to do"
+    return 0
+  fi
+
+  ui_say "  applying: ${todo[*]}"
+  unit_order "${todo[@]}"
+  run_units "${UNIT_ORDER[@]}"
+  report_failures
+
+  # EXITS NON-ZERO WHEN SOMETHING FAILED, because this is the mode most likely
+  # to be run by something that is not a person and will never read the output.
+  (( ${#FAILED[@]} == 0 ))
 }
 
 # ---------------------------------------------------------------------------
@@ -431,7 +556,7 @@ tui_units() {
     # thing it exists for unreachable.
     "${id}_available" >/dev/null || continue
 
-    label="$(printf '%-14s %s' "$id" "$(unit_title "$id")")"
+    label="$(printf '%-15s %s' "$id" "$(unit_title "$id")")"
     ids+=("$id")
     labels+=("$label")
 
@@ -632,7 +757,8 @@ END
 
 # ---------------------------------------------------------------------------
 case "$MODE" in
-  check) mode_check ;;
+  check)  mode_check ;;
+  update) mode_update ;;
   apply)
     (( ${#UNIT_ARGS[@]} )) || { ui_bad "apply needs at least one unit id" >&2; usage >&2; exit 2; }
     mode_apply

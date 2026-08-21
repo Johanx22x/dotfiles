@@ -220,4 +220,34 @@ symlinks_move_aside() {
   ui_did "   moved ${#files[@]} file(s) to $backup"
 }
 
+
+# ---------------------------------------------------------------------------
+# AFTER THE LINKS, THE RELOADS.
+#
+# A unit file that arrived through stow is invisible to systemd until it is told
+# to look again, and that is the exact shape of the bug `check` found on the
+# machine this repository comes from: wallpaper-rotate.timer had never been
+# linked, so `systemctl --user is-enabled` answered not-found and the wallpaper
+# stopped rotating with nothing anywhere to say so.
+#
+# NOTHING ELSE IS RESTARTED, and that is a decision rather than an omission.
+# Restarting Quickshell takes down the bar, the island and the notification
+# daemon of the session the person is sitting in, and reloading the compositor
+# re-reads a config they may be halfway through editing. Both are one command,
+# both are in the README, and neither belongs to a step whose job was to make
+# symlinks.
+symlinks_post() {
+  run systemctl --user daemon-reload 2>/dev/null || true
+
+  ui_dim "   Nothing running picks new configuration up on its own:"
+  if want_hyprland; then
+    ui_dim "     hyprctl reload                                      # Hyprland"
+  fi
+  if want_niri; then
+    ui_dim "     niri reloads on save                                # niri"
+  fi
+  ui_dim "     qs kill && qs -d -p ~/.config/quickshell/shell.qml  # Quickshell"
+  return 0
+}
+
 unit_register symlinks
