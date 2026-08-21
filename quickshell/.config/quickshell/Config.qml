@@ -1456,11 +1456,14 @@ Singleton {
 
     // ---------------- Persistence ----------------
     //
-    // The same four lines as NotificationState's FileView, and for the same
+    // Nearly the same lines as NotificationState's FileView, and for the same
     // reasons: watchChanges only EMITS fileChanged, so the reload is the
     // handler's job; the first run has no file to read, which onLoadFailed
     // turns into a write of the defaults rather than an error on every
-    // launch.
+    // launch. The one difference is that neither write happens in the handler
+    // that asked for it -- see the note on saveTimer below, which is the
+    // difference between a block of assignments landing and about half of it
+    // landing.
     //
     // Editing the file by hand while the shell is up works and is picked up
     // immediately -- that is what watchChanges buys, and it is the fastest
@@ -1479,6 +1482,74 @@ Singleton {
     // and those defaults are already what the properties hold.
     property bool loaded: false
 
+    // ---------------- Why the save is deferred ----------------
+    //
+    // A BLOCK OF ASSIGNMENTS USED TO LOSE ROUGHLY HALF OF ITSELF, and this
+    // timer is the whole fix. Write two values in one synchronous turn and the
+    // first is silently reverted, in memory and on disk; write thirty and
+    // about fifteen come back. Five separate pieces of work ran into it from
+    // unrelated directions before anybody chased it down -- it is what took
+    // the About page's Restore defaults out -- so the mechanism is worth
+    // writing out in full rather than being left as folklore about JsonAdapter
+    // not seeing every write.
+    //
+    // IT IS NONE OF THE THREE THINGS IT LOOKS LIKE. Nothing coalesces
+    // `adapterUpdated`: JsonAdapter::onPropertyChanged emits it synchronously,
+    // inside the property write, so `onAdapterUpdated: writeAdapter()` used to
+    // run in the middle of `adapter.showDate = false`. Nothing in the adapter
+    // schedules its write-back. And FileView has no debounce of its own, which
+    // is half of the problem rather than a missing feature.
+    //
+    // WHAT IT IS: FileView keeps two buffers. `writeData` holds the bytes
+    // handed to the writer thread; `state.data` holds the last COMMITTED
+    // bytes, and `FileView::data()` -- which is what the adapter deserialises
+    // from -- returns the second. `writeAdapter()` serialises the live adapter
+    // and calls `setData()`, which parks the bytes in `writeData` and starts
+    // an async write, leaving `state.data` alone. The NEXT `writeAdapter()` in
+    // the same turn finds that writer still in flight, so `saveAsync()` ->
+    // `cancelAsync()` -> `waitForJob()` blocks on it and commits ITS payload
+    // -- the previous generation -- into `state.data`. That emits
+    // `dataChanged` synchronously, which deserialises the stale generation
+    // back over the live properties, undoing whatever was assigned since.
+    // `JsonAdapter::changesBlocked` is set for the whole deserialise, so the
+    // clobber never re-emits `adapterUpdated`: nothing downstream hears it and
+    // nothing is printed. The next serialisation then writes the reverted
+    // value out, which is what turns a flicker into a loss.
+    //
+    // (Quickshell 0.3.0, src/io/fileview.cpp and src/io/jsonadapter.cpp.)
+    //
+    // So: one `writeAdapter()` per settle, never two in one turn, and never
+    // one running inside the property write that triggered it. Thirty
+    // assignments are thirty `adapterUpdated` signals, thirty restarts of this
+    // timer, and one write.
+    //
+    // 150ms, THE SAME NUMBER pushTimer and tweakPushTimer already use, and the
+    // second reason for it is the one they give: a slider dragged across a
+    // hundred values was a hundred writes of the whole file, one per frame,
+    // and now it is one. The shell still reacts on the frame -- every binding
+    // is on the property, not on the file -- and the disk catches up once the
+    // value stops moving.
+    Timer {
+        id: saveTimer
+
+        interval: 150
+        onTriggered: file.writeAdapter()
+    }
+
+    // WHAT THIS COSTS: up to 150ms of changes if the shell goes away inside
+    // that window, which master did not risk because it wrote on the spot.
+    // Nothing can be done about it from here, and that is measured rather than
+    // assumed. `Component.onDestruction` on this singleton does not run -- not
+    // on Qt.quit(), not on a SIGTERM, and not on the config reload that
+    // happens every time a file in this tree is edited. Neither does a
+    // Connections onto Qt.application's aboutToQuit. A flush that never fires
+    // is worse than no flush, because the comment above it claims the case is
+    // covered, so there is no flush.
+    //
+    // The exposure is one pointer gesture: the shell would have to die within
+    // 150ms of the click that changed something. Everything before that click
+    // is already on disk.
+
     FileView {
         id: file
 
@@ -1487,7 +1558,12 @@ Singleton {
         printErrors: false
 
         onFileChanged: reload()
-        onAdapterUpdated: writeAdapter()
+        // NOT `writeAdapter()`. See the note on saveTimer above: calling it
+        // from this handler is what lost assignments, because the handler runs
+        // INSIDE the property write and a second call in the same turn walks
+        // back over the first. The signal only asks for a save; the timer is
+        // what performs one.
+        onAdapterUpdated: saveTimer.restart()
         // TWO THINGS ON LOAD, and the order matters. The migration reads the
         // raw text and rewrites the bar shape, so it has to finish before
         // anything is told the config is usable -- a consumer that armed itself
@@ -1503,9 +1579,14 @@ Singleton {
         
             root.loaded = true;
         }
+        // A machine with no file yet. THROUGH THE SAME TIMER as every other
+        // save, so there is exactly one path from "the adapter changed" to
+        // "the file is written" and no second one to keep correct. The file
+        // appearing 150ms after first launch instead of immediately costs
+        // nothing: `loaded` is already true, so nothing is waiting on it.
         onLoadFailed: {
             root.loaded = true;
-            writeAdapter();
+            saveTimer.restart();
         }
 
         // The one thing that has to happen between the file being read and
