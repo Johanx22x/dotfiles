@@ -41,18 +41,6 @@ import "root:/"
 Singleton {
     id: root
 
-    // ---------------- Dashboard ----------------
-    //
-    // Which tab the dashboard was last on. It lives HERE and not in
-    // Dashboard.qml because the popout destroys its content when it closes --
-    // that is what keeps a popout from carrying stale state between openings,
-    // and it is also why the tab kept snapping back to Dashboard. The state
-    // has to outlive the thing that displays it.
-    //
-    // Session-scoped, not written to disk: it survives closing and reopening
-    // the dashboard, not restarting the shell.
-    property int dashboardTab: 0
-
     // ---------------- Level 2: screen capture ----------------
     //
     // WHO is capturing and HOW MANY are doing it comes from the compositor
@@ -138,25 +126,29 @@ Singleton {
         root.dashboardRequested();
     }
 
-    // THE list of tabs, in the order the strip draws them. It lives here and
-    // not in Dashboard.qml for the same reason `dashboardTab` does: the
-    // dashboard is destroyed every time the popout closes, and the order has
-    // to be answerable while it does not exist. Dashboard.qml reads this
-    // rather than keeping its own copy -- two lists that had to agree on an
-    // order would eventually not.
+    // A `dashboardTabs` list and a `dashboardTab` index lived here, and both
+    // are gone because the dashboard has no tabs left to be on.
     //
-    // NOTIFICATIONS WAS THE SECOND OF FOUR. It is the bell at the right end of
-    // the bar now, opening into the bar's popout under itself, so the three
-    // left here are the three the dashboard was always about: this desktop,
-    // what is playing, and this machine.
+    // They lived HERE and not in Dashboard.qml for a reason worth keeping in
+    // mind if anything else in that panel ever needs to remember something:
+    // the popout DESTROYS its content when it closes, which is what stops a
+    // popout carrying stale state between openings, and it is also why the tab
+    // kept snapping back to the first one until the index moved out here. Any
+    // state the dashboard has to keep across an opening has to outlive the
+    // thing that displays it.
     //
-    // An `openDashboard(tab)` went with it. It existed for exactly one caller
-    // -- the do-not-disturb badge, which meant "here is what you missed" and
-    // not "here is the dashboard" -- and with the list gone from this panel
-    // there is nowhere specific left to be sent. Everything that opens the
-    // dashboard now opens it on whatever tab it was left on, which is what
-    // `dashboardTab` was always for.
-    readonly property var dashboardTabs: ["Dashboard", "Media", "Performance"]
+    // The list itself was here so the ORDER was answerable while the dashboard
+    // did not exist, and because two lists that had to agree on an order
+    // eventually would not. It ended at four entries: Workspaces went because
+    // the bar's dots are on screen at all times, Notifications became the bell
+    // at the right end of the bar, and the last three were folded into one
+    // view. See the header of modules/island/Dashboard.qml.
+    //
+    // An `openDashboard(tab)` went before them, for the same reason in
+    // miniature: it had exactly one caller -- the do-not-disturb badge, which
+    // meant "here is what you missed" and not "here is the dashboard" -- and
+    // once its destination was a bar widget there was nowhere specific left to
+    // be sent. Everything that opens this panel now opens the whole of it.
 
     // Asking for the dashboard to go away, for the same reason as above: the
     // popout that holds it is not this singleton's to close.
