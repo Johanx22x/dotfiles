@@ -83,8 +83,16 @@ jobs:
           # thing at the point where it has to guess.
           printf '[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
 
+          # python-yaml for tests/workflows.py, which reads these workflow
+          # files back; actionlint for the same check, which shells out to it
+          # for everything about GitHub's schema that a hand-written test has
+          # no business reimplementing. Both are in [extra], so the same two
+          # names install them on the desktop this repository is for -- which
+          # is the difference between a check anybody can run before pushing
+          # and one that only CI can answer.
           pacman -Syu --needed --noconfirm \
-            git python lua shellcheck stow hyprland niri curl
+            git python python-yaml lua shellcheck actionlint stow hyprland \
+            niri curl
 
       - uses: actions/checkout@v7
 
@@ -119,6 +127,17 @@ jobs:
       - name: Shell scripts pass shellcheck
         if: ${{ !cancelled() }}
         run: tests/shell-lint.sh
+
+      # LAST, BECAUSE IT IS ABOUT THE OTHER CHECKS RATHER THAN ABOUT THE
+      # REPOSITORY. It answers whether the workflows in this directory run at
+      # all, whether any of them still filters a `pull_request` by base branch
+      # -- the bug that let stacked pull requests merge with no checks -- and
+      # whether every executable script in tests/ is named by some workflow. A
+      # check nothing runs and a check that never starts look identical from
+      # the outside, which is to say they look like nothing.
+      - name: The workflows run, and run on every pull request
+        if: ${{ !cancelled() }}
+        run: tests/workflows.py
 
       - name: Package names resolve
         if: ${{ !cancelled() }}
