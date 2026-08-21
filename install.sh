@@ -38,11 +38,13 @@ COMPOSITOR=""
 # that means it.
 UI_ASK=1
 
-# Everything that went wrong, collected as the run goes and printed once at the
-# end. A package that will not install is not a reason to abandon the symlinks,
-# but half an hour of pacman output scrolls past and a failure buried in it is a
-# failure nobody sees.
-FAILED=()
+# WHAT WENT WRONG LIVES IN lib/fail.sh, and it is two ledgers rather than one
+# array. A package that will not build is not a reason to abandon the symlinks;
+# symlinks that would not link IS a reason to abandon everything after them --
+# and the version of this that collected both into one array called FAILED
+# could not tell the reader which of the two they had just had. fail_note and
+# fail_stop are the whole interface; see the header of that file for why the
+# stopping one exits rather than setting a flag.
 
 # The one place a command that CHANGES something goes through, so that
 # --dry-run is one condition here rather than a condition in every unit.
@@ -60,6 +62,9 @@ run() {
 
 # ---------------------------------------------------------------------------
 source "$DOT/lib/ui.sh"
+# After ui.sh, which it prints through; before everything that records a
+# failure, which is nearly everything else.
+source "$DOT/lib/fail.sh"
 source "$DOT/lib/state.sh"
 source "$DOT/lib/pkg.sh"
 source "$DOT/lib/units.sh"
@@ -292,7 +297,12 @@ sudo_begin() {
   (( DRY_RUN )) && return 0
 
   ui_say "   This needs sudo for the packages. Asking once, now."
-  sudo -v || { ui_bad "   sudo refused, and everything below needs it."; exit 1; }
+  # ALREADY FATAL BEFORE ANY OF THIS EXISTED, and now it says so in the same
+  # shape as every other stop. Nothing below installs, links or enables
+  # anything without it, so there is no half of the run left to attempt.
+  sudo -v || fail_stop "sudo" \
+    "sudo refused, and everything below it needs root." \
+    "Check this user is in the wheel group and that /etc/sudoers grants it, then run this again."
 
   # The refresh runs until this script exits. `kill -0 $$` is what ends it if
   # the script dies without reaching the trap -- otherwise the loop would
@@ -311,14 +321,6 @@ sudo_end() {
   [[ -n $SUDO_KEEPALIVE_PID ]] && kill "$SUDO_KEEPALIVE_PID" 2>/dev/null
   SUDO_KEEPALIVE_PID=""
   return 0
-}
-
-# ---------------------------------------------------------------------------
-report_failures() {
-  (( ${#FAILED[@]} )) || return 0
-  echo
-  ui_bad "${#FAILED[@]} thing(s) did not work:"
-  printf '  %s\n' "${FAILED[@]}"
 }
 
 # Applies one list of units, skipping the ones this machine has no use for.
@@ -434,7 +436,7 @@ mode_apply() {
   fi
 
   run_units "${UNIT_ORDER[@]}"
-  report_failures
+  fail_report
 }
 
 # ---------------------------------------------------------------------------
@@ -514,11 +516,13 @@ mode_update() {
   ui_say "  applying: ${todo[*]}"
   unit_order "${todo[@]}"
   run_units "${UNIT_ORDER[@]}"
-  report_failures
+  fail_report
 
-  # EXITS NON-ZERO WHEN SOMETHING FAILED, because this is the mode most likely
-  # to be run by something that is not a person and will never read the output.
-  (( ${#FAILED[@]} == 0 ))
+  # EXITS NON-ZERO WHEN ANYTHING AT ALL DID NOT WORK, notes included, because
+  # this is the mode most likely to be run by something that is not a person
+  # and will never read the output. A fatal failure never reaches this line:
+  # fail_stop ends the run where it happens, with its own non-zero exit.
+  fail_clean
 }
 
 # ---------------------------------------------------------------------------
@@ -736,7 +740,6 @@ mode_setup() {
 
   echo
   ui_ok "== Ready =="
-  report_failures
   cat <<'END'
 
 One thing is still yours, and it is a decision rather than a chore:
@@ -754,6 +757,13 @@ Everything else has a unit. To see where this machine stands at any moment:
 
       ./install.sh check
 END
+
+  # LAST, AND NOT BEFORE THE HAND-OFF ABOVE. The notes are the part with
+  # something to act on; the paragraph above them is the same on every machine.
+  # Printed first, the notes scroll away behind advice nobody needed twice --
+  # which is how "2 thing(s) did not work" came to be something people read
+  # after the fact in a screenshot.
+  fail_report
 }
 
 # ---------------------------------------------------------------------------

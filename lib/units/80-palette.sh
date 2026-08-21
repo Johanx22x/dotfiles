@@ -89,7 +89,17 @@ palette_apply() {
   if ! find -L "$dir" -maxdepth 2 -type f \( "${find_args[@]}" \) 2>/dev/null | grep -q .; then
     ui_bad "   No wallpapers in $dir."
     ui_say "   Drop one in and then run: wallpaper-switch random"
-    FAILED+=("palette: no wallpapers to generate it from")
+    # ALL THREE OF THESE ARE NOTES, and this unit argued for that before there
+    # was a word for it: "say so and carry on: it is one command to run again".
+    # The generated colour files are missing until somebody runs it, and the
+    # desktop comes up meanwhile on the seeded defaults -- several applications
+    # grey, which is ugly and is not broken. It also cannot succeed during a
+    # first install at all: wallpaper-switch needs a running compositor and a
+    # wallpaper daemon, and neither exists before the first login. A unit that
+    # is EXPECTED to fail on the machine this script is written for is the last
+    # one that should be allowed to end the run.
+    fail_note "palette" "no wallpapers in $dir, so no palette could be generated" \
+      "Put an image in $dir, then run: wallpaper-switch random"
     return 0
   fi
 
@@ -98,7 +108,12 @@ palette_apply() {
   # happened is that the symlinks step was skipped.
   if [[ ! -x "$HOME/.local/bin/wallpaper-switch" ]]; then
     ui_bad "   ~/.local/bin/wallpaper-switch is missing -- apply 'symlinks' first."
-    FAILED+=("palette: wallpaper-switch is not linked")
+    # REACHED ONLY BY A DELIBERATE `apply palette` ON ITS OWN now that the
+    # symlinks unit stops the run when it cannot link. Kept anyway: `apply`
+    # without --with-requires exists precisely so one unit can be run in
+    # isolation, and this is the message that makes that case comprehensible.
+    fail_note "palette" "$HOME/.local/bin/wallpaper-switch is not linked, so nothing could generate the colours" \
+      "./install.sh apply symlinks && ./install.sh apply palette"
     return 0
   fi
 
@@ -110,7 +125,8 @@ palette_apply() {
   else
     ui_bad "   the palette could not be generated. Once logged in, run:"
     ui_say "     wallpaper-switch random"
-    FAILED+=("palette: wallpaper-switch did not finish")
+    fail_note "palette" "wallpaper-switch could not generate the colours" \
+      "Once logged in to the desktop, run: wallpaper-switch random"
   fi
 }
 

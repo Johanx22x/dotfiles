@@ -87,7 +87,12 @@ optional_apply() {
     (( ${#names[@]} )) || continue
     any=1
     ui_say "   $group: ${#names[@]} package(s)"
-    pkg_install "$group" "${names[@]}"
+    # A NOTE, WHICH IS THE WHOLE POINT OF THIS DIRECTORY. The header of this
+    # file draws the line: everything on this side of it "can be left out and
+    # added later". The desktop comes up without GIMP, without Steam, without
+    # the Neovim group. A group that failed is named, with the packages in it,
+    # and the run carries on to the units that matter.
+    pkg_install note optional "$group" "${names[@]}"
   done < <(optional_groups)
 
   if (( ! any )); then

@@ -86,6 +86,18 @@ pkg_load_installed() {
   PKG_INSTALLED_LOADED=1
 }
 
+# THE CACHE IS A LIE THE MOMENT PACMAN RUNS, and until this existed nothing said
+# so. Every reader above goes through PKG_INSTALLED, which is filled once and
+# kept, which is right for `check` -- it asks a hundred questions of a machine
+# nobody is changing. It is wrong immediately after an install, and asking the
+# local database again is what makes it possible to answer "which of these
+# actually went in" without parsing anybody's output.
+pkg_reload_installed() {
+  PKG_INSTALLED=()
+  PKG_INSTALLED_LOADED=0
+  pkg_load_installed
+}
+
 pkg_is_installed() {
   pkg_load_installed
   [[ -n ${PKG_INSTALLED[$1]:-} ]]
@@ -119,6 +131,67 @@ pkg_multilib_on() {
   (( PKG_MULTILIB_ON ))
 }
 
+# ---------------------------------------------------------------------------
+# WHICH OF THESE DID NOT GO IN, asked of the local database rather than of the
+# installer's output.
+#
+# THE ALTERNATIVES WERE WEIGHED AND THIS IS THE CHEAPEST TRUE ONE.
+#
+#   ONE INVOCATION PER PACKAGE would attribute a failure by construction, and
+#   it costs the batching, which is not a small thing here: `yay -S a b c`
+#   resolves the dependency graph across all three at once and builds a shared
+#   AUR dependency ONCE. Split up, a common -git dependency is re-resolved and
+#   rebuilt for every package that wants it, and each invocation asks its own
+#   round of "which provider / edit the PKGBUILD / proceed" questions. On the
+#   required list that is minutes turning into a long evening.
+#
+#   PARSING THE OUTPUT is free and wrong. pacman's messages are TRANSLATED --
+#   this file already carries the scar of that, in the note on `pacman -Sl`
+#   above -- and yay's are neither translated nor stable nor documented as an
+#   interface. A parser that works today is a parser that reports "nothing
+#   failed" after the next release.
+#
+#   ASKING AGAIN AFTERWARDS, which is this, keeps the batch, costs one
+#   `pacman -Qq` per install step, and is not a guess: "is it installed" is the
+#   question that was being asked in the first place. Its one blind spot is a
+#   package that was already installed at an older version and failed to
+#   UPDATE, which would not show up here -- and that is exactly the case
+#   `--needed` tells the caller it is not attempting, so the answer stays
+#   consistent with what was asked for.
+pkg_still_missing() {
+  pkg_reload_installed
+  pkg_missing "$@"
+}
+
+# THE INSTALLER FAILED AND EVERYTHING IS INSTALLED is a real outcome and not a
+# contradiction: pacman and yay both exit non-zero for a failing hook, an
+# orphaned dependency warning or a post-transaction script, with the
+# transaction itself committed. So the message has two shapes and the caller
+# picks neither -- $1 is the subject, and what follows it depends on whether
+# the re-check found anything actually missing.
+pkg_failure_line() {
+  local subject="$1"; shift
+
+  if (( $# )); then
+    printf '%s: %s' "$subject" "$*"
+  else
+    printf '%s, though every name on the list is installed afterwards -- see the output above' "$subject"
+  fi
+}
+
+# And the same fork for the way out, because "install them one at a time" is
+# not advice when there is nothing left to install.
+pkg_failure_remedy() {
+  local one_at_a_time="$1"; shift
+
+  if (( $# )); then
+    printf '%s %s' "$one_at_a_time" "$*"
+  else
+    printf '%s' "Read the output above: the packages went in, so what failed was a hook or a post-transaction step."
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # A DISABLED REPOSITORY IS NOT IN `pacman -Sl` EITHER, so once [multilib] is
 # off its packages are indistinguishable from names that only exist in the AUR,
 # and handing lib32-mesa to yay is not a good outcome. The rule is written down
@@ -155,21 +228,39 @@ pkg_ensure_yay() {
 # ---------------------------------------------------------------------------
 # INSTALL A SET OF NAMES, wherever each of them lives.
 #
-# NOTHING IN HERE IS ALLOWED TO END THE RUN. Under `set -e` a function that
-# returns non-zero inside an `if` body takes the whole script down with it, and
-# that is precisely how one package dropped from the repositories used to mean
-# no symlinks, no seeds and no palette. Every fallible command is tested rather
-# than run bare, and what went wrong goes into FAILED to be said again at the
-# end, where it will still be on screen.
+# NOTHING IN HERE ENDS THE RUN ON ITS OWN, and that stays true. Under `set -e` a
+# function that returns non-zero inside an `if` body takes the whole script down
+# with it, and that is precisely how one package dropped from the repositories
+# used to mean no symlinks, no seeds and no palette. Every fallible command is
+# tested rather than run bare. What CHANGED is that the caller now says how much
+# the set matters, and a set that matters enough goes through fail_stop -- which
+# does end the run, deliberately, by the one route that is impossible to forget.
 #
-# Returns 0 even when packages failed. "Some of it did not install" is a report,
-# not a reason to abandon the rest of the run.
+# $1 IS `stop` OR `note`, AND IT BELONGS TO THE CALLER. This file has no way to
+# know whether a list is the desktop or a nice-to-have; the units do, because
+# the answer is written down in the directory the list came from. See the note
+# in 15-optional.sh on what separates packages/required/ from packages/optional/.
+#
+# $2 is the unit id, which is what the summary groups by and what a person would
+# run again. $3 is the label -- "required", "gaming", "gpu/nvidia" -- which is
+# what they saw scroll past.
+#
+# Returns 0 when the severity is `note`, even though packages failed. "Some of
+# it did not install" is a report, not a reason to abandon the rest of the run.
 pkg_install() {
-  local label="$1"; shift
-  local names=("$@") repo=() aur=() blocked=() name
+  local severity="$1" unit="$2" label="$3"; shift 3
+  local names=("$@") repo=() aur=() blocked=() failed=() name
 
   (( ${#names[@]} )) || return 0
-  pkg_load_repo_index || { FAILED+=("$label: the sync databases are empty"); return 0; }
+
+  # ALWAYS FATAL, WHATEVER THE CALLER SAID. An empty sync database is not this
+  # list failing, it is pacman being unable to install anything at all: every
+  # later pkg_install hits the same wall, and every name in every list would
+  # fall through to the AUR branch and be built from source. There is no
+  # version of carrying on here that is not worse than stopping.
+  pkg_load_repo_index || fail_stop "$unit" \
+    "pacman knows of no packages at all -- the sync databases are empty." \
+    "sudo pacman -Sy"
 
   for name in "${names[@]}"; do
     if [[ -n ${PKG_REPO[$name]:-} ]]; then
@@ -184,13 +275,9 @@ pkg_install() {
   if (( ${#blocked[@]} )); then
     ui_bad "   $label: ${#blocked[@]} package(s) need [multilib], which is not enabled:"
     printf '     %s\n' "${blocked[@]}"
-    ui_say "     Uncomment these two lines in /etc/pacman.conf, run 'sudo pacman -Sy',"
-    ui_say "     and this again:"
-    ui_say ""
-    ui_say "       [multilib]"
-    ui_say "       Include = /etc/pacman.d/mirrorlist"
-    ui_say ""
-    FAILED+=("$label: ${blocked[*]} (needs [multilib])")
+    pkg_record "$severity" "$unit" \
+      "$label: ${blocked[*]} -- [multilib] is not enabled" \
+      "Uncomment [multilib] and its Include line in /etc/pacman.conf, run 'sudo pacman -Sy', then: ./install.sh apply $unit"
   fi
 
   # --needed skips what is already installed, which is what makes re-running
@@ -199,8 +286,11 @@ pkg_install() {
     if run sudo pacman -S --needed "${repo[@]}"; then
       ui_did "   $label: ${#repo[@]} package(s) from the repositories"
     else
+      mapfile -t failed < <(pkg_still_missing "${repo[@]}")
       ui_bad "   $label: pacman did not finish, see the output above"
-      FAILED+=("$label: pacman failed")
+      pkg_record "$severity" "$unit" \
+        "$(pkg_failure_line "$label: pacman could not install" "${failed[@]}")" \
+        "$(pkg_failure_remedy "A mirror, a renamed package or a conflict -- try them one at a time: sudo pacman -S --needed" "${failed[@]}")"
     fi
   fi
 
@@ -217,11 +307,35 @@ pkg_install() {
       if yay -S --needed "${aur[@]}"; then
         ui_did "   $label: AUR done"
       else
-        ui_bad "   $label: some AUR packages failed, see the output above"
-        FAILED+=("$label: an AUR build failed")
+        # BY NAME, WHICH IS WHAT THE NOTE ON pkg_needs_multilib ALREADY
+        # PROMISED. It says a misclassified multilib package would be "reported
+        # as an AUR build that failed -- by name, which is a long way from
+        # silence", and ninety lines below it the code recorded exactly "an AUR
+        # build failed" with no name at all. Thirty names go to yay in one
+        # batch; the promise was worth keeping and the comment was the only
+        # part of it that existed.
+        mapfile -t failed < <(pkg_still_missing "${aur[@]}")
+        ui_bad "   $(pkg_failure_line "$label: the AUR build failed" "${failed[@]}")"
+        pkg_record "$severity" "$unit" \
+          "$(pkg_failure_line "$label: the AUR build failed" "${failed[@]}")" \
+          "$(pkg_failure_remedy "Build them one at a time to see which one and why: yay -S" "${failed[@]}")"
       fi
     else
-      FAILED+=("$label: ${#aur[@]} AUR package(s), and no yay to build them")
+      pkg_record "$severity" "$unit" \
+        "$label: no yay, so ${#aur[@]} AUR package(s) were skipped: ${aur[*]}" \
+        "Install yay by hand -- git clone https://aur.archlinux.org/yay.git && cd yay && makepkg -si -- then: ./install.sh apply $unit"
     fi
+  fi
+}
+
+# The one place the severity a caller chose turns into a ledger entry, so that
+# no branch above has to remember which of the two functions it wanted.
+pkg_record() {
+  local severity="$1" unit="$2" what="$3" remedy="$4"
+
+  if [[ $severity == stop ]]; then
+    fail_stop "$unit" "$what" "$remedy"
+  else
+    fail_note "$unit" "$what" "$remedy"
   fi
 }

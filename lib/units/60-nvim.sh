@@ -40,7 +40,12 @@ nvim_apply() {
     ui_did "   cloned"
   else
     ui_bad "   the clone failed, ~/.config/nvim is not set up"
-    FAILED+=("nvim: the clone failed")
+    # NOT FATAL, and the comment above already said why: this is one editor's
+    # configuration. The desktop comes up, logs in and draws without it, and
+    # the two things that break the clone -- no network, no git because the
+    # packages step was skipped -- are both things the person can see.
+    fail_note "nvim" "the clone of ~/.config/nvim failed" \
+      "Check the network, then: ./install.sh apply nvim"
   fi
 }
 

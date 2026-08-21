@@ -99,13 +99,35 @@ symlinks_check() {
 }
 
 # ---------------------------------------------------------------------------
+# EVERY FAILURE IN HERE STOPS THE RUN, and this is the unit the whole
+# fatal/not-fatal distinction was drawn for.
+#
+# Nothing that this repository does survives it. ~/.config for the compositor,
+# the bar, the terminal and the shell are links made here; so is
+# ~/.local/bin, which is where every script the later units invoke lives.
+# `palette` calls wallpaper-switch, `monitors` calls desktop-monitors,
+# `services-user` enables unit files that only exist in ~/.config/systemd/user
+# because stow put them there. Carrying on past a failed stow means running
+# five more units that each discover the same missing directory in their own
+# words -- which is what used to happen, and it produced a summary of five
+# unrelated-looking failures with one cause.
+#
+# It is also the failure a person can actually fix: a file in the way, a
+# missing package, a second checkout. Stopping while they are still at the
+# keyboard is the difference between a two-minute fix and a machine that half
+# works for a week.
+#
+# THE REASON SURVIVES NOW, WHICH IT DID NOT. Each branch below used to
+# `return 1` and let unit_apply record the same "symlinks: did not finish" for
+# all five, so the summary said nothing that the person could act on and the
+# real message had scrolled away. fail_stop takes the reason and the way out
+# together, and does not return.
 symlinks_apply() {
   local stow_args=() stow_out conflicts=() unhandled=() backup
 
-  command -v stow >/dev/null || {
-    ui_bad "   stow is not installed, so nothing can be linked"
-    return 1
-  }
+  command -v stow >/dev/null || fail_stop "symlinks" \
+    "stow is not installed, so not one dotfile can be linked." \
+    "sudo pacman -S --needed stow   -- or ./install.sh apply packages, which includes it"
   mapfile -t stow_args < <(symlinks_args)
 
   ui_say "   packages: ${STOW_PACKAGES[*]}"
@@ -144,8 +166,9 @@ symlinks_apply() {
   if (( ${#unhandled[@]} )); then
     ui_bad "   stow reports something this will not touch on its own:"
     printf '   %s\n' "${unhandled[@]}"
-    ui_say "   Sort it out by hand and run this again."
-    return 1
+    fail_stop "symlinks" \
+      "stow reported something this will not guess at: ${unhandled[0]}" \
+      "Read the stow output above, sort it out by hand, and run this again."
   fi
 
   if (( ${#conflicts[@]} )); then
@@ -162,16 +185,28 @@ symlinks_apply() {
 
     backup="$HOME/dotfiles-replaced-$(date +%Y%m%d-%H%M%S)"
     if ui_confirm "Move them to $backup and carry on?"; then
-      symlinks_move_aside "$backup" "${conflicts[@]}" || return 1
+      # move_aside puts everything back on the first failed move and prints
+      # both sides, so by the time it returns non-zero the filesystem is in
+      # trouble and there is nothing left for this run to attempt.
+      symlinks_move_aside "$backup" "${conflicts[@]}" || fail_stop "symlinks" \
+        "the conflicting files could not be moved aside, so nothing was linked." \
+        "Read the two lists printed above -- they are the exact state of $backup and of \$HOME -- and move the rest by hand."
     else
-      ui_bad "   nothing linked. Move them by hand and run this again."
-      return 1
+      # DECLINED IS STILL FATAL. It is a choice and not an accident, and the
+      # answer is the same either way: no dotfile is linked, so every unit
+      # after this one would be working on a machine that has none of this
+      # repository on it. Saying "fine" and carrying on would be the installer
+      # pretending the answer did not matter.
+      fail_stop "symlinks" \
+        "the ${#conflicts[@]} file(s) in the way were left alone, so nothing was linked." \
+        "Move or delete them yourself -- they are listed above, under \$HOME -- and run this again, or answer yes to have them moved to a timestamped folder."
     fi
   fi
 
   if ! run stow "${stow_args[@]}" "${STOW_PACKAGES[@]}"; then
-    ui_bad "   stow failed even after clearing the conflicts above."
-    return 1
+    fail_stop "symlinks" \
+      "stow failed even with nothing in the way." \
+      "Run it by hand to see what it says: stow ${stow_args[*]} ${STOW_PACKAGES[*]}"
   fi
   ui_did "   linked"
 }
@@ -207,10 +242,19 @@ symlinks_move_aside() {
     ui_bad "   could not move ~/$rel -- putting the other ${#moved[@]} back"
     for undo in "${moved[@]}"; do
       if ! mv "$backup/$undo" "$HOME/$undo"; then
+        # THE WORST STATE THIS SCRIPT CAN REACH, and until now it produced one
+        # red line and then let the run carry on into six more units. Files
+        # that were in $HOME are under $backup, the rollback itself is failing,
+        # and nothing is linked. There is no version of continuing that is not
+        # making it worse, and the list printed above is the only record that
+        # exists -- so the run ends here, with that list still the last thing
+        # on screen.
         ui_bad "   AND COULD NOT PUT ~/$undo BACK. Nothing else will be touched."
         ui_say "   These are now under $backup and not in \$HOME:"
         printf '     %s\n' "${moved[@]}"
-        return 1
+        fail_stop "symlinks" \
+          "\$HOME/$undo could not be put back, so ${#moved[@]} of your file(s) are under $backup and not in \$HOME." \
+          "Nothing else was touched and nothing was linked. Move the files listed above back yourself, work out why the filesystem refused -- full disk, read-only mount, ownership -- and run this again."
       fi
     done
     ui_say "   \$HOME is as it was. Nothing was linked."

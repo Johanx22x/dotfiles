@@ -94,7 +94,7 @@ services-system_check() {
 }
 
 services-system_apply() {
-  local unit failures=0 pending=()
+  local unit failed=() pending=()
 
   while IFS= read -r unit; do
     [[ -z $unit ]] && continue
@@ -121,16 +121,37 @@ services-system_apply() {
   for unit in "${pending[@]}"; do
     if [[ $unit == sddm.service ]]; then
       run sudo systemctl enable "$unit" && ui_did "   enabled $unit (from the next boot)" \
-        || { ui_bad "   could not enable $unit"; failures=$(( failures + 1 )); }
+        || { ui_bad "   could not enable $unit"; failed+=("$unit"); }
     elif run sudo systemctl enable --now "$unit"; then
       ui_did "   enabled $unit"
     else
       ui_bad "   could not enable $unit"
-      failures=$(( failures + 1 ))
+      failed+=("$unit")
     fi
   done
 
-  (( failures )) && FAILED+=("services-system: $failures unit(s) could not be enabled")
+  # ONE NAME IN THIS LIST IS FATAL AND THE OTHERS ARE NOT, which is why the
+  # severity is decided here rather than for the unit as a whole. The list
+  # above says it about sddm itself: "without it a machine boots to a text
+  # console and the sessions this repo installs are not reachable at all".
+  # That is the definition of a machine that has not been set up, and it is
+  # worth stopping on because the person is still at the keyboard now and will
+  # not be at the next boot, which is when they would find out.
+  #
+  # The rest are the network, bluetooth, TRIM, the pacman cache, the mirrors
+  # and the snapshot timers. Every one of them is a thing that keeps working
+  # without the machine failing to come up, and all of them can be enabled
+  # afterwards with one command -- so they are named and the run carries on.
+  if (( ${#failed[@]} )); then
+    if [[ " ${failed[*]} " == *" sddm.service "* ]]; then
+      fail_stop "services-system" \
+        "sddm.service could not be enabled, so this machine would boot to a text console." \
+        "systemctl status sddm.service  -- then 'sudo systemctl enable sddm.service' and run this again."
+    fi
+    fail_note "services-system" \
+      "${#failed[@]} system unit(s) could not be enabled: ${failed[*]}" \
+      "systemctl status ${failed[0]}   -- then: ./install.sh apply services-system"
+  fi
   return 0
 }
 
