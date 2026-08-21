@@ -139,22 +139,39 @@ SettingsPage {
     // A peak monitor opens a real capture stream on the node: on the input
     // that means this shell is recording from the microphone, which would
     // show up as such to anything watching and would keep the device busy
-    // forever. `root.visible` is the page's own on-screen flag -- see the
-    // note in SettingsPage.qml about why every page is built and only one is
-    // shown -- so the microphone is only listened to while somebody is
-    // looking at the page that displays it.
+    // forever.
+    //
+    // `root.onScreen` AND NOT `root.visible`, WHICH IS WHAT THIS FILE USED TO
+    // SAY and what made the paragraph above come true. `visible` is the page's
+    // position in the rail and nothing else: a hidden window does not make its
+    // content item invisible, so the selected page reads visible=true with the
+    // settings window shut.
+    //
+    // MEASURED, on a throwaway probe of exactly this shape -- a FloatingWindow
+    // bound to a flag, a child item bound to a page index, two peak monitors
+    // -- counting the capture streams PipeWire really has with
+    // `pw-dump | grep -c "Quickshell Peak Detect"`:
+    //
+    //                            gated on visible   gated on onScreen
+    //     never opened                          2                   0
+    //     window open                           2                   2
+    //     window closed again                   2                   0
+    //
+    // The left column is this shell recording from the microphone with nothing
+    // on screen, until it is restarted. See SettingsPage.qml for what onScreen
+    // folds in and what it deliberately does not.
     PwNodePeakMonitor {
         id: outputPeak
 
         node: root.sink
-        enabled: root.visible
+        enabled: root.onScreen
     }
 
     PwNodePeakMonitor {
         id: inputPeak
 
         node: root.source
-        enabled: root.visible
+        enabled: root.onScreen
     }
 
     // ---------------- Naming an application ----------------
