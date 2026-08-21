@@ -1,4 +1,6 @@
 brave-bin
 mpvpaper
+obs-studio-liberty
 wl-gammarelay-rs
 yay
+zen-browser-bin
