@@ -179,4 +179,46 @@ Singleton {
         if (root.present)
             Quickshell.execDetached(["desktop-brightness", "down", String(root.step)]);
     }
+
+    // NOT WHAT THE MEDIA KEYS CALL, and they are deliberately left alone. Both
+    // compositors bind XF86MonBrightnessUp/Down straight to
+    // `brightnessctl -e4 -n2`, which steps along a perceptual curve so every
+    // press feels like the same amount of change; the script behind the calls
+    // below is linear because it serves a slider, whose handle has to land
+    // where it was dropped. Routing the keys through here would make them
+    // worse at the one thing they are good at, and buy nothing: the island
+    // already follows the sysfs file, so it sees those presses land whoever
+    // made them.
+    //
+    // What this is for is everything that is not those two keys -- a terminal,
+    // a script, a keyboard with no brightness keys on it, and any bind
+    // somebody adds later that would rather name the shell than name a tool.
+    IpcHandler {
+        target: "brightness"
+
+        function up(): void {
+            root.up();
+        }
+
+        function down(): void {
+            root.down();
+        }
+
+        // Refuses rather than clamps, the same call SettingsState.page makes:
+        // a number out of range is a typo, and quietly turning 400 into 100
+        // hides it. The floor is applied rather than refused, because 5 is
+        // where the script puts it and asking for 1 is a legible request for
+        // "as dim as it goes".
+        function set(percent: int): void {
+            if (percent < 0 || percent > 100)
+                return;
+            root.setPercent(percent);
+        }
+
+        function status(): string {
+            if (!root.present)
+                return "no backlight";
+            return `${root.percent}%`;
+        }
+    }
 }
