@@ -78,7 +78,12 @@ SettingsPage {
         "accel", "scroll", "natural scroll", "keyboard", "repeat", "delay",
         "key repeat", "layout", "keymap", "xkb", "language", "spanish",
         "español", "latam", "latin american", "distribución", "accents",
-        "dead keys", "ñ"]
+        // "active layout" was a ROW here until the layout section was
+        // redesigned -- the ChoiceRow that used to carry that label is gone,
+        // and without this the words that reached this page for two months
+        // reach nothing. The cycle rows are labelled with the layout's name
+        // now, so "spanish" still finds it on its own.
+        "dead keys", "ñ", "active layout", "cycle"]
 
     // The code-to-name table, asked for the first time this page is looked at.
     // See Config.ensureLayoutNames: nothing at startup needs ninety-nine
@@ -92,35 +97,89 @@ SettingsPage {
     // that it survives the section being rebuilt.
     property string layoutQuery: ""
 
-    // The configured layouts in a FIXED order, which is not the order they are
-    // stored in.
+    // THE CYCLE IN THE ORDER SUPER + K WALKS IT, starting at the layout in
+    // use, and this reverses what the page used to do -- so the old reasoning
+    // goes first.
     //
-    // The store rotates -- that is how it remembers which one is active -- so
-    // showing the cycle as it is stored would mean the segments swapped places
-    // every time one of them was clicked, and the row you just pressed moved
-    // out from under the pointer. Sorting by code is stable under rotation,
-    // because a rotation changes the order and never the set.
+    // The cycle used to be shown sorted by code. The store ROTATES on
+    // Hyprland -- "us,latam" becomes "latam,us" when you switch -- so drawing
+    // it as stored meant the segments of a ChoiceRow swapped places every
+    // time one of them was clicked, and the next one you reached for had
+    // moved out from under the pointer. Sorting is stable under rotation,
+    // because a rotation changes the order and never the set, and that bought
+    // a control that stayed still.
     //
-    // What is lost is the cycle ORDER, which this control was never the right
-    // place to read: SUPER + K is where that is felt, and the sequence is
-    // still whatever the store holds.
-    readonly property var layoutsInFixedOrder: Config.keyboardLayouts.slice().sort()
+    // What it cost was the ORDER, which is the only thing a cycle has beyond
+    // its members. SUPER + K steps this list; a display that hides the
+    // sequence cannot answer "and then what", and with three or four layouts
+    // that is the entire question. The old comment said the order "was never
+    // the right thing to read here" and pointed at the keybind. That was the
+    // wrong way round: the keybind is where the order is FELT, which is
+    // exactly why this is where it has to be READ.
+    //
+    // Anchoring the display at the active layout buys the order back and pays
+    // less for it than sorting did:
+    //
+    //   - A ring has no first element, so it needs an anchor, and the layout
+    //     you are typing in right now is the only one that means anything.
+    //     Read down the list and you are reading what SUPER + K will do next.
+    //   - It makes the two flavors draw the same thing. Hyprland rotates the
+    //     stored list and niri keeps an index into it (see Config); rotating
+    //     the display by that index hides a difference that was never the
+    //     user's business.
+    //   - The click that moves it is no longer ambiguous. What made the old
+    //     control dangerous was that a click reshuffled the row you were
+    //     about to press NEXT. Here the row you clicked moves to a place the
+    //     list already names -- the top, because the top is what you are
+    //     typing in -- and nothing else changes place.
+    //
+    // THE ORDER IS SHOWN AND NOT EDITED, which is a smaller claim than it
+    // looks. With two layouts, the case this machine and most others are in,
+    // a ring of two has one sequence and there is nothing to reorder. Past
+    // that, "move this one up" means two different things underneath: on
+    // Hyprland the stored list is the ring rotated to put the active layout
+    // first, so a reorder has to be rewritten to preserve that, while on niri
+    // the stored positions ARE the indices `niri msg action switch-layout`
+    // takes, so rewriting them moves what the compositor is pointing at. One
+    // control, two meanings, and on one flavor a silent change of the layout
+    // you are typing in. Removing and adding again is two clicks, does the
+    // same thing, and cannot mean anything else.
+    readonly property var layoutCycle: {
+        const list = Config.keyboardLayouts;
+        if (list.length === 0)
+            return [];
 
-    // The whole list, in the order the rows are drawn.
+        const at = Config.keyboardLayoutIndex;
+        const out = [];
+        for (let i = 0; i < list.length; i++)
+            out.push(list[(at + i) % list.length]);
+        return out;
+    }
+
+    // Every layout xkb ships, for the section that ADDS one.
     //
-    // CONFIGURED FIRST AND IN CYCLE ORDER, then everything else by name. The
-    // rows worth clicking are the ones already in use -- that is where you go
-    // to switch or to remove -- and past that a stable alphabetical list beats
-    // a clever one, the same call NetworkPage makes about sorting by signal.
+    // ONE JOB, which is the whole change on this page: this list only ever
+    // adds. It used to be the same rows that also switched and removed, with
+    // the configured ones hoisted to the top wearing badges, so a click meant
+    // "add" in one part of it and "switch to" in another and the answer to
+    // "what am I using" was mixed into the answer to "what could I use". The
+    // cycle has its own section above now, and nothing in this one moves it.
     //
-    // While there is a query the order is the score's, because then the list
-    // is an answer to what was typed rather than a list to look down.
+    // The configured ones are still IN the list, dimmed and saying so, rather
+    // than dropped: a search for "spanish" that came back empty because the
+    // layout was already configured would read as the search being broken.
+    //
+    // Plain alphabetical, with nothing hoisted -- there is nothing up here
+    // worth reaching first any more. While there is a query the order is the
+    // score's, because then the list is an answer to what was typed rather
+    // than a list to look down.
     readonly property var layoutRows: {
         const names = Config.layoutNames;
         const all = Object.keys(names).map(code => ({ code, name: names[code] }));
 
         // Before the process has come back there is nothing to list except
-        // what is already configured, which is enough to switch between.
+        // what is already configured, which at least draws the section
+        // instead of an empty card.
         const rows = all.length > 0 ? all
             : Config.keyboardLayouts.map(code => ({ code, name: code }));
 
@@ -141,18 +200,7 @@ SettingsPage {
                 .map(scored => scored.row);
         }
 
-        // In the fixed order and not the stored one, for the reason given on
-        // layoutsInFixedOrder: rows that reshuffle when you click one are how
-        // you end up clicking the wrong one next.
-        const configured = root.layoutsInFixedOrder
-            .map(code => rows.find(row => row.code === code))
-            .filter(row => row !== undefined);
-
-        const rest = rows
-            .filter(row => !Config.keyboardLayouts.includes(row.code))
-            .sort((a, b) => a.name.localeCompare(b.name));
-
-        return configured.concat(rest);
+        return rows.slice().sort((a, b) => a.name.localeCompare(b.name));
     }
 
     // Add one to the end of the cycle. The end and not the front: adding a
@@ -272,51 +320,267 @@ SettingsPage {
     // A CYCLE AND NOT A SINGLE CHOICE, because the thing people do with this
     // is switch back and forth: code in English, write in Spanish, and back.
     // One layout at a time would mean coming to this window twice a paragraph.
-    // The first entry is the one in use; SUPER + K and the pill on the bar
-    // both step it.
+    // SUPER + K and the pill on the bar both step it.
+    //
+    // TWO SECTIONS, AND THAT IS THE WHOLE REDESIGN. This was one list doing
+    // two jobs: every layout xkb ships, with the handful actually configured
+    // hoisted to the top wearing an "Active" badge and an x, plus a ChoiceRow
+    // above it showing the same handful a third time, plus a line of prose
+    // explaining that a click means "add" down here and something else up
+    // there. Three drawings of one set, one click with two meanings, and a
+    // sentence apologising for both.
+    //
+    // So: "Layout cycle" is what you have and what it does, and "Add a
+    // layout" is the several hundred you could have. Each list has one verb.
+    // Which layouts are in the cycle is the first card; the order is the
+    // order they are drawn in; which one is active is the top row and the
+    // filled pill; removing is the x, which is only in the first card; adding
+    // is a click in the second, which does nothing else. None of that needs a
+    // sentence under it, which is why there is no longer one.
     SettingsSection {
         width: parent.width
         glyph: Icons.keyboard
-        title: "Layout"
+        title: "Layout cycle"
 
-        // The segments are the CODES, in caps, and not the names -- "US",
-        // "LATAM". Two reasons: they are what the bar shows, so this control
-        // and that pill say the same word; and a name like "Spanish (Latin
-        // American)" elides to "Spanish (La…" in a quarter of this width,
-        // which is not a label. The names are in the list below.
-        ChoiceRow {
-            visible: Config.keyboardLayouts.length > 1
+        Repeater {
+            model: root.layoutCycle
 
-            glyph: Icons.keyboard
-            label: "Active layout"
-            options: root.layoutsInFixedOrder.map(code => ({
-                label: code.toUpperCase(),
-                value: code
-            }))
-            value: Config.keyboardLayout
+            delegate: Rectangle {
+                id: cycleEntry
 
-            onChosen: value => Config.useKeyboardLayout(value)
+                required property var modelData
+                required property int index
 
-            hint: "What the keyboard is typing in right now — every "
-                + "application on the machine, not just this shell. SUPER + K "
-                + "steps through the same list without opening this window, "
-                + "and so does clicking the layout on the bar."
+                readonly property string code: cycleEntry.modelData
+                readonly property string name: Config.layoutName(cycleEntry.code)
+                // The list starts at the layout in use -- see layoutCycle --
+                // so being first IS being active, and the row after it is
+                // where SUPER + K goes.
+                readonly property bool active: cycleEntry.index === 0
+                readonly property bool isNext: cycleEntry.index === 1
+
+                // WHAT SettingsSearch MATCHES ON. The walk duck-types a row
+                // as anything carrying a non-empty `label`, and these are
+                // rows: "spanish" should find the layout you are using. There
+                // are at most four of them, which is why the browse list
+                // below deliberately has no label on its delegate -- ninety-
+                // nine layouts in the index would drown every other answer.
+                readonly property string label: cycleEntry.name
+                readonly property string glyph: Icons.keyboard
+
+                width: parent ? parent.width : 320
+                implicitHeight: Theme.groupHeight
+
+                radius: Theme.groupRadius
+                // The active row takes no hover tint: it is the one row here
+                // with nothing to do when clicked.
+                color: cycleMouse.containsMouse && !cycleEntry.active
+                    ? Theme.surfaceContainerHigh : "transparent"
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
+
+                // THE CODE IN CAPS AND FILLED WHEN ACTIVE. Two things at
+                // once, and both of them are why it is a pill rather than a
+                // word: it is what the bar shows, so this row and that pill
+                // say the same thing in the same shape; and filled-versus-
+                // outlined is a state you can read at a glance from across
+                // the card, which "Active" written in small letters at the
+                // other end of the row was not.
+                Rectangle {
+                    id: cycleCode
+
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.groupPadding
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    implicitWidth: Math.max(56, cycleCodeLabel.implicitWidth + 18)
+                    implicitHeight: 24
+                    radius: height / 2
+
+                    color: cycleEntry.active ? Theme.primary : "transparent"
+                    border.width: cycleEntry.active ? 0 : 1
+                    border.color: Theme.outlineVariant
+
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.animDuration }
+                    }
+
+                    Text {
+                        id: cycleCodeLabel
+
+                        anchors.centerIn: parent
+                        text: cycleEntry.code.toUpperCase()
+                        font.family: Theme.fontFamily
+                        font.pointSize: Theme.fontSize - 1.5
+                        font.weight: cycleEntry.active ? Font.Bold : Theme.fontWeight
+                        color: cycleEntry.active ? Theme.textOnPrimary : Theme.textOnSurfaceVariant
+
+                        Behavior on color {
+                            ColorAnimation { duration: Theme.recolorDuration }
+                        }
+                    }
+                }
+
+                Text {
+                    id: cycleName
+
+                    anchors.left: cycleCode.right
+                    anchors.leftMargin: Theme.itemSpacing
+                    anchors.right: cycleTrailing.left
+                    anchors.rightMargin: Theme.itemSpacing
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    text: cycleEntry.name
+                    elide: Text.ElideRight
+                    font.family: Theme.fontFamily
+                    font.pointSize: Theme.fontSize
+                    font.weight: cycleEntry.active ? Font.Bold : Theme.fontWeight
+                    color: cycleEntry.active ? Theme.textOnSurface : Theme.textOnSurfaceVariant
+
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.recolorDuration }
+                    }
+                }
+
+                // A Row rather than two anchored items, because both of these
+                // come and go: a Row drops an invisible child and closes the
+                // gap, where an item anchored to an invisible neighbour keeps
+                // the hole where it used to be.
+                Row {
+                    id: cycleTrailing
+
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.groupPadding - 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.itemSpacing
+
+                    // THE ROW SUPER + K TAKES YOU TO, WEARING THE KEY THAT
+                    // TAKES YOU THERE. This is what makes the order legible
+                    // without a caption claiming the rows are in cycle order:
+                    // the second row is labelled with the thing that reaches
+                    // it, and the rest follow from there.
+                    //
+                    // The chips are the keybinds page's, down to the sizes:
+                    // the key takes the accent and the modifier stays muted,
+                    // because the modifier is the part you already know.
+                    Row {
+                        visible: cycleEntry.isNext
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 5
+
+                        Repeater {
+                            model: ["SUPER", "K"]
+
+                            Rectangle {
+                                id: keyChip
+
+                                required property int index
+                                required property string modelData
+
+                                readonly property bool isKey: keyChip.index === 1
+
+                                implicitWidth: keyChipLabel.implicitWidth + 14
+                                implicitHeight: 22
+                                radius: height / 2
+
+                                color: keyChip.isKey ? Theme.primaryContainer : Theme.surfaceContainerHighest
+
+                                Behavior on color {
+                                    ColorAnimation { duration: Theme.recolorDuration }
+                                }
+
+                                Text {
+                                    id: keyChipLabel
+
+                                    anchors.centerIn: parent
+                                    text: keyChip.modelData
+                                    font.family: Theme.fontFamily
+                                    font.pointSize: Theme.fontSize - 1.5
+                                    font.weight: Theme.fontWeight
+                                    color: keyChip.isKey ? Theme.textOnPrimaryContainer : Theme.textOnSurfaceVariant
+
+                                    Behavior on color {
+                                        ColorAnimation { duration: Theme.recolorDuration }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Its own target over the row's own click, so the two
+                    // meanings never share a hit area: the row means "type in
+                    // this", the x means "stop offering it". The last
+                    // remaining layout has no x -- a keyboard has to be
+                    // something.
+                    Item {
+                        id: cycleRemove
+
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        visible: Config.keyboardLayouts.length > 1
+                        implicitWidth: 24
+                        implicitHeight: 24
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: Icons.close
+                            font.family: Theme.fontFamily
+                            font.pointSize: Theme.iconSize
+                            color: removeMouse.containsMouse ? Theme.critical : Theme.outline
+
+                            Behavior on color {
+                                ColorAnimation { duration: Theme.animDuration }
+                            }
+                        }
+
+                        MouseArea {
+                            id: removeMouse
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.removeLayout(cycleEntry.code)
+                        }
+                    }
+                }
+
+                MouseArea {
+                    id: cycleMouse
+
+                    anchors.fill: parent
+                    // UNDER EVERY SIBLING, which is what leaves the x
+                    // clickable. Among items with the same z the one declared
+                    // LAST wins the pointer, and this one is last because it
+                    // has to cover the whole row -- so it takes a negative z
+                    // and the remove target keeps its own hit area inside it.
+                    z: -1
+                    hoverEnabled: true
+                    // ONE VERB IN THIS CARD: make this the layout I am typing
+                    // in. The row that already says yes is not a target.
+                    enabled: !cycleEntry.active
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Config.useKeyboardLayout(cycleEntry.code)
+                }
+            }
         }
 
+        // WHAT THE LIST CANNOT DRAW: that the sequence wraps, and that the
+        // same thing is a click away on the bar. Not an explanation of the
+        // control above it -- that one explains itself now -- which is why it
+        // is two short lines instead of the paragraph that used to be here.
         Text {
             x: Theme.groupPadding
             width: parent.width - Theme.groupPadding * 2
-            // A ChoiceRow ends a handful of pixels under its own segments,
-            // so a caption with no top padding sits against them and reads as
-            // a label belonging to the last one.
-            topPadding: 6
-            bottomPadding: 6
+            topPadding: 4
+            bottomPadding: 4
 
             text: Config.keyboardLayouts.length > 1
-                ? "Click a layout below to add it to the cycle, and the × to "
-                  + "take it out."
-                : "One layout is configured. Add a second below and the pair "
-                  + "becomes a cycle you can step with SUPER + K."
+                ? "SUPER + K steps to the next one and wraps at the end. So "
+                  + "does clicking the layout on the bar."
+                : "One layout, so there is nothing to step. Add a second "
+                  + "below and SUPER + K starts cycling."
             wrapMode: Text.WordWrap
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 1
@@ -326,12 +590,20 @@ SettingsPage {
                 ColorAnimation { duration: Theme.recolorDuration }
             }
         }
+    }
+
+    SettingsSection {
+        width: parent.width
+        glyph: Icons.search
+        title: "Add a layout"
 
         // The ceiling is xkb's and not this window's: a keymap holds four
         // groups, and a fifth layout is accepted by the parser and then never
-        // reached by the cycle. Said out loud only when it is reached --
-        // a limit nobody is near is a sentence that teaches the eye to skip
-        // this part of the card.
+        // reached by the cycle. Said out loud only when it is reached -- a
+        // limit nobody is near is a sentence that teaches the eye to skip
+        // this part of the card. It sits above the field rather than below
+        // the list, because it is the reason nothing in the list can be
+        // clicked and that is worth knowing before scrolling it.
         Text {
             visible: Config.keyboardLayouts.length >= Config.keyboardLayoutMax
 
@@ -340,8 +612,8 @@ SettingsPage {
             bottomPadding: 6
 
             text: "Four layouts is the most an xkb keymap can hold. Remove "
-                + "one before adding another — a fifth would be accepted and "
-                + "then never reached."
+                + "one above before adding another — a fifth would be "
+                + "accepted and then never reached."
             wrapMode: Text.WordWrap
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 1
@@ -372,8 +644,8 @@ SettingsPage {
         // Same ceiling-and-capture arrangement as the network list, and for
         // the same reason: this is a card of however many layouts xkb happens
         // to ship -- ninety-nine of them -- inside a page that also scrolls.
-        // 220 is about six rows, enough to see the configured ones plus the
-        // top of the search results.
+        // 220 is about six rows, enough to see the top of the search results
+        // without the field scrolling off the screen behind them.
         ScrollList {
             id: layoutList
 
@@ -397,26 +669,27 @@ SettingsPage {
 
                         readonly property string code: entry.modelData.code
                         readonly property bool configured: Config.keyboardLayouts.includes(entry.code)
-                        readonly property bool active: Config.keyboardLayout === entry.code
-                        // A row that cannot be clicked: the cycle is full and
-                        // this one is not in it. Dimmed rather than hidden --
-                        // a list that silently drops ninety rows when you add
-                        // a fourth layout would look broken.
-                        readonly property bool reachable: entry.configured
-                            || Config.keyboardLayouts.length < Config.keyboardLayoutMax
+                        // Nothing can be added while the cycle is full.
+                        // Dimmed rather than hidden -- a list that silently
+                        // dropped ninety rows when you added a fourth layout
+                        // would look broken.
+                        readonly property bool addable: !entry.configured
+                            && Config.keyboardLayouts.length < Config.keyboardLayoutMax
+
+                        // NO `label` HERE, deliberately: SettingsSearch walks
+                        // children and duck-types a row by that property, and
+                        // ninety-nine of them would bury every other answer
+                        // in the window. The four in the cycle above carry one
+                        // instead.
 
                         width: layoutEntries.width
                         implicitHeight: 34
 
                         radius: Theme.groupRadius
-                        // Membership is the tint and the active one is the
-                        // word on the right. Two marks for two different
-                        // facts: being in the cycle, and being the one in use.
-                        color: entryMouse.containsMouse && entry.reachable ? Theme.surfaceContainerHigh
-                            : entry.configured ? Qt.alpha(Theme.surfaceContainerHigh, 0.5)
-                            : "transparent"
+                        color: entryMouse.containsMouse && entry.addable
+                            ? Theme.surfaceContainerHigh : "transparent"
 
-                        opacity: entry.reachable ? 1 : 0.4
+                        opacity: entry.addable || entry.configured ? 1 : 0.4
 
                         Behavior on color {
                             ColorAnimation { duration: Theme.animDuration }
@@ -435,22 +708,21 @@ SettingsPage {
                             elide: Text.ElideRight
                             font.family: Theme.fontFamily
                             font.pointSize: Theme.fontSize
-                            font.weight: entry.active ? Font.Bold : Theme.fontWeight
-                            color: entry.active ? Theme.primary : Theme.textOnSurface
+                            font.weight: Theme.fontWeight
+                            color: entry.configured ? Theme.textOnSurfaceVariant : Theme.textOnSurface
 
                             Behavior on color {
                                 ColorAnimation { duration: Theme.recolorDuration }
                             }
                         }
 
-                        // The code, always, and not only for the configured
-                        // ones: it is what the bar shows and what every
-                        // command takes, so this is where somebody learns
-                        // that the pill saying LATAM is this row.
+                        // The code, always: it is what the bar shows and what
+                        // every command takes, so this is where somebody
+                        // learns that the pill saying LATAM is this row.
                         Text {
                             id: entryCode
 
-                            anchors.right: entryState.left
+                            anchors.right: entryMark.left
                             anchors.rightMargin: Theme.itemSpacing
                             anchors.verticalCenter: parent.verticalCenter
 
@@ -464,60 +736,35 @@ SettingsPage {
                             }
                         }
 
+                        // WHAT THIS ROW WOULD DO, on the row itself: a plus
+                        // where the click adds one, and the word where it is
+                        // already yours. A layout already in the cycle is not
+                        // hidden and not clickable -- it is answered. That is
+                        // what keeps this list to one verb: nothing in it
+                        // ever means "switch to" or "remove", which is what
+                        // the card above is for.
+                        //
+                        // The plus is a character and not a glyph from the
+                        // font, the same call StepperRow's buttons make: it
+                        // is one shape everybody reads and it needs no
+                        // codepoint checked against the cmap.
                         Text {
-                            id: entryState
-
-                            anchors.right: entryRemove.left
-                            anchors.rightMargin: Theme.itemSpacing
-                            anchors.verticalCenter: parent.verticalCenter
-
-                            visible: entry.active
-                            text: "Active"
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize - 1
-                            font.weight: Font.Bold
-                            color: Theme.primary
-
-                            Behavior on color {
-                                ColorAnimation { duration: Theme.recolorDuration }
-                            }
-                        }
-
-                        // Its own target, over the row's own click, so the two
-                        // meanings never share a hit area: the row means "type
-                        // in this", the × means "stop offering it". The last
-                        // remaining layout has no × -- a keyboard has to be
-                        // something.
-                        Item {
-                            id: entryRemove
+                            id: entryMark
 
                             anchors.right: parent.right
-                            anchors.rightMargin: Theme.groupPadding - 6
+                            anchors.rightMargin: Theme.groupPadding
                             anchors.verticalCenter: parent.verticalCenter
 
-                            visible: entry.configured && Config.keyboardLayouts.length > 1
-                            implicitWidth: 24
-                            implicitHeight: 24
+                            text: entry.configured ? "In cycle" : "+"
+                            font.family: Theme.fontFamily
+                            font.pointSize: entry.configured ? Theme.fontSize - 1 : Theme.fontSize + 2
+                            font.weight: entry.configured ? Theme.fontWeight : Font.Bold
+                            color: entry.configured ? Theme.outline
+                                : entryMouse.containsMouse && entry.addable ? Theme.primary
+                                : Theme.outline
 
-                            Text {
-                                anchors.centerIn: parent
-                                text: Icons.close
-                                font.family: Theme.fontFamily
-                                font.pointSize: Theme.iconSize
-                                color: removeMouse.containsMouse ? Theme.critical : Theme.outline
-
-                                Behavior on color {
-                                    ColorAnimation { duration: Theme.animDuration }
-                                }
-                            }
-
-                            MouseArea {
-                                id: removeMouse
-
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.removeLayout(entry.code)
+                            Behavior on color {
+                                ColorAnimation { duration: Theme.animDuration }
                             }
                         }
 
@@ -525,29 +772,10 @@ SettingsPage {
                             id: entryMouse
 
                             anchors.fill: parent
-                            // UNDER EVERY SIBLING, which is what leaves the ×
-                            // clickable. Among items with the same z the one
-                            // declared LAST wins the pointer, and this one is
-                            // last because it has to cover the whole row --
-                            // so it takes a negative z and the remove target
-                            // keeps its own hit area inside it.
-                            z: -1
                             hoverEnabled: true
-                            cursorShape: entry.reachable ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            enabled: entry.reachable
-
-                            // Two verbs on one click, and they do not overlap:
-                            // a layout that is not in the cycle gets added, a
-                            // layout that is in it becomes the active one.
-                            // Clicking the one already active is the only
-                            // no-op, which is what a row should do when it is
-                            // already saying yes.
-                            onClicked: {
-                                if (!entry.configured)
-                                    root.addLayout(entry.code);
-                                else if (!entry.active)
-                                    Config.useKeyboardLayout(entry.code);
-                            }
+                            cursorShape: entry.addable ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            enabled: entry.addable
+                            onClicked: root.addLayout(entry.code)
                         }
                     }
                 }
