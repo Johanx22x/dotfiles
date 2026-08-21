@@ -143,6 +143,59 @@ Item {
         }
     }
 
+    // ---------------- Brightness, as an acknowledgement ----------------
+    //
+    // THE THIRD TIME THIS SHAPE IS USED AND THE SECOND THAT IS A VALUE
+    // CHANGING UNDERNEATH US, and it is deliberately the same shape as the
+    // volume immediately above rather than anything new: watch the thing
+    // itself, and flash when it moves. What differs is only where the push
+    // comes from -- PipeWire has a signal, a backlight has a file -- and
+    // Brightness.qml is where that difference is absorbed, so by the time it
+    // reaches this file the two are the same kind of event.
+    //
+    // WHY WATCHING BEATS BEING TOLD, in one line: the media keys are bound
+    // straight to `brightnessctl` in both compositors and neither knows this
+    // shell exists. Following the value covers them, and covers a laptop's
+    // firmware Fn keys, which nothing could tell us about. The long version
+    // is in Brightness.qml.
+    //
+    // THE FLASH LIVES HERE AND NOT IN THAT SINGLETON, which is not where it
+    // would first go. Nothing at the root of this config imports
+    // `root:/modules` -- the dependency runs modules-to-root and never back --
+    // so a singleton beside Config and Theme cannot reach into the island's
+    // arbiter without turning that around. It also keeps the split clean:
+    // Brightness owns what the backlight IS, and this file owns what the bar
+    // does about it. The same reason the volume's flash is here and not in
+    // PipeWire's node.
+    //
+    // ON A DESKTOP NOTHING BELOW EVER RUNS. `Brightness.present` is false with
+    // no backlight or with the laptop module switched off, so the handler
+    // returns before it can raise anything.
+
+    // The shell starting up is not the user changing the brightness. Exactly
+    // the argument `volumeSettled` makes above, and needed twice over here:
+    // the FileView delivers its first value once the device has been asked
+    // for, so a fresh shell would otherwise flash the current brightness at
+    // whoever just logged in.
+    property bool brightnessSettled: false
+
+    Timer {
+        interval: 1000
+        running: true
+        onTriggered: root.brightnessSettled = true
+    }
+
+    Connections {
+        target: Brightness
+        enabled: root.brightnessSettled
+
+        function onPercentChanged(): void {
+            if (!Brightness.present)
+                return;
+            IslandState.flashBrightness(Brightness.percent);
+        }
+    }
+
     // ---------------- Size ----------------
     // What the capsule is aiming at. The Behavior on `capsule.width` is what
     // turns a change here into the morph.
@@ -323,7 +376,14 @@ Item {
             }
         }
 
-        // ---------------- Acknowledgement: volume ----------------
+        // ---------------- Acknowledgement: a value that just moved ----------
+        //
+        // SERVES VOLUME AND BRIGHTNESS FROM ONE ROW, because they ask the same
+        // question and want the same answer: a glyph saying which value, a bar
+        // saying where it sits, and a number confirming it. A second Row for
+        // brightness would have been a copy of this one with one line changed,
+        // and two copies drift -- the fixed width below that stops the capsule
+        // twitching between 9% and 10% would have been fixed in one of them.
         Row {
             id: ackContent
 
@@ -338,7 +398,14 @@ Item {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
+                // THE ONLY THING THAT VARIES BY KIND. The bar and the number
+                // below are the same question in both cases -- how much of it
+                // is there -- so they are drawn once rather than copied per
+                // acknowledgement, and the glyph is what says which value is
+                // being talked about. Adding mic mute here is one more branch.
                 text: {
+                    if (IslandState.ack === "brightness")
+                        return Icons.brightness;
                     if (IslandState.ackMuted)
                         return Icons.volumeMuted;
                     if (IslandState.ackValue === 0)
