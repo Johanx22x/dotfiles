@@ -441,6 +441,18 @@ FloatingWindow {
                         BluetoothPage {}
                         AppsPage {}
                         KeybindsPage {}
+                        // Second to last, in front of About. It is about the
+                        // machine rather than about the shell, which is the
+                        // group it lands in, and About stays last because it
+                        // is the reference material and holds the one button
+                        // that undoes everything above it.
+                        //
+                        // APPENDED RATHER THAN INSERTED, deliberately: page
+                        // indices are positions, `qs ipc call settings page N`
+                        // addresses them by number, and a page dropped into
+                        // the middle renumbers every bind after it. This moves
+                        // About alone.
+                        UpdatesPage {}
                         AboutPage {}
 
                         Component.onCompleted: {
