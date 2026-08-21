@@ -1,0 +1,97 @@
+name: xwayland satellite watch
+
+# Opens an issue when packages/xwayland-satellite/ can be deleted.
+#
+# That directory is a local PKGBUILD carrying upstream PR #480, and its header
+# says in as many words: "DELETE THIS WHOLE DIRECTORY once the fix is in the
+# repos". Nothing was ever going to notice that moment. The patched package
+# works, so there is no symptom to prompt anybody, and it will sit there being
+# rebuilt by hand long after it stopped being needed.
+#
+# ON A SCHEDULE AND NOT ON A PULL REQUEST, because the thing that changes is
+# not this repository -- it is Arch's. A pull request check would ask the
+# question only when somebody happened to open one, which is exactly the wrong
+# trigger for "has the outside world moved yet".
+#
+# Weekly. The answer changes at most once, and a day either way costs nothing.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  # So it can be tried without waiting a week, and re-run after the issue is
+  # closed to confirm it stays quiet.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+
+    steps:
+      # git for the checkout, github-cli to open the issue, and pacman -Sy so
+      # `pacman -Si` has a database to answer from. vercmp comes with pacman.
+      - name: Install what the watch needs
+        run: pacman -Syu --needed --noconfirm git github-cli
+
+      - uses: actions/checkout@v7
+
+      - name: Compare the repository version against the patched one
+        id: watch
+        run: tests/xwayland-satellite-watch.sh
+
+      - name: Open an issue
+        if: steps.watch.outputs.overtaken == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REPO_VERSION: ${{ steps.watch.outputs.repo_version }}
+          PATCHED_VERSION: ${{ steps.watch.outputs.patched_version }}
+          # The title is also how a run finds the issue a previous run opened,
+          # so it is fixed and searched for as a phrase. No colon in the part
+          # being searched: GitHub search reads `word:` as a qualifier.
+          MARKER: "the repository build has caught up"
+        run: |
+          set -euo pipefail
+
+          title="xwayland-satellite: $MARKER"
+
+          # ONE ISSUE, NOT ONE A WEEK. The answer stays yes for as long as the
+          # directory is still there, and an issue already saying so is the
+          # whole message.
+          open_already="$(gh issue list --state open --search "\"$MARKER\" in:title" \
+                            --json number --jq 'length')"
+          if [[ $open_already -gt 0 ]]; then
+            echo "already open, nothing to say"
+            exit 0
+          fi
+
+          # Written to a file rather than passed inline: --body with a here
+          # document inside a YAML block scalar is two layers of indentation
+          # rules over the same text, and the failure mode is a body that
+          # arrives with leading spaces and renders as a code block.
+          {
+            printf '`pacman -Si xwayland-satellite` reports **%s**, which now beats\n' "$REPO_VERSION"
+            printf 'the **%s** built from `packages/xwayland-satellite/`.\n\n' "$PATCHED_VERSION"
+            cat <<'BODY'
+          That is the condition the PKGBUILD header was written against: the version
+          was chosen so a released fix would replace the local package on its own,
+          with no pin to remember. pacman will take the repository one at the next
+          upgrade whether or not anything is done here.
+
+          What is left is the cleanup the header asks for:
+
+          - check that the repository build really carries the fix from
+            [PR #480](https://github.com/Supreeeme/xwayland-satellite/pull/480) --
+            open DaVinci Resolve under niri and see whether the project manager
+            appears
+          - delete `packages/xwayland-satellite/`
+          - drop whatever points at it from the README and `install.sh`
+
+          Opened by `.github/workflows/xwayland-satellite-watch.yml`.
+          BODY
+          } > issue-body.md
+
+          gh issue create --title "$title" --body-file issue-body.md
