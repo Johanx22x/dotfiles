@@ -34,6 +34,20 @@ import QtQuick
 Singleton {
     id: root
 
+    // Read by shell.qml to bring this singleton into existence at startup.
+    //
+    // IT WAS NOT REACHED AT ALL UNTIL THE SETTINGS WINDOW HAD BEEN OPENED,
+    // and that was a bug rather than a saving. The only thing referring to
+    // this file was NightLightSection.qml, which lives on the Display page,
+    // and the pages sit behind `Loader { active: root.everOpened }` -- so the
+    // schedule this singleton exists to run did not start at login. It
+    // started the first time somebody opened SUPER + C, and on a session
+    // where nobody did, the evening simply never came on.
+    //
+    // The IpcHandler below needs the same thing for its own reason: a target
+    // is only answerable once the object holding it exists.
+    readonly property bool armed: true
+
     readonly property string stateDir: Quickshell.env("XDG_STATE_HOME") || `${Quickshell.env("HOME")}/.local/state`
 
     // The two values the script keeps. Defaults chosen to match its own, so a
@@ -47,11 +61,33 @@ Singleton {
 
     // ---------------- Setting it ----------------
 
+    // SETTING IT BY HAND, and the schedule outranks it. The switch on the
+    // Display page is already bound `enabled: !NightLight.scheduled`, so this
+    // rule existed -- it just lived in the window, which meant every new door
+    // to this singleton had to remember it. The IpcHandler at the bottom of
+    // this file is the second door, and rather than teach it the same lesson
+    // the rule moves here, where it is a fact about the feature instead of a
+    // property of one control. The row's binding stays as it was and now
+    // reflects the rule rather than being it.
+    //
+    // A schedule you stop obeying is not a schedule: turning the filter off at
+    // nine in the evening while a schedule says it should be on would hold
+    // only until the next boundary, and a switch that undoes itself hours
+    // later is worse than one that says no.
     function setEnabled(value: bool): void {
+        if (root.scheduled)
+            return;
+
         if (value === root.enabled)
             return;
 
         root.applyEnabled(value);
+    }
+
+    // Through setEnabled, so the schedule outranks this too -- see the note
+    // above it.
+    function toggle(): void {
+        root.setEnabled(!root.enabled);
     }
 
     // The same thing WITHOUT the equality guard, for the schedule to use.
@@ -232,5 +268,55 @@ Singleton {
         const hours = Math.floor(minutes / 60) % 24;
         const rest = minutes % 60;
         return `${String(hours).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+    }
+
+    // THE SHAPE OF THE `dnd` TARGET, verb for verb, because it is the same
+    // kind of thing: a mode that is on or off, that a person wants to flip
+    // without going to look for a window. Until now the only door to this was
+    // the Display page of the settings window -- there is no keybind for it in
+    // either compositor -- so a filter you wanted off for five minutes cost
+    // SUPER + C and a scroll.
+    //
+    // `enable` and `disable` rather than `on` and `off`: a QML member whose
+    // name starts with "on" is parsed as a signal handler, and `on` alone is
+    // the shape that invites the parser to try. NotificationState.qml carries
+    // the same note over the same two names.
+    //
+    // NOTHING HERE WRITES THE STATE FILE. These call the same functions the
+    // switches call, which shell out to `night-light`, which is the only
+    // writer -- so a call from a terminal moves the switch in the settings
+    // window exactly as an edit from a terminal already did. That contract is
+    // the whole reason the script owns the file, and an IPC target that wrote
+    // it directly would be a second writer with its own idea of the truth.
+    //
+    // NO TEMPERATURE VERBS. The stepper on the Display page moves in 100K
+    // steps across a 3500K range, which is a number to nudge while looking at
+    // the screen rather than one to name from a shell, and inventing a coarser
+    // step here would put two different ideas of "warmer" in the tree.
+    // `night-light temp N` is still there for a terminal.
+    IpcHandler {
+        target: "nightlight"
+
+        function toggle(): void {
+            root.toggle();
+        }
+
+        function enable(): void {
+            root.setEnabled(true);
+        }
+
+        function disable(): void {
+            root.setEnabled(false);
+        }
+
+        // Says whether the schedule is in charge, because when it is, the
+        // three verbs above do nothing and a caller has no other way to find
+        // out -- they return void, like every action in every handler here.
+        function status(): string {
+            const state = root.enabled ? `on at ${root.temperature}K` : "off";
+            if (!root.scheduled)
+                return state;
+            return `${state}, on a schedule from ${root.clockText(root.from)} to ${root.clockText(root.to)}`;
+        }
     }
 }
