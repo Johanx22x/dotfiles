@@ -829,8 +829,14 @@ hl.layer_rule({
     -- falls through to the GLOBAL decoration.blur, which has different
     -- parameters and no xray, and the surface ends up visibly blurrier than
     -- the bar it is supposed to belong to. That is how the power menu looked
-    -- before it was added to this list.
-    match = { namespace = "^quickshell-(bar|popout|notifications|powermenu|launcher|cheatsheet)$" },
+    -- before it was added to this list, and how the wallpaper carousel looked
+    -- until `wallpaper` was added to it -- a full-screen sheet of
+    -- Theme.glass(Theme.surface) is the largest possible place to notice.
+    --
+    -- The list is the WlrLayershell.namespace lines in the shell, minus the two
+    -- surfaces with no glass in them: quickshell-screen-corner is opaque black
+    -- and quickshell-click-catcher draws nothing at all.
+    match = { namespace = "^quickshell-(bar|popout|notifications|powermenu|launcher|cheatsheet|wallpaper)$" },
 
     blur          = true,
 
