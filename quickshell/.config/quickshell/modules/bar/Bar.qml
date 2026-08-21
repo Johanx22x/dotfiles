@@ -402,6 +402,17 @@ PanelWindow {
                     popout: barPopout
                 }
 
+                // BETWEEN THE BELL AND THE GEAR, which is where it belongs
+                // among the three doors in this pill: the bell is about what
+                // the desktop has said, this is about what the machine is, the
+                // gear is about everything else. It also puts the flag next to
+                // the window it opens.
+                UpdatesButton {
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    visible: bar.widget("updates")
+                }
+
                 SettingsButton {
                     anchors.verticalCenter: parent.verticalCenter
 
