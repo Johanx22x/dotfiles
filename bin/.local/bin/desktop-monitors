@@ -607,6 +607,11 @@ validate_spec() {
 current_vrr() {
   local desc="$1" d m p s t v
   [[ -s "$STATE_FILE" ]] || return 0
+  # shellcheck disable=SC2034  # m, p, s and t are the columns between the two
+  # this function wants, and `read` needs a name for each of them or the last
+  # one would collect the rest of the line. Named rather than `_` because these
+  # are the record's own column letters, spelled the same way in the three other
+  # loops over this file.
   while IFS=$'\t' read -r d m p s t v; do
     [[ "$d" == "$desc" ]] && { printf '%s' "$v"; return 0; }
   done < "$STATE_FILE"
