@@ -32,7 +32,6 @@
 // undescribed bind is exactly the one you are about to collide with, so it is
 // listed too, marked as undescribed rather than left blank.
 
-import Quickshell.Io
 import QtQuick
 import "root:/"
 import "root:/components"
@@ -151,48 +150,56 @@ SettingsPage {
 
     // ---------------- What counts as the same keystroke ----------------
     //
-    // THE WHOLE CONFLICT FEATURE IS THIS FUNCTION, so it is worth being exact
-    // about which fields are in it and which are deliberately out.
+    // THE WHOLE CONFLICT FEATURE IS THIS COMPARISON, so it is worth being
+    // exact about what is in it and what is deliberately out. It is the
+    // `chordId` built on every entry below, and the conflict list is nothing
+    // but the entries that share one.
     //
     // IN, because each one changes WHICH EVENT reaches the bind:
-    //   submap   -- a submap is a mode. Two binds in different submaps are
-    //               never live at the same moment, so they cannot collide.
-    //               The empty submap is the root one and is a value like any
-    //               other.
-    //   modmask  -- compared for equality, not overlap: Hyprland matches the
-    //               held modifiers exactly, so SUPER and SUPER + SHIFT are two
-    //               different keystrokes and not a near miss.
-    //   the key  -- the keysym, lowercased, because "S" and "s" name the same
-    //               physical key; or the KEYCODE when there is one, since a
-    //               bind written by code has no keysym to compare and 0 means
-    //               "not by code" rather than "code zero".
-    //   press / release / long press -- three different events. A bind on the
-    //               way down and a bind on the way up of the same chord is a
-    //               pair, not a clash.
+    //   submap    -- a submap is a mode. Two binds in different submaps are
+    //                never live at the same moment, so they cannot collide.
+    //                The empty submap is the root one and is a value like any
+    //                other -- and the only one niri has.
+    //   the chord -- the modifiers and the key together, as the compositor
+    //                facade spells them out, lowercased: a keysym names a
+    //                physical key, so `SUPER, S` and `SUPER, s` are one bind
+    //                written twice. The modifiers are compared for equality
+    //                and not for overlap, which is how the compositor matches
+    //                them: SUPER and SUPER + SHIFT are two different
+    //                keystrokes and not a near miss.
     //
     // OUT, because they change what a bind DOES once it has already been
     // reached, which is not the question:
     //   locked        -- only says the bind still works over a lock screen. In
     //                    an unlocked session a locked and an unlocked bind on
     //                    the same chord both fire, so this is a conflict and
-    //                    excluding the field is what lets it be seen.
+    //                    leaving the field out is what lets it be seen.
     //   non_consuming -- says the key ALSO goes on to the window. Two binds
-    //                    still both fire.
+    //                    still both fire; it is why a stack can be amber
+    //                    rather than red, not why it is a stack.
     //   repeat, mouse -- how it is held or which device pressed it, both
     //                    already implied by the key.
     //
-    // KNOWN BLIND SPOT, and it is honest to name it: a catch_all bind swallows
-    // every key in its submap, which collides with everything there without
-    // sharing a key with any of it. There is none here; when there is, this
-    // will not see it.
-    function bindId(bind: var): string {
-        const key = bind.keycode ? `code:${bind.keycode}`
-            : String(bind.key ?? "").toLowerCase();
-        const event = bind.release ? "release" : bind.longPress ? "long" : "press";
-        // NUL as the separator, so a submap named "press" cannot fake a match
-        // against a field boundary.
-        return [bind.submap ?? "", bind.modmask ?? 0, key, event].join("\u0000");
-    }
+    // THREE BLIND SPOTS, and naming them is part of being able to trust the
+    // green line this page prints when it finds nothing:
+    //
+    //   PRESS AGAINST RELEASE. A bind on the way down and a bind on the way up
+    //   of the same chord are a pair and not a clash, and this cannot tell
+    //   them apart: the facade carries the chord, the submap and the
+    //   description, and not the release flag -- nor the keycode or the raw
+    //   modmask that the fields above would want. Push-to-talk is exactly that
+    //   shape, so with `ptt=1` under Hyprland its key is listed here as a
+    //   conflict. Seeing that pair is the price of seeing every real one;
+    //   widening the facade for one line of this page is not.
+    //
+    //   MODIFIER ORDER. The facade hands the modifiers over already spelled
+    //   out -- in a fixed order from Hyprland's modmask, in the order the file
+    //   happens to write them from niri's config. `Mod+Shift+E` and
+    //   `Shift+Mod+E` in a niri config are one chord and land in two buckets.
+    //
+    //   catch_all. A bind that swallows every key in its submap collides with
+    //   everything there without sharing a key with any of it. There is none
+    //   here; when there is, this will not see it.
 
     // ---------------- The list ----------------
 
@@ -205,9 +212,9 @@ SettingsPage {
         "Apps", "Windows", "Workspaces", "Capture", "Look", "Media", "Shell"
     ]
 
-    // One record per bind, in the order hyprctl reported them. Filled by the
-    // Process at the bottom; the two bindings under it are derived from this
-    // and from nothing else.
+    // One record per bind, in the order the compositor reported them. The two
+    // bindings under it are derived from this and from nothing else.
+    //
     // WHERE THE LIST COMES FROM. No command is run here: each compositor backend
     // produces the same shape from whatever source it has -- Hyprland's socket
     // on one flavor, the config file on the other -- and this page turns it into
@@ -216,16 +223,23 @@ SettingsPage {
     // EVERY bind, described or not, unlike the cheatsheet: this page answers
     // "what is this chord doing", so the media keys belong here even though they
     // would be noise on a sheet of chords worth memorising.
-    readonly property var entries: Compositor.binds.map((bind, index) => ({
+    readonly property var entries: Compositor.binds.map(bind => ({
         keys: bind.keys.map(k => root.keyName(k)),
         category: bind.category,
         text: bind.description,
         described: bind.described,
         submap: bind.submap,
         nonConsuming: bind.nonConsuming,
-        // The index is enough to tell two identical-looking rows apart, and it
-        // is stable for as long as the list is.
-        id: `${bind.submap}\u0000${bind.keys.join("+")}\u0000${index}`,
+        // A KEY THAT IS MEANT TO COLLIDE, which is the opposite of what a row
+        // id usually is and why it is not called one: the conflict list below
+        // buckets by it, so two binds that answer the same keystroke have to
+        // land on the same string. It carried the entry's index until now,
+        // which made every bucket a bucket of one and left `conflicts`
+        // permanently empty. See the rule above for what is compared here.
+        //
+        // NUL as the separator, so a submap named after a chord cannot fake a
+        // match across the field boundary.
+        chordId: `${bind.submap}\u0000${bind.keys.join("+").toLowerCase()}`,
         search: `${bind.keys.join(" ")} ${bind.category} ${bind.description}`.toLowerCase()
     }))
 
@@ -258,7 +272,7 @@ SettingsPage {
         const seen = [];
 
         for (const entry of root.entries) {
-            if (root.query !== "" && entry.haystack.indexOf(root.query) < 0)
+            if (root.query !== "" && entry.search.indexOf(root.query) < 0)
                 continue;
 
             if (!byName[entry.category]) {
@@ -283,11 +297,11 @@ SettingsPage {
         const order = [];
 
         for (const entry of root.entries) {
-            if (!buckets[entry.id]) {
-                buckets[entry.id] = [];
-                order.push(entry.id);
+            if (!buckets[entry.chordId]) {
+                buckets[entry.chordId] = [];
+                order.push(entry.chordId);
             }
-            buckets[entry.id].push(entry);
+            buckets[entry.chordId].push(entry);
         }
 
         const out = [];
@@ -506,10 +520,12 @@ SettingsPage {
             // the top of the page -- Tooltip's own header is explicit that
             // the same trick at the bottom would be clipped away.
             Tooltip {
-                text: "Same submap, same modifiers, same key, and both on the press "
-                    + "or both on the release. Whether a bind is locked or "
-                    + "non-consuming is not part of it: those change what it does "
-                    + "after it fires, not whether it fires."
+                text: "Same submap, same modifiers, same key. Whether a bind is "
+                    + "locked or non-consuming is not part of it: those change what "
+                    + "it does after it fires, not whether it fires. Press against "
+                    + "release is not part of it either, because the compositor does "
+                    + "not report it here — so a hold-to-talk key, which is bound on "
+                    + "both, is listed."
                 shown: ruleMouse.containsMouse
 
                 x: Theme.groupPadding
@@ -782,9 +798,10 @@ SettingsPage {
 
     // ---------------- Reading them ----------------
     //
-    // ON EVERY TRIP TO THE PAGE, because the compositor is the only thing that
-    // knows what is bound right now and a `hyprctl reload` between two visits
-    // is exactly what a cached list gets wrong.
+    // ON EVERY TRIP TO THE PAGE, because what is bound right now is the
+    // compositor's answer and not this window's: a `hyprctl reload`, or a save
+    // to the niri config, between two visits is exactly what a cached list
+    // gets wrong.
     //
     // `visible` and not Component.onCompleted: the settings window builds
     // every page at startup and keeps them all alive, so onCompleted fires for
@@ -794,26 +811,6 @@ SettingsPage {
     // false-to-true change that this handler sees.
     onVisibleChanged: {
         if (root.visible)
-            reader.running = true;
-    }
-
-    // WHERE THE LIST COMES FROM. No command is run here any more: each
-    // compositor backend produces the same shape from whatever source it has --
-    // Hyprland's socket on one flavor, the config file on the other -- and this
-    // page turns it into rows. See compositor/CompositorBackend.qml.
-    //
-    // EVERY bind, described or not, unlike the cheatsheet: this page answers
-    // "what is this chord doing", so the media keys belong here even though
-    // they would be noise on a sheet of chords worth memorising.
-
-    Connections {
-        target: root
-
-        // Re-read when the page is looked at, so a config reload between two
-        // visits cannot leave a stale list on screen.
-        function onVisibleChanged(): void {
-            if (root.visible)
-                Compositor.refreshBinds();
-        }
+            Compositor.refreshBinds();
     }
 }
