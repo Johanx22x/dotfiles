@@ -109,7 +109,7 @@ Singleton {
     // 0.85 is this setup's standard, the same figure waybar, wofi and dunst
     // use. The blur behind it is the compositor's, but WHERE it goes is this
     // shell's own doing now: every glass surface names its blur region through
-    // ext-background-effect (BackgroundEffect.blurRegion, see modules/bar and
+    // the compositor, which under Hyprland is a layerrule with ignore_alpha and
     // its siblings), and both compositors honour it. Under Hyprland the
     // blur-quickshell rule in hyprland.lua still picks the parameters, and one
     // of them -- ignore_alpha at 0.84 -- is tied to the number below: it drops

@@ -273,50 +273,6 @@ PanelWindow {
     }
 
     // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
-    //
-    // ext-background-effect: the client names the region behind it that should
-    // be blurred, and both compositors here implement it. This window is a
-    // corner radius wider than the panel on each side, and what lives in those
-    // two strips is a fillet -- a square with a quarter circle taken out of it,
-    // so mostly transparent.
-    //
-    // THIS IS THE SURFACE THE BANDS CAME FROM. Asked to blur the rectangle,
-    // niri blurred the strips too and the launcher opened with a lit,
-    // round-cornered band down each side of the panel. `mask` did not help:
-    // it stops input there, not painting, and a compositor blurring from
-    // outside never sees it.
-    //
-    // So the region is the panel and the two fillets, each in the shape it is
-    // drawn -- and the fillets drop out of it by themselves when the panel
-    // detaches, because they stop being visible and WedgeRegion follows that.
-    BackgroundEffect.blurRegion: Region {
-        // ONE PIXEL IN FROM THE PANEL, and not `item: panel`. A wl_region is a
-        // list of rectangles, so the rounded corners below come out rasterised
-        // to whole pixels while the corner painted over them is antialiased; a
-        // blur that reaches the paint's own edge therefore lights up the
-        // half-covered pixels along the curve, one bright spike per step.
-        // components/WedgeRegion.qml carries the measurement and the reason the
-        // number is one rather than two.
-        //
-        // Spelled out rather than taken from `item`, because a Region has no way
-        // to say "that item, minus a pixel". The panel is a direct child of this
-        // window, so its x and y are already surface-local -- the same
-        // assumption the two fillets below make, for the same reason.
-        x: panel.x + 1
-        y: panel.y + 1
-        width: panel.width - 2
-        height: panel.height - 2
-
-        // The panel's own rounding, less that same pixel, so the region's arc
-        // stays concentric with the painted one instead of cutting across it.
-        // Welded, the top two corners are above the window and the compositor
-        // clips them away, which is the same trick that makes the drawn edge
-        // come out straight.
-        radius: Theme.cardRadius - 1
-
-        WedgeRegion { wedge: leftFillet }
-        WedgeRegion { wedge: rightFillet }
-    }
 
     // Reset on every opening. A launcher that remembers the last search is a
     // launcher that shows yesterday's answer to today's keystroke.

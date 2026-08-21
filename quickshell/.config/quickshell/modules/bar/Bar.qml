@@ -90,41 +90,6 @@ PanelWindow {
     color: "transparent"
 
     // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
-    //
-    // ext-background-effect: the client names the region behind it that should
-    // be blurred, and both compositors here implement it -- niri since 26.04,
-    // Hyprland since 0.56.0. It replaces the guessing a compositor has to do
-    // from outside, which is what a layer-rule or a layerrule amounts to: they
-    // are handed a rectangle and have to work out from the alpha in it which
-    // pixels were meant.
-    //
-    // Deliberately NOT the whole window. It is a corner radius taller than the
-    // bar, and that extra strip is the fillets -- mostly transparent, since a
-    // fillet is what is left of a square after a quarter circle is taken out of
-    // it. Blur the rectangle and the strip lights up across the full width of
-    // the screen, just under the bar.
-    //
-    // So: the bar proper, plus each fillet in the shape the fillet is actually
-    // drawn. See components/WedgeRegion.qml for how the second half is built
-    // and what was checked on screen to trust it.
-    //
-    // AND THE RECTANGLE IS STILL FLUSH WITH THE PAINT, which the launcher, the
-    // popouts and the notification panel are deliberately not: they stand a
-    // pixel back so their rounded corners stop stepping, and the reason is in
-    // WedgeRegion.qml. It does not apply here. `surface` has no corner radius
-    // and it is anchored to three edges of the window with an integer height,
-    // so every side of it lands on a whole pixel and a straight edge on a whole
-    // pixel is rasterised exactly -- measured: no half-covered pixel anywhere
-    // along one. Standing back would buy nothing and cost a line of unblurred
-    // pixels the full width of the screen, right under the bar, which is very
-    // nearly the artifact this region was written to remove. The two fillets
-    // carry the inset because the two fillets are where the curve is.
-    BackgroundEffect.blurRegion: Region {
-        item: surface
-
-        WedgeRegion { wedge: leftFillet }
-        WedgeRegion { wedge: rightFillet }
-    }
 
     // One popout for the whole bar: it moves under whichever widget was
     // clicked and swaps its content, instead of every widget owning a window.
