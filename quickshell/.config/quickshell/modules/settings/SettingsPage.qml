@@ -48,13 +48,54 @@ Column {
     // no rail entry, no index, and no place in search.
     property bool available: true
 
-    // ON SCREEN OR NOT, and this is the only honest answer to that question
-    // in this window. Every page is built and kept alive so that none of them
-    // forgets where you were, which means `visible` cannot be left to default
-    // to true -- pages that turn hardware on when they are looked at (the
-    // Wi-Fi scanner, Bluetooth discovery) read exactly this property, and if
-    // it lied they would scan forever in the background.
+    // WHICH PAGE THE RAIL HAS SELECTED, and no more than that. Every page is
+    // built and kept alive so that none of them forgets where you were, which
+    // means `visible` cannot be left to default to true: one page at a time
+    // draws, and this is what picks it.
+    //
+    // IT SAYS NOTHING ABOUT THE WINDOW, and that is the trap this property
+    // used to be at the centre of. A QQuickWindow's content item does not
+    // stop being visible when the window is hidden -- window visibility and
+    // item visibility are separate things in Qt, and only the second one is
+    // this -- so the selected page reads `visible: true` for the whole
+    // session, including the 99% of it during which the settings window is
+    // shut. Measured on a throwaway probe of exactly this shape: with the
+    // FloatingWindow hidden, the child item reports visible=true.
     visible: SettingsState.currentPage === root.index
+
+    // IS ANYBODY ACTUALLY LOOKING AT THIS PAGE. The flag every page must use
+    // before it turns hardware on, and the reason it exists is the paragraph
+    // above: `visible` alone answered a different question and answered it
+    // with a yes that never went away.
+    //
+    // What it cost while three pages gated on `visible`: `pw-dump | grep -c
+    // "Quickshell Peak Detect"` returned 2 with the sound page open and STILL
+    // 2 after the window was closed -- this shell recording from the
+    // microphone, indefinitely, with nothing on screen. The Wi-Fi scanner and
+    // Bluetooth discovery were left running by the same mistake.
+    //
+    // SettingsState.isOpen AND NOT THE WINDOW ITSELF, because a page is a
+    // separate file and cannot see the window that hosts it; the singleton is
+    // what both ends already share, the window's own `visible` is bound to it,
+    // and its `onClosed` writes it back when the compositor closes the window
+    // behind the shell's back. It is one binding away from the truth rather
+    // than the truth itself, which is the honest description.
+    //
+    // THE OTHER CANDIDATE WAS Qt's OWN `Window.visibility`, and it was measured
+    // rather than dismissed: on the same probe it reads 0 (Hidden) with the
+    // window closed and 2 (Windowed) with it open, so it would work. It was
+    // not taken because it buys nothing here and costs two things -- an extra
+    // QtQuick.Window import in every page, and an attached `Window.window`
+    // that is NULL until the window has been shown for the first time, which
+    // is precisely the state the shell spends its first minutes in.
+    //
+    // NOTHING ELSE IS FOLDED IN. Minimised is not a state this desktop has --
+    // Hyprland's equivalent is the special workspace -- and neither Qt nor the
+    // compositor tells the shell that the window is behind another one or on a
+    // workspace nobody is looking at. Not a loss: those end when you look
+    // again, and the failure this is here to stop lasted until the shell was
+    // restarted.
+    readonly property bool onScreen: root.visible && SettingsState.isOpen
 
     // A plain fallback rather than an implicitWidth: a Column computes its
     // own implicit size from its children and refuses to have one assigned
