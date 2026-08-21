@@ -128,6 +128,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: tests/shell-lint.sh
 
+      - name: Package names resolve
+        if: ${{ !cancelled() }}
+        run: tests/package-lists.sh
+
+      - name: stow links the tree without conflicts
+        if: ${{ !cancelled() }}
+        run: tests/stow-conflicts.sh
+
       # LAST, BECAUSE IT IS ABOUT THE OTHER CHECKS RATHER THAN ABOUT THE
       # REPOSITORY. It answers whether the workflows in this directory run at
       # all, whether any of them still filters a `pull_request` by base branch
@@ -138,14 +146,6 @@ jobs:
       - name: The workflows run, and run on every pull request
         if: ${{ !cancelled() }}
         run: tests/workflows.py
-
-      - name: Package names resolve
-        if: ${{ !cancelled() }}
-        run: tests/package-lists.sh
-
-      - name: stow links the tree without conflicts
-        if: ${{ !cancelled() }}
-        run: tests/stow-conflicts.sh
 
       # NO QMLLINT, AND NOT FOR WANT OF TRYING. Neither of the two on an Arch
       # system can answer the question:
