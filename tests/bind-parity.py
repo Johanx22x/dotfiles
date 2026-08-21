@@ -13,6 +13,11 @@ WHAT IS COMPARED, AND WHAT DELIBERATELY IS NOT.
   * The chord. Both sides must bind it, spelled however each config spells it.
   * Whether the chord carries a human label -- `description` on the Hyprland
     side, `hotkey-overlay-title` on the niri side. Both or neither.
+  * That neither side binds the same chord TWICE. See read_hyprland: this one
+    was added after the check waved through a change that would have bound
+    SUPER + F a second time under Hyprland, on the reasoning that the chord
+    was missing there -- it was not, it lives in gaming.lua, and a check that
+    folds its own input into a dict cannot tell those two states apart.
 
   * NOT the text of that label, and not the action behind the chord. Four
     Hyprland actions have no niri equivalent and their chords were
@@ -103,7 +108,7 @@ def normalise(chord: str) -> str:
 # The Hyprland side
 # --------------------------------------------------------------------------
 
-def read_hyprland() -> dict[str, str]:
+def read_hyprland() -> tuple[dict[str, str], list[str]]:
     """Every bind Hyprland would end up with, as {chord: description}.
 
     The config is executed rather than read -- see tests/hl-stub.lua for why
@@ -113,6 +118,25 @@ def read_hyprland() -> dict[str, str]:
     that has this desktop installed that file exists and adds binds which are
     not in the repo. Without this the check would pass or fail depending on
     whose machine it ran on.
+
+    THE SECOND RETURN VALUE IS THE CHORDS BOUND MORE THAN ONCE, and it exists
+    because the first one cannot hold them. The stub prints one line per
+    `hl.bind` call, in order; folding those into a dict is what the comparison
+    below needs, and it is also a shredder -- a chord bound twice arrives as
+    two lines and leaves as one entry carrying the later description.
+
+    THAT IS A REAL STATE AND NOT A HYPOTHETICAL ONE, which is the whole reason
+    this is measured. hyprland.lua says so at its own KEYBINDINGS note, read
+    out of Hyprland 0.56.1's source: `hl.bind` APPENDS to the keybind list and
+    every bind matching a chord is dispatched, so binding a chord a second time
+    fires the old action as well as the new one -- on a toggle like fullscreen
+    that is a visible no-op, with nothing anywhere saying why. Taking a chord
+    over means `hl.unbind` first, and an unbind removes the earlier entry from
+    the stub's list too, so the honest way of doing it never trips this.
+
+    The niri side needs no such argument: niri REFUSES a duplicate keybind
+    outright ("duplicate keybind later defined here", measured on 26.04), so
+    there the compositor is the check. Hyprland accepts it in silence.
     """
     # THE ENTRY POINT ONLY, and not every .lua in the directory: hyprland.lua
     # pulls gaming.lua in itself through `require`, and running a required file
@@ -122,6 +146,7 @@ def read_hyprland() -> dict[str, str]:
         die(f"{config} is missing")
 
     binds: dict[str, str] = {}
+    duplicates: list[str] = []
     with tempfile.TemporaryDirectory() as empty_home:
         result = subprocess.run(
             ["lua", str(STUB), str(config)],
@@ -132,8 +157,14 @@ def read_hyprland() -> dict[str, str]:
             die(f"could not run {config}:\n{result.stderr.strip()}")
         for line in result.stdout.splitlines():
             chord, _, description = line.partition("\t")
-            binds[normalise(chord)] = description
-    return binds
+            # ON THE NORMALISED CHORD, because that is the level Hyprland
+            # itself collides at: RETURN and ENTER are one key, and two binds
+            # spelled differently for it are still two binds both firing.
+            chord = normalise(chord)
+            if chord in binds:
+                duplicates.append(chord)
+            binds[chord] = description
+    return binds, duplicates
 
 
 # --------------------------------------------------------------------------
@@ -146,7 +177,7 @@ NIRI_BIND = re.compile(r"""^\s*(?P<chord>[^\s{}"]+)(?P<props>[^{}]*)\{""")
 NIRI_TITLE = re.compile(r"""hotkey-overlay-title="(?P<title>[^"]*)\"""")
 
 
-def read_niri() -> dict[str, str]:
+def read_niri() -> tuple[dict[str, str], list[str]]:
     """Every bind in the `binds { }` block, as {chord: hotkey-overlay-title}.
 
     KDL is read with a regular expression and not with a parser, because the
@@ -154,8 +185,16 @@ def read_niri() -> dict[str, str]:
     is none in the base install. What keeps that honest is `niri validate`,
     which runs in the same workflow: this function never sees a file niri
     itself would reject, so it only has to cope with valid KDL.
+
+    The duplicate list is returned for the same reason the Hyprland one is,
+    and it can only ever fire in a state niri would refuse to load -- which is
+    exactly why it is here rather than assumed away. `niri validate` catches a
+    literally repeated chord; it does not catch two chords this check folds
+    together and niri does not, and the day KEYS above grows a fold that is
+    wrong, this says so in one line instead of the counts quietly shifting.
     """
     binds: dict[str, str] = {}
+    duplicates: list[str] = []
     depth, inside = 0, False
     for raw in NIRI_CONFIG.read_text().splitlines():
         # Comments first. Quoted strings in this file never contain "//", and
@@ -176,7 +215,10 @@ def read_niri() -> dict[str, str]:
             match = NIRI_BIND.match(line)
             if match:
                 title = NIRI_TITLE.search(match.group("props"))
-                binds[normalise(match.group("chord"))] = title.group("title") if title else ""
+                chord = normalise(match.group("chord"))
+                if chord in binds:
+                    duplicates.append(chord)
+                binds[chord] = title.group("title") if title else ""
 
         depth += line.count("{") - line.count("}")
         if depth <= 0:
@@ -184,7 +226,7 @@ def read_niri() -> dict[str, str]:
 
     if not binds:
         die(f"found no binds in {NIRI_CONFIG} -- has the block moved?")
-    return binds
+    return binds, duplicates
 
 
 # --------------------------------------------------------------------------
@@ -260,10 +302,36 @@ def other(side: str) -> str:
     return NIRI if side == HYPRLAND else HYPRLAND
 
 
+# What a chord bound twice means on each side, and it is not the same thing.
+# Hyprland dispatches both; niri will not load the file at all.
+DUPLICATE_ADVICE = {
+    HYPRLAND: "hl.bind appends rather than replaces and every matching bind "
+              "fires, so drop the first one with hl.unbind before binding it "
+              "again -- or move the bind instead of adding a second",
+    NIRI: "niri refuses a duplicate keybind outright, so this config does not "
+          "load",
+}
+
+
 def main() -> int:
-    hypr, niri = read_hyprland(), read_niri()
+    hypr, hypr_twice = read_hyprland()
+    niri, niri_twice = read_niri()
     exceptions = Exceptions()
     failures = list(exceptions.errors)
+
+    # FIRST, because a chord bound twice makes the two counts printed at the
+    # end untrue as well: each side's dict has one entry for it, so the check
+    # would go on to compare a config nobody wrote against the other one.
+    #
+    # NOT EXCUSABLE THROUGH bind-exceptions.toml, deliberately. That file is
+    # for asymmetries somebody chose between the two compositors; this is one
+    # config disagreeing with itself, and there is no version of it that is a
+    # decision worth recording.
+    for side, twice in ((HYPRLAND, hypr_twice), (NIRI, niri_twice)):
+        for chord in twice:
+            failures.append(
+                f"{chord}: bound more than once under {side} -- "
+                f"{DUPLICATE_ADVICE[side]}")
 
     binds = {HYPRLAND: hypr, NIRI: niri}
     for side in SIDES:
@@ -296,8 +364,12 @@ def main() -> int:
         print()
         for failure in failures:
             print(f"  FAIL  {failure}")
-        print(f"\n{len(failures)} divergence(s). Fix the config, or declare the "
-              f"asymmetry with a reason in {EXCEPTIONS.relative_to(REPO)}.")
+        # The second half of that sentence does NOT cover a chord bound twice
+        # on one side -- there is no entry that excuses one -- so it says which
+        # kind of failure it is offering an escape hatch for.
+        print(f"\n{len(failures)} divergence(s). Fix the config; where the two "
+              f"compositors differ on purpose, declare it with a reason in "
+              f"{EXCEPTIONS.relative_to(REPO)}.")
         return 1
 
     print("bind-parity: the two compositors agree")
