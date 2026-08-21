@@ -17,6 +17,15 @@ CompositorBackend {
 
     name: "Hyprland"
 
+    // THE ONE VALUE HERE THAT IS A FACT ABOUT THESE DOTFILES rather than about
+    // Hyprland, and it is written out rather than resolved because there is
+    // nothing to resolve it from: the binds arrive over the socket, so unlike
+    // niri's this backend never opens the file they came from and cannot ask
+    // it its own name. hypr/.config/hypr/hyprland.lua is what this tree stows,
+    // and it is the file the keybinds page named unconditionally before this
+    // property existed.
+    bindsFile: "~/.config/hypr/hyprland.lua"
+
     // Quickshell.Hyprland populates itself when a Hyprland socket is there. The
     // signature is the compositor's own announcement and the cheapest proof it
     // is this flavor and not another.

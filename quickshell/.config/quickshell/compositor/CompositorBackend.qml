@@ -213,6 +213,24 @@ QtObject {
     // reload between two openings is exactly what a cached list gets wrong.
     function refreshBinds(): void {}
 
+    // WHERE THE BINDS ABOVE ARE WRITTEN, as a path somebody can open. Empty
+    // where there is nothing to say, which is the answer for a compositor
+    // nobody has written a backend for and the answer this contract has to go
+    // on being able to give.
+    //
+    // A PATH AND NOT THE COMPOSITOR'S NAME, though `name` at the top of this
+    // file would have been enough to stop the keybinds page telling a niri
+    // session to go and edit a Hyprland config. The sentence this is for says
+    // where to go and add a description to a bind, and "config.kdl" against
+    // "hyprland.lua" is the half of that sentence somebody acts on -- which
+    // compositor they are running is the half they already know.
+    //
+    // IT IS NOT A SECOND `name` IN DISGUISE. The rule at the top of this file
+    // is that the shell must never branch on which compositor it is, and
+    // nothing branches on this: it is printed, and the page that prints it
+    // drops the words around it when it comes back empty.
+    property string bindsFile: ""
+
     // ---- Windows on screen, as rectangles ---------------------------------
     //
     // The boxes a region selector can snap to, in slurp's own spelling --
