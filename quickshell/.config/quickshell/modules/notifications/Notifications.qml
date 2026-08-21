@@ -273,6 +273,7 @@ PanelWindow {
     // Welds the panel to the bar on its open side: material ADDED outside the
     // panel, filling the angle. The bottom corners are the panel's own
     // rounding, which is the opposite operation.
+    //
     // Named, because the blur region above is built from it: it reads this
     // item's `radius`, `corner` and `visible` rather than being told any of
     // it twice.

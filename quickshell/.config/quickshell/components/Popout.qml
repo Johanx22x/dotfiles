@@ -206,6 +206,7 @@ PanelWindow {
 
     // The two fillets that weld the panel to the bar. Same colour as the
     // panel, and outside it so they are not clipped by its own rounding.
+    //
     // Named, because the blur region above is built from them: it reads each
     // one's `radius`, `corner`, `visible` and position rather than being told
     // any of it twice.
