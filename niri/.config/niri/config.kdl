@@ -1108,30 +1108,41 @@ include optional=true "~/.config/niri/opacity.kdl"
 // -----------------------------------------------------------------------------
 // LAYER RULES
 // -----------------------------------------------------------------------------
-// THE GLASS WORKS DIFFERENTLY HERE, AND THERE IS NOTHING TO WRITE FOR IT.
+// THE GLASS IS THE COMPOSITOR'S JOB HERE TOO, and this is the rule that does it.
 //
 // Hyprland has no idea a client wants blur, so hyprland.lua tells it: a
 // layer_rule matching the quickshell-* namespaces, with blur, ignore_alpha
 // tuned just under the surfaces' own alpha, and xray so the bar and its popouts
 // composite over the same wallpaper and end up the same colour.
 //
-// niri inverts that. It implements ext-background-effect, a generic protocol
-// where the SURFACE asks for its own blur, and Quickshell 0.3.0 speaks it
-// (BackgroundEffect in Quickshell.Wayland). So the shell asks and niri answers,
-// and none of the three numbers above has anywhere to live in this file --
-// including xray, which has no equivalent because the question it answers does
-// not come up: the effect is per surface rather than a rectangle the compositor
-// blurs from outside.
+// niri COULD invert that, and this section used to claim it already did. It
+// implements ext-background-effect, where the SURFACE asks for its own blur,
+// and Quickshell 0.3.0 does ship the type for it -- Quickshell.Wayland has a
+// BackgroundEffect. THIS SHELL NEVER INSTANTIATES ONE: `grep -rn
+// BackgroundEffect ~/.config/quickshell` comes back empty, while ten files
+// import Quickshell.Wayland for WlrLayershell and nothing else. So nobody was
+// asking, nothing was answering, and every glass surface -- the bar, its
+// popouts, the launcher, the cheatsheet, the power menu, the notifications and
+// the wallpaper carousel -- was drawing Theme.glassAlpha over a perfectly sharp
+// background. Frosted under Hyprland, a flat tint under niri.
 //
-// Which means the blur may well look different rather than identical, and that
-// is a thing to look at on screen rather than reason about here. If the popouts
-// come out a different colour from the bar the way they did under Hyprland
-// without xray, this comment is the place to start.
+// ONE KNOB, NOT THREE. Under a layer-rule, niri 26.04's background-effect takes
+// `blur` and nothing else: `ignore-alpha` and `passes` are rejected by `niri
+// validate`, and xray has no equivalent at all because the question it answers
+// does not come up -- the effect belongs to the surface rather than to a
+// rectangle the compositor blurs from outside. Which is also why the blur may
+// look different from Hyprland's rather than identical; that is a thing to look
+// at on screen rather than reason about here.
 //
-// The one layer rule niri would want is `place-within-backdrop` for the
-// wallpaper surface, so it stays put when the overview zooms out. awww and
-// mpvpaper set their own namespace and it is not stable across the two
-// backends, so that is left until the wallpaper script learns this flavor.
+// THE NAMESPACE LIST IS THE SAME ONE hyprland.lua MATCHES, and both come from
+// the WlrLayershell.namespace lines in the shell. Screen corners and the click
+// catcher are left out on purpose: one is opaque black, the other is invisible.
+// A namespace missing from here does not merely go unblurred, it goes flat --
+// see the note in hyprland.lua for what that looked like the last time.
+layer-rule {
+    match namespace="^quickshell-(bar|popout|notifications|powermenu|launcher|cheatsheet|wallpaper)$"
+    background-effect { blur true; }
+}
 
 
 // -----------------------------------------------------------------------------
