@@ -47,6 +47,37 @@ ShellRoot {
         Component.onCompleted: Microphone.armed
     }
 
+    // THE BACKLIGHT IS WATCHED FROM LOGIN, and this line is what lets it, for
+    // the third time and for the same reason. Nothing asks for Brightness until
+    // the dashboard's slider is drawn, and the island cannot ask -- it only
+    // reacts to what this singleton reports, so a watcher created on demand
+    // would come into being already holding the value it was supposed to have
+    // noticed changing. On a machine with no backlight it costs one process
+    // spawn that prints nothing; see the header there.
+    Scope {
+        Component.onCompleted: Brightness.armed
+    }
+
+    // THE VOLUME AND THE NIGHT LIGHT ANSWER TO `qs ipc` FROM LOGIN, and these
+    // two lines are what let them. An IpcHandler only answers once the object
+    // holding it exists, so a target inside a singleton nobody has touched
+    // reports "no such target" until something unrelated happens to reach for
+    // it -- which for a shell full of lazily created singletons is a target
+    // that works or does not depending on what you did earlier in the session.
+    //
+    // NightLight was worse off than that and this is not only about IPC. The
+    // only thing referring to it was the Display page of the settings window,
+    // and the pages are built behind `Loader { active: root.everOpened }`, so
+    // the schedule it exists to run did not start until somebody opened
+    // SUPER + C. On a session where nobody did, the evening never came on.
+    Scope {
+        Component.onCompleted: Volume.armed
+    }
+
+    Scope {
+        Component.onCompleted: NightLight.armed
+    }
+
     // A Bar on each screen that is meant to have one -- the main screen alone
     // until the Bar page says otherwise. See Screens.qml for how the main one
     // is chosen and why it is no longer a model name written out five times.
