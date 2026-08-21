@@ -1,4 +1,0 @@
-hyprland
-hyprsunset
-uwsm
-xdg-desktop-portal-hyprland

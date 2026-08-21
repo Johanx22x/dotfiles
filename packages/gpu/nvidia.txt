@@ -1,0 +1,22 @@
+# NVIDIA, open kernel modules.
+#
+# THE ONLY ONE OF THE THREE GPU LISTS THAT IS RUN ON REAL HARDWARE. This is
+# what the machine this repository comes from has installed today: an RTX 5070
+# on nvidia-open-dkms, which is the supported driver for Turing and newer and
+# the only one that gets these cards at all.
+#
+# nvidia-open-dkms rather than nvidia-open, because this machine keeps two
+# kernels (see required/base.txt) and DKMS is what rebuilds the module for
+# whichever one gets updated. It is why linux-headers and linux-lts-headers
+# are in that list.
+#
+# libva-nvidia-driver is the VA-API bridge on top of NVDEC, which is what lets
+# mpv, Celluloid and the video wallpapers decode on the card. lib32-nvidia-utils
+# is for the 32-bit half of Steam and needs [multilib] enabled, exactly like
+# optional/gaming.txt.
+
+lib32-nvidia-utils
+libva-nvidia-driver
+nvidia-open-dkms
+nvidia-utils
+opencl-nvidia

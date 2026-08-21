@@ -54,8 +54,8 @@ Then seven steps, each asking before it acts:
 
 | | |
 |---|---|
-| **1 · Packages** | `packages/pacman.txt` and the chosen compositor's list, plus `packages/multilib.txt` if multilib is on |
-| **2 · AUR** | builds `yay` if missing, then `packages/aur.txt` |
+| **1 · Packages** | `packages/required/*.txt` and the chosen compositor's list — repo or AUR, worked out per name |
+| **2 · Optional** | `packages/optional/*.txt`, one pack at a time: apps, gaming, neovim, hardware |
 | **3 · Symlinks** | `stow` links the config into `$HOME` |
 | **4 · Seeds** | copies `seeds/` where nothing exists yet — never overwrites |
 | **5 · Neovim** | clones [Johanx22x/nvim](https://github.com/Johanx22x/nvim) into `~/.config/nvim` |
@@ -108,7 +108,7 @@ so next to the line that depends on it.
 |---|---|---|
 | Model | dynamic tiling (dwindle) | scrollable tiling (columns) |
 | Config | `hypr/` — Lua, `hyprctl reload` | `niri/` — KDL, reloads on save |
-| Packages | `packages/hyprland.txt` | `packages/niri.txt` |
+| Packages | `packages/compositor/hyprland.txt` | `packages/compositor/niri.txt` |
 | Session | `uwsm` | `niri-session` |
 | Portal | `xdg-desktop-portal-hyprland` | `xdg-desktop-portal-gnome` |
 
