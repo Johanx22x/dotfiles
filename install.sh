@@ -26,6 +26,7 @@ DOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSUME_YES=0
 DRY_RUN=0
 JSON=0
+WITH_REQUIRES=0
 COMPOSITOR=""
 
 # Everything that went wrong, collected as the run goes and printed once at the
@@ -144,7 +145,7 @@ Sets this desktop up on an Arch machine, and tells you whether it still is.
 USAGE
   ./install.sh [OPTIONS]              set the machine up
   ./install.sh check [--json]         read-only: say what is and is not in place
-  ./install.sh apply <unit>... [OPTS] apply named units and what they require
+  ./install.sh apply <unit>... [OPTS] apply exactly the units you name
 
 MODES
   (none)    The menu. Every unit with its state and a box, the boxes remembered
@@ -153,12 +154,15 @@ MODES
   check     Asks every unit how it is and prints a table. Uses no sudo, writes
             nothing, and is safe to run at any moment. Exits 1 when a unit that
             applies to this machine is not ok.
-  apply     One or more units by id, plus whatever they require, in order.
+  apply     Exactly the units you name, in the right order among themselves.
+            It does NOT pull in their requirements -- see --with-requires --
+            because the point of it is repairing one row of the check table.
 
 OPTIONS
   -y, --yes             Answer yes to everything. Needed when there is no
                         terminal to ask on.
   -n, --dry-run         Say what would be done and do none of it.
+      --with-requires   apply only. Also apply whatever the named units require.
       --compositor=X    hyprland, niri or both. Taken from the profile, or from
                         what is installed, when it is not given.
       --profile=PATH    Somewhere other than
@@ -214,6 +218,7 @@ while (( $# )); do
     --profile=*)   PROFILE_PATH="${1#*=}" ;;
     --profile)
       ui_bad "write it as --profile=/path/to/file" >&2; exit 2 ;;
+    --with-requires) WITH_REQUIRES=1 ;;
     -h|--help)     usage; exit 0 ;;
     --)            shift; UNIT_ARGS+=("$@"); break ;;
     -*)
@@ -369,9 +374,23 @@ mode_check() {
 }
 
 # ---------------------------------------------------------------------------
-# apply: named units, plus what they require.
+# apply: exactly the named units, in the right order among themselves.
+#
+# WHAT IT DOES NOT DO IS PULL IN THEIR REQUIREMENTS, and that is the whole
+# design of this mode. `apply` is what somebody reaches for after reading a
+# `check` table and seeing one row that is wrong. Expanding the request into its
+# dependencies is correct in principle and useless in practice: `symlinks`
+# requires `packages`, `packages` is not `ok` while one name out of 119 is
+# missing, and so asking to relink one file produced an offer to run
+# `pacman -S --needed` over the entire desktop plus four AUR builds. Nobody
+# takes that offer, so the mode was unusable for the thing it is best at.
+#
+# The requirements are still read: they decide the order when several units are
+# named together, and any that are outside the set and not already `ok` are
+# named on screen with their state, so a step that is about to fail for a known
+# reason says so first. `--with-requires` is the way back.
 mode_apply() {
-  local id
+  local id dep state
 
   for id in "${UNIT_ARGS[@]}"; do
     if ! unit_exists "$id"; then
@@ -383,13 +402,19 @@ mode_apply() {
 
   compositor_resolve apply
   stow_packages_resolve
-  unit_order "${UNIT_ARGS[@]}"
 
-  # WHAT WILL RUN, BEFORE IT RUNS. `apply seeds` pulling in packages and
-  # symlinks is correct and is also a surprise, so the expanded list is shown
-  # rather than discovered halfway down.
-  if (( ${#UNIT_ORDER[@]} > ${#UNIT_ARGS[@]} )); then
-    ui_dim "  with what they require: ${UNIT_ORDER[*]}"
+  if (( WITH_REQUIRES )); then
+    unit_order "${UNIT_ARGS[@]}"
+    if (( ${#UNIT_ORDER[@]} > ${#UNIT_ARGS[@]} )); then
+      ui_dim "  with what they require: ${UNIT_ORDER[*]}"
+    fi
+  else
+    unit_order_within "${UNIT_ARGS[@]}"
+    while IFS=$'\t' read -r dep state; do
+      [[ -z $dep ]] && continue
+      ui_warn "  note: this needs '$dep', which is $state"
+      ui_dim  "        ./install.sh apply $dep   -- or --with-requires to chain them"
+    done < <(unit_unmet_requires "${UNIT_ARGS[@]}")
   fi
 
   run_units "${UNIT_ORDER[@]}"
