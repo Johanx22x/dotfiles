@@ -19,19 +19,38 @@
 // their first iteration.
 //
 // LAYOUT
-// Three columns, filled shortest-first rather than in order, so they end at
-// roughly the same height instead of leaving one long and two stubby. There
-// is no scrolling: at the thirty-odd described binds each compositor has, the
-// tallest column is around a third of the screen, and the sheet would have to
-// grow past twice its current size before height became a question worth
-// solving. A number was written out here and went stale the first time a bind
-// was added.
+// Columns, filled shortest-first rather than in order, so they end at roughly
+// the same height instead of leaving one long and two stubby. That packing is
+// the part of this layout worth keeping and none of what follows changes it.
+//
+// HOW MANY COLUMNS IS THE SCREEN'S ANSWER AND NOT THIS FILE'S. It used to be
+// three, and three of a fixed 540 plus the gaps and the padding is a card 1740
+// pixels wide -- which is comfortable on the 2560-wide monitor it was written
+// on and 660 pixels wider than the 1080-wide portrait one beside it. On that
+// screen whole columns ran off both edges, and since nothing here scrolled
+// there was no way to reach them. So the count comes from the width that is
+// actually there, and on a screen with room for one column it is one.
+//
+// AND THE COLUMN IS AS WIDE AS ITS WIDEST ROW. 540 was a number too, and it
+// was too NARROW: a chord gutter of 227 leaves about 300 pixels for the
+// description, and "fake fullscreen (for games that minimise)" wants more, so
+// it came out as "fake fullscreen (for games that ...". The width is measured
+// off the descriptions now, the same way the gutter is measured off the
+// chords.
+//
+// AND IT SCROLLS WHEN IT STILL DOES NOT FIT, which one column of fifty-two
+// binds does not. The card is capped at the screen it opens on and the columns
+// sit in a ScrollList inside it; the header and "Esc to close" stay put above
+// them, because a heading that scrolls away on a reference sheet is a heading
+// nobody can use.
 
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 import "root:/"
+// ScrollList, which the columns sit in.
+import "root:/components"
 
 PanelWindow {
     id: root
@@ -39,9 +58,84 @@ PanelWindow {
     // The ShellScreen this sheet belongs to, from Variants in shell.qml.
     required property var modelData
 
-    readonly property int columnCount: 3
-    readonly property int columnWidth: 540
+    // ---------------- How big the sheet is allowed to be ----------------
+    //
+    // EVERY NUMBER BELOW IS DERIVED FROM THE SCREEN except this one, which is
+    // the breathing room a modal wants around itself so that it reads as a
+    // sheet laid over the desktop rather than as a new desktop. It is the only
+    // place a constant belongs in this section: it is a look, and the rest are
+    // consequences.
+    readonly property int screenMargin: 60
+
+    readonly property int availableWidth: Math.max(0, (root.modelData?.width ?? 0) - root.screenMargin * 2)
+    readonly property int availableHeight: Math.max(0, (root.modelData?.height ?? 0) - root.screenMargin * 2)
+
+    // What is left for the columns once the card has had its padding.
+    readonly property int contentRoom: Math.max(0, root.availableWidth - root.cardPadding * 2)
+
+    // HOW WIDE A COLUMN WANTS TO BE: the chord gutter, the gap after it, and
+    // the longest description in the sheet. Measured off the text for the same
+    // reason keyGutter is -- a number written down here is a number that goes
+    // stale the first time somebody writes a longer description, and the way
+    // it goes stale is a row that quietly ends in an ellipsis.
+    readonly property int naturalColumnWidth: {
+        // See keyGutter: advanceWidth() is a function call, so the font has to
+        // be READ here or this never recomputes when the type size moves.
+        if (bodyMetrics.font.family === "" || bodyMetrics.font.pointSize <= 0)
+            return root.keyGutter + root.rowGap;
+
+        let widest = 0;
+        for (const group of root.groups)
+            for (const bind of group.binds)
+                widest = Math.max(widest, bodyMetrics.advanceWidth(bind.text));
+
+        return root.keyGutter + root.rowGap + Math.ceil(widest);
+    }
+
+    // ...capped by what there is. On a screen too narrow even for one full
+    // column the descriptions elide, which is the old behaviour and the honest
+    // one: there is no width at which they both fit and stay this size.
+    readonly property int columnWidth: Math.min(root.naturalColumnWidth, root.contentRoom)
+
+    // Three is a ceiling and not a count. It is what the sheet was designed
+    // around and what the widest monitor here has room for; a fourth column
+    // would be a different sheet rather than the same one on a bigger screen.
+    readonly property int columnCountMax: 3
+
+    // As many as fit side by side, and never fewer than one -- a sheet with
+    // zero columns is a blank card, and a screen too narrow for a column still
+    // gets the column, elided, which is more use than nothing.
+    readonly property int columnCount: {
+        if (root.columnWidth <= 0)
+            return 1;
+
+        const fit = Math.floor((root.contentRoom + root.columnGap)
+                             / (root.columnWidth + root.columnGap));
+        return Math.max(1, Math.min(root.columnCountMax, fit));
+    }
+
+    // The columns and the gaps between them, which is what the header spans
+    // and what the card is built around.
+    readonly property int contentWidth: root.columnCount * root.columnWidth
+        + (root.columnCount - 1) * root.columnGap
+
     readonly property int columnGap: 30
+
+    // The space between a chord and its description, in BindRow. Here because
+    // naturalColumnWidth above adds it up; see chipPadding for the same
+    // argument at one level down.
+    readonly property int rowGap: 12
+
+    // The description's font, for measuring the longest one. The chips have
+    // their own -- see chipMetrics -- because they are drawn a size smaller.
+    FontMetrics {
+        id: bodyMetrics
+
+        font.family: Theme.fontFamily
+        font.pointSize: Theme.fontSize
+        font.weight: Theme.fontWeight
+    }
+
     // The keys sit in a fixed-width gutter and are flush with its right edge,
     // so the actual key is always the chip nearest its own description and
     // every description in a column starts at the same x.
@@ -181,6 +275,11 @@ PanelWindow {
     // Shortest-first packing. Categories keep their order within a column, and
     // each goes to whichever column is currently shortest -- measured in rows
     // plus two for the heading, so a heading is not free.
+    //
+    // It takes the count from root.columnCount, which is now the screen's
+    // answer rather than a three written down. Nothing else about it changes:
+    // one column is the same algorithm with one bucket, and the categories
+    // come out in order because every one of them is the shortest column.
     function pack(groups: var): var {
         const columns = [];
         const heights = [];
@@ -324,8 +423,22 @@ PanelWindow {
 
             anchors.centerIn: parent
 
-            implicitWidth: layout.implicitWidth + root.cardPadding * 2
-            implicitHeight: layout.implicitHeight + root.cardPadding * 2
+            // BUILT AROUND THE CONTENT WIDTH RATHER THAN AROUND THE COLUMN'S
+            // OWN IDEA OF IT. `layout.implicitWidth` was the widest child, and
+            // the widest child was a Row of three fixed columns -- so the card
+            // was as wide as the columns happened to be and the screen never
+            // came into it. root.contentWidth is the columns AFTER the screen
+            // has had its say, so this can no longer come out wider than what
+            // it is drawn on.
+            implicitWidth: root.contentWidth + root.cardPadding * 2
+
+            // The height is still the content's, and it is bounded because the
+            // list inside it is: see `list.height`. Capped here as well, so
+            // that a header taller than the whole screen -- which is not a
+            // real case, but is the sort of thing that makes a modal
+            // unclosable -- still cannot push the card off its own screen.
+            implicitHeight: Math.min(layout.implicitHeight + root.cardPadding * 2,
+                                     root.availableHeight)
             radius: Theme.cardRadius
 
             color: Theme.glass(Theme.surfaceContainer)
@@ -351,15 +464,144 @@ PanelWindow {
                 anchors.fill: parent
             }
 
+            // ---------------- Scroll indicator ----------------
+            //
+            // IT ANSWERS "IS THERE MORE", which the sheet cannot answer on its
+            // own: a row cut off by the bottom of the card looks exactly like a
+            // row that happens to end there, and on the portrait screen there
+            // are around six hundred pixels of binds below the fold. It also
+            // says how far down you are, which a list of similar-looking rows
+            // otherwise does not.
+            //
+            // IT IS NOT THERE WHEN EVERYTHING FITS, which is every landscape
+            // screen here -- a bar that is always full height is a control that
+            // says nothing and takes room saying it.
+            //
+            // IN THE CARD'S OWN PADDING, so it costs no width: the card keeps
+            // thirty pixels of padding on each side and four pixels of bar
+            // centred in the right-hand thirty overlaps nothing.
+            //
+            // Hand-drawn, and it is the second one of these in the shell --
+            // modules/notifications/NotificationHistory.qml has the other, and
+            // its comments carry the reasoning for the thumb's floor and for
+            // the travel mapping below. A THIRD caller is what should lift this
+            // into components/; two is where that starts being worth doing and
+            // this is not the commit to do it in.
+            Rectangle {
+                id: scrollTrack
+
+                anchors.right: parent.right
+                anchors.rightMargin: (root.cardPadding - width) / 2
+
+                // POSITIONED AND NOT ANCHORED TO THE LIST, because the list is
+                // a grandchild of this card and anchors only reach a parent or
+                // a sibling -- QML says so at runtime, as a warning, and leaves
+                // the bar at the top of the card. `layout` IS a child here, so
+                // the list's own y inside it is the offset that is missing.
+                y: layout.y + list.y
+                height: list.height
+
+                width: 4
+                radius: width / 2
+
+                visible: list.visible && list.scrollable
+
+                color: Qt.alpha(Theme.outlineVariant, 0.5)
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+
+                Rectangle {
+                    id: thumb
+
+                    // As tall a share of the track as the visible part is of
+                    // the whole, with a floor -- proportional alone leaves a
+                    // few pixels to hunt for on a long list.
+                    height: Math.max(30, scrollTrack.height * list.visibleArea.heightRatio)
+
+                    // The floor is also why this is not simply
+                    // `yPosition * track.height`: once the thumb is taller than
+                    // its share it has less room to travel than the content
+                    // does, so the position is mapped onto the travel that is
+                    // actually left. Without it the bar reaches the bottom
+                    // before the sheet does.
+                    y: {
+                        const travel = scrollTrack.height - thumb.height;
+                        const range = 1 - list.visibleArea.heightRatio;
+                        if (travel <= 0 || range <= 0)
+                            return 0;
+                        return Math.max(0, Math.min(1, list.visibleArea.yPosition / range)) * travel;
+                    }
+
+                    width: parent.width
+                    radius: parent.radius
+
+                    // Brighter while it is being used and quiet the rest of the
+                    // time: at rest this is a hint about the shape of the list,
+                    // in the hand it is a control. Both `moving` and the
+                    // velocity are asked because a wheel notch is neither a
+                    // drag nor a flick and does not set `moving`.
+                    color: list.moving || list.verticalVelocity !== 0
+                            || scrollMouse.pressed || scrollMouse.containsMouse
+                        ? Theme.primary
+                        : Theme.outline
+
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.animDuration }
+                    }
+                }
+
+                // Four pixels is the right width to look at and an unfair thing
+                // to ask anyone to hit, so the pointer gets eighteen. Wider
+                // only, never taller: growing it vertically would move this
+                // item's origin off the track that `mouse.y` is measured from.
+                MouseArea {
+                    id: scrollMouse
+
+                    anchors.fill: parent
+                    anchors.leftMargin: -7
+                    anchors.rightMargin: -7
+
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+
+                    // Press jumps and drag follows, one gesture and no dead
+                    // zone. The pointer is the MIDDLE of the thumb, so what you
+                    // pressed on ends up under your finger.
+                    function scrollTo(y: real): void {
+                        const travel = scrollTrack.height - thumb.height;
+                        if (travel <= 0)
+                            return;
+                        const progress = Math.max(0, Math.min(1, (y - thumb.height / 2) / travel));
+                        list.contentY = progress * (list.contentHeight - list.height);
+                    }
+
+                    onPressed: mouse => scrollMouse.scrollTo(mouse.y)
+                    onPositionChanged: mouse => {
+                        if (pressed)
+                            scrollMouse.scrollTo(mouse.y);
+                    }
+                }
+            }
+
             Column {
                 id: layout
 
                 anchors.centerIn: parent
+                width: root.contentWidth
                 spacing: 22
 
                 // ---------------- Header ----------------
                 Item {
-                    width: layout.implicitWidth
+                    id: header
+
+                    // The content width and not the Column's implicit one: the
+                    // columns live in a Flickable now, and a Flickable's
+                    // implicit width is not its content's -- so "as wide as my
+                    // widest sibling" would have quietly become "as wide as the
+                    // title", taking "Esc to close" with it.
+                    width: root.contentWidth
                     height: title.implicitHeight
 
                     Row {
@@ -436,91 +678,126 @@ PanelWindow {
                 }
 
                 // ---------------- The columns ----------------
-                Row {
+                //
+                // IN A ScrollList AND NOT LOOSE IN THE CARD, because one
+                // column of fifty-two binds is taller than a 1920-pixel screen
+                // and there was no way at all to reach the bottom of it. The
+                // component is components/ScrollList.qml as it stands: it
+                // clips, it stops at its bounds, and it takes the wheel only
+                // while there is somewhere to go -- which is the behaviour
+                // wanted here too, since the sheet is a modal and there is
+                // nothing behind it that should be scrolling instead.
+                //
+                // ONLY THE COLUMNS SCROLL. The header and "Esc to close" are
+                // above this and stay where they are: the one thing somebody
+                // opening a sheet they cannot read needs to keep in sight is
+                // how to shut it.
+                ScrollList {
+                    id: list
+
                     visible: Compositor.can("bindsIntrospection")
-                    spacing: root.columnGap
+                    width: root.contentWidth
+                    contentHeight: columnsRow.implicitHeight
 
-                    Repeater {
-                        model: root.columns
+                    // AS TALL AS THE COLUMNS WANT, UP TO WHAT IS LEFT. What is
+                    // left is the screen, less the margin around the sheet,
+                    // less the card's own padding, less the header and the
+                    // space under it. Where the columns are shorter than that
+                    // -- which is every landscape screen here -- this is their
+                    // own height, the card shrinks to them as it always did,
+                    // and nothing scrolls.
+                    height: Math.min(columnsRow.implicitHeight,
+                                     root.availableHeight - root.cardPadding * 2
+                                         - header.height - layout.spacing)
 
-                        Column {
-                            id: column
+                    Row {
+                        id: columnsRow
 
-                            required property var modelData
+                        spacing: root.columnGap
 
-                            width: root.columnWidth
-                            spacing: 18
+                        Repeater {
+                            model: root.columns
 
-                            Repeater {
-                                model: column.modelData
+                            Column {
+                                id: column
 
-                                Column {
-                                    id: group
+                                required property var modelData
 
-                                    required property var modelData
+                                width: root.columnWidth
+                                spacing: 18
 
-                                    width: column.width
-                                    spacing: 6
+                                Repeater {
+                                    model: column.modelData
 
-                                    // ---- Category heading ----
-                                    Row {
-                                        spacing: 8
+                                    Column {
+                                        id: group
 
-                                        Text {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: Icons.category(group.modelData.name)
-                                            font.family: Theme.fontFamily
-                                            font.pointSize: Theme.iconSize - 1
-                                            color: Theme.primary
+                                        required property var modelData
 
-                                            Behavior on color {
-                                                ColorAnimation { duration: Theme.recolorDuration }
-                                            }
-                                        }
-
-                                        Text {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: group.modelData.name
-                                            font.family: Theme.fontFamily
-                                            font.pointSize: Theme.fontSize
-                                            font.weight: Font.Bold
-                                            // Letterspaced and in the accent:
-                                            // the headings are signposts, and
-                                            // at this size weight alone does
-                                            // not separate them enough from
-                                            // the rows under them.
-                                            font.letterSpacing: 0.8
-                                            color: Theme.primary
-
-                                            Behavior on color {
-                                                ColorAnimation { duration: Theme.recolorDuration }
-                                            }
-                                        }
-                                    }
-
-                                    Rectangle {
                                         width: column.width
-                                        height: 1
-                                        color: Theme.outlineVariant
+                                        spacing: 6
 
-                                        Behavior on color {
-                                            ColorAnimation { duration: Theme.recolorDuration }
+                                        // ---- Category heading ----
+                                        Row {
+                                            spacing: 8
+
+                                            Text {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: Icons.category(group.modelData.name)
+                                                font.family: Theme.fontFamily
+                                                font.pointSize: Theme.iconSize - 1
+                                                color: Theme.primary
+
+                                                Behavior on color {
+                                                    ColorAnimation { duration: Theme.recolorDuration }
+                                                }
+                                            }
+
+                                            Text {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: group.modelData.name
+                                                font.family: Theme.fontFamily
+                                                font.pointSize: Theme.fontSize
+                                                font.weight: Font.Bold
+                                                // Letterspaced and in the accent:
+                                                // the headings are signposts, and
+                                                // at this size weight alone does
+                                                // not separate them enough from
+                                                // the rows under them.
+                                                font.letterSpacing: 0.8
+                                                color: Theme.primary
+
+                                                Behavior on color {
+                                                    ColorAnimation { duration: Theme.recolorDuration }
+                                                }
+                                            }
                                         }
-                                    }
 
-                                    // ---- The binds ----
-                                    Repeater {
-                                        model: group.modelData.binds
-
-                                        BindRow {
-                                            required property var modelData
-
+                                        Rectangle {
                                             width: column.width
-                                            keys: modelData.keys
-                                            label: modelData.text
-                                            gutterWidth: root.keyGutter
-                                            chipPadding: root.chipPadding
-                                            chipSpacing: root.chipSpacing
+                                            height: 1
+                                            color: Theme.outlineVariant
+
+                                            Behavior on color {
+                                                ColorAnimation { duration: Theme.recolorDuration }
+                                            }
+                                        }
+
+                                        // ---- The binds ----
+                                        Repeater {
+                                            model: group.modelData.binds
+
+                                            BindRow {
+                                                required property var modelData
+
+                                                width: column.width
+                                                keys: modelData.keys
+                                                label: modelData.text
+                                                gutterWidth: root.keyGutter
+                                                gap: root.rowGap
+                                                chipPadding: root.chipPadding
+                                                chipSpacing: root.chipSpacing
+                                            }
                                         }
                                     }
                                 }
