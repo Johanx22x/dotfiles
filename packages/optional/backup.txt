@@ -1,0 +1,20 @@
+# The backup of the irreplaceable: borg for the archives, borgmatic for the
+# policy around them.
+#
+# Optional because a backup needs somewhere to put it, and that somewhere is
+# the one thing this repository cannot ship. The configuration is tracked
+# (backup/.config/borgmatic/config.yaml -- what to save, what to leave out,
+# how long to keep it); the destination and the passphrase are per-machine and
+# are never committed. Ticking this group installs the two tools and nothing
+# starts by itself, which is deliberate: see the Backups section of the README
+# for the two commands that bring it up.
+#
+# Two packages and no more. borgmatic is a front end that shells out to borg,
+# so borg is what does the work and would be needed even if the YAML were
+# replaced by a script tomorrow.
+#
+# The installer ticks a group as one box, and can be opened to pick packages
+# out of it one at a time.
+
+borg
+borgmatic

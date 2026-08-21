@@ -1,0 +1,355 @@
+#!/usr/bin/env bash
+# backup -- the copy of the irreplaceable, and whether it happened.
+#
+# A thin wrapper over borgmatic, which is a thin wrapper over borg. It does not
+# decide what gets saved or for how long: that is entirely in
+# ~/.config/borgmatic/config.yaml, which is a tracked file in this repository.
+# What this adds is the three things a YAML cannot hold or cannot do.
+#
+# ONE: THE MACHINE'S OWN TWO VALUES, out of ~/.config/borgmatic/local.env --
+# where the repository is, and the passphrase that opens it. That file is not
+# in git and must never be: this repository is public. Everything else about
+# the backup is tracked, and the split is exactly the one hypr/monitors.lua and
+# niri/monitors.kdl already use -- the logic is versioned, the machine's values
+# are not.
+#
+# TWO: REFUSING TO RUN INTO A DISK THAT IS NOT THERE. If the destination is an
+# external or secondary disk and it is not mounted, its mount point is still a
+# perfectly writable empty directory on the root filesystem. borg would create
+# a repository in it and start filling the system disk with a copy of the home
+# directory, and the only symptom until / fills up is that the backup looks
+# like it is working. See repo_ready() below.
+#
+# THREE: SAYING SO ON SCREEN WHEN A RUN FAILS. The two callers of this script
+# are a systemd timer and a person typing it, and for the first of those
+# `echo >&2` goes into the journal, which nobody reads on a day when nothing
+# looks wrong. A backup that has been silently failing for three weeks is the
+# ordinary way to discover you have no backup.
+#
+# WHAT IT DELIBERATELY DOES NOT DO. It does not restore. `backup restore`
+# prints the commands and stops, because a restore is one of the few operations
+# here that can destroy the thing it is being run to save, and it should be
+# read before it is run rather than after.
+
+set -euo pipefail
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/borgmatic"
+LOCAL_ENV="$CONFIG_DIR/local.env"
+CONFIG="$CONFIG_DIR/config.yaml"
+UNIT=backup.service
+
+usage() {
+    cat <<'EOF'
+Usage:
+  backup                  what the last run did and when the next one is
+  backup status           the same, said explicitly
+  backup run              create, prune and check now -- what the timer calls
+  backup list             the archives in the repository, newest last
+  backup restore          print the recipe for getting a file back, run nothing
+  backup --help           this
+
+Configuration:
+  ~/.config/borgmatic/config.yaml   tracked: what is saved, and for how long
+  ~/.config/borgmatic/local.env     never committed: BORG_REPO, BORG_PASSPHRASE
+EOF
+}
+
+say()  { printf '  %s\n' "$*"; }
+ok()   { printf '  \033[1;32m OK \033[0m %s\n' "$*"; }
+bad()  { printf '  \033[1;31mFAIL\033[0m %s\n' "$*"; }
+warn() { printf '  \033[1;33m ?? \033[0m %s\n' "$*"; }
+hdr()  { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
+
+# Both channels, always. The journal keeps the detail for whoever goes looking;
+# the notification is what makes anybody go looking in the first place.
+#
+# `|| true` on notify-send because there may be no notification daemon -- a
+# console login, a session that has not started the shell yet -- and a backup
+# that fails to report a failure should still report the failure by exiting
+# non-zero, rather than dying on the reporting.
+fatal() {
+    printf 'backup: %s\n' "$*" >&2
+    notify-send -u critical -a backup \
+        "Backup failed" "$*" 2>/dev/null || true
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+# The machine's own values
+#
+# NOT `source`, WHICH IS THE OBVIOUS WAY AND THE WRONG ONE. Sourcing runs the
+# file as shell, so a passphrase holding a $, a backtick or a quote -- which is
+# to say a good passphrase -- is either mangled or executed. This reads
+# KEY=VALUE with no evaluation at all: everything after the first `=` is the
+# value, verbatim, to the end of the line. So the file needs no quoting and
+# must not have any: quotes written around a value become part of it.
+#
+# ONLY BORG_* NAMES ARE ACCEPTED, and anything else in the file is refused
+# rather than ignored. The file exists to hold borg's own environment
+# (BORG_REPO and BORG_PASSPHRASE today; BORG_RSH and BORG_REMOTE_PATH on the
+# day the destination is a server over ssh), and a line that is not one of
+# those is a typo -- BORG_REPOSITORY, say -- which would otherwise leave the
+# run pointed at nothing with no explanation.
+#
+# IT REPORTS RATHER THAN EXITS, through LOAD_ERROR. `backup status` exists
+# precisely to describe a setup that is not working yet, and a loader that
+# called fatal() would take the status listing down with it at the first
+# machine that has no local.env -- which is every machine, once, on the day it
+# is being set up.
+LOAD_ERROR=""
+load_local_env() {
+    LOAD_ERROR=""
+
+    if [[ ! -r $LOCAL_ENV ]]; then
+        LOAD_ERROR="$LOCAL_ENV is missing. It holds this machine's BORG_REPO and BORG_PASSPHRASE; see the Backups section of the README."
+        return 1
+    fi
+
+    local line key value lineno=0
+    while IFS= read -r line || [[ -n $line ]]; do
+        lineno=$(( lineno + 1 ))
+        [[ -z ${line//[[:space:]]/} ]] && continue
+        [[ ${line#"${line%%[![:space:]]*}"} == '#'* ]] && continue
+
+        key="${line%%=*}"
+        value="${line#*=}"
+        if [[ $key == "$line" ]]; then
+            LOAD_ERROR="$LOCAL_ENV line $lineno: no '=' in it"
+            return 1
+        fi
+        if [[ ! $key =~ ^BORG_[A-Z0-9_]+$ ]]; then
+            LOAD_ERROR="$LOCAL_ENV line $lineno: '$key' is not a BORG_* variable"
+            return 1
+        fi
+
+        export "$key=$value"
+    done < "$LOCAL_ENV"
+
+    if [[ -z ${BORG_REPO:-} ]]; then
+        LOAD_ERROR="$LOCAL_ENV sets no BORG_REPO"
+        return 1
+    fi
+    if [[ -z ${BORG_PASSPHRASE:-} && -z ${BORG_PASSCOMMAND:-} ]]; then
+        LOAD_ERROR="$LOCAL_ENV sets neither BORG_PASSPHRASE nor BORG_PASSCOMMAND"
+        return 1
+    fi
+}
+
+# The strict form, for the two subcommands that touch the repository: the
+# loader's own message is what the user needs, so it is what fatal() shows.
+require_local_env() { load_local_env || fatal "$LOAD_ERROR"; }
+
+# ---------------------------------------------------------------------------
+# Is the destination actually there?
+#
+# `config` is the small text file at the root of every borg repository, next to
+# data/ -- so its presence answers both halves of the question at once: the
+# repository has been created, and whatever it is on is mounted right now. A
+# repository path that is an empty directory is the signature of an unmounted
+# disk and is the case this exists to catch.
+#
+# If borg ever changes that layout this reports a repository that is fine as
+# missing, which is the direction to be wrong in: a false alarm is read, a
+# false all-clear is not.
+#
+# Only local paths are checked. `user@host:/path` is borg's ssh form and there
+# is nothing on this filesystem to look at, so it is left to borg to answer --
+# a network destination that is unreachable fails loudly on its own, which is
+# the failure a local mount point does NOT have.
+repo_ready() {
+    case "$BORG_REPO" in
+        ssh://*|*:/*) return 0 ;;
+    esac
+    [[ -e "$BORG_REPO/config" ]]
+}
+
+require_repo() {
+    repo_ready || fatal \
+        "no borg repository at $BORG_REPO. If that is a separate disk, it is probably not mounted; if it was never created, see the Backups section of the README."
+}
+
+require_borgmatic() {
+    command -v borgmatic >/dev/null 2>&1 || fatal \
+        "borgmatic is not installed. ./install.sh apply optional, with the backup group ticked."
+    [[ -r $CONFIG ]] || fatal \
+        "$CONFIG is missing. It comes from this repository through stow: run 'stow --no-folding -t ~ backup' from the clone."
+}
+
+# ---------------------------------------------------------------------------
+# The run itself
+#
+# A bare `borgmatic` is create, prune, compact and check, in that order, and
+# that is deliberately what is called rather than naming the actions: the
+# consistency checks have their own schedule inside config.yaml (`checks:`),
+# so borgmatic decides on each run whether one is due. Spelling the actions out
+# here would be a second opinion on a question the tracked config already
+# answers.
+#
+# --verbosity 1 keeps one line per phase in the journal, which is what makes
+# `journalctl --user -u backup.service` worth opening. borg's own progress bars
+# are not asked for: there is no terminal to draw them on when the timer is the
+# caller.
+cmd_run() {
+    require_borgmatic
+    require_local_env
+    require_repo
+
+    if ! borgmatic --verbosity 1; then
+        fatal "borgmatic exited non-zero. journalctl --user -u $UNIT -e"
+    fi
+}
+
+# `repo-list` AND NOT `list`. In borgmatic 2.x they are two different
+# commands and the names read backwards from what 1.x did: `repo-list` is the
+# archives in the repository, `list` is the files inside one archive. Getting
+# it wrong here would answer a question nobody asked.
+cmd_list() {
+    require_borgmatic
+    require_local_env
+    require_repo
+    borgmatic repo-list
+}
+
+# ---------------------------------------------------------------------------
+cmd_status() {
+    hdr "Tools"
+    if command -v borgmatic >/dev/null 2>&1; then
+        ok "borgmatic $(borgmatic --version 2>/dev/null || echo '?')"
+    else
+        bad "borgmatic is not installed"
+    fi
+    command -v borg >/dev/null 2>&1 && ok "borg $(borg --version 2>/dev/null)" \
+                                    || bad "borg is not installed"
+
+    hdr "Configuration"
+    [[ -r $CONFIG ]] && ok "${CONFIG/#$HOME/\~}" \
+                     || bad "${CONFIG/#$HOME/\~} is missing -- stow the backup package"
+
+    if [[ -r $LOCAL_ENV ]]; then
+        # The MODE is worth showing and the CONTENTS are never worth showing:
+        # this file holds the passphrase, and `backup status` is the command
+        # somebody runs while screen sharing.
+        ok "${LOCAL_ENV/#$HOME/\~} (mode $(stat -c %a "$LOCAL_ENV"))"
+    else
+        bad "${LOCAL_ENV/#$HOME/\~} is missing -- see the README"
+    fi
+
+    hdr "Destination"
+    # The reporting loader and not the strict one: status is meant to describe
+    # a broken setup, not to fall over on one.
+    if load_local_env; then
+        if repo_ready; then
+            ok "$BORG_REPO"
+            df -h "$BORG_REPO" 2>/dev/null | tail -1 | sed 's/^/     /'
+        else
+            bad "$BORG_REPO holds no borg repository (disk not mounted, or never created)"
+        fi
+    else
+        warn "$LOAD_ERROR"
+    fi
+
+    hdr "Timer"
+    local state
+    state="$(systemctl --user is-enabled backup.timer 2>/dev/null || true)"
+    # `not-found` is a WORD systemctl prints, not an empty answer, and the two
+    # mean different things: not-found is "there is no such unit file", which
+    # on this repository means the systemd package has not been stowed or the
+    # manager has not reloaded since it was. Left in the catch-all it came out
+    # as "backup.timer is not-found", which says nothing about what to do.
+    case "$state" in
+        enabled)         ok "backup.timer is enabled" ;;
+        disabled)        warn "backup.timer exists but is not enabled -- systemctl --user enable --now backup.timer" ;;
+        ""|not-found)    bad "backup.timer is not there -- stow the systemd package, then systemctl --user daemon-reload" ;;
+        *)               warn "backup.timer is $state" ;;
+    esac
+    systemctl --user list-timers --all backup.timer --no-pager 2>/dev/null \
+        | sed 's/^/     /'
+
+    hdr "Last run"
+    # THE NEVER-RUN CASE HAS TO BE SAID OUT LOUD. `systemctl show` on a unit
+    # that has never started reports Result=success and ExecMainStatus=0 --
+    # which are its defaults, not an outcome -- and printing that verbatim
+    # tells somebody checking on a machine they have just set up that their
+    # last backup succeeded. It is exactly the reassuring lie this script is
+    # written to avoid, so the empty ActiveEnterTimestamp is read first and
+    # answers the question instead.
+    local entered
+    entered="$(systemctl --user show "$UNIT" --no-pager -p ActiveEnterTimestamp --value 2>/dev/null || true)"
+    if [[ -z ${entered//[[:space:]]/} ]]; then
+        warn "$UNIT has never run"
+    else
+        # `show` and not `status`: one field per line and no pager, so it can
+        # be read in a terminal that is not a tty.
+        systemctl --user show "$UNIT" --no-pager \
+            -p Result -p ExecMainStatus -p ActiveEnterTimestamp -p InactiveEnterTimestamp \
+            2>/dev/null | sed 's/^/     /'
+    fi
+    say ""
+    say "journalctl --user -u $UNIT -e     for the detail"
+
+    if [[ -n ${BORG_REPO:-} ]] && repo_ready && command -v borgmatic >/dev/null 2>&1; then
+        hdr "Archives"
+        borgmatic repo-list --last 5 2>/dev/null | sed 's/^/     /' \
+            || warn "could not read the repository"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# PRINTED, NOT RUN, and see the header for why. Everything below is read-only
+# except the last block, which is the one that overwrites files in place.
+cmd_restore() {
+    cat <<'EOF'
+
+  Getting something back. Nothing here is run for you.
+
+  1. Find the archive. They are named by date, newest last:
+
+       backup list
+
+  2. Look inside one without extracting anything:
+
+       borgmatic list --archive latest
+       borgmatic list --archive latest --find '*/notes.md'
+
+     (`repo-list` is the archives, `list` is the files inside one of them.
+      They are two commands and the names are easy to read backwards.)
+
+  3. THE EASY WAY, and the one to reach for first: mount the archive and copy
+     out of it with a file manager, cp, or anything else. Nothing is written to
+     your home directory that you do not copy yourself.
+
+       mkdir -p /tmp/restore
+       borgmatic mount --archive latest --mount-point /tmp/restore
+       ...
+       borgmatic umount --mount-point /tmp/restore
+
+  4. Extracting instead, when it is a lot of files. borg restores paths
+     RELATIVE TO THE CURRENT DIRECTORY and without a leading slash, so run it
+     somewhere empty and move the result -- run it in ~ and it overwrites the
+     originals, which is the accident this whole file is trying not to have.
+
+       cd /tmp/restore
+       borgmatic extract --archive latest --path home/<user>/Projects/thing
+
+  The passphrase and the repository come from ~/.config/borgmatic/local.env,
+  which borgmatic reads through this script. Running borg by hand in a plain
+  terminal will ask you for both.
+
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# BEFORE THE CASE AND NOT AFTER IT. Checked afterwards, `backup run extra`
+# would take the whole backup and then complain about the word it ignored.
+(( $# <= 1 )) || { printf 'backup: too many arguments\n' >&2; usage >&2; exit 2; }
+
+case "${1:-status}" in
+    status)      cmd_status ;;
+    run)         cmd_run ;;
+    list)        cmd_list ;;
+    restore)     cmd_restore ;;
+    -h|--help)   usage; exit 0 ;;
+    *)           printf 'backup: unknown argument: %s\n' "$1" >&2
+                 usage >&2
+                 exit 2 ;;
+esac
