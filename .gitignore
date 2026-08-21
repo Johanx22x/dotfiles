@@ -121,3 +121,34 @@ systemd/.config/systemd/user/wallpaper-rotate.timer.d/
 niri/.config/niri/tweaks.kdl
 niri/.config/niri/monitors.kdl
 niri/.config/niri/local.kdl
+
+# ---------------------------------------------------------------------------
+# The backup's per-machine half, and the only entry in this file that is about
+# a SECRET rather than about a generated file
+#
+# THIS REPOSITORY IS PUBLIC. `gh repo view --json visibility` says PUBLIC, and
+# a passphrase pushed to it is not fixed by a later commit removing it -- it is
+# in the history, on GitHub's servers, and in every clone and fork made in the
+# meantime. The only version of that mistake that can be undone is the one that
+# never happens.
+#
+# So the split is the same one monitors.kdl and tweaks.lua already use, applied
+# to something that matters more. backup/.config/borgmatic/config.yaml is
+# tracked and holds what to save, what to leave out and for how long. local.env
+# holds this machine's two values -- BORG_REPO, where the archives go, and
+# BORG_PASSPHRASE, what opens them -- and is never committed.
+#
+# LIKE THE RULES AT THE TOP OF THIS FILE, IT CANNOT MATCH ANYTHING TODAY.
+# install.sh stows with --no-folding, so a file written into
+# ~/.config/borgmatic/ lands there and not in this repository. The rule is the
+# net for the day somebody stows without it, and for the day somebody creates
+# the file inside the clone by hand because that is where the rest of the
+# configuration lives. The glob is second on purpose: an .env under this
+# package is a machine's own environment by definition, whatever it ends up
+# being called.
+#
+# tests/backup-secrets.sh is the other half of the same guard: this file stops
+# the untracked half being added, that check stops a literal being pasted into
+# the tracked half. Both are needed -- neither catches the other's mistake.
+backup/.config/borgmatic/local.env
+backup/.config/borgmatic/*.env

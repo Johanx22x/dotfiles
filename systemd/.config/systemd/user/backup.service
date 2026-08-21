@@ -1,0 +1,65 @@
+[Unit]
+Description=Back the irreplaceable up with borgmatic
+# NOTHING TO WAIT FOR. This reads files and writes to a disk, so unlike the two
+# timers next door it has no business with graphical-session.target: a backup
+# that only runs while somebody is logged in graphically is a backup that stops
+# the first time the machine is left at the display manager.
+#
+# BORGMATIC SHIPS FOUR UNITS OF ITS OWN AND THIS IS NONE OF THEM. The Arch
+# package installs borgmatic.{service,timer} into /usr/lib/systemd/system and
+# borgmatic-user.{service,timer} into /usr/lib/systemd/user, and the user pair
+# is genuinely close to what is wanted here. It is not used, for three reasons
+# that are all in its own text:
+#
+#   ExecStart=/usr/bin/borgmatic --verbosity -2 --syslog-verbosity 1
+#     -2 is borgmatic's "say nothing unless it is an error". Combined with a
+#     unit that has no OnFailure=, a failing backup produces one line in the
+#     journal and nothing anywhere a person will see it.
+#   ExecStartPre=sleep 1m
+#     A minute of dead time on every single run, there to keep backups off the
+#     tail of a boot -- which a daily calendar timer with a randomised delay
+#     already does.
+#   ConditionACPower=true
+#     Harmless on this desktop, and on a laptop it makes the unit skip with
+#     "condition failed" rather than fail, which is the kind of silence this
+#     change exists to remove.
+#
+# None of that is reachable from a config file; it would need a drop-in
+# overriding a packaged unit, which is more moving parts than a unit of our
+# own. A different NAME on purpose as well, so that enabling one is never
+# mistaken for enabling the other.
+
+[Service]
+Type=oneshot
+# By name, like every other unit here: ~/.local/bin is on the user manager's
+# PATH through the environment generator, and hardcoding /home/<user> is
+# exactly what the rest of this repository refuses to do.
+#
+# THE SCRIPT AND NOT `borgmatic` DIRECTLY, which is the whole reason there is a
+# script. It is what reads the machine's repository path and passphrase out of
+# ~/.config/borgmatic/local.env, what refuses to start when the destination
+# disk is not there, and what puts a notification on screen when a run fails --
+# and `backup run` in a terminal is then the same run, not an approximation of
+# it.
+ExecStart=%h/.local/bin/backup run
+
+# notify-send needs a session bus to talk to, and a unit started by a timer
+# inherits no environment from any shell. %t is XDG_RUNTIME_DIR, so this is the
+# ordinary per-user bus socket -- the same one a terminal would have found.
+# Without it a failed backup fails silently, which is the failure mode this
+# whole change exists to avoid.
+Environment=XDG_RUNTIME_DIR=%t
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
+
+# A first backup walks 6 GB and a check reads the whole repository back, so the
+# default DefaultTimeoutStartSec would kill it partway through. borg is
+# interruptible -- it takes a lock and rolls back a half-written archive on the
+# next run -- but being killed nightly at the same point would mean never
+# finishing one. Six hours is not an estimate of how long it takes; it is a
+# ceiling that a genuinely stuck run still hits.
+TimeoutStartSec=6h
+
+# Nice to the CPU and, more to the point, to the disks: this is meant to be
+# invisible on a machine somebody is using, and it has all night.
+Nice=10
+IOSchedulingClass=idle
