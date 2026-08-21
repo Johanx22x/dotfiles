@@ -21,7 +21,6 @@
 // costs elsewhere.
 
 import Quickshell
-import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import QtQuick.Effects
@@ -30,6 +29,11 @@ import QtQuick.Layouts
 import "root:/"
 import "root:/modules/bar"
 import "root:/modules/notifications"
+// SessionInfo, for the identity card on the Performance tab. It lives with
+// the settings window because that is where it was first needed; it is a
+// singleton, so importing the directory brings the name into scope and
+// builds nothing.
+import "root:/modules/settings"
 
 Item {
     id: root
@@ -597,17 +601,6 @@ Item {
                         radius: Theme.cardRadius - 8
                         color: Theme.surfaceContainerHighest
 
-                        // TEMPORARY -- chasing the unpainted bottom band. Dumps
-                        // the geometry of the cover and of both layers whenever
-                        // any of it settles. Remove once the cause is known; do
-                        // not commit.
-                        function dumpGeometry(what: string): void {
-                            console.log(`[cover] ${what}` + ` cover=${cover.width}x${cover.height}` + ` backdrop=${artBackdrop.width}x${artBackdrop.height}` + ` status=${artBackdrop.status} painted=${artBackdrop.paintedWidth}x${artBackdrop.paintedHeight}` + ` source=${artBackdrop.sourceSize.width}x${artBackdrop.sourceSize.height}` + ` art=${art.width}x${art.height} artStatus=${art.status}` + ` artPainted=${art.paintedWidth}x${art.paintedHeight}` + ` url=${playerRow.artSource}`);
-                        }
-
-                        onWidthChanged: dumpGeometry("cover resized")
-                        onHeightChanged: dumpGeometry("cover resized")
-
                         // A BLURRED COPY BEHIND, and the sharp one fitted in
                         // front. This is damage control, not a fix: what the
                         // player publishes is all there is.
@@ -633,10 +626,6 @@ Item {
                             fillMode: Image.PreserveAspectCrop
                             sourceSize.width: 1024
                             asynchronous: true
-
-                            // TEMPORARY, see cover.dumpGeometry above.
-                            onStatusChanged: cover.dumpGeometry("backdrop status " + status)
-                            onPaintedHeightChanged: cover.dumpGeometry("backdrop repainted")
                         }
 
                         MultiEffect {
@@ -667,9 +656,6 @@ Item {
                             onStatusChanged: {
                                 if (status === Image.Error && playerRow.youtubeId && !playerRow.maxResFailed)
                                     playerRow.maxResFailed = true;
-
-                                // TEMPORARY, see cover.dumpGeometry above.
-                                cover.dumpGeometry("art status " + status);
                             }
                             fillMode: Image.PreserveAspectFit
                             asynchronous: true
@@ -919,11 +905,33 @@ Item {
                             anchors.margins: 18
                             spacing: 12
 
+                            // ASKED RATHER THAN ASSERTED, all three rows. The
+                            // distribution and the compositor were written out
+                            // as text here, and one of them was simply wrong:
+                            // the card said Hyprland on a machine running niri.
+                            // That is the failure mode of a literal -- it does
+                            // not stop being drawn when it stops being true.
+                            // `Compositor.name` is what the facade already
+                            // publishes for exactly this question, and it had no
+                            // readers at all until now.
+                            //
+                            // The uptime is read once, as the card is built, and
+                            // that is the whole of it: the popout destroys its
+                            // content on close, so every opening is a fresh
+                            // reading and nothing ticks in between. SessionInfo's
+                            // own, rather than a second implementation of the
+                            // same arithmetic -- the settings window has printed
+                            // "4h 12m" from that function all along.
+                            //
+                            // The glyph beside the distribution stays Arch's.
+                            // Following the name would take a table of logos, and
+                            // this machine is not going to become another
+                            // distribution between two openings of a popout.
                             Repeater {
                                 model: [
-                                    { glyph: Icons.arch, value: "Arch Linux" },
-                                    { glyph: Icons.gpu, value: "Hyprland" },
-                                    { glyph: Icons.clock, value: root.uptime }
+                                    { glyph: Icons.arch, value: SessionInfo.distro },
+                                    { glyph: Icons.gpu, value: Compositor.name },
+                                    { glyph: Icons.clock, value: SessionInfo.uptime() }
                                 ]
 
                                 Row {
@@ -942,9 +950,10 @@ Item {
 
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
-                                        // Elided rather than wrapped: uptime is
-                                        // the long one and a second line would
-                                        // push the row out of the card.
+                                        // Elided rather than wrapped: the
+                                        // distribution's PRETTY_NAME is the long
+                                        // one and a second line would push the row
+                                        // out of the card.
                                         width: parent.width - Theme.iconSize - 16
                                         elide: Text.ElideRight
                                         text: parent.modelData.value
@@ -1060,94 +1069,15 @@ Item {
         }
     }
 
+    // MINUTES, and the same choice the bar's clock already made: the two
+    // things reading this are a "HH:mm" and a date, so a per-second tick is
+    // fifty-nine wake-ups an hour that redraw the same two strings. A
+    // SystemClock only fires at the precision it is given, so the precision
+    // is the whole of the cost.
     SystemClock {
         id: dashClock
 
-        precision: SystemClock.Seconds
-    }
-
-    // ---------------- Readings off /proc ----------------
-    // Straight from the kernel rather than by spawning `free` or `top` on a
-    // timer: reading two small files is what those tools do anyway, and doing
-    // it here keeps the shell process-free the way the rest of the migration
-    // did.
-
-    readonly property string uptime: {
-        const raw = uptimeFile.text();
-        if (!raw)
-            return "";
-        const seconds = Math.floor(parseFloat(raw.split(" ")[0]));
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        return `up ${hours} hour${hours === 1 ? "" : "s"}, ${minutes} minute${minutes === 1 ? "" : "s"}`;
-    }
-
-    property real ramPercent: 0
-    property real cpuPercent: 0
-
-    // CPU is a RATE, so one reading says nothing: it needs the difference
-    // between two samples of the cumulative jiffy counters. These hold the
-    // previous sample.
-    property real lastCpuTotal: 0
-    property real lastCpuIdle: 0
-
-    FileView {
-        id: uptimeFile
-
-        path: "/proc/uptime"
-    }
-
-    FileView {
-        id: memFile
-
-        path: "/proc/meminfo"
-    }
-
-    FileView {
-        id: statFile
-
-        path: "/proc/stat"
-    }
-
-    function sample(): void {
-        uptimeFile.reload();
-        memFile.reload();
-        statFile.reload();
-
-        const mem = memFile.text();
-        if (mem) {
-            const total = parseFloat(mem.match(/MemTotal:\s+(\d+)/)?.[1] ?? 0);
-            // MemAvailable and not MemFree: free counts cache as used memory
-            // and reports a machine with a warm page cache as nearly full.
-            const available = parseFloat(mem.match(/MemAvailable:\s+(\d+)/)?.[1] ?? 0);
-            if (total > 0)
-                root.ramPercent = (1 - available / total) * 100;
-        }
-
-        const stat = statFile.text();
-        if (stat) {
-            const fields = stat.split("\n")[0].trim().split(/\s+/).slice(1).map(parseFloat);
-            const total = fields.reduce((a, b) => a + b, 0);
-            // Fields 3 and 4 are idle and iowait: both are the CPU not working.
-            const idle = fields[3] + fields[4];
-            const deltaTotal = total - root.lastCpuTotal;
-            const deltaIdle = idle - root.lastCpuIdle;
-            if (root.lastCpuTotal > 0 && deltaTotal > 0)
-                root.cpuPercent = (1 - deltaIdle / deltaTotal) * 100;
-            root.lastCpuTotal = total;
-            root.lastCpuIdle = idle;
-        }
-    }
-
-    Timer {
-        interval: 2000
-        // Only while the dashboard is actually on screen. The popout destroys
-        // its content on close, so this stops sampling the moment it is shut
-        // rather than polling /proc forever in the background.
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: root.sample()
+        precision: SystemClock.Minutes
     }
 
     // A transport button. Filled and larger for the primary action, a ghost
