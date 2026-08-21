@@ -328,10 +328,14 @@ FloatingWindow {
         // EVERY PAGE IS BUILT AND ONE IS VISIBLE. It keeps each page's state
         // -- a scroll position, a half-typed password, an expanded row --
         // across a trip to another page, which a Loader would throw away.
-        // The cost is that a page cannot use `visible` to mean "the window is
-        // showing me" without the window driving it, which is exactly what
-        // SettingsPage does with its index; pages that turn hardware on when
-        // looked at (the Wi-Fi scanner, Bluetooth discovery) depend on it.
+        //
+        // The cost is that `visible` on a page means only "the rail has me
+        // selected", which SettingsPage drives from its index. It does NOT
+        // mean anybody is looking: this window is hidden far more often than
+        // it is open, and hiding a window leaves its content item visible.
+        // Pages that turn hardware on when looked at -- the microphone meters,
+        // the Wi-Fi scanner, Bluetooth discovery -- must gate on
+        // `onScreen` instead, which is that flag AND the window being open.
         Flickable {
             anchors.top: header.bottom
             anchors.left: rail.right
