@@ -171,50 +171,6 @@ PanelWindow {
     }
 
     // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
-    //
-    // ext-background-effect: the client names the region behind it that should
-    // be blurred, and both compositors here implement it. It matters more here
-    // than anywhere else in the shell, because of the high-water mark above:
-    // this window is deliberately as large as the largest thing any popout has
-    // ever shown, and everywhere the panel is not, it paints nothing at all.
-    // Blur the rectangle and the popout frosts a slab of screen it does not
-    // occupy -- and keeps frosting it after the content shrinks back.
-    //
-    // The region follows `panel`, so it shrinks and grows with the animation
-    // rather than with the window, and the fillets come along because
-    // WedgeRegion reads their position, which is anchored to the panel's edges.
-    BackgroundEffect.blurRegion: Region {
-        // ONE PIXEL IN FROM THE PANEL, and not `item: panel`. A wl_region is a
-        // list of rectangles, so the rounded corners below come out rasterised
-        // to whole pixels while the corner painted over them is antialiased,
-        // and a blur that reaches the paint's own edge lights up the
-        // half-covered pixels along the curve. See components/WedgeRegion.qml
-        // for the measurement and for why the number is one.
-        //
-        // It matters here more than at a panel that stands still: `width` is
-        // animated, so the edge spends most of its time on a fractional
-        // coordinate, and a Region's own x, y, width and height are integers.
-        // A pixel of slack is what keeps the rounding of one from landing
-        // outside the antialiasing of the other mid-slide.
-        //
-        // Still a binding on `panel` and not on the window, so it shrinks and
-        // grows with the animation. The panel is a direct child of this window,
-        // so its x and y are already surface-local -- the same assumption the
-        // two fillets below make.
-        x: panel.x + 1
-        y: panel.y + 1
-        width: panel.width - 2
-        height: panel.height - 2
-
-        // The panel's own rounding, less that same pixel, so the region's arc
-        // stays concentric with the painted one. Welded, the top two corners
-        // are above the window and the compositor clips them away -- the same
-        // trick that makes the drawn edge come out straight against the bar.
-        radius: Theme.cardRadius - 1
-
-        WedgeRegion { wedge: leftFillet }
-        WedgeRegion { wedge: rightFillet }
-    }
 
     FocusGrab {
         window: root

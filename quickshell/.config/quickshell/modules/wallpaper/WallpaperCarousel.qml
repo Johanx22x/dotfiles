@@ -301,28 +301,6 @@ PanelWindow {
     color: "transparent"
 
     // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
-    //
-    // ext-background-effect: the client names the region behind it that should
-    // be blurred, and both compositors here implement it -- niri since 26.04,
-    // Hyprland since 0.56.0. The whole sheet, because on a full-screen sheet
-    // the rectangle IS what gets painted; frosting everything behind a modal is
-    // the point of it.
-    //
-    // Said out loud anyway rather than left to a compositor to infer, because
-    // that is the whole change: a surface with nothing to declare still has to
-    // declare it. The region starts empty, and a sheet that never asked would
-    // be a dark tint over perfectly sharp windows -- which is the largest
-    // possible place to notice, and is how this one looked before `wallpaper`
-    // was added to the rule in hyprland.lua.
-    //
-    // `sheet` and not the window, for the reason its own note gives: the
-    // window's contentItem measures 0x0 whatever the layer surface is, and the
-    // Rectangle is the only thing here that knows the screen's size. Checked on
-    // screen -- a region taken from an item inside a 0x0 contentItem still
-    // comes out the item's size.
-    BackgroundEffect.blurRegion: Region {
-        item: sheet
-    }
 
     Connections {
         target: WallpaperState
