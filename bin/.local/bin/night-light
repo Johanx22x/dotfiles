@@ -26,6 +26,14 @@
 
 set -euo pipefail
 
+# FOUND NEXT TO THIS SCRIPT AND NOT THROUGH $PATH -- see the note further down
+# about why the `compositor` this brings in has to be found this way, and what
+# happens silently when it is not. `wait_until` and `state_write` come from the
+# same place.
+BIN_DIR="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=../lib/desktop-lib.sh
+. "$BIN_DIR/../lib/desktop-lib.sh"
+
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
 STATE_FILE="$STATE_DIR/night-light"
 
@@ -83,9 +91,14 @@ read_state() {
     fi
 }
 
+# THROUGH state_write AND NOT `>`, for both halves of what that buys. This is a
+# read-modify-write -- every command here calls read_state first and then writes
+# back the field it did not change -- so `night-light on` and `night-light temp`
+# arriving together used to lose one of the two. And the file is replaced rather
+# than emptied and refilled, so the settings window, which reads it back, can no
+# longer catch it holding nothing.
 write_state() {
-    mkdir -p "$STATE_DIR"
-    printf '%s\n%s\n' "$enabled" "$temperature" > "$STATE_FILE"
+    printf '%s\n%s\n' "$enabled" "$temperature" | state_write "$STATE_FILE"
 }
 
 # =============================================================================
@@ -124,14 +137,11 @@ write_state() {
 # of a login shell and of very little else: the settings window in Quickshell
 # inherits the compositor's environment, install.sh calls these scripts by
 # absolute path with whatever PATH it was started with, and a systemd --user
-# unit gets neither. The same shim is in gs, gaming-check, desktop-opacity and
-# wallpaper-switch, and desktop-opacity's copy explains why at length. readlink
-# resolves the stow symlink back into the repo, so the helper is found whether
-# this was started from ~/.local/bin or straight out of the checkout.
-BIN_DIR="$(dirname "$(readlink -f "$0")")"
-compositor() { "$BIN_DIR/compositor" "$@"; }
+# unit gets neither. That is why the library sourced at the top of this file is
+# resolved through readlink rather than looked up, and why `compositor` comes
+# out of it instead of off the PATH.
 
-# THE FAILURE HERE IS THE SILENT ONE, which is why the shim above matters even
+# THE FAILURE HERE IS THE SILENT ONE, which is why resolving it matters even
 # though nothing in this file dies without it. Both calls below sit inside an
 # `if` with stderr thrown away, so a `compositor` that cannot be run is
 # indistinguishable from a compositor that cannot tint: backend() answers
@@ -178,12 +188,7 @@ ensure_hyprsunset() {
 
     # The socket appears a moment after the process does, and a command sent
     # before it exists is simply lost.
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-        pgrep -x hyprsunset >/dev/null && return 0
-        sleep 0.1
-    done
-
-    return 1
+    wait_until 10 0.1 pgrep -x hyprsunset >/dev/null
 }
 
 apply_hyprsunset() {
@@ -255,12 +260,7 @@ ensure_gammarelay() {
         --description="Wayland gamma relay (night-light backend)" \
         wl-gammarelay-rs run >/dev/null 2>&1 || true
 
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-        gammarelay_running && return 0
-        sleep 0.1
-    done
-
-    return 1
+    wait_until 10 0.1 gammarelay_running
 }
 
 apply_gammarelay() {
