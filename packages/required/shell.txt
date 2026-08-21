@@ -21,7 +21,6 @@
 adw-gtk-theme
 adwaita-icon-theme
 awww
-brightnessctl
 cava
 inotify-tools
 jq

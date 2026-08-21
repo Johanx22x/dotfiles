@@ -1,0 +1,11 @@
+# Hardware a desktop does not have. The `laptop` unit already asks whether this
+# machine is one and records the answer; this group follows that answer rather
+# than being a taste question like the other optional groups.
+#
+# brightnessctl owns the backlight. `desktop-brightness` wraps it, and both
+# compositors bind XF86MonBrightnessUp/Down to that wrapper, so on a machine with
+# a panel those two keys are dead without it. On a desktop there is no
+# /sys/class/backlight to write to and the package is pure weight -- which is
+# exactly the state this repository was in: declared as required, not installed,
+# and nobody noticing because the machine has no backlight to miss.
+brightnessctl
