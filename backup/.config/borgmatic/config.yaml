@@ -1,0 +1,291 @@
+# What gets backed up, what does not, and for how long it is kept.
+#
+# borgmatic 2.x, over borg 1.x -- `extra/borgmatic 2.1.7` and `extra/borg
+# 1.4.5` as this is written. The version matters: borgmatic dropped the old
+# `location:` / `storage:` / `retention:` sections, so every option here is at
+# the top level. A config written for 1.7 still loads, with a deprecation
+# warning, and would be the wrong thing to copy from.
+#
+# ---------------------------------------------------------------------------
+# THIS FILE IS PUBLIC. THE REPOSITORY THIS REPOSITORY IS PUSHED TO IS PUBLIC.
+#
+# Nothing below may ever hold a passphrase, a key, or a path with credentials
+# in it. The two values that belong to THIS machine -- where the archives go
+# and what opens them -- are read from ~/.config/borgmatic/local.env, which is
+# not tracked and never will be. tests/backup-secrets.sh fails the build if a
+# literal ever appears here, so the mistake is caught in a pull request rather
+# than in a git history that cannot be rewritten.
+#
+# It is the same split hypr/monitors.lua and niri/monitors.kdl already use: the
+# logic is versioned, the machine's own values are not. See the Backups section
+# of the README for the two commands that create local.env.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Where it goes
+#
+# ${BORG_REPO} is borgmatic's own environment interpolation, which is on unless
+# --no-environment-interpolation is passed. The braces are NOT optional:
+# $BORG_REPO on its own is left as the literal seven characters. There is no
+# default on purpose -- borgmatic raises "Cannot find variable BORG_REPO in
+# environment" and stops, which is the correct outcome for a machine that has
+# not been told where to put its backup. A default would send it somewhere.
+#
+# ONE DESTINATION TODAY, AND THE LIST IS WHY THAT IS NOT A DEAD END. A second
+# repository -- ssh://user@host/./name.borg -- is another entry here and
+# nothing else changes: same sources, same excludes, same retention, and borg
+# sends only the chunks the far end does not have. That is the upgrade path out
+# of the honest limitation of the current setup, which is that a copy on a disk
+# inside this machine survives the main NVMe dying and survives `rm -rf`, and
+# does not survive the house burning down.
+repositories:
+    - path: "${BORG_REPO}"
+      label: local
+
+# The passphrase, from the same untracked file, through the same mechanism.
+#
+# borgmatic hard-errors if BORG_PASSPHRASE is unset, which is again the right
+# failure: borg would otherwise sit waiting on a prompt that a systemd timer
+# has no terminal to answer.
+#
+# borg reads BORG_PASSPHRASE out of the environment by itself, so this line
+# looks redundant and is not. Naming it here is what makes the dependency
+# visible in the file somebody reads when they are trying to work out where the
+# key comes from -- and it means a run with a broken local.env fails at
+# borgmatic's own check with a sentence about a missing variable, instead of
+# somewhere further in.
+encryption_passphrase: "${BORG_PASSPHRASE}"
+
+# ---------------------------------------------------------------------------
+# What is saved: the irreplaceable, and nothing else
+#
+# The rule for this list is one question -- if this machine were gone tomorrow,
+# could it be got back? Everything a package manager, a lockfile or a download
+# can reproduce is deliberately absent, and that is why the whole set is about
+# 2.7 GB rather than the 134 GB in /home.
+#
+#   ~/.ssh       8 KB. The keys that identify this machine to everything else.
+#   ~/.gnupg     80 KB. Same, and worse to lose: a GPG key cannot be reissued
+#                by clicking a button on a web page.
+#   ~/Projects   5.4 GB as it stands, 2.1 GB once node_modules is out (see the
+#                excludes). Work, and the only thing here with no upstream.
+#   ~/Documents  empty today. Listed anyway: the point of the list is to be
+#                right about where things go, and an empty directory that is
+#                already covered costs nothing.
+#   ~/Pictures   1.1 GB, 78 files. Photographs and the wallpaper collection.
+#
+# Tildes are expanded by borgmatic, so no home directory is named literally --
+# the same rule the rest of this repository follows.
+#
+# NOT ~/.config, AND THAT IS NOT AN OVERSIGHT. The configuration of this
+# desktop is this git repository; a second copy of it inside a borg archive
+# would be a copy that can silently disagree with the one that is authoritative.
+# What is genuinely per-machine and untracked -- monitors.kdl, tweaks.lua,
+# local.env -- is a few dozen lines that are quicker to write again than to
+# find in an archive.
+source_directories:
+    - ~/.ssh
+    - ~/.gnupg
+    - ~/Projects
+    - ~/Documents
+    - ~/Pictures
+
+# source_directories_must_exist is left at its default of true. A source that
+# has stopped existing is either a typo or a directory somebody moved, and both
+# are worth stopping for: the alternative is a backup that quietly gets smaller.
+
+# ---------------------------------------------------------------------------
+# What is left out
+#
+# HOW THESE ARE MATCHED, because it is not the shell and it is not gitignore.
+# borgmatic 2.x no longer passes --exclude to borg at all: every line here is
+# written into one generated patterns file as `! fm:<line>`, where `!` is
+# borg's exclude-and-do-not-descend and `fm` is fnmatch. Under fnmatch a single
+# `*` crosses `/` -- so `*/node_modules` matches at any depth and `**` would
+# buy nothing. Tildes are expanded; globs are NOT expanded by borgmatic and go
+# to borg verbatim, which is what makes `*/node_modules` mean what it says
+# instead of being resolved against the current directory.
+#
+# A directory named without a trailing slash excludes the directory and
+# everything under it, and borg does not walk into it -- which is where the
+# time is saved, not just the bytes.
+exclude_patterns:
+    # ----- These earn their keep today, and here is the measurement -----
+    #
+    # ~/Projects holds 189,883 files. 176,342 of them -- 93% -- are inside a
+    # node_modules, and they account for 3.3 GB of its 5.4 GB. Excluding this
+    # one line takes the source set from 189,883 files to 13,541 and from
+    # 5.4 GB to 2.1 GB.
+    #
+    # The file count is the number that matters more than the bytes: borg
+    # stats, reads and chunks every file it walks, so a nightly run that steps
+    # over 176,000 files it can regenerate from a lockfile is paying for them
+    # every night forever.
+    - '*/node_modules'
+    # Next.js's build cache, 2,532 files. Regenerated by `next build`, and a
+    # dotted name owned by exactly one tool, so there is no chance of it
+    # standing for something somebody wrote by hand.
+    - '*/.next'
+    #
+    # NOT `dist`, AND NOT `build`, WHICH WERE BOTH CONSIDERED AND MEASURED.
+    # Once node_modules is gone they are worth 3,620 files and half a gigabyte
+    # between them, on a 237 GB destination -- and unlike node_modules and
+    # .next they are ordinary English words that a person may well have used
+    # for a directory holding something they wrote. Half a gigabyte is not
+    # worth a rule that can silently drop work, which is the one failure a
+    # backup must not have.
+
+    # ----- These cannot match anything today, and that is not a reason to
+    # ----- drop them
+    #
+    # Every path below is OUTSIDE source_directories: the sources are five
+    # named directories inside the home, and none of these is under any of
+    # them. So borg never walks near them and the lines do nothing -- verified
+    # by looking, not assumed.
+    #
+    # They are kept for the same reason the rules at the top of .gitignore are
+    # kept: they are the net for the day the source list is widened. Adding
+    # `~` or `/home` as a source is a one-line change that somebody will make
+    # eventually, and it is the change that puts 14 GB of ~/.cache and 13 GB of
+    # Steam into the archive on the same night. The excludes should already be
+    # here when it happens rather than be worked out afterwards from a full
+    # disk.
+    #
+    # Measured on this machine: ~/.cache is 14 GB (7.7 GB of it yay's build
+    # cache), ~/.local/share/Steam is 13 GB, ~/.local/share/Trash is 350 MB and
+    # ~/build is 2.2 GB of AUR working directories. All four are regenerable by
+    # definition -- a cache, a game library that Steam redownloads, a wastebin,
+    # and unpacked source trees.
+    - '~/.cache'
+    - '~/.local/share/Steam'
+    - '~/.local/share/Trash'
+    - '~/build'
+    #
+    # /home/.snapshots IS NEW, IS REAL, AND IS THE ONE WORTH UNDERSTANDING. A
+    # `home` snapper config was created today and has already taken a timeline
+    # snapshot, so this is no longer hypothetical:
+    #
+    #     $ snapper -c home list
+    #     1 | single |  | Fri 21 Aug 2026 02:00:05 PM CST | root | timeline
+    #
+    # Snapper puts a config's snapshots at the ROOT of the subvolume it
+    # watches -- here @home, mounted at /home -- so they land in
+    # /home/.snapshots, a SIBLING of /home/<user> and not a child of it:
+    #
+    #     $ findmnt -no SOURCE,TARGET /home
+    #     /dev/nvme0n1p2[/@home] /home
+    #     $ find /home -maxdepth 2 -name .snapshots
+    #     /home/.snapshots
+    #
+    # Which is why it is in this second group rather than the first: the five
+    # sources are all inside /home/<user>, so borg does not reach it today.
+    # What makes it the single most important line to already have in place is
+    # what is inside one. Each snapshot is a read-only btrfs snapshot of the
+    # WHOLE home directory -- of the very thing being backed up -- with its own
+    # device number, which is what distinguishes it from an ordinary directory:
+    #
+    #     $ stat -c '%i %d %n' /home/.snapshots/1/snapshot /home/johan
+    #     256 138 /home/.snapshots/1/snapshot
+    #     257  48 /home/johan
+    #
+    # So the day `/home` or `~` is added as a source, every snapshot is another
+    # full copy of the home directory to walk, and the archive grows by one
+    # home directory per snapshot kept.
+    #
+    # AND IT IS NOT PROTECTED BY ITS PERMISSIONS, WHICH IS WHAT AN EARLIER
+    # VERSION OF THIS COMMENT ASSUMED. /home/.snapshots is root-owned and mode
+    # 750, and that looks like a run as the user would simply be refused --
+    # but there is an ACL underneath it:
+    #
+    #     $ getfacl /home/.snapshots
+    #     user::rwx
+    #     user:johan:r-x        <- this one
+    #
+    # so the user can descend into it perfectly well. The exclude is the only
+    # thing that would stop it.
+    - /home/.snapshots
+
+# CACHEDIR.TAG, the cross-tool convention for "this directory is a cache, do
+# not back it up". Nothing under the sources writes one today -- `find` over
+# ~/Projects returns zero -- so this changes nothing right now. It is one line,
+# it costs nothing per run, and cargo, various bundlers and several build
+# systems drop that file into their output directories, so it starts working on
+# its own the day one of them appears.
+exclude_caches: true
+
+# LEFT AT ITS DEFAULT OF false, DELIBERATELY, AND THE DEFAULT IS THE RIGHT ONE
+# HERE FOR A REASON THAT IS EASY TO GET BACKWARDS. On btrfs every subvolume has
+# its own device number, so `one_file_system: true` makes borg treat a nested
+# subvolume as a different filesystem and skip it -- silently, with the archive
+# simply missing that directory. There is no nested subvolume under the sources
+# today (checked: all five share st_dev 48, and no directory under them has
+# btrfs's inode 256), but "true" would turn the day somebody creates one into a
+# silent hole in the backup, and the thing it protects against -- wandering off
+# into another mount -- cannot happen when the sources are five named
+# directories rather than /.
+#
+# It would also happen to skip /home/.snapshots, whose snapshots carry device
+# 138 against the home directory's 48 (see the exclude above). That is not a
+# reason to turn it on: it would be getting the right answer there by a rule
+# that gets the wrong answer everywhere else. The exclude says what is meant
+# and says it in one place.
+one_file_system: false
+
+# auto,zstd,3 rather than a flat level. `auto` lets borg test a chunk with lz4
+# first and store it uncompressed when it does not shrink, which is most of
+# ~/Pictures: JPEG and PNG are already compressed and running zstd over them
+# spends CPU to save nothing. Level 3 is zstd's own default -- the source code
+# in ~/Projects compresses well at any level, and paying for 19 to save a few
+# more megabytes of a 2 GB backup is not a trade worth making nightly.
+compression: auto,zstd,3
+
+# ---------------------------------------------------------------------------
+# How long archives are kept
+#
+# THE THREAT THIS IS SIZED FOR IS NOT DISK FAILURE, IT IS NOT NOTICING. A dead
+# NVMe is discovered the same day; a file deleted or corrupted by mistake is
+# discovered when somebody goes looking for it, which can be months. So the
+# retention is deep rather than dense: two weeks of days for the ordinary "I
+# broke it this afternoon", two months of weeks, and a year of months for the
+# one that is found in July and was lost in March.
+#
+# IT IS AFFORDABLE BECAUSE BORG DEDUPLICATES. An archive is a list of chunks
+# that mostly already exist, so 34 archives of a 2 GB source do not cost 68 GB
+# -- they cost 2 GB plus what actually changed. Against 237 GB free there is no
+# reason to be stingy, and every reason not to be.
+#
+# Pruning only ever removes an ARCHIVE from the list. The chunks it referenced
+# stay until nothing else points at them, and the space comes back at the
+# `compact` that borgmatic runs straight after the prune.
+keep_daily: 14
+keep_weekly: 8
+keep_monthly: 12
+
+# ---------------------------------------------------------------------------
+# Consistency checks
+#
+# A backup nobody has verified is a belief, not a backup, and borg is explicit
+# that bit rot on the destination is what `check` exists for. The two here are
+# the two that are worth their cost:
+#
+#   repository  walks the segments and the index -- the structure. This is what
+#               catches a disk going bad underneath the archives.
+#   archives    reads every archive's metadata and confirms the chunks it names
+#               are present. This is what catches an archive that cannot be
+#               restored.
+#
+# NOT `data`, which re-reads and re-verifies every chunk in the repository.
+# It is the only check that would catch a chunk whose contents are wrong while
+# its metadata is intact, and it costs a full read of the whole repository to
+# do it. On a nightly user timer that is hours of disk for a failure mode the
+# repository check already catches most of.
+#
+# frequency is borgmatic's, not borg's: it records the last run under
+# ~/.local/state/borgmatic and skips a check that is not due yet, so the
+# nightly run stays a create-and-prune on all but a handful of nights. Without
+# these two lines every check would run every night -- "always" is the default.
+checks:
+    - name: repository
+      frequency: 2 weeks
+    - name: archives
+      frequency: 1 month
