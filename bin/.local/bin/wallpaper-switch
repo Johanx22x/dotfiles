@@ -181,7 +181,15 @@ STILL_FRAME="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-still.png"
 
 mkdir -p "$(dirname "$STATE_FILE")"
 
-die() { echo "wallpaper-switch: $*" >&2; exit 1; }
+# `die`, `warn`, `wait_until` and `compositor` come from the library beside this
+# script, resolved through readlink rather than $PATH: the caller that matters
+# is wallpaper-rotate.timer, and a systemd --user unit has neither ~/.local/bin
+# on its PATH nor a terminal to print to. See the note on lib_notify in
+# desktop-lib.sh -- half of what this file has to say went into the journal and
+# nowhere else.
+WS_BIN_DIR="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=../lib/desktop-lib.sh
+. "$WS_BIN_DIR/../lib/desktop-lib.sh"
 
 # The find expression for every accepted extension: -iname a -o -iname b ...
 # Built rather than written out so the arrays above stay the only list.
@@ -665,12 +673,6 @@ if [[ -z "${NIRI_SOCKET:-}" ]]; then
     [[ -n "$NIRI_SOCKET" ]] && export NIRI_SOCKET
 fi
 
-# Which compositor is answering. Resolved next to this script rather than
-# through PATH: this runs from a systemd unit too, where ~/.local/bin may not be
-# on it.
-WS_BIN_DIR="$(dirname "$(readlink -f "$0")")"
-compositor() { "$WS_BIN_DIR/compositor" "$@"; }
-
 # ---------------------------------------------------------------
 # 4. Set the wallpaper
 # ---------------------------------------------------------------
@@ -730,21 +732,25 @@ wait_for_new_layer() {
     if compositor can monitor-query 2>/dev/null && compositor is niri 2>/dev/null; then
         # No pid to compare, so the proof is the COUNT going up -- see
         # layer_count above for why that is equivalent here.
-        local baseline="${before:-0}"
-        for _ in {1..80}; do
-            [[ "$(layer_count "$ns")" -gt "$baseline" ]] && return 0
-            sleep 0.05
-        done
-        return 1
+        wait_until 80 0.05 layer_count_above "$ns" "${before:-0}"
+        return
     fi
 
-    local old=" $before " pid
-    for _ in {1..80}; do
-        while read -r pid; do
-            [[ -n "$pid" && "$old" != *" $pid "* ]] && return 0
-        done < <(layer_pids "$ns")
-        sleep 0.05
-    done
+    wait_until 80 0.05 layer_pid_other_than "$ns" "$before"
+}
+
+# The two questions wait_for_new_layer waits on, one per flavor, as predicates
+# of their own -- wait_until takes a command, and a command is the only shape a
+# poll loop needs to be written in once.
+layer_count_above() {
+    [[ "$(layer_count "$1")" -gt "$2" ]]
+}
+
+layer_pid_other_than() {
+    local old=" $2 " pid
+    while read -r pid; do
+        [[ -n "$pid" && "$old" != *" $pid "* ]] && return 0
+    done < <(layer_pids "$1")
     return 1
 }
 
@@ -783,7 +789,7 @@ spawn_daemon() {
        systemctl --user show-environment 2>/dev/null | grep -q '^WAYLAND_DISPLAY='; then
         systemd-run --user --collect --quiet \
             --description="wallpaper: $1" -- "$@" && return 0
-        echo "wallpaper-switch: systemd-run could not start $1, starting it here" >&2
+        warn "systemd-run could not start $1, starting it here"
     fi
     "$@" >/dev/null 2>&1 &
 }
@@ -834,7 +840,7 @@ stop_video() {
         sleep 0.05
     done
 
-    echo "wallpaper-switch: mpvpaper ${pids% } would not stop" >&2
+    warn "mpvpaper ${pids% } would not stop"
     return 1
 }
 
@@ -856,12 +862,7 @@ awww_shows_everywhere() {
 # transition: awww goes on reporting the outgoing image while it dissolves, so
 # checking the instant `awww img` returns would fail on every fade.
 awww_wait_for() {
-    local _
-    for _ in {1..18}; do
-        awww_shows_everywhere "$1" && return 0
-        sleep 0.15
-    done
-    return 1
+    wait_until 18 0.15 awww_shows_everywhere "$1"
 }
 
 apply_image() {
@@ -885,10 +886,7 @@ apply_image() {
         # applies an image immediately after, which is the only reason the
         # daemon is being started at all.
         spawn_daemon awww-daemon --no-cache
-        for _ in {1..20}; do
-            awww query >/dev/null 2>&1 && break
-            sleep 0.15
-        done
+        wait_until 20 0.15 awww query >/dev/null 2>&1 || true
     fi
 
     # 165 fps = the real refresh rate of both monitors. Any less and the
@@ -910,7 +908,7 @@ apply_image() {
     if ! awww_wait_for "$1"; then
         awww img "$1" --transition-type none >/dev/null 2>&1
         awww_wait_for "$1" \
-            || echo "wallpaper-switch: awww left an output on a different image" >&2
+            || warn "awww left an output on a different image"
     fi
 
     # Only once the still is up. awww img has returned by here, so the image
@@ -1017,7 +1015,7 @@ if [[ "$MODE" == "still" ]]; then
             # behaviour but at the video's real size, and only then the
             # thumbnail, which at least always exists.
             if extract_frame "$TARGET" "$STILL"; then
-                echo "wallpaper-switch: mpv did not answer, froze to the opening frame instead" >&2
+                warn "mpv did not answer, froze to the opening frame instead"
             else
                 STILL="$(frame_for "$TARGET")" \
                     || die "could not extract a frame from $(basename "$TARGET") (is ffmpeg installed?)"
