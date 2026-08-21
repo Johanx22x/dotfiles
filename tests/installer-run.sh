@@ -216,47 +216,15 @@ printf '# Stand-in for the neovim pack.\ncowsay\n'    > "$MINI/packages/optional
 PROFILE="$HOME_DIR/.local/state/dotfiles-profile"
 
 # ---------------------------------------------------------------------------
-# A STDIN FULL OF THE ANSWER PACMAN IS WAITING FOR, AND THE BUG IT IS HERE FOR.
+# NOTHING ON STDIN, AND THAT IS THE POINT OF IT.
 #
-# lib/pkg.sh's pkg_install runs `sudo pacman -S --needed "${repo[@]}"` and does
-# not pass --noconfirm. pacman then asks, and with nothing on stdin it does not
-# fall back to the default -- it gives up:
-#
-#     :: Proceed with installation? [Y/n]    required: pacman did not finish
-#     ...
-#        stow is not installed, so nothing can be linked
-#
-# So `./install.sh -y` installs no packages at all with no terminal attached,
-# which is the precise case --yes exists for, and `update` -- documented as
-# something to reach from a keybind or a cron job -- cannot install anything
-# either. It is an omission rather than a decision: the two OTHER places
-# lib/pkg.sh calls pacman, pkg_ensure_yay and ui_offer_gum, both pass
-# --noconfirm, and makepkg is given it too.
-#
-# It is NOT fixed here, because this branch does not touch install.sh or lib/.
-# What happens instead is that the run is handed a stdin full of the "y" pacman
-# is waiting for, so everything downstream of the packages step can still be
-# tested. A regular file rather than a pipe from `yes`, so that install.sh
-# exiting first cannot turn into a SIGPIPE that this script then has to explain
-# away.
-#
-# DELETE THIS AND THE `< "$CONFIRM"` BELOW once pkg_install passes --noconfirm.
-#
-# A MEGABYTE OF THEM, AND NOT TWO HUNDRED LINES. Every unit in a run shares one
-# stdin, and pacman reads it through stdio -- so a `pacman -S` does not take
-# one line and leave the rest, it pulls a whole buffer and leaves the offset
-# past it. Sized in buffers rather than in lines for that reason; a megabyte is
-# nothing and the alternative is a second reader finding end of file.
-#
-# (Built by repeating a chunk rather than with `yes | head`, because that
-# pipeline ends with `yes` taking a SIGPIPE, and under `set -o pipefail` the
-# 141 that produces is the pipeline's exit status -- which took this whole
-# script down on the first attempt.)
-CONFIRM="$SANDBOX/confirmations"
-confirm_chunk="$(printf 'y\n%.0s' {1..2048})"   # 4 KiB
-for _ in {1..256}; do printf '%s' "$confirm_chunk"; done > "$CONFIRM"
-unset confirm_chunk
-
+# This used to hand the run a megabyte of "y" so that pacman -- which had no
+# --noconfirm and stops dead on ":: Proceed with installation? [Y/n]" with
+# nothing to read -- could get through the packages step. lib/pkg.sh now passes
+# --noconfirm whenever this script would not be able to relay an answer, so the
+# crutch is gone and its absence is itself the check: every run below is given
+# /dev/null, and anything that goes back to reading an answer off stdin gets end
+# of file and fails here rather than on somebody's machine.
 # EVERY XDG VARIABLE, NOT JUST THE ONE. install.sh reaches XDG_STATE_HOME by
 # name and $HOME/.config by hand, and the machine running this may well have
 # the others pointing somewhere real -- so all four are aimed at the sandbox,
@@ -270,7 +238,7 @@ installer() {
         XDG_DATA_HOME="$HOME_DIR/.local/share" \
         XDG_CACHE_HOME="$HOME_DIR/.cache" \
         NO_COLOR=1 \
-        "$MINI/install.sh" "$@" < "$CONFIRM"
+        "$MINI/install.sh" "$@" </dev/null
 }
 
 # `check` asks nothing and must never need an answer, so it is given a stdin
