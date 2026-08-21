@@ -141,6 +141,22 @@ Row {
                 continue;
             }
 
+            // THREE FIELDS FROM HERE DOWN, and the guard above is not enough
+            // on its own: it lets a two-field line through and the state is
+            // read out of fields[2] a few lines below, where `undefined !==
+            // "disconnected"` is true and the component is reported as
+            // connected and in use. The one line that legitimately has two
+            // fields is `name`, which has just been dealt with.
+            //
+            // Latent rather than live: `airpods-battery` writes
+            // "<component>\t<level>\t<state>" for every component it found
+            // and "name\t<alias>" for the alias, so nothing it produces today
+            // takes this path. What does is a half-written file -- the writer
+            // replaces it atomically, so that would have to be something else
+            // -- or the day a component reports a level with no state.
+            if (fields.length < 3)
+                continue;
+
             const level = parseInt(fields[1]);
             if (isNaN(level))
                 continue;
@@ -198,6 +214,12 @@ Row {
                 stateText: root.stateTextOf(device.state),
                 remaining: root.remainingText(
                     charging ? (device.timeToFull ?? 0) : (device.timeToEmpty ?? 0), charging),
+                // The same estimate again, unformatted, for the notification.
+                // BatteryAlerts words that one itself -- taking `remaining`
+                // would be taking a sentence written for the panel, which is
+                // how the two battery widgets ended up saying the same thing
+                // two different ways in the first place.
+                secondsLeft: charging ? 0 : (device.timeToEmpty ?? 0),
                 health: (device.healthSupported ?? false)
                     ? Math.round(device.healthPercentage ?? 0) : -1,
                 parts: []
@@ -242,6 +264,9 @@ Row {
                 label: root.airpods.name,
                 stateText: lowest.stateText,
                 remaining: "",
+                // AAP carries a percentage and a charging flag and no estimate
+                // at all, so the notification falls back to its instruction.
+                secondsLeft: 0,
                 health: -1,
                 parts: root.airpods.parts
             });
@@ -280,17 +305,14 @@ Row {
     //
     // CHARGING BEATS BOTH. A mouse on its cable at 8% is not a problem, and
     // colouring it as one is how a warning stops being believed.
-    readonly property int alertBelow: 15
+    // Only the amber one is decided here. Where the shouting starts, where it
+    // re-arms, and whether a given reading is shouting-worthy all live in
+    // BatteryAlerts now: the machine's own battery widget asks the same
+    // questions, and the answers had been written out twice.
     readonly property int warnBelow: 30
 
-    // Higher than alertBelow on purpose. A battery sitting exactly on the
-    // threshold flickers across it as the reading settles, and without a gap
-    // between "start warning" and "stop warning" that flicker is a
-    // notification every few minutes.
-    readonly property int rearmAt: 20
-
     function isAlerting(charge: int, charging: bool): bool {
-        return !charging && charge <= root.alertBelow;
+        return BatteryAlerts.isAlerting(charge, charging);
     }
 
     function tintFor(charge: int, charging: bool): color {
@@ -314,51 +336,28 @@ Row {
 
     // ---------------- The alert ----------------
     //
-    // KEYED AND HELD ON THE WIDGET, not in the delegate. The list is sorted by
-    // how empty each thing is, so the delegates are destroyed and rebuilt
-    // whenever a percentage changes -- which is exactly when this state
-    // matters. A flag stored in the row would be thrown away by the same event
-    // that should have set it, and the notification would go out again every
-    // few minutes.
-    property var alerted: ({})
-
+    // KEYED, AND NOT KEPT HERE ANY MORE. The reasoning that took it off the
+    // delegate still holds -- the list is sorted by how empty each thing is,
+    // so the rows are destroyed and rebuilt whenever a percentage changes,
+    // which is exactly when this state matters -- and it did not go far
+    // enough. A flag on the WIDGET is one flag per Bar, and shell.qml builds a
+    // Bar per screen: two monitors carrying a bar meant two critical
+    // notifications, which do not expire, for one mouse going flat.
+    //
+    // So it lives in BatteryAlerts, which exists once per shell process. This
+    // hands over a reading; being called again with the same reading from the
+    // other bar is a no-op there.
     function considerAlert(entry: var): void {
-        const key = entry?.key ?? "";
-        if (key === "")
+        if (!entry)
             return;
 
-        // Back above the re-arm line, or on a cable: forget it happened, so
-        // the next time it runs down there is a warning again.
-        if (entry.charging || entry.charge >= root.rearmAt) {
-            if (root.alerted[key]) {
-                const next = Object.assign({}, root.alerted);
-                delete next[key];
-                root.alerted = next;
-            }
-            return;
-        }
-
-        if (entry.charge > root.alertBelow || root.alerted[key])
-            return;
-
-        const next = Object.assign({}, root.alerted);
-        next[key] = true;
-        root.alerted = next;
-
-        // notify-send and not a call into this shell's own notification model:
-        // the shell IS the notification daemon, so this goes out over the bus
-        // and comes straight back in as an ordinary notification -- which
-        // means it looks like every other one, stacks with them, and obeys
-        // do-not-disturb. A private code path would bypass all three.
-        //
-        // Critical urgency, which is what makes it outlive its timeout: see
-        // the header of NotificationCard.qml. A warning that disappears while
-        // you are looking at the other monitor has not warned anybody.
-        Quickshell.execDetached(["notify-send",
-            "--urgency=critical",
-            "--app-name=Battery",
-            `${entry.label} is at ${entry.charge}%`,
-            "Put it on the cable before it stops."]);
+        BatteryAlerts.consider({
+            key: entry.key,
+            label: entry.label,
+            charge: entry.charge,
+            charging: entry.charging,
+            secondsLeft: entry.secondsLeft
+        });
     }
 
     // Which entry the panel is about. A KEY and not the object: `entries` is
