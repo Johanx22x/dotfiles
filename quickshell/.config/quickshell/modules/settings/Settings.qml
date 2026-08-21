@@ -364,7 +364,7 @@ FloatingWindow {
             // window is never opened, which is nearly every shell start.
             //
             // AND NEARLY EVERY SHELL START IS WHAT MAKES IT WORTH DOING. The
-            // thirteen pages below are about 8,800 lines of QML, all of it
+            // fourteen pages below are about 10,100 lines of QML, all of it
             // constructed before the first frame is drawn, and Quickshell
             // reloads the whole config every time a .qml file is saved -- so
             // the bill is paid again on every save while editing the shell,
@@ -435,6 +435,7 @@ FloatingWindow {
                         NotificationsPage {}
                         DisplayPage {}
                         AudioPage {}
+                        RecordingPage {}
                         InputPage {}
                         NetworkPage {}
                         BluetoothPage {}
