@@ -159,6 +159,14 @@ Singleton {
             battery: false,
             keyboardLayout: false,
             clock: true,
+            // ON, and by the same test the two above it pass. It is a DOOR and
+            // not a reading: with the history no longer a tab of the island's
+            // dashboard, the bell is the only PERMANENT pointer-reachable way
+            // into it -- the do-not-disturb badge is the other one and it comes
+            // and goes with the mute. A second copy on a second screen repeats
+            // a way in rather than a sentence about the desktop, which is
+            // exactly the trade the tray and the settings button already make.
+            notifications: true,
             settingsButton: true
         })
     })
@@ -979,8 +987,8 @@ Singleton {
     //
     // ONE COMPLETE SET PER MONITOR, WITH NO SHARED BASE ABOVE THEM. Every bar
     // is configured on its own: `barWidgetsByMonitor` maps a screenKey() to
-    // the eight answers for that screen, and nothing a bar says can move
-    // another one. A monitor with no entry shows `defaults.barWidgets`, the
+    // the complete set of answers for that screen, and nothing a bar says can
+    // move another one. A monitor with no entry shows `defaults.barWidgets`, the
     // seed at the top of this file, and gets an entry of its own the first
     // time a switch on it is touched.
     //
@@ -1148,6 +1156,13 @@ Singleton {
     // which is the same choice the old `barBase` switch statement made and for
     // a reason that still holds: a name assembled at runtime fails at runtime,
     // on one monitor, long after the rename that broke it.
+    //
+    // A WIDGET ADDED AFTER THE OLD MODEL DIED HAS NO ENTRY HERE, and cannot:
+    // there was never a `barNotifications` for a file in the old shape to
+    // carry. The fold below reads that as "the file says nothing", which lands
+    // it on the same TRUE every unmentioned widget gets, and that is the right
+    // answer -- an old config should come back with the bell on rather than
+    // with a bar that quietly has no way into its own notification history.
     readonly property var legacyBarKeys: ({
         logo: "barLogo",
         activeWindow: "barActiveWindow",
@@ -1185,7 +1200,13 @@ Singleton {
         let legacy = Object.keys(overrides).length > 0;
 
         for (const widget of root.barWidgets) {
-            const value = stored[root.legacyBarKeys[widget]];
+            // Guarded rather than `stored[root.legacyBarKeys[widget]]`, because
+            // a widget with no legacy key would index the file by the STRING
+            // "undefined" -- which reads as absent today and would read as a
+            // value the day somebody hand-edits a key of that name in. See the
+            // note on legacyBarKeys.
+            const legacyKey = root.legacyBarKeys[widget];
+            const value = legacyKey ? stored[legacyKey] : undefined;
 
             if (typeof value === "boolean") {
                 base[widget] = value;
@@ -1431,8 +1452,8 @@ Singleton {
         adapter.nightLightScheduled = root.defaults.nightLightScheduled;
         adapter.nightLightFrom = root.defaults.nightLightFrom;
         adapter.nightLightTo = root.defaults.nightLightTo;
-        // Every bar back to the seed, which is a deletion and not eight
-        // assignments: with no shared base left there is nothing to restore
+        // Every bar back to the seed, which is a deletion and not one
+        // assignment per widget: with no shared base left there is nothing to restore
         // TO except the seed, and an empty map is how a bar says it follows it.
         // Back to one bar on the monitor the rule picks, with no monitor
         // holding an opinion of its own. The Hyprland side is deliberately NOT

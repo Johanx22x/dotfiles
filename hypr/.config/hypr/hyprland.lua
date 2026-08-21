@@ -594,7 +594,14 @@ hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("qs ipc call dnd toggle"), { descript
 
 -- ...and the other half: what came in while it was muted, or while you were
 -- not at the desk. Same key with SHIFT, because it is the same subject.
-hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("qs ipc call island notifications"), { description = "Shell: notification history" })
+--
+-- TOGGLES. It used to only open, back when it was `island notifications` and
+-- the list was a tab of the dashboard: a key that opened something on a named
+-- tab could not close it without also deciding what "close" meant for the
+-- other three. The list is its own widget now -- the bell at the right end of
+-- the bar -- so pressing this again puts away what pressing it put up, which
+-- is what SUPER + D and every button on that end of the bar already do.
+hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("qs ipc call notifications history"), { description = "Shell: notification history" })
 
 -- The shell's own settings. C for config; it was the only letter near it that
 -- was free, and S, P and O are all spoken for by screenshots, pseudotile and
