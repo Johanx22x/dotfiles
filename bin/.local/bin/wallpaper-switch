@@ -788,13 +788,54 @@ spawn_daemon() {
     "$@" >/dev/null 2>&1 &
 }
 
+# ---- Stopping the video, by pid and for good ----
+# BY PID, AND ONLY THE ONES THAT WERE ALREADY THERE. This was `pkill -x
+# mpvpaper`, which signals whatever answers to the name AT THE INSTANT IT RUNS
+# -- including a process that appeared between the check and the signal, and
+# including one somebody started by hand for a single output, which is a
+# supported use of this machine: MPVPAPER_OUTPUT is a variable at the top of
+# this file precisely so a second monitor can be given its own video. Taking a
+# snapshot of the pids first and signalling those is what apply_video below
+# already does, for the same reason. A list of pids cannot grow behind your
+# back, and it is the only way to signal a process you can name.
+#
+# AND THEN MAKE SURE THEY ARE GONE. The old loop waited one second and returned
+# whether or not anything was left, so a video that did not answer SIGTERM in
+# time still held its layer surface -- and the ~2 GB of decoder memory measured
+# under `still` below -- while the caller went on to put another wallpaper on
+# top of it. That is the state this function is called to prevent, and it was
+# reported as reached.
+#
+# SIGTERM FIRST, because mpvpaper closes its wl_surface from its own handler and
+# a surface torn down under the compositor is the noisier failure. SIGKILL after
+# two seconds, because by then nothing about it is going to be tidy anyway.
 stop_video() {
-    pgrep -x mpvpaper >/dev/null || return 0
-    pkill -x mpvpaper 2>/dev/null
-    for _ in {1..20}; do
-        pgrep -x mpvpaper >/dev/null || break
+    local pids left pid waited=0 _
+
+    pids="$(pgrep -x -u "$(id -u)" mpvpaper 2>/dev/null | tr '\n' ' ')"
+    [[ -n "${pids// /}" ]] || return 0
+
+    # shellcheck disable=SC2086  # a pid list, deliberately split
+    kill $pids 2>/dev/null
+
+    # Three seconds in 50 ms steps: SIGKILL goes out on the fortieth.
+    for _ in {1..60}; do
+        left=""
+        for pid in $pids; do
+            kill -0 "$pid" 2>/dev/null && left+="$pid "
+        done
+        [[ -n "${left// /}" ]] || return 0
+        pids="$left"
+
+        (( ++waited == 40 )) && {
+            # shellcheck disable=SC2086  # a pid list, deliberately split
+            kill -9 $pids 2>/dev/null
+        }
         sleep 0.05
     done
+
+    echo "wallpaper-switch: mpvpaper ${pids% } would not stop" >&2
+    return 1
 }
 
 # Is every output showing $1 right now? awww answers one line per output,
@@ -896,7 +937,7 @@ apply_video() {
     # process never ran -- which is why every switch left another mpvpaper
     # behind, four deep, all still playing the first video.
     local old_pids old_layers
-    old_pids="$(pgrep -x mpvpaper 2>/dev/null | tr '\n' ' ')"
+    old_pids="$(pgrep -x -u "$(id -u)" mpvpaper 2>/dev/null | tr '\n' ' ')"
     old_layers="$(layer_state mpvpaper)"
 
     # No -f any more. Forking was how this held the process open when the
