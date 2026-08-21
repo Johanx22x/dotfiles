@@ -295,8 +295,14 @@ hl.config({
         -- Set to true to enable resizing windows by clicking and dragging on borders and gaps
         resize_on_border = false,
 
-        -- Please see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Tearing/ before you turn this on
-        allow_tearing = false,
+        -- NO allow_tearing HERE, and that is the point: it is declared once, in
+        -- gaming.lua, next to the note explaining when you would want it and
+        -- next to the `immediate` window rule you have to uncomment with it.
+        -- It used to be declared in both files with the same value, which is
+        -- fine until the day they disagree -- gaming.lua loads after this
+        -- block, so it would have won silently, and the file you edited would
+        -- have been the one that did nothing. Hyprland's own default is false,
+        -- so tearing stays off even if gaming.lua fails to load.
 
         layout = "dwindle",
     },
@@ -465,19 +471,11 @@ hl.config({
     },
 })
 
--- See https://wiki.hypr.land/Configuring/Layouts/Master-Layout/ for more
-hl.config({
-    master = {
-        new_status = "master",
-    },
-})
-
--- See https://wiki.hypr.land/Configuring/Layouts/Scrolling-Layout/ for more
-hl.config({
-    scrolling = {
-        fullscreen_on_one_column = true,
-    },
-})
+-- The master and scrolling blocks were here, tuning two layouts that are
+-- never selected: `general.layout` is "dwindle" above and nothing anywhere
+-- switches it. They came from the upstream template. Add them back the day
+-- the layout changes, not before -- a setting that configures nothing reads
+-- like a setting that works.
 
 ----------------
 ----  MISC  ----
@@ -539,12 +537,13 @@ hl.gesture({
     action = "workspace"
 })
 
--- Example per-device config
--- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Devices/ for more
-hl.device({
-    name        = "epic-mouse-v1",
-    sensitivity = -0.5,
-})
+-- The example hl.device for "epic-mouse-v1" was here, straight from the
+-- upstream template (/usr/share/hypr/hyprland.lua). It is Hyprland's made-up
+-- name in its own documentation, and nothing of the sort is attached here:
+-- no device by that name appears in /proc/bus/input/devices, so the block set
+-- the sensitivity of nothing. The DualSense rule below is
+-- what a real per-device block looks like, and `hyprctl devices` is where the
+-- names come from.
 
 -- The kernel's hid-playstation driver exposes the DualSense touchpad as a
 -- real pointer device (its own evdev node with POINTER + BUTTONPAD), so the
@@ -872,14 +871,12 @@ hl.layer_rule({
 -- "quickshell-notifications" and is covered by blur-quickshell above.
 -- Nothing on this system creates a bare "notifications" layer any more.
 
--- Hyprland-run windowrule
-hl.window_rule({
-    name  = "move-hyprland-run",
-    match = { class = "hyprland-run" },
-
-    move  = "20 monitor_h-120",
-    float = true,
-})
+-- The move-hyprland-run rule was here, also from the upstream template. The
+-- binary exists (hyprland-guiutils ships /usr/bin/hyprland-run) but nothing on
+-- this desktop starts it: the launcher is the shell's own, `qs ipc call
+-- launcher toggle`, bound on SUPER + SPACE, and it is a layer surface rather
+-- than a window -- see the blur rule above, not a window rule. So the rule
+-- placed a window that never opens.
 
 -- Helper apps kept out of the tiling: they are opened briefly and closed,
 -- and tiled they would reshuffle the rest of the workspace on every launch.
@@ -1126,6 +1123,24 @@ hl.window_rule({
 ---------------
 -- Render, environment and window rules for games.
 -- See ~/.config/hypr/gaming.lua
+--
+-- BARE, and not pcall(dofile, ...) like the four other includes -- which looks
+-- like the odd one out and is not. Measured on 0.56.2 rather than assumed:
+-- Hyprland's `require` catches whatever the module throws and files it as a
+-- config error instead of letting it propagate. Appending a syntax error to
+-- gaming.lua, and separately a call to a nil global, printed
+-- `require("gaming"): ...` in the parsing result and the rest of THIS file
+-- still ran -- a deliberately broken rule added after this line was still
+-- reached and still reported. So tweaks.lua and local.lua below survive a
+-- broken gaming.lua on their own; there is nothing here for a pcall to save.
+--
+-- Wrapping it would in fact cost something: pcall SWALLOWS the message, and
+-- gaming.lua is the file most often edited -- every new game adds a rule to
+-- it. Left as it is, a mistake in there shows up in `hyprctl configerrors`
+-- and in the red banner. `require` rather than a path is also what keeps
+-- `Hyprland --verify-config -c` on a checkout elsewhere reading THAT
+-- checkout's gaming.lua: it resolves through package.path, which Hyprland
+-- points at the directory of the config it actually loaded.
 require("gaming")
 
 
