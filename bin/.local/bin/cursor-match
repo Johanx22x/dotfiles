@@ -49,8 +49,35 @@ PALETTE="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/colors.json"
 # ever swapped for another built the same way.
 PREFIX="Bibata-Material-"
 
+usage() {
+    cat <<'EOF'
+Usage:
+  cursor-match            resolve and apply -- what wallpaper-switch calls
+  cursor-match --dry-run  say what it would pick and change nothing
+EOF
+}
+
+# EVERYTHING THAT IS NOT --dry-run USED TO BE A RUN. The test was a single
+# `[[ ${1:-} == --dry-run ]] && DRY_RUN=1` with nothing after it, so the whole
+# file fell through to the apply path whatever it was handed: `cursor-match
+# --help` changed the pointer, and so did `--dryrun`, `-n`, and every typo of
+# the one flag this script has. A dry run that silently is not one is the worst
+# failure a flag with that name can have -- it is asked for precisely when the
+# answer is not to be trusted yet.
+#
+# The rest of this file is deliberately hard to make fail (see the note under
+# missing() below), and that is about MISSING PIECES on a machine mid-setup, not
+# about arguments. A word this script does not know is the caller being wrong,
+# and it is told so.
 DRY_RUN=0
-[[ ${1:-} == --dry-run ]] && DRY_RUN=1
+case "${1:-}" in
+    "")        ;;
+    --dry-run) DRY_RUN=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *)         echo "cursor-match: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+esac
+
+(( $# <= 1 )) || { echo "cursor-match: too many arguments" >&2; usage >&2; exit 2; }
 
 # EVERY MISSING PIECE IS A QUIET EXIT 0, NOT AN ERROR. This runs at the end of
 # every wallpaper change, including on a fresh clone where the cursor pack was

@@ -228,10 +228,10 @@ if ! command -v gamescope >/dev/null; then
     exit
 fi
 
-# If Steam is already running inside a gamescope session (steam-gamescope),
-# adding another gamescope per game nests it on itself: worse performance,
-# odd input and a broken overlay. In that case do nothing and let the game
-# through.
+# If Steam is already running inside a gamescope session -- Steam Deck mode, or
+# a gamescope started by hand around the whole client -- adding another
+# gamescope per game nests it on itself: worse performance, odd input and a
+# broken overlay. In that case do nothing and let the game through.
 if [[ -n ${GAMESCOPE_WAYLAND_DISPLAY:-} ]]; then
     echo "gs: already inside gamescope, not nesting another one" >&2
     if [[ ${GS_GAMEMODE:-1} == 1 ]] && command -v gamemoderun >/dev/null; then
