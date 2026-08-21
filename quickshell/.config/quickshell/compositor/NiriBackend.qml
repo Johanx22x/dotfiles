@@ -45,6 +45,19 @@ CompositorBackend {
 
     name: "niri"
 
+    // The file the binds below were actually read out of, tidied for printing.
+    // Not a second copy of the path: it is configFile's own, so a session
+    // pointed somewhere else by $NIRI_CONFIG names the file it is really
+    // using. $HOME goes back to "~" because that is how somebody writes a path
+    // down, and because the settings page prints this in a sentence.
+    bindsFile: {
+        const home = Quickshell.env("HOME") ?? "";
+        const path = root.configFile.path;
+        return home !== "" && path.startsWith(home + "/")
+            ? "~" + path.slice(home.length)
+            : path;
+    }
+
     // $NIRI_SOCKET is the compositor's own announcement, the way
     // $HYPRLAND_INSTANCE_SIGNATURE is for the other one.
     readonly property string socketPath: Quickshell.env("NIRI_SOCKET") ?? ""

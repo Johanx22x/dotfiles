@@ -52,7 +52,7 @@ SettingsPage {
     // title does not say out loud.
     keywords: [
         "keybind", "keybinding", "hotkey", "shortcut", "shortcuts", "keys",
-        "keyboard", "bind", "chord", "conflict", "hyprland"
+        "keyboard", "bind", "chord", "conflict", "hyprland", "niri"
     ]
 
     // ---------------- Glyphs that are not in Icons yet ----------------
@@ -197,6 +197,25 @@ SettingsPage {
         font.family: Theme.fontFamily
         font.pointSize: Theme.fontSize - 1.5
         font.weight: Theme.fontWeight
+    }
+
+    // WHAT A ROW WITH NOTHING TO SAY FOR ITSELF SAYS, and the point of it is
+    // the second half: where to go and write a description. It read "no
+    // description in hyprland.lua" unconditionally, which on this machine is
+    // twenty-eight rows telling a niri session to edit a Hyprland config that
+    // is not there. The file comes from the compositor facade now -- see
+    // bindsFile in compositor/CompositorBackend.qml -- and the sentence drops
+    // the words rather than guessing when there is nothing to ask.
+    //
+    // THE NAME AND NOT THE PATH, here only: this is one line among eighty in a
+    // list that elides, and the whole path is in the Editing section at the
+    // foot of the page, which is where somebody who has decided to go and edit
+    // it is looking.
+    readonly property string undescribed: {
+        const file = Compositor.bindsFile;
+        return file === ""
+            ? "no description"
+            : `no description in ${file.split("/").pop()}`;
     }
 
     // A CEILING ON THE LIST, not a height for it. Sixty-four binds at thirty
@@ -902,7 +921,7 @@ SettingsPage {
                                     // key is taken by something with no name.
                                     text: {
                                         if (!bind.modelData.described)
-                                            return "no description in hyprland.lua";
+                                            return root.undescribed;
                                         return bind.modelData.submap === ""
                                             ? bind.modelData.text
                                             : `${bind.modelData.text}  ·  in submap ${bind.modelData.submap}`;
@@ -939,11 +958,27 @@ SettingsPage {
             topPadding: 4
             bottomPadding: 6
 
-            text: "Binds are written in ~/.config/hypr/hyprland.lua, and that file "
-                + "is where they are changed. Hyprland hands out every bind as a Lua "
-                + "callback number, so this window can read which keys are taken and "
-                + "what they are for, but never what a bind actually runs — which is "
-                + "the half an editor here would need."
+            // THE SAME BUG AS THE ROWS ABOVE, and fixing one without the other
+            // would have left the page contradicting itself: eighty rows
+            // pointing at config.kdl over a paragraph pointing at
+            // hyprland.lua. The file comes from the same place they do.
+            //
+            // The reason it is a view and not an editor is the file's own
+            // header argument rather than the Hyprland one that used to be
+            // here. "Hyprland hands out every bind as a Lua callback number"
+            // is true and is only true on Hyprland -- under niri the backend
+            // reads the config itself and can see exactly what a bind runs, so
+            // as a reason for this window not offering to edit them it is the
+            // wrong reason on the machine it is being read on. What holds
+            // either way is what the file IS.
+            text: (Compositor.bindsFile === ""
+                    ? "Binds are written in the compositor's own config, and that file "
+                    : `Binds are written in ${Compositor.bindsFile}, and that file `)
+                + "is where they are changed. This window reads them and never writes "
+                + "them: the file is hand-written — prose about why each key sits "
+                + "where it does, and loops that turn two lines into twenty binds — "
+                + "and a window that generated it would produce a correct list of "
+                + "binds while destroying the only record of why they are those binds."
             wrapMode: Text.WordWrap
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 1
