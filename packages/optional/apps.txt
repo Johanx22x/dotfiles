@@ -1,0 +1,18 @@
+# Applications this desktop was set up with, and nothing here depends on.
+#
+# Optional in the real sense: the browser, the chat client, the torrent client
+# and the recorder are personal choices, and skipping the group leaves a
+# working desktop. mimeapps.list in seeds/ points at Brave for the web, which
+# is the one line to change if this group is skipped.
+#
+# The installer ticks a group as one box, and can be opened to pick packages
+# out of it one at a time.
+
+brave-bin
+discord
+github-cli
+gimp
+htop
+nano
+obs-studio-liberty
+qbittorrent

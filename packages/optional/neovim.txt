@@ -1,0 +1,18 @@
+# The language servers and runtimes ~/.config/nvim expects to find.
+#
+# Separate from the editor, which is in required/desktop.txt, because Neovim
+# opens files perfectly without any of this -- what it loses is completion and
+# diagnostics for the four languages this machine writes. The configuration
+# itself is a separate repository (Johanx22x/nvim) that the installer clones;
+# these are the binaries it shells out to.
+#
+# The installer ticks a group as one box, and can be opened to pick packages
+# out of it one at a time.
+
+gopls
+jedi-language-server
+lua-language-server
+nodejs
+npm
+python-pynvim
+tree-sitter-cli

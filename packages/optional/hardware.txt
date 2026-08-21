@@ -1,0 +1,18 @@
+# Tools for looking at and moving the hardware around, none of which the
+# desktop calls.
+#
+# This is the group to skip on a machine that only has to run: nothing on the
+# bar, in the shell or in bin/ shells out to any of it. It is here because a
+# machine that is being set up from this repository is usually also being
+# partitioned, copied onto and inspected on the same afternoon.
+#
+# The installer ticks a group as one box, and can be opened to pick packages
+# out of it one at a time.
+
+7zip
+dmidecode
+gptfdisk
+rsync
+smartmontools
+tree
+wget

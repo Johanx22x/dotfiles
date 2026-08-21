@@ -1,0 +1,49 @@
+# The desktop this repository is: Quickshell, the wallpaper daemons, the colour
+# generator and the fonts they all assume.
+#
+# "shell" is the Quickshell session -- bar, island, launcher, notifications,
+# settings window -- and not the login shell, which lives in desktop.txt with
+# the rest of the terminal.
+#
+# awww and mpvpaper are one feature between them: a still or an animated GIF
+# goes through awww, a video wallpaper through mpvpaper, and wallpaper-switch
+# picks by extension. matugen is what turns the image into the accent palette
+# every other file here reads.
+#
+# wl-gammarelay-rs is the niri half of the blue light filter and is listed here
+# rather than in compositor/niri.txt because it is harmless under Hyprland,
+# where hyprsunset owns the gamma and nothing starts this one.
+#
+# yay is in this list rather than being bootstrapped by hand: a good half of
+# what is above comes from the AUR, and the installer builds yay from source
+# only when the name cannot be resolved any other way.
+
+adw-gtk-theme
+adwaita-icon-theme
+awww
+brightnessctl
+cava
+inotify-tools
+jq
+libnotify
+matugen
+mpvpaper
+noto-fonts
+noto-fonts-cjk
+noto-fonts-emoji
+otf-font-awesome
+playerctl
+qt5-wayland
+qt6-multimedia
+qt6-multimedia-ffmpeg
+qt6-wayland
+qt6ct
+quickshell
+ttf-dejavu
+ttf-jetbrains-mono-nerd
+ttf-liberation
+ttf-nerd-fonts-symbols-mono
+wl-gammarelay-rs
+yay
+zen-browser-bin
+zenity

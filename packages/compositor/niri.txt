@@ -1,0 +1,19 @@
+# niri, and the two pieces a niri session cannot do without.
+#
+# xdg-desktop-portal-gnome IS NOT A MISTAKE. niri implements Mutter's D-Bus
+# screencast API rather than a wlroots one, and xdp-gnome is the backend that
+# speaks it. Without it a niri session has no ScreenCast at all -- no Discord
+# screen share, no OBS window capture -- and nothing says why. It coexists with
+# the Hyprland backend: each compositor ships its own
+# /usr/share/xdg-desktop-portal/<name>-portals.conf and xdg-desktop-portal
+# picks the file by XDG_CURRENT_DESKTOP, so answering "both" installs both and
+# there is nothing to switch by hand.
+#
+# xwayland-satellite is X11 support, started per session rather than as a
+# rootful server. The version in the repositories has a bug that stops DaVinci
+# Resolve opening; packages/xwayland-satellite/ carries the same package with
+# the upstream fix and the installer prefers it while it is needed.
+
+niri
+xwayland-satellite
+xdg-desktop-portal-gnome

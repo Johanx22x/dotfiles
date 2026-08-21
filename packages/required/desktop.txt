@@ -1,0 +1,53 @@
+# The applications and command-line tools the tracked configuration is written
+# against.
+#
+# Required rather than optional because files in this repo name them: ranger's
+# scope.sh calls atool, highlight, mediainfo and ffmpegthumbnailer; the
+# launcher and the screenshot binds call grim, slurp, satty, hyprshot and
+# hyprpicker; zsh's config calls eza, bat, fd, fzf, zoxide and starship. A
+# machine that skips this list gets a desktop whose keybinds point at commands
+# that are not there.
+#
+# stow is the one entry that is about the installer itself: it is what links
+# every other directory in this repo into $HOME.
+
+atool
+bat
+btop
+celluloid
+cliphist
+eza
+fastfetch
+fd
+ffmpeg
+ffmpegthumbnailer
+ffmpegthumbs
+fzf
+gpu-screen-recorder
+grim
+highlight
+hyprpicker
+hyprshot
+i2c-tools
+kdegraphics-thumbnailers
+kitty
+loupe
+mediainfo
+mpv
+nautilus
+neovim
+openrgb
+python-pillow
+ranger
+satty
+slurp
+starship
+stow
+unzip
+wf-recorder
+wl-clip-persist
+wl-clipboard
+zathura
+zathura-pdf-poppler
+zoxide
+zsh
