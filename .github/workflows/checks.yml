@@ -17,9 +17,40 @@ name: Checks
 # Every check lives in tests/ as a script that runs on its own, which is
 # deliberate: a check that can only be run by pushing a branch is a check
 # nobody runs before pushing.
+#
+# THE TRIGGER HAS NO `branches:` FILTER, AND THE ABSENCE IS THE POINT. It used
+# to say `branches: [master]`, which reads as "every pull request" only if
+# every pull request is aimed at master. This repository uses stacked pull
+# requests -- `gh stack` -- where a pull request's base is the branch below it
+# in the stack rather than master, and such a pull request matched no trigger
+# at all. Not "ran and passed": never started. Pull requests #58 and #59 merged
+# with exactly one check run between them, `notify`, and no `Checks` run of any
+# kind on either head commit. A missing check looks the same on the page as a
+# check nobody has heard of, which is to say it looks like nothing, and the
+# pull request merges green.
+#
+# WHAT A STACKED PULL REQUEST IS CHECKED AGAINST, since it is no longer master.
+# The `pull_request` event builds `refs/pull/N/merge` -- the head merged into
+# THAT pull request's base -- and actions/checkout takes that ref by default.
+# So the tree these checks see is the branch merged into the one below it,
+# which already contains everything below THAT, all the way down to master.
+# The whole stack up to and including this pull request, in other words, which
+# is both the tree the author is actually proposing and the only tree in which
+# a stacked change makes sense on its own. Checking it against master instead
+# would mean checking a diff that has never existed.
+#
+# AND IT DOES NOT DOUBLE ANYTHING. One run per pull request per push, which is
+# what there already was; a stack of five is five different trees and therefore
+# five different questions, not the same job five times. The obvious-looking
+# alternative -- keeping the base filter and adding a `push:` trigger to cover
+# the rest -- is what would double it, because a branch with a pull request
+# open fires both. Retargeting is quiet too: when the branch below merges and
+# the stack is restacked, changing a base fires `edited`, which is not in
+# `pull_request`'s default activity types, so nothing re-runs for that alone.
+# What does re-run is the force-push that restacking performs, and that one has
+# genuinely changed the tree.
 on:
   pull_request:
-    branches: [master]
 
 permissions:
   contents: read
