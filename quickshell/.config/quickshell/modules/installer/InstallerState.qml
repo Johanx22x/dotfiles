@@ -6,10 +6,21 @@
 // file and of lib/units.sh. What there is to do lives in lib/units/, one file
 // per unit, each answering the same six questions and knowing nothing about
 // how it is being driven. `check --json` is that engine's machine-readable
-// mouth, and it prints one object per unit:
+// mouth, and it prints one object per unit, with five fields:
 //
-//   {"id": "symlinks", "title": "Symlinks", "state": "missing:1 not linked",
-//    "kind": "missing", "note": "1 not linked"}
+//   id      symlinks
+//   title   Symlinks
+//   state   missing:1 not linked
+//   kind    missing
+//   note    1 not linked
+//
+// WRITTEN OUT AS FIELDS AND NOT AS THE JSON OBJECT IT REALLY IS, which looks
+// like fussiness and is not: a pair of braces anywhere in the comment ABOVE
+// `pragma Singleton` stops this file being a singleton at all. Nothing errors.
+// Every property on it reads back undefined, every function on it is "not a
+// function", and the only symptom is a widget that draws nothing. That is an
+// afternoon already spent once on this desktop; the rule is written on the
+// wall of it, and this comment is where the next person meets the wall.
 //
 // `kind` is a four-value enum -- ok, missing, drift, na -- which is why the
 // page can draw a chip from it without interpreting anything, and `note` is
@@ -126,24 +137,31 @@ Singleton {
     // work to do.
     property string checkError: ""
 
-    readonly property bool ready: root.units.length > 0
+    readonly property bool ready: (root.units ?? []).length > 0
 
     // ---------------- Reading the table ----------------
 
     // Units this machine has something to do about. `na` is not work -- a
     // desktop is not broken for not being a laptop -- and `ok` is not work
     // either. That is the same count the CLI prints under its table.
+    // `?? []` AND NOT BECAUSE units MIGHT NOT BE AN ARRAY. Bindings inside a
+    // singleton are not evaluated in declaration order, so a reader that
+    // touches this during construction can arrive before `units: []` has been
+    // applied and get undefined -- which is not an error anywhere, it is a
+    // warning on stderr and an `outstanding` of undefined for one frame. The
+    // guard costs nothing and keeps the log clean; the same one is on every
+    // derived property below.
     readonly property var outstandingUnits: {
         const out = [];
 
-        for (const unit of root.units)
+        for (const unit of (root.units ?? []))
             if (unit.kind === "missing" || unit.kind === "drift")
                 out.push(unit);
 
         return out;
     }
 
-    readonly property int outstanding: root.outstandingUnits.length
+    readonly property int outstanding: (root.outstandingUnits ?? []).length
 
     // The worst kind outstanding, for whoever has one colour to spend. Drift
     // beats missing, which is the order the CLI's table colours them in:
@@ -152,7 +170,7 @@ Singleton {
     readonly property string worst: {
         let seen = "";
 
-        for (const unit of root.outstandingUnits) {
+        for (const unit of (root.outstandingUnits ?? [])) {
             if (unit.kind === "drift")
                 return "drift";
             seen = "missing";
@@ -201,7 +219,7 @@ Singleton {
     readonly property var runnableNow: {
         const out = [];
 
-        for (const unit of root.outstandingUnits) {
+        for (const unit of (root.outstandingUnits ?? [])) {
             if (root.needsTerminal(unit.id) || root.isReportOnly(unit.id))
                 continue;
             if (!root.unitWanted(unit.id))
@@ -216,7 +234,7 @@ Singleton {
     readonly property var runnableInTerminal: {
         const out = [];
 
-        for (const unit of root.outstandingUnits) {
+        for (const unit of (root.outstandingUnits ?? [])) {
             if (!root.needsTerminal(unit.id))
                 continue;
             if (!root.unitWanted(unit.id))
@@ -341,7 +359,7 @@ Singleton {
     function pkgWantedCount(group: var): int {
         let n = 0;
 
-        for (const name of group.packages)
+        for (const name of (group.packages ?? []))
             if (root.pkgWanted(group.name, name))
                 n += 1;
 
@@ -686,7 +704,7 @@ Singleton {
             if (root.outstanding === 0)
                 return "everything applicable is in place";
 
-            const names = root.outstandingUnits.map(unit => unit.id).join(" ");
+            const names = (root.outstandingUnits ?? []).map(unit => unit.id).join(" ");
             return `${root.outstanding} unit(s) need attention: ${names}`;
         }
     }

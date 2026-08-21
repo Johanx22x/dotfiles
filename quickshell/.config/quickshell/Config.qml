@@ -133,7 +133,7 @@ Singleton {
         // changing it moves the bars nobody has customised and leaves the rest
         // alone. See the widget section below for the whole shape.
         //
-        // WHY THESE SEVEN AND NOT ALL NINE. ONE SEED SERVES TWO BARS THAT WANT
+        // WHY THESE EIGHT AND NOT ALL TEN. ONE SEED SERVES TWO BARS THAT WANT
         // DIFFERENT THINGS, and every line below is that tension. It is what a
         // fresh clone comes up with -- the FIRST bar, the only one most
         // machines will ever have, and the whole of what somebody who has just
@@ -147,13 +147,13 @@ Singleton {
         // Three of them read the screen they are on, so a second copy says
         // something new either way: the focused window title, and the clock
         // and the logo that make a strip of pixels read as this desktop's bar
-        // rather than as a gap. Three more are ways back rather than readings
-        // -- see the note on `notifications` below for the third. The settings
-        // button is the only pointer-reachable way into this window, which is
-        // the same argument the power button already wins; the tray is where
-        // an application with no window of its own lives, and a session where
-        // Discord is minimised to a tray that is not drawn is a session with
-        // no way to reach it.
+        // rather than as a gap. Four more are ways back rather than readings
+        // -- see the notes on `notifications` and `updates` below for the
+        // last two. The settings button is the only pointer-reachable way
+        // into this window, which is the same argument the power button
+        // already wins; the tray is where an application with no window of
+        // its own lives, and a session where Discord is minimised to a tray
+        // that is not drawn is a session with no way to reach it.
         //
         // THE ISLAND IS THE ONE THE SECOND-COPY QUESTION GETS WRONG, and it is
         // on. That it narrates the desktop and there is only one desktop is
@@ -203,6 +203,14 @@ Singleton {
             // a way in rather than a sentence about the desktop, which is
             // exactly the trade the tray and the settings button already make.
             notifications: true,
+            // ON, and by the same test as the gear beside it. Another door: it
+            // says how far behind this machine is, and it is the only
+            // pointer-reachable way to the page that explains it. A second
+            // monitor repeating the number costs one glyph; a monitor whose
+            // bar has the gear but not the flag would hide the one thing that
+            // is meant to be unmissable, on the screen somebody happens to be
+            // looking at.
+            updates: true,
             settingsButton: true
         })
     })
