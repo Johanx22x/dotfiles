@@ -19,7 +19,6 @@
 // the check that the intention is possible. A desktop where somebody answered
 // yes by mistake shows nothing rather than a permanent 0%.
 
-import Quickshell
 import Quickshell.Services.UPower
 import QtQuick
 import "root:/"
@@ -45,10 +44,14 @@ Rectangle {
     // reminder; 20% on the machine you are working on is about half an hour.
     // The numbers are the ones every laptop desktop has settled on for the
     // same reason -- they are roughly "finish the paragraph" and "save now".
-    readonly property int alertBelow: 15
+    //
+    // Only the amber one is a decision made here. The point at which this
+    // interrupts you belongs to BatteryAlerts, which is where both battery
+    // widgets now agree about it -- and which is also the only thing that can
+    // count how many times it has already interrupted you.
     readonly property int warnBelow: 25
 
-    readonly property bool alerting: !root.charging && root.charge <= root.alertBelow
+    readonly property bool alerting: BatteryAlerts.isAlerting(root.charge, root.charging)
 
     readonly property color tint: {
         if (root.charging)
@@ -140,35 +143,34 @@ Rectangle {
 
     // ---------------- The warning ----------------
     //
-    // ONCE PER CROSSING, with the same re-arm gap the peripheral widget uses:
-    // a battery sitting on the threshold flickers across it as the reading
-    // settles, and without a gap that flicker is a notification a minute.
-    property bool warned: false
-
+    // ONCE PER CROSSING, AND ONCE PER MACHINE. This used to hold its own
+    // `warned` flag and send its own notify-send, which is one flag per Bar --
+    // and shell.qml builds a Bar per screen. Two monitors carrying a bar meant
+    // two critical notifications, which do not expire, for one battery
+    // crossing one line. The state and the sending are in BatteryAlerts now;
+    // this file reports a reading and nothing more.
+    //
+    // STILL ON EVERY READING and not only on the ones that cross the line: the
+    // check has to see the value climb back up as well, or it never re-arms.
     onChargeChanged: root.considerAlert()
     onChargingChanged: root.considerAlert()
 
     function considerAlert(): void {
+        // A desktop where somebody answered "laptop" by mistake has a
+        // DisplayDevice reporting 0% forever, and that is not a flat battery.
         if (!root.present)
             return;
 
-        if (root.charging || root.charge >= 20) {
-            root.warned = false;
-            return;
-        }
-
-        if (root.charge > root.alertBelow || root.warned)
-            return;
-
-        root.warned = true;
-
-        // Through the bus like any other notification -- see the note in
-        // PeripheralBattery: the shell is the notification daemon, so this
-        // comes back in as an ordinary one and obeys do-not-disturb.
-        Quickshell.execDetached(["notify-send",
-            "--urgency=critical",
-            "--app-name=Battery",
-            `Battery at ${root.charge}%`,
-            root.remaining !== "" ? `About ${root.remaining}.` : "Find a cable."]);
+        BatteryAlerts.consider({
+            // ONE KEY FOR THE MACHINE, and it does not come off the device:
+            // UPower's DisplayDevice is an aggregate with a synthetic path,
+            // and there is exactly one of it. A fixed string is what makes
+            // every bar's call land on the same entry.
+            key: "system",
+            label: "Battery",
+            charge: root.charge,
+            charging: root.charging,
+            secondsLeft: root.device?.timeToEmpty ?? 0
+        });
     }
 }
