@@ -78,9 +78,27 @@ SELF="${0##*/}"
 die() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; exit 1; }
 note() { printf '  %s\n' "$*"; }
 
+# FOUND NEXT TO THIS SCRIPT AND NOT THROUGH $PATH. ~/.local/bin is on the PATH
+# of a login shell and of very little else: the settings window in Quickshell
+# inherits the compositor's environment, install.sh calls these scripts by
+# absolute path with whatever PATH it was started with, and a systemd --user
+# unit gets neither. The same shim is in gs, gaming-check, desktop-opacity and
+# wallpaper-switch, and desktop-opacity's copy explains why at length. readlink
+# resolves the stow symlink back into the repo, so the helper is found whether
+# this was started from ~/.local/bin or straight out of the checkout.
+BIN_DIR="$(dirname "$(readlink -f "$0")")"
+compositor() { "$BIN_DIR/compositor" "$@"; }
+
 # WHICH COMPOSITOR, asked of the helper rather than of XDG_CURRENT_DESKTOP --
 # see the header of `compositor` for why the socket is proof and the desktop
 # name is only intention.
+#
+# AT TOP LEVEL AND UNDER set -e, so every command in this file depends on it,
+# `show`, `list` and `--help` included. install.sh is the caller that proves it
+# matters: it runs "$HOME/.local/bin/desktop-monitors" by absolute path, with
+# whatever PATH the person had when they started it. Verified before the shim
+# above: `env PATH=/usr/bin:/bin desktop-monitors show` exited 127 with
+# "compositor: command not found".
 FLAVOR="$(compositor)"
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
