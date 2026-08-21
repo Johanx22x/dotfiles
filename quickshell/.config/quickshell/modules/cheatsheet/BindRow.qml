@@ -47,7 +47,11 @@ Item {
     required property int chipPadding
     required property int chipSpacing
 
-    readonly property int gap: 12
+    // The space between the chord and its description. From the sheet, like
+    // the chip geometry above and for the same reason: the sheet adds this to
+    // the gutter and to the longest description to decide how wide a column
+    // has to be, so it has to be the same number the row leaves.
+    required property int gap
 
     implicitHeight: 30
 
