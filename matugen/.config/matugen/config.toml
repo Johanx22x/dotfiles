@@ -11,27 +11,52 @@
 # Template syntax: {{colors.<role>.default.hex}}
 # Useful roles: primary, secondary, tertiary, source_color, error, outline
 
+# [config] IS EMPTY AND MUST STILL BE HERE. Every option that used to live
+# under it is gone (see the block below), but matugen deserialises the file
+# into a struct whose `config` field is not optional, so deleting the header
+# is a hard failure before any template is even looked at:
+#
+#   $ matugen image w.jpg -c config.toml
+#   Failed to read config file.
+#   TOML parse error at line 1, column 1  --  missing field `config`
+#
+# Verified against matugen 4.2.0 by removing the line and running it.
 [config]
 
-# ---- Harmonised semantic colours ----
-# Some elements CANNOT use primary/tertiary without losing their meaning:
-# the three segments of #custom-system have to be told apart at a glance,
-# and the gamescope button has to read as "an action" rather than one more
-# piece of data.
+# ---- There is NO [config.custom_colors]: do not add one back ----
 #
-# With "blend = true" matugen takes the original Tokyo Night hue and rotates
-# it towards the wallpaper colour (Material You's harmonize): it stays
-# purple / green / blue, but from the image's family. That way the
-# relationship between the three survives any wallpaper, which would not
-# happen by assigning them scheme roles (with a green image, primary and the
-# RAM green would come out nearly identical).
+# There was one, and it harmonised three extra colours on every wallpaper
+# change -- cpu #bb9af7, ram #9ece6a, gpu #7aa2f7, each with blend = true so
+# matugen rotated the Tokyo Night hue towards the image (Material You's
+# harmonize) instead of replacing it. The argument was that the three
+# segments of #custom-system have to be told apart at a glance, and that
+# assigning them scheme roles would collapse two of them into each other over
+# a green wallpaper.
 #
-# warning (#e0af68) and critical (#f7768e) are NOT harmonised: they are
-# alerts and must always look the same, even over a red wallpaper.
-[config.custom_colors]
-cpu = { color = "#bb9af7", blend = true }   # magenta TN
-ram = { color = "#9ece6a", blend = true }   # TN green -- also the gs button
-gpu = { color = "#7aa2f7", blend = true }   # blue TN
+# #custom-system IS A WAYBAR CSS ID, and waybar is gone -- the shell draws
+# that readout now (see the note at the top of this file). Nothing took over
+# the three colours when the bar went:
+#
+#   $ git grep -E 'colors\.(cpu|ram|gpu)'    -> nothing, in the whole tree
+#
+# None of the eleven templates below reads them, so matugen was computing
+# three harmonised hues per wallpaper and writing them into no file at all.
+# The one thing that looks like a hit is not one: templates/
+# fastfetch-config.jsonc contains "type": "cpu", which names a fastfetch
+# MODULE and has nothing to do with a colour role.
+#
+# The replacement does not want them either. quickshell/Theme.qml takes its
+# accents from `primary` and `secondary`, which the scheme already provides
+# in contrast-checked pairs; two hand-harmonised hues outside that system
+# would be two more things to keep in step for no gain.
+#
+# WHAT THE BLOCK WAS RIGHT ABOUT stays true and is now stated where it
+# applies: an ALERT is never harmonised. warning (#e0af68) and critical
+# (#f7768e) have to look the same over a red wallpaper as over a blue one,
+# because for those two the colour IS the meaning. That is why they are
+# hardcoded in Theme.qml and in both GTK templates rather than derived from
+# the image, and why quickshell-colors.json does not pass M3's `error` role
+# through at all.
 
 # ---- Quickshell (the shell: bar, notifications, launcher, dashboard) ----
 # JSON and not a generated .qml on purpose: Quickshell reloads the WHOLE
@@ -161,17 +186,26 @@ output_path = '~/.config/ranger/accent'
 # signal to send it. Apps pick up the new palette when they open, same as
 # wofi, ranger and fastfetch.
 #
-# Both files write ONLY @define-color, never a CSS rule, and that is what
-# makes ~/.config/gtk-3.0/gtk.css safe again. GTK loads it at priority USER
+# WHY A SELECTOR IN EITHER OF THESE FILES IS DANGEROUS, and it is not about
+# taste. Both are written to ~/.config, which GTK loads at priority USER
 # (800), above the sheet an application passes for itself (APPLICATION, 600).
-# A RULE there beats every app: that is how the old GTK3 patch made wofi
-# impossible to make transparent, whose workaround -- hiding ~/.config behind
-# an empty XDG_CONFIG_HOME -- left Discord, Brave and OpenRGB reading an empty
-# config on tmpfs after every reboot (2026-08-01). A @define-color declares a
-# variable and overrides nobody, so priority stops mattering.
+# A @define-color declares a variable and overrides nobody, so priority stops
+# mattering; a RULE beats every app on the machine. That is how the old GTK3
+# patch made wofi impossible to make transparent, and its workaround -- hiding
+# ~/.config behind an empty XDG_CONFIG_HOME -- left Discord, Brave and OpenRGB
+# reading an empty config on tmpfs after every reboot (2026-08-01).
 #
-# The theme doing the painting is adw-gtk3-dark (package adw-gtk-theme), which
-# reads those names. Never put a selector in these templates.
+# gtk3-colors.css therefore writes @define-color and nothing else, and the
+# theme doing the painting is adw-gtk3-dark (package adw-gtk-theme), which
+# reads those names.
+#
+# gtk4-colors.css is NOT rule-free, and this file used to claim it was. It
+# carries a handful of rules that libadwaita gives no colour name for, and
+# the rule that replaces "never a selector" is: every selector must be
+# anchored to something only the app it was written for has. .content-pane
+# alone is not that anchor -- libadwaita puts the class on the content side of
+# EVERY split view, so an unanchored rule reaches Loupe as readily as
+# Nautilus. See the header of the template for what each rule is anchored to.
 [templates.gtk3]
 input_path = '~/.config/matugen/templates/gtk3-colors.css'
 output_path = '~/.config/gtk-3.0/gtk.css'

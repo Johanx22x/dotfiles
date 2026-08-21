@@ -25,6 +25,5 @@
   "tertiary": "{{colors.tertiary.default.hex}}",
   "on_tertiary": "{{colors.on_tertiary.default.hex}}",
 
-  "error": "{{colors.error.default.hex}}",
-  "on_error": "{{colors.on_error.default.hex}}"
+  "_no_error_role": "M3 has error/on_error and this file used to emit them, but Theme.qml never read either key -- it declares `warning` and `critical` as hardcoded Tokyo Night literals, because an alert tinted by the wallpaper loses the one thing it is for: over a red image a critical reading would come out the same hue as the rest of the bar. So the two lines wrote a colour nothing could consume. Every other key here is read by a property in Theme.qml; keep it that way, and if some role really is wanted, add the reader in the same change. Same reasoning as the [config] block in config.toml."
 }

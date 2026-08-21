@@ -2,8 +2,9 @@
    Template: ~/.config/matugen/templates/gtk4-colors.css
    Wallpaper: {{image}}
 
-   GTK4 / libadwaita ONLY. No CSS rules here: just the colour names
-   libadwaita officially exposes.
+   GTK4 / libadwaita ONLY. Mostly the colour names libadwaita officially
+   exposes, plus a short block of rules at the end for the handful of things
+   it gives no colour name for.
 
    This and the GTK3 CSS used to be ONE file written to both places, on the
    argument that each toolkit's colour names are different and do not clash.
@@ -17,11 +18,23 @@
    Verified by removing the rule block from the GTK4 gtk.css and reopening
    the window: the boxes disappear.
 
-   There IS one rule block at the end of the file, but it is short and
-   deliberate: libadwaita paints the selected row of lists in a neutral grey,
-   and without it Nautilus ends up with practically no wallpaper colour. What
-   is NOT touched is borders, button backgrounds or popovers: that is where
-   the problem was. */
+   The rules at the end of the file are in TWO groups and the split is the
+   whole point of them:
+
+     .navigation-sidebar  GLOBAL, and meant to be. libadwaita paints the
+                          selected row of a list in a neutral grey that does
+                          not follow the accent, so a sidebar shows no trace
+                          of the wallpaper. Every libadwaita app picking this
+                          up is the point of this setup, not a leak.
+
+     .content-pane        SCOPED to window.view, which in practice means
+                          Nautilus. These are geometry and one literal hex,
+                          decided while looking at Nautilus, and .content-pane
+                          on its own is not a Nautilus class at all -- see the
+                          block itself.
+
+   What is still NOT touched either way is borders, button backgrounds and
+   popovers: that is where the original problem was. */
 
 
 /* ==================================================================
@@ -177,8 +190,13 @@
 @define-color accent_fg_color  {{colors.on_primary.default.hex}};
 
 /* ---- Semantic: NOT harmonised ----
-   Same as warning/critical in waybar (see config.toml): an alert has to look
-   the same always, even over a red wallpaper. */
+   An alert has to look the same always, even over a red wallpaper: for
+   these four the colour IS the meaning, so deriving them from the image
+   would throw away the only thing they carry. The same call is made in
+   quickshell/Theme.qml, which hardcodes `warning` and `critical` rather than
+   reading M3's error role, and it is written out under [config] in
+   config.toml. (That comment used to point at waybar's #custom-system.
+   waybar is gone.) */
 @define-color destructive_color     #f7768e;
 @define-color destructive_bg_color  #f7768e;
 @define-color destructive_fg_color  #1a1b26;
@@ -206,14 +224,70 @@
 
    ONE deliberate exception, added knowingly: the border-radius on the
    content pane's scrolledwindow further down. It is geometry and it breaks
-   the rule. The reason the original rule exists is that geometry LEAKED --
-   rules meant for Adwaita GTK3 were being written into the libadwaita file
-   too, so selectors like "button" hit widgets they were never written for.
-   That failure mode does not apply here: the selector is anchored to
-   .content-pane, a class only a split-view app has, and it sets a radius on
-   one container rather than a border on a generic widget. If header buttons
-   or popovers ever come back with boxes, this is still the first block to
-   bisect.
+   the rule. The reason the rule exists is that geometry LEAKED -- rules
+   meant for Adwaita GTK3 were being written into the libadwaita file too, so
+   selectors like "button" hit widgets they were never written for.
+
+   THE EXCEPTION USED TO EXCUSE ITSELF BY SAYING .content-pane IS "A CLASS
+   ONLY A SPLIT-VIEW APP HAS", which is true and is not the same thing as
+   "only Nautilus has it". libadwaita adds it itself, to an internal AdwBin
+   wrapping the content child of every split view:
+
+     Window                node=window            classes=['background']
+       OverlaySplitView    node=overlay-split-view
+         Bin               node=widget            classes=['content-pane']
+         Bin               node=widget            classes=['sidebar-pane']
+
+   (printed by walking the tree of a bare Adw.OverlaySplitView; the classes
+   are there before anything is realized). So it is a PUBLIC libadwaita
+   class, applied by the library, and at USER priority these rules land on
+   any installed app that has a split view -- Loupe has three of them, one
+   being its properties_split_view, so the pane holding the photograph was
+   getting @window_bg_color and a 14px corner:
+
+     $ strings /usr/bin/loupe | grep -c AdwOverlaySplitView    -> 3
+
+   Do not read this as "libadwaita styles .content-pane heavily" -- it has no
+   `.content-pane { }` rule of its own at all, which is exactly why the class
+   was free to hijack. In libadwaita 1.9.3 the string occurs 41 times: once
+   as the bare class name the C code adds, and 40 times across 8 stylesheet
+   lines, every one of them paired with .sidebar-pane in the shape
+
+     :not(.isolated) > .content-pane :not(.isolated) > .sidebar-pane { ... }
+
+   which is how a sidebar NESTED inside a content pane is told to use the
+   secondary_sidebar_* colours. Checking that there is no bare rule is one
+   command, worth re-running after an update:
+
+     strings /usr/lib/libadwaita-1.so.0 |
+       grep -oE '[^,{]*\.content-pane *\{'
+
+   Today its only hit still has an ancestor in front of it. The class is a
+   hook libadwaita hands out, and this file was the one using it as one.
+
+   THE FIX IS window.view, AND THERE IS NO BETTER ANCHOR. GTK4 CSS cannot
+   select by application: a widget subclass inherits its parent's CSS node
+   name, so there is no "nautiluswindow" node to aim at --
+
+     Gtk.Window -> 'window'   Gtk.ApplicationWindow -> 'window'
+     a subclass of either -> 'window'   a subclass of Gtk.Box -> 'box'
+
+   -- verified with get_css_name() on GTK 4.22.4. What Nautilus does have is
+   a class it puts on the window itself, in its own template:
+
+     nautilus-window.ui:  <template class="NautilusWindow" ...>
+                            <style><class name="view"/></style>
+
+   and Loupe has `class name="view"` nowhere in its resources (grep -c: 0).
+   Measured rather than assumed, with "window.view .content-pane" loaded at
+   USER priority over two hand-built trees: the rule reaches .content-pane
+   inside a window carrying .view and does not reach it inside one that does
+   not.
+
+   The failure mode of this choice is the good one. If Nautilus ever drops
+   .view, what is lost is a rounded corner in one app -- not the rest of the
+   desktop being repainted. If header buttons or popovers ever come back with
+   boxes, this is still the first block to bisect.
 
    What gets painted and why: libadwaita leaves the selected row of lists in
    a neutral grey that does not depend on the accent, so Nautilus's sidebar
@@ -241,6 +315,10 @@
    above still work because libadwaita maps them to the variables for
    compatibility. */
 
+/* DELIBERATELY UNSCOPED, unlike the .content-pane block below. This one is
+   pure colour derived from the accent, and every libadwaita app following the
+   wallpaper is what this whole setup is for. Anchoring it to Nautilus would
+   be the bug, not the fix. */
 .navigation-sidebar row:selected,
 .navigation-sidebar child:selected,
 .navigation-sidebar flowboxchild:selected {
@@ -255,6 +333,14 @@
 
 
 /* ---- Content pane: chrome surface + the file view as a rounded card ----
+
+   EVERY SELECTOR HERE IS PREFIXED window.view, WHICH MEANS NAUTILUS. The
+   long version is in the golden-rule block above; the short version is that
+   .content-pane is libadwaita's own class for the content side of any split
+   view, so without the prefix these rules also repaint Loupe, which has
+   three of them. `window` is the CSS node name every GtkWindow subclass
+   reports, and `.view` is a class Nautilus puts on its own window in
+   nautilus-window.ui -- the nearest thing GTK4 CSS has to "this app".
 
    Two things are being fixed here and they turned out to be the same fix.
 
@@ -276,15 +362,15 @@
    without it the radius is drawn and then covered up. Verified by painting
    the scrolledwindow cyan and the gridview yellow -- only yellow showed.
 
-   The two resets after it are guards, and NEITHER is optional. ".content-pane
-   scrolledwindow" matches descendants, and there is more than one
-   scrolledwindow down there:
+   The two resets after it are guards, and NEITHER is optional. The
+   "window.view .content-pane scrolledwindow" selector matches DESCENDANTS,
+   and there is more than one scrolledwindow down there:
 
      - the breadcrumb / search pill in the header IS a scrolledwindow (it
        scrolls sideways when the path is long). Without the .top-bar guard
        it gets the view colour and a 14px radius, which shows up as a
        wrong-coloured blob poking out of the pill's rounded ends. Verified
-       by painting .content-pane scrolledwindow red: the pill went red.
+       by painting the pane's scrolledwindow red: the pill went red.
      - right-click menus live inside the pane too, hence the popover guard.
 
    No :backdrop variants anywhere in this block, on purpose: the window must
@@ -297,23 +383,23 @@
    contrast step. Raise the radius and you get more curve, not more
    contrast -- the lever for visibility is the opacity in hyprland.lua. */
 
-.content-pane {
+window.view .content-pane {
   background-color: @window_bg_color;
 }
 
-.content-pane scrolledwindow {
+window.view .content-pane scrolledwindow {
   background-color: @view_bg_color;
   border-radius: 14px 0 0 14px;
 }
 
-.content-pane gridview,
-.content-pane listview,
-.content-pane columnview {
+window.view .content-pane gridview,
+window.view .content-pane listview,
+window.view .content-pane columnview {
   background: none;
 }
 
-.content-pane .top-bar scrolledwindow,
-.content-pane popover scrolledwindow {
+window.view .content-pane .top-bar scrolledwindow,
+window.view .content-pane popover scrolledwindow {
   background: none;
   border-radius: 0;
 }
@@ -337,7 +423,7 @@
    header, which is intended -- they are the same kind of control and were
    fading on backdrop for the same reason. */
 
-.content-pane .top-bar box.linked,
-.content-pane .top-bar box.linked:backdrop {
+window.view .content-pane .top-bar box.linked,
+window.view .content-pane .top-bar box.linked:backdrop {
   background-color: #24283b;
 }
