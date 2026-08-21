@@ -38,6 +38,23 @@ Item {
     // step the bar's own wheel handler has always used.
     property real step: 0.05
 
+    // WHETHER THE WHEEL BELONGS TO THE SLIDER AT ALL, and the default is yes
+    // because that is where this control came from: on the island it is a
+    // popout with nothing behind it to scroll, and turning the wheel over a
+    // volume bar is what everyone expects.
+    //
+    // It is FALSE on the sound page, and the difference is not taste. That
+    // page is a Flickable taller than the window, so the wheel over a slider
+    // has two possible meanings -- move this value, or move the page -- and
+    // the pointer happens to be over a slider on the way past far more often
+    // than it is there on purpose. Scrolling down to reach the input devices
+    // and arriving with the output volume changed is the bug; the page is the
+    // one that gets the wheel there. Same argument as ScrollList.qml, reached
+    // from the other side: the rule is that the surface you MEANT to scroll
+    // gets the event, and for a slider in a long page that is never the
+    // slider.
+    property bool wheelEnabled: true
+
     signal moved(real value)
 
     readonly property real fraction: root.maximum > 0
@@ -140,8 +157,20 @@ Item {
                 root.emit(event.x);
         }
 
-        onWheel: event => root.moved(Math.max(0, Math.min(root.maximum,
-            root.value + (event.angleDelta.y > 0 ? root.step : -root.step))))
+        // DECLINED RATHER THAN IGNORED when the wheel is not ours. A
+        // MouseArea accepts a wheel event whether or not anything handles it,
+        // so leaving this empty would still swallow the notch and leave a dead
+        // patch on the page instead of scrolling it. Handing it back is what
+        // lets the Flickable underneath take it.
+        onWheel: event => {
+            if (!root.wheelEnabled) {
+                event.accepted = false;
+                return;
+            }
+
+            root.moved(Math.max(0, Math.min(root.maximum,
+                root.value + (event.angleDelta.y > 0 ? root.step : -root.step))));
+        }
     }
 
     // The MouseArea is inset by its negative margins, so its x is 6px to the
