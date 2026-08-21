@@ -113,6 +113,11 @@ would rather read it than look at it.
 require — the point of it is fixing one thing. It says what is missing
 underneath, and `--with-requires` chains them if that is what you meant.
 
+Every mode says in its **exit status** whether it did what it was asked: zero
+when everything worked, non-zero when anything at all did not, whether it ended
+the run or only got a line in the summary. So `./install.sh update && systemctl
+--user restart quickshell` means what it looks like.
+
 ## Updating
 
 ```sh

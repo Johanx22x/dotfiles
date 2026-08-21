@@ -141,11 +141,22 @@ fail_report() {
   ui_dim "  The run finished. Nothing above needed it to stop."
 }
 
-# For `update`, which is the one mode meant to be read by a machine rather than
-# a person. Its existing rule is kept exactly: anything at all that did not work
-# is a non-zero exit, note or not, because the caller will never see the words.
-# The interactive modes do not do this -- a note is a note, and a person who has
-# just been told about it in yellow does not also need a failing exit status.
+# THE EXIT STATUS, FOR ALL FOUR MODES. Anything at all that did not work is a
+# non-zero exit, note or not.
+#
+# THIS USED TO BE `update` ONLY, and the argument for that was that a note is a
+# note and a person who has just been told about it in yellow does not also need
+# a failing exit status. That argument is about the wrong reader. The words are
+# for the person; the status is the only thing the SHELL can see, and `apply` and
+# the menu both ended on fail_report, which succeeds whether or not it had
+# anything to report -- so a run that printed "1 thing(s) to know: apps: pacman
+# could not install" exited 0, and `./install.sh apply symlinks && ...` carried
+# happily on. Nobody at the keyboard is worse off for a status they never look
+# at, and every script is better off for one that is true.
+#
+# A stop never reaches here: fail_stop ends the run where it happens with its own
+# non-zero exit, so this is the milder half of the same answer and not a second
+# mechanism beside it.
 fail_clean() {
   (( ${#FAIL_NOTES[@]} == 0 ))
 }

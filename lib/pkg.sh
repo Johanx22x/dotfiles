@@ -205,6 +205,42 @@ pkg_needs_multilib() {
 }
 
 # ---------------------------------------------------------------------------
+# WHETHER PACMAN AND YAY ARE ALLOWED TO ASK A QUESTION.
+#
+# `pacman -S` ends with ":: Proceed with installation? [Y/n]" and reads the
+# answer from stdin. With nothing on stdin it does NOT fall back to the
+# default it is printing in capitals -- it gives up:
+#
+#     :: Proceed with installation? [Y/n]    required: pacman did not finish
+#        stow is not installed, so nothing can be linked
+#
+# So `./install.sh -y` installed no packages at all with no terminal attached,
+# which is the exact case --yes exists for, and `update` -- documented as
+# something to reach from a keybind or a cron job -- could not install
+# anything either. Verified against the real pacman, in a throwaway root:
+# with stdin at end of file it stops on that line and exits 1; with
+# --noconfirm and the same stdin it walks straight past it into the
+# transaction.
+#
+# NOT UNCONDITIONAL, AND THE CONDITION IS THE ONE ui_confirm ALREADY USES.
+# --noconfirm answers every question pacman has and not only that one: which
+# provider to take for a name that several packages provide, whether to
+# replace a package, whether to remove something that conflicts. On a terminal,
+# with no --yes, those are worth seeing -- pacman's own transaction list is the
+# last look at 119 names and a download size before any of it arrives, and this
+# script cannot put those questions on screen for it. So the rule is that
+# pacman is told to take its defaults in exactly the three cases where this
+# script would not ask a question either: --yes was given, questions are
+# switched off (which is what `update` does), or there is no terminal to ask
+# on. Those are ui_confirm's three branches, in ui.sh, and they stay in step
+# by being the same three.
+pkg_noconfirm() {
+  (( ${ASSUME_YES:-0} )) && return 0
+  (( ${UI_ASK:-1} == 0 )) && return 0
+  ! ui_has_tty
+}
+
+# ---------------------------------------------------------------------------
 # yay builds itself from source the first time, which needs git, base-devel and
 # a few minutes. Only called when a list actually turns out to contain
 # something from the AUR.
@@ -212,7 +248,7 @@ pkg_ensure_yay() {
   command -v yay >/dev/null && return 0
 
   local tmp built=1
-  sudo pacman -S --needed --noconfirm git base-devel
+  run_sudo pacman -S --needed --noconfirm git base-devel
   tmp="$(mktemp -d)"
   if git clone --depth 1 https://aur.archlinux.org/yay.git "$tmp/yay" &&
      ( cd "$tmp/yay" && makepkg -si --noconfirm ); then
@@ -249,9 +285,13 @@ pkg_ensure_yay() {
 # it did not install" is a report, not a reason to abandon the rest of the run.
 pkg_install() {
   local severity="$1" unit="$2" label="$3"; shift 3
-  local names=("$@") repo=() aur=() blocked=() failed=() name
+  local names=("$@") repo=() aur=() blocked=() failed=() name confirm=()
 
   (( ${#names[@]} )) || return 0
+
+  # Worked out once for both installers below, so the two cannot disagree
+  # about whether this run is one somebody is watching.
+  pkg_noconfirm && confirm=(--noconfirm)
 
   # ALWAYS FATAL, WHATEVER THE CALLER SAID. An empty sync database is not this
   # list failing, it is pacman being unable to install anything at all: every
@@ -283,7 +323,7 @@ pkg_install() {
   # --needed skips what is already installed, which is what makes re-running
   # this cheap enough to be the normal way to use it.
   if (( ${#repo[@]} )); then
-    if run sudo pacman -S --needed "${repo[@]}"; then
+    if run_sudo pacman -S --needed "${confirm[@]}" "${repo[@]}"; then
       ui_did "   $label: ${#repo[@]} package(s) from the repositories"
     else
       mapfile -t failed < <(pkg_still_missing "${repo[@]}")
@@ -297,14 +337,19 @@ pkg_install() {
   if (( ${#aur[@]} )); then
     ui_say "   $label: ${#aur[@]} package(s) come from the AUR"
     if (( ${DRY_RUN:-0} )); then
-      run yay -S --needed "${aur[@]}"
+      run yay -S --needed "${confirm[@]}" "${aur[@]}"
     elif pkg_ensure_yay; then
       # THE NAMES GO AS ARGUMENTS AND NOT DOWN STDIN. `yay -S --needed -` reads
       # the list from stdin, and then reads its own prompts -- which provider,
       # edit the PKGBUILD, proceed with the build -- from that same stdin,
       # which by then is at end of file. The answers it got were whatever was
       # left of the list.
-      if yay -S --needed "${aur[@]}"; then
+      # THE SAME ANSWER GOES TO yay, and for a stronger reason than symmetry:
+      # it asks more questions than pacman does -- which provider, whether to
+      # show the diff, whether to edit the PKGBUILD, whether to proceed -- and
+      # every one of them lands on the same stdin. A run with --yes that
+      # stalled on the first AUR package would be the same bug one line down.
+      if yay -S --needed "${confirm[@]}" "${aur[@]}"; then
         ui_did "   $label: AUR done"
       else
         # BY NAME, WHICH IS WHAT THE NOTE ON pkg_needs_multilib ALREADY

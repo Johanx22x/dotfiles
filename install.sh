@@ -60,6 +60,27 @@ run() {
   "$@"
 }
 
+# And the one place a command that needs ROOT goes through, so that "ask for the
+# password at the moment it is first needed" is one condition here instead of a
+# thing every caller has to remember.
+#
+# WHY THERE IS A SECOND WRAPPER AND NOT JUST `run sudo`. run_units called
+# sudo_begin before every list of units it was handed, whatever was in the list,
+# so `./install.sh apply symlinks` -- stow, into a home directory, root nowhere
+# near it -- opened with a password prompt. A password asked for to do something
+# that does not need one is how people learn to type it without reading what is
+# asking.
+#
+# sudo_begin is idempotent, so the first of these pays for the prompt and starts
+# the keepalive and every one after it is free. Everything that argued for
+# asking early is still true: the timestamp is still held open for the length of
+# the run, which is what an AUR build half an hour in depends on, and `check`
+# and --dry-run still never reach a sudo that executes.
+run_sudo() {
+  sudo_begin
+  run sudo "$@"
+}
+
 # ---------------------------------------------------------------------------
 source "$DOT/lib/ui.sh"
 # After ui.sh, which it prints through; before everything that records a
@@ -281,22 +302,32 @@ fi
 (( EUID == 0 )) && { ui_bad "Do not run this as root. It asks for sudo when it needs it."; exit 1; }
 
 # ---------------------------------------------------------------------------
-# SUDO, ONCE, AT THE TOP, AND KEPT ALIVE.
+# SUDO, ONCE, AT THE FIRST THING THAT NEEDS IT, AND KEPT ALIVE UNTIL THE END.
 #
 # Between the first sudo and the end of an AUR build there can be half an hour,
 # which is well past the five-minute default timeout -- so pacman stops in the
 # middle of a run and sits waiting for a password behind a wall of build output,
-# on a terminal nobody is watching any more.
+# on a terminal nobody is watching any more. That is what the keepalive is for
+# and it has not changed.
 #
-# NOT CALLED FOR `check` OR UNDER `--dry-run`, and that is the point of it
-# living here rather than inside pkg_install: those two must be runnable by
-# anybody at any time, and a password prompt is a side effect like any other.
+# WHAT CHANGED IS WHO CALLS IT. This used to run at the top of run_units, for
+# every list of units, so a run that needed no root at all still opened with a
+# password prompt. It is called from run_sudo now, which means the prompt lands
+# on the first command that actually needs root and never appears at all in a
+# run that has none.
+#
+# IDEMPOTENT, because that is what makes calling it from every root command
+# cheap: the second call finds the keepalive already running and returns.
+#
+# NEVER FOR `check` OR UNDER `--dry-run`: neither reaches a run_sudo that
+# executes anything, and the DRY_RUN branch below is the belt to that brace.
 SUDO_KEEPALIVE_PID=""
 
 sudo_begin() {
   (( DRY_RUN )) && return 0
+  [[ -n $SUDO_KEEPALIVE_PID ]] && return 0
 
-  ui_say "   This needs sudo for the packages. Asking once, now."
+  ui_say "   This step needs root. Asking for sudo once, now."
   # ALREADY FATAL BEFORE ANY OF THIS EXISTED, and now it says so in the same
   # shape as every other stop. Nothing below installs, links or enables
   # anything without it, so there is no half of the run left to attempt.
@@ -323,11 +354,29 @@ sudo_end() {
   return 0
 }
 
+# WHAT THE PLAN LEAVES OUT, SAID OUT LOUD. Any requirement of the units about to
+# run that is not among them and is not already ok, one line each.
+#
+# All three modes that apply anything now run exactly the list they announce and
+# nothing else, so all three owe the reader this: a step that is about to fail
+# for a reason already on the table should say so before it does, rather than
+# leaving somebody to work out from the output that `symlinks` failed because
+# `packages` was never run. <suffix> is how to get the missing one, which is the
+# only part that differs between the modes.
+notice_unmet_requires() {
+  local suffix="$1"; shift
+  local dep state
+  while IFS=$'\t' read -r dep state; do
+    [[ -z $dep ]] && continue
+    ui_warn "  note: this needs '$dep', which is $state"
+    ui_dim  "        ./install.sh apply $dep$suffix"
+  done < <(unit_unmet_requires "$@")
+}
+
 # Applies one list of units, skipping the ones this machine has no use for.
 # Shared by `apply` and the full run so that the two cannot drift apart.
 run_units() {
   local id
-  sudo_begin
   for id in "$@"; do
     if ! "${id}_available" >/dev/null; then
       ui_dim "  $id does not apply to this machine, skipped"
@@ -408,7 +457,7 @@ mode_check() {
 # named on screen with their state, so a step that is about to fail for a known
 # reason says so first. `--with-requires` is the way back.
 mode_apply() {
-  local id dep state
+  local id
 
   for id in "${UNIT_ARGS[@]}"; do
     if ! unit_exists "$id"; then
@@ -428,15 +477,18 @@ mode_apply() {
     fi
   else
     unit_order_within "${UNIT_ARGS[@]}"
-    while IFS=$'\t' read -r dep state; do
-      [[ -z $dep ]] && continue
-      ui_warn "  note: this needs '$dep', which is $state"
-      ui_dim  "        ./install.sh apply $dep   -- or --with-requires to chain them"
-    done < <(unit_unmet_requires "${UNIT_ARGS[@]}")
+    notice_unmet_requires "   -- or --with-requires to chain them" "${UNIT_ARGS[@]}"
   fi
 
   run_units "${UNIT_ORDER[@]}"
   fail_report
+
+  # THE STATUS SAYS WHETHER IT DID WHAT IT WAS ASKED, and that is a different
+  # audience from the yellow block above. `apply` is the mode a script reaches
+  # for -- `./install.sh apply symlinks && systemctl --user restart quickshell`
+  # is an ordinary line -- and a 0 that means "the symlinks unit failed" is a
+  # lie told to the one reader that cannot read the words. See fail_clean.
+  fail_clean
 }
 
 # ---------------------------------------------------------------------------
@@ -513,8 +565,23 @@ mode_update() {
     return 0
   fi
 
-  ui_say "  applying: ${todo[*]}"
-  unit_order "${todo[@]}"
+  # THE LIST ANNOUNCED IS THE LIST APPLIED, which it was not. This said
+  # "applying: symlinks seeds nvim cursors laptop" and then called unit_order,
+  # which walks _requires and pulls the requirements back in whatever the
+  # profile said and whatever `check` had just answered. With `unit.packages 0`
+  # written down out loud, the next thing on screen was
+  #
+  #     applying: symlinks seeds nvim cursors laptop
+  #     == Packages ==
+  #
+  # -- a "no" ignored, and a unit that was already ok done over again, which is
+  # the "half an hour of pacman saying there is nothing to do" that mode_setup's
+  # own comment says it avoids. unit_order_within orders the same set by
+  # _requires and adds nothing to it; what it leaves out is named below rather
+  # than being smuggled back in.
+  unit_order_within "${todo[@]}"
+  ui_say "  applying: ${UNIT_ORDER[*]}"
+  notice_unmet_requires "   -- or tick it, so this mode takes it too" "${UNIT_ORDER[@]}"
   run_units "${UNIT_ORDER[@]}"
   fail_report
 
@@ -651,9 +718,27 @@ tui_optional() {
     state_set "group.${groups[i]}" "$wanted"
   done
 
-  # The drill-down. Only offered where there is a terminal to drill with; a
-  # non-interactive run has already had its answer from the profile.
+  # ---------------------------------------------------------------------
+  # THE DRILL-DOWN, AND THE TWO RUNS IT IS NOT FOR.
+  #
+  # No terminal: there is nothing to drill with, and a run with nobody at the
+  # keyboard has already had its answer from the profile.
+  #
+  # --yes: ui_confirm returns 0 under ASSUME_YES without reading anything,
+  # which is exactly right for "shall I do this?" and fatal for a loop whose
+  # condition is "shall I ask you again?" -- the answer can never be no, so the
+  # loop can never end. On a pty with --yes and nothing typed it asked this
+  # 1,864 times in fifteen seconds and had to be killed. The fix is not a
+  # bound on the loop: --yes means "do not ask me", and a sub-menu that exists
+  # only to be typed into is the one thing --yes cannot answer for. So it is
+  # declined, out loud, and the packs above stand as the answer.
   ui_has_tty || return 0
+  if (( ASSUME_YES )); then
+    ui_dim "   --yes: the per-package menu needs typing, so it is skipped."
+    ui_dim "   The packs above are the answer; edit $(state_path) to disagree."
+    return 0
+  fi
+
   while ui_confirm "  Open one of them and pick packages one at a time?" n; do
     group="$(ui_choose_one 1 "${groups[@]}")"
     tui_optional_packages "$group"
@@ -731,11 +816,16 @@ mode_setup() {
     return 0
   fi
 
+  # ORDERED AMONG THEMSELVES AND NOTHING ELSE ADDED, for the reason written out
+  # in mode_update: unit_order would put a unit back that the boxes above said
+  # no to, and the intersection three lines up is the whole point of the boxes.
+  unit_order_within "${todo[@]}"
+
   echo
-  ui_say "  Would apply: ${todo[*]}"
+  ui_say "  Would apply: ${UNIT_ORDER[*]}"
+  notice_unmet_requires "   -- or tick it and run this again" "${UNIT_ORDER[@]}"
   ui_confirm "  Go ahead?" || { ui_say "  Nothing done."; return 0; }
 
-  unit_order "${todo[@]}"
   run_units "${UNIT_ORDER[@]}"
 
   echo
@@ -764,6 +854,9 @@ END
   # which is how "2 thing(s) did not work" came to be something people read
   # after the fact in a screenshot.
   fail_report
+  # And the same non-zero status the other two modes give, for the same reason:
+  # `git pull && ./install.sh && reboot` is a line somebody will write.
+  fail_clean
 }
 
 # ---------------------------------------------------------------------------

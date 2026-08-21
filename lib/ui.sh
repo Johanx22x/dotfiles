@@ -166,7 +166,7 @@ ui_offer_gum() {
   ui_dim "   The menu below is plain bash. 'gum' draws a nicer one -- 13 MiB"
   ui_dim "   from extra, depending on nothing but glibc."
   if ui_confirm "   Install gum?" n; then
-    if sudo pacman -S --needed --noconfirm gum; then
+    if run_sudo pacman -S --needed --noconfirm gum; then
       state_set ui.gum yes
     else
       ui_bad "   gum could not be installed; carrying on with the plain menu."
