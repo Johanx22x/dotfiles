@@ -29,6 +29,7 @@
 // two lines of small text, and the point of the thing is that it can be read
 // at a glance.
 
+import QtQml
 import QtQuick
 import "root:/"
 
@@ -127,6 +128,20 @@ Rectangle {
         return sum;
     }
 
+    // The same walk, kept as a list, because a flipped note needs it too --
+    // see the stacking note further down.
+    readonly property var ancestry: root.chainTo(root.parent, root.viewport)
+
+    function chainTo(item: Item, stop: Item): var {
+        const out = [];
+        let p = item;
+        while (p && p !== stop) {
+            out.push(p);
+            p = p.parent;
+        }
+        return out;
+    }
+
     // The two candidates, in the parent's coordinates.
     readonly property real belowY: root.anchorY + root.anchorHeight + root.gap
     readonly property real aboveY: root.anchorY - root.height - root.gap
@@ -178,6 +193,47 @@ Rectangle {
 
     // Above the rows it overlaps, including the one below it in the card.
     z: 100
+
+    // AND `z: 100` IS NOT ENOUGH FOR A FLIPPED ONE, which is the half of this
+    // fix that a screenshot found and arithmetic did not. `z` orders an item
+    // among its own SIBLINGS and nothing else, so 100 wins inside the row and
+    // buys nothing outside it -- and everything outside it is stacked on the
+    // assumption that a note only ever hangs DOWNWARDS. SettingsSection gives
+    // its rows a descending z so that a note covers the rows BELOW it, and
+    // SettingsPage does the same to the sections for the same reason. Both
+    // comments say so in as many words. Flip the note and both work against
+    // it: the row above has the higher z, so it paints last, and its label
+    // came through the middle of the note. Photographed on a probe holding
+    // three real SettingsSections -- the word "Filler" sat across the second
+    // line of a flipped note.
+    //
+    // So while a note is up AND flipped, every item between it and the
+    // viewport is lifted over its own siblings, which is the smallest change
+    // that makes the whole path win: the row over the rows above it, the card
+    // over its heading, the section over the section before it. A Binding per
+    // ancestor rather than an assignment, so that dropping the note puts each
+    // `z` back where it was without this file having to remember them.
+    //
+    // 1000 because the restacks assign a z equal to a child count -- thirteen
+    // sections at the most in this window -- and this has to clear all of
+    // them. Nothing else in the shell assigns a z anywhere near it.
+    //
+    // ONLY WHILE FLIPPED. An unflipped note wants exactly the stacking the
+    // two restacks already give it, and lifting the row would break the case
+    // that has always worked to fix the one that never did.
+    Instantiator {
+        active: root.visible && root.flipped
+        model: root.ancestry
+
+        delegate: Binding {
+            required property var modelData
+
+            target: modelData
+            property: "z"
+            value: 1000
+            restoreMode: Binding.RestoreBindingOrValue
+        }
+    }
 
     visible: opacity > 0
     opacity: root.shown ? 1 : 0
