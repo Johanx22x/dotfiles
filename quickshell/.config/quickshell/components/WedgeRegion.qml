@@ -137,11 +137,13 @@ Region {
         // GROWN BY THE INSET AROUND THAT SAME CENTRE -- the box loses the inset
         // at its top left and gains twice it in each dimension, so the centre
         // does not move and only the radius changes. That walks the curve a
-        // pixel further into the fillet, which is the whole fix; the square's
-        // own two straight edges are left alone because they are not where the
-        // problem is. One of them abuts the panel or the bar and is interior to
-        // the union, the other lies on a whole pixel, and a straight edge on a
-        // whole pixel is rasterised exactly.
+        // pixel further into the fillet, which is the whole fix.
+        //
+        // The square's own two straight edges stay where they were, because a
+        // straight edge is not where the problem is. Of every fillet in this
+        // shell, one edge abuts the bar or the panel it welds and is interior
+        // to the union, and the other lies along the window's own edge, where
+        // the compositor clips blur and paint to the same line.
         x: root.x - (root.filledLeft ? 0 : root.side) - root.inset
         y: root.y - (root.filledTop ? 0 : root.side) - root.inset
 
