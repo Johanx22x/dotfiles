@@ -236,30 +236,82 @@ Item {
     // in this panel already follows; the media block was the one that did
     // not. There is no loop: `info` reports what its CONTENT needs and the
     // block is sized from the answer.
-    readonly property int mediaHeight: Math.max(root.artSize, info.implicitHeight)
-
-    // ASKED, NOT ASSERTED, exactly as the old grid did it: the calendar grows
-    // with the type size and the readings row grows with it too, so a stated
-    // height is a height that pushes something out through the bottom edge on
-    // the first person who changes Theme.fontSize.
     readonly property int actionsHeight: actionsRow.implicitHeight + root.glassPad * 2
     readonly property int readingsHeight: readingsRow.implicitHeight + root.glassPad * 2
     readonly property int slidersHeight: sliders.implicitHeight + root.glassPad * 2
     readonly property int clockHeight: clockLines.implicitHeight + root.glassPad * 2
-    readonly property int calendarHeight: month.implicitHeight + root.glassPad * 2
 
-    readonly property int leftHeight: root.mediaHeight + root.gap + root.readingsHeight
+    // ---- WHAT EACH COLUMN WOULD BE IF NOTHING STRETCHED ----
+    //
+    // These two are the CONTENT's answer and nothing is drawn at them. They
+    // exist only to decide which column is the tall one.
+    readonly property int mediaNaturalHeight: Math.max(root.artSize, info.implicitHeight)
+    readonly property int calendarNaturalHeight: month.implicitHeight + root.glassPad * 2
+
+    readonly property int leftNaturalHeight: root.mediaNaturalHeight + root.gap + root.readingsHeight
         + root.gap + root.slidersHeight + root.gap + root.actionsHeight
-    readonly property int rightHeight: root.clockHeight + root.gap + root.calendarHeight
+    readonly property int rightNaturalHeight: root.clockHeight + root.gap + root.calendarNaturalHeight
 
-    // THE TWO COLUMNS NOW AGREE, which is the whole compaction. The right one
-    // is the month and cannot be argued with -- it is a steppable grid at body
-    // size, and the only thing that moved there is the cell, from 34 x 30 to
-    // 30 x 26, which took 39 pixels off without touching the type inside it.
-    // The left one gained the volume as a fourth band and reaches 338 against
-    // that 341. Whichever wins, the difference now lands in the ground as a
-    // few pixels rather than as the 105-pixel hole that was there.
-    readonly property int bodyHeight: Math.max(root.leftHeight, root.rightHeight) + root.edge * 2
+    // ---- AND THE ONE HEIGHT THEY BOTH FILL ----
+    //
+    // THE TWO COLUMNS ENDED ON DIFFERENT LINES, and the reason is the same
+    // one that produced the 105-pixel hole this redesign started with, come
+    // back smaller: each column added up its own contents and landed wherever
+    // that put it. The panel was as tall as the taller of the two and the
+    // shorter one simply stopped early -- thirteen pixels early, with the
+    // calendar's bottom edge above the actions strip's.
+    //
+    // Growing the calendar until the two sums happened to match would square
+    // it up for today's card heights and re-open the moment any of them
+    // changed: a font size, a longer output device name, a control added to
+    // the capture row. The fix is that NO ARITHMETIC HAS TO AGREE. The panel
+    // takes the taller column, and in each column ONE card absorbs whatever
+    // the difference turns out to be, so both always end on exactly the same
+    // line whichever one wins and whatever moves.
+    //
+    // The absorbers are the media block on the left and the month's card on
+    // the right, and each was picked because it is the card in its column
+    // that can take height without looking stretched.
+    readonly property int columnHeight: Math.max(root.leftNaturalHeight, root.rightNaturalHeight)
+
+    readonly property int bodyHeight: root.columnHeight + root.edge * 2
+
+    // Never smaller than their natural heights, because columnHeight is the
+    // maximum of the two sums these are subtracted from.
+    readonly property int mediaHeight: root.columnHeight - root.gap - root.readingsHeight
+        - root.gap - root.slidersHeight - root.gap - root.actionsHeight
+    readonly property int calendarHeight: root.columnHeight - root.clockHeight - root.gap
+
+    // ---- WHERE THE SLACK GOES, WHICH IS A CHOICE AND NOT A DEFAULT ----
+    //
+    // Three things could have absorbed it on the right and they are not the
+    // same decision. Growing the CELLS makes the dates more comfortable and
+    // is the obvious reading of "make the calendar bigger". Growing the CLOCK
+    // makes the time louder. Padding INSIDE the card makes neither bigger and
+    // keeps both honest.
+    //
+    // This is the third, and the reason is coupling rather than taste. The
+    // slack is whatever the LEFT column happens to be taller by, so cells
+    // derived from it would make the size of the dates a function of the
+    // replay's connector name and the capture row's contents -- action at a
+    // distance, in the one card where a fractional row height would show as
+    // uneven weeks. Padding inside a card is symmetric, invisible, and cannot
+    // be wrong.
+    //
+    // The dates are one number away if they should be bigger: cellWidth and
+    // cellHeight in modules/bar/CalendarView.qml. That is a deliberate change
+    // to how the calendar looks rather than something that should fall out of
+    // how tall the column beside it happens to be.
+    //
+    // ON THE LEFT the slack grows the art square, because the picture fills
+    // the media block's height -- so the left column's absorber is the one
+    // card that gets BETTER for being given room.
+    //
+    // AND IT HOLDS IN EVERY MONTH. CalendarView draws 42 cells always, six
+    // rows whether the month needs five or six, which is a decision recorded
+    // there for exactly this reason: a grid sized to its content would be a
+    // row shorter in February and the panel would change height between one
+    // month and the next.
 
     implicitHeight: root.bodyHeight
 
