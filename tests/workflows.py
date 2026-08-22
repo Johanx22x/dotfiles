@@ -59,6 +59,19 @@ def fail(where: str, message: str) -> None:
 # not the string "on", and a naive `spec.get("on")` finds nothing on every
 # workflow ever written. GitHub's own parser does not do this; the quirk is
 # only ever on this side of the fence.
+def steps(spec: dict):
+    """Every step of every job, skipping anything that is not a mapping.
+
+    A workflow whose `steps:` is a string, or whose `jobs:` is missing
+    altogether, is a workflow actionlint has already objected to; this is only
+    making sure the rules below read it without raising.
+    """
+    for job in (spec.get("jobs") or {}).values():
+        for step in (job or {}).get("steps") or []:
+            if isinstance(step, dict):
+                yield step
+
+
 def triggers(spec: dict) -> dict:
     on = spec.get(True, spec.get("on"))
     if on is None:
@@ -169,14 +182,13 @@ for path, spec in specs.items():
     # and has said so since it was written. A sentence in a comment is not a
     # check; this is.
     if "pull_request_target" in on:
-        for job in (spec.get("jobs") or {}).values():
-            for step in (job or {}).get("steps") or []:
-                uses = str(step.get("uses", ""))
-                run = str(step.get("run", ""))
-                if uses.startswith("actions/checkout"):
-                    fail(name, f"is `pull_request_target` and uses {uses}")
-                if re.search(r"\bgit\s+(clone|fetch|checkout)\b", run):
-                    fail(name, "is `pull_request_target` and checks out by hand in a `run:`")
+        for step in steps(spec):
+            uses = str(step.get("uses", ""))
+            run = str(step.get("run", ""))
+            if uses.startswith("actions/checkout"):
+                fail(name, f"is `pull_request_target` and uses {uses}")
+            if re.search(r"\bgit\s+(clone|fetch|checkout)\b", run):
+                fail(name, "is `pull_request_target` and checks out by hand in a `run:`")
 
 # --- RULE THREE: every check is wired into a workflow -----------------------
 # The header of checks.yml makes a point of every check being a script in
@@ -187,23 +199,58 @@ for path, spec in specs.items():
 # that nobody runs, and that therefore guards nothing. Same bug as the trigger,
 # one floor down.
 #
-# The test is deliberately dumb: does the file's path appear anywhere in any
-# workflow file. That covers `run: tests/foo.sh` and it covers the longer forms
-# with $GITHUB_WORKSPACE in front, without this script having to understand
-# shell.
-workflow_text = "\n".join(p.read_text() for p in files)
+# The test is deliberately dumb about SHELL: does the file's path appear
+# anywhere in the text of a `run:` step. That covers `run: tests/foo.sh` and it
+# covers the longer forms with $GITHUB_WORKSPACE or `sudo -u ci -H` in front,
+# without this script having to understand what a command line means.
+#
+# IT IS NOT DUMB ABOUT YAML ANY MORE, AND THAT WAS THE HOLE. This used to read
+# the raw file, comments and all, and the file it is mostly about opens with a
+# comment naming tests/shell-lint.sh -- the one at checks.yml explaining why the
+# pacman step comes before the checkout. So the rule was satisfied by prose
+# about a check rather than by a step that runs one, which is the exact bug it
+# was written to catch, one floor down again. Deleting the shell-lint step from
+# checks.yml on master:
+#
+#     $ tests/workflows.py
+#     workflows: 11 executable check(s) in tests/
+#     workflows: the workflows run, and they run on every pull request
+#     $ echo $?
+#     0
+#
+# `yaml` is already imported for the trigger rules, so reading the steps back
+# costs nothing that was not already being paid.
+commands = [str(step["run"]) for spec in specs.values()
+            for step in steps(spec) if "run" in step]
 checks = sorted(
     p for p in (REPO / "tests").iterdir()
     if p.suffix in {".sh", ".py"} and os.access(p, os.X_OK)
 )
+
+# THE FLOOR, for the same reason every other collection in tests/ has one: a
+# rule that has nothing to compare answers "all clear" and answers it in the
+# same words it uses when it means it. No `run:` step anywhere means the
+# workflows have stopped running commands, or that this script has stopped
+# being able to read them; no executable check means tests/ has lost its
+# executable bits, which would leave this file's last line claiming the checks
+# are wired in when there are none.
+if not commands:
+    fail(".github/workflows", "has no `run:` step in any job, so no workflow "
+                             "runs a check at all")
+if not checks:
+    fail("tests", "holds no executable .sh or .py, so this rule has nothing to "
+                  "look for -- has the layout changed?")
+
+wired = "\n".join(commands)
 for check in checks:
     rel = check.relative_to(REPO).as_posix()
-    if rel not in workflow_text:
+    if rel not in wired:
         fail(
             rel,
-            "is an executable check that no workflow names, so nothing ever "
-            "runs it. Add a step to .github/workflows/checks.yml, or drop the "
-            "executable bit if it is a helper rather than a check.",
+            "is an executable check that no workflow RUNS -- a comment "
+            "mentioning it does not count. Add a step to "
+            ".github/workflows/checks.yml, or drop the executable bit if it "
+            "is a helper rather than a check.",
         )
 print(f"workflows: {len(checks)} executable check(s) in tests/")
 
