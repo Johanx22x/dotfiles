@@ -245,23 +245,12 @@ SettingsPage {
         // Only there when it is true, which is almost never. A permanent
         // caption explaining a condition that does not apply is noise the eye
         // learns to skip, and then misses on the day it matters.
-        Text {
+        SectionNote {
             visible: !Networking.wifiHardwareEnabled
-
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
 
             text: "The wireless adapter is switched off in hardware. "
                 + "A key on the keyboard or a switch on the machine has to turn it back on."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
             color: Theme.warning
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
     }
 
@@ -275,13 +264,10 @@ SettingsPage {
         // "nothing here": the radio being off is fixed by the switch above,
         // a missing adapter is not fixable from this window at all, and an
         // empty list with the scanner running just means waiting a second.
-        Text {
+        SectionNote {
             visible: text !== ""
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
             topPadding: 4
-            bottomPadding: 6
 
             text: {
                 if (!root.wifiDevice)
@@ -291,15 +277,6 @@ SettingsPage {
                 if (root.networks.length === 0)
                     return "Scanning…";
                 return "";
-            }
-
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
             }
         }
 

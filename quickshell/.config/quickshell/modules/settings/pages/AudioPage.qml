@@ -1038,22 +1038,10 @@ SettingsPage {
             }
         }
 
-        Text {
+        SectionNote {
             visible: root.sinks.length === 0
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
-
             text: "No output devices."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         // NO CEILING AND NO INNER SCROLL, which is a departure from the
@@ -1117,20 +1105,11 @@ SettingsPage {
         // meter is read the other way round: you make a noise on purpose to
         // find out whether the machine can hear it, and the instruction is
         // the whole point of the control.
-        Text {
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
+        SectionNote {
             bottomPadding: 4
 
             text: "Say something — the bar moves if the microphone is hearing it."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 2
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         Item {
@@ -1149,22 +1128,10 @@ SettingsPage {
             }
         }
 
-        Text {
+        SectionNote {
             visible: root.sources.length === 0
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
-
             text: "No input devices."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         // Uncapped, like the outputs above and for the same reason.
@@ -1236,23 +1203,12 @@ SettingsPage {
         glyph: Icons.music
         title: "Playing"
 
-        Text {
+        SectionNote {
             visible: root.playing.length === 0
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
             topPadding: 4
-            bottomPadding: 6
 
             text: "Nothing is playing."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         Column {
@@ -1290,23 +1246,12 @@ SettingsPage {
         glyph: Icons.record
         title: "Recording"
 
-        Text {
+        SectionNote {
             visible: root.recording.length === 0
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
             topPadding: 4
-            bottomPadding: 6
 
             text: "Nothing is recording."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         Column {

@@ -287,11 +287,9 @@ SettingsPage {
         // else, and somebody who remembers "All" has every reason to read a
         // segmented picker over eight switches as a scope again. One line, and
         // only while there is more than one bar for it to be about.
-        Text {
+        SectionNote {
             visible: root.barCount > 1
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
             // A TOP PADDING, WHICH THE OTHER NOTES ON THIS PAGE DO NOT HAVE,
             // because the row above this one is not shaped like the rows above
             // those. A ToggleRow centres its label in a tall row and leaves
@@ -299,18 +297,10 @@ SettingsPage {
             // its own bottom edge, so without this the sentence is printed
             // against the track.
             topPadding: 6
-            bottomPadding: 6
 
             text: "Each bar keeps its own complete set, so these switches "
                 + "change the bar named above and no other."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 2
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         ToggleRow {
@@ -345,24 +335,13 @@ SettingsPage {
         // it stay -- they are anchored to the middle of the bar, not to the
         // island -- which is worth saying before somebody reads their staying
         // as the switch not having worked.
-        Text {
+        SectionNote {
             visible: !Config.barWidget(root.barKey, "island")
-
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
 
             text: "SUPER + D still opens the dashboard. The do-not-disturb "
                 + "and capture badges stay: they belong to the middle of the "
                 + "bar rather than to the island."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 2
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         ToggleRow {
@@ -393,24 +372,12 @@ SettingsPage {
             onToggled: value => Config.setBarWidget(root.barKey, "keyboardLayout", value)
         }
 
-        Text {
+        SectionNote {
             visible: Config.barWidget(root.barKey, "keyboardLayout") && Config.keyboardLayouts.length < 2
-
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
 
             text: "Only one layout is configured, so there is nothing to "
                 + "show and nothing to switch to. Add a second one under "
                 + "Input and the indicator appears."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         // The bell, between the clock and the gear -- where it sits on the bar,
@@ -450,24 +417,13 @@ SettingsPage {
         //
         // "FROM THIS BAR", scoped like the line under the gear: with two bars
         // the other screen still has its flag.
-        Text {
+        SectionNote {
             visible: !Config.barWidget(root.barKey, "updates")
-
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
 
             text: "This bar will not say when the machine has fallen behind. "
                 + "The Updates page still does, and so does "
                 + "`qs ipc call updates status`."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 2
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         ToggleRow {
@@ -488,22 +444,11 @@ SettingsPage {
         // a single card it reads as a statement about the desktop, and with
         // two bars it would be a false one -- the other screen still has its
         // gear. The line is otherwise the one that was here.
-        Text {
+        SectionNote {
             visible: !Config.barWidget(root.barKey, "settingsButton")
 
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
-
             text: "The gear is gone from this bar. SUPER + C still opens this window."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 2
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         // REPURPOSED RATHER THAN REMOVED. This row used to read "This
@@ -595,25 +540,14 @@ SettingsPage {
             onToggled: value => Config.setLaptopModule("brightness", value)
         }
 
-        Text {
+        SectionNote {
             visible: Config.laptopBattery || Config.laptopBrightness
-
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
 
             text: "These two need the hardware as well as the switch: the "
                 + "battery needs one UPower reports, and the slider needs a "
                 + "backlight under /sys/class/backlight. On a machine without "
                 + "them they stay hidden and leave no gap."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 2
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
     }
 

@@ -37,6 +37,7 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import "root:/"
+import "root:/components"
 // SettingsSection lives two directories UP, and QML's implicit import covers a
 // file's own directory only.
 import "root:/modules/settings"
@@ -341,23 +342,12 @@ SettingsSection {
         }
     }
 
-    Text {
-        x: Theme.groupPadding
-        width: parent.width - Theme.groupPadding * 2
+    SectionNote {
         topPadding: 4
-        bottomPadding: 6
 
         text: "Drag a screen to say where it sits. Edges snap to the "
             + "neighbours they are near, and nothing reaches the "
             + "compositor until Apply."
-        wrapMode: Text.WordWrap
-        font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize - 1
-        color: Theme.textOnSurfaceVariant
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
     }
 
     Rectangle {
@@ -578,24 +568,20 @@ SettingsSection {
         }
     }
 
-    Text {
+    SectionNote {
         visible: root.arrangeOverlaps
 
-        x: Theme.groupPadding
-        width: parent.width - Theme.groupPadding * 2
         topPadding: 6
+        // The one note in the tree with no gap under it, and it stays that
+        // way now that the component has a default: the Apply row below is
+        // 44 pixels tall with its content centred in them, so the space is
+        // already there.
+        bottomPadding: 0
 
         text: "Two screens are on top of each other. Neither compositor "
             + "refuses it, but the overlapping strip is drawn by both and "
             + "the pointer behaves as though one of them is not there."
-        wrapMode: Text.WordWrap
-        font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize - 1
         color: Theme.warning
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
     }
 
     // The buttons, and the banner that replaces them once something is
