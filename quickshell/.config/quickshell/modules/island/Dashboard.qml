@@ -452,7 +452,14 @@ Item {
             //
             // NOT IMPROVED. Where their design looks odd to me it is
             // implemented anyway; the instruction on this card is fidelity.
-            Card {
+            // A ClippingRectangle AND NOT THE Card COMPONENT, because this is
+            // the one card with something drawn to its own edges. `clip: true`
+            // on a plain Item clips to the BOUNDING BOX, so the blurred cover
+            // would be painted straight over the rounded corners and square
+            // them off -- the same trap the cover art itself fell into once
+            // before. This clips to the radius. end-4 solve it with an
+            // OpacityMask layer effect; this is what this shell already has.
+            ClippingRectangle {
                 id: mediaCard
 
                 width: parent.width
@@ -475,9 +482,12 @@ Item {
                 // the port is that this card looks like that card.
                 radius: 19
 
-                // The blurred cover is drawn to the card's own edges, so the
-                // card has to cut it to its corners.
-                clip: true
+                // What the Card component would have given it.
+                color: Theme.surfaceContainerHigh
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
 
                 // Same rule the island uses: prefer what is actually playing,
                 // fall back to the first player that exists so a paused track
@@ -736,7 +746,12 @@ Item {
                         // Art background: a square as tall as the content,
                         // exactly as theirs -- Layout.fillHeight with the
                         // width following the height.
-                        Rectangle {
+                        // A ClippingRectangle for the same reason the card
+                        // itself is one: the art is cropped to fill this square
+                        // and `clip` would cut it to the bounding box, leaving
+                        // a square photo inside a rounded frame. end-4 mask it
+                        // with an OpacityMask layer; this clips to the radius.
+                        ClippingRectangle {
                             id: artBackground
 
                             Layout.fillHeight: true
@@ -744,7 +759,6 @@ Item {
 
                             radius: 8
                             color: Qt.alpha(Theme.surfaceContainerHighest, 0.5)
-                            clip: true
 
                             Image {
                                 id: art
