@@ -54,7 +54,10 @@ Item {
 
     readonly property real handleMargins: 4
     readonly property real handleHeight: 24
-    readonly property real handleWidth: seekArea.pressed ? 1.5 : 3
+    // Not readonly, only because a Behavior is attached below and a value
+    // interceptor on a read-only property is a needless thing to have to be
+    // sure about. Nothing writes it.
+    property real handleWidth: seekArea.pressed ? 1.5 : 3
     readonly property real trackWidth: 4
     readonly property real trackDotSize: 3
     readonly property real unsharpenRadius: 2
