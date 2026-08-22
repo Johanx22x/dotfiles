@@ -8,10 +8,9 @@ The accent palette is generated from the wallpaper.
 
 <br>
 
-<img src="assets/preview-1.png" width="49%" alt="Desktop on a pink wallpaper: fastfetch in kitty, the island open on its Performance tab, Neovim and zathura">
-<img src="assets/preview-2.png" width="49%" alt="Desktop on a blue wallpaper: Celluloid, Zen, Nautilus and the settings window on its Display page">
+<img src="assets/preview-1.png" width="70%" alt="Desktop on a pink wallpaper: fastfetch in kitty, the island open on its Performance tab, Neovim and zathura">
 
-<sub>Two wallpapers, one desktop. Every accent above comes from the image behind it.</sub>
+<sub>Every accent above comes from the image behind it.</sub>
 
 <br>
 <br>
