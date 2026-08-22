@@ -105,9 +105,28 @@ jobs:
           # seat or a GPU, which Hyprland will not (the header there says why);
           # mesa is llvmpipe, because Qt Quick still wants a GL context on a
           # runner that has no card in it. All three are in [extra].
+          #
+          # python-pyqt6 AND qt6-declarative, BOTH, for tests/wheel-and-click.py.
+          # That bench builds a QQuickView of its own and drives the settings
+          # rail's real components inside it, so it needs Qt Quick itself and a
+          # Python binding to it. NOT COVERED BY quickshell ABOVE: the binding
+          # is what lets a test synthesize a wheel event naming a device Qt
+          # would never hand it, which is the whole reason the bench exists.
+          # And the two names are not one either -- python-pyqt6 declares
+          # qt6-base and stops there, while its QtQuick module links
+          # libQt6Quick.so.6, libQt6Qml.so.6 and three more that only
+          # qt6-declarative ships, so the binding alone gives a container where
+          # `import PyQt6.QtQuick` fails and the check dies before its first
+          # assertion.
+          #
+          # NO FONT PACKAGE, checked rather than assumed: that bench was run
+          # against an empty fontconfig and passed. Its entries carry Text
+          # items, but nothing it measures is a text size -- the rail's height
+          # comes from Theme.groupHeight -- so Qt's own fallback is enough and
+          # a font package would be weight for nothing.
           pacman -Syu --needed --noconfirm \
             git python python-yaml lua shellcheck actionlint stow hyprland \
-            niri curl quickshell labwc mesa
+            niri curl quickshell labwc mesa python-pyqt6 qt6-declarative
 
       - uses: actions/checkout@v7
 
@@ -194,6 +213,26 @@ jobs:
           useradd --create-home --shell /bin/bash checker
           sudo -u checker -H "$GITHUB_WORKSPACE/tests/stale-links.sh"
 
+      # THE ONE CHECK THAT RUNS QML. Everything above reads files or runs a
+      # parser over them; this builds a QQuickView offscreen, puts the settings
+      # rail's own ScrollList and SettingsNavItem in it at the window's real
+      # 820x580, and sends wheel and mouse events at them by hand.
+      #
+      # IT IS HERE BECAUSE THE ALTERNATIVE FAILED THREE TIMES. The rail's
+      # first-click bug took #144, #155 and #158 to fix, and the middle one
+      # shipped a settings window in which nothing scrolled at all -- because
+      # every measurement until then had been taken by hand, on a bench that
+      # was never committed, and asked only one of the two questions. The file
+      # says the rest.
+      #
+      # NO COMPOSITOR AND NO DISPLAY. The script forces QT_QPA_PLATFORM to
+      # offscreen itself; nothing here needs a seat, a Wayland socket or
+      # Quickshell. It is the one QML question a container can answer, which is
+      # also why it is the only one asked -- see the note on qmllint below.
+      - name: The settings rail scrolls, and keeps the click that follows
+        if: ${{ !cancelled() }}
+        run: tests/wheel-and-click.py
+
       # LAST, BECAUSE IT IS ABOUT THE OTHER CHECKS RATHER THAN ABOUT THE
       # REPOSITORY. It answers whether the workflows in this directory run at
       # all, whether any of them still filters a `pull_request` by base branch
@@ -233,6 +272,14 @@ jobs:
       # binding get evaluated for real, with no import path to teach it. What
       # it cannot do is point at a line in a file nothing reaches yet, which is
       # the one thing a linter is better at.
+      #
+      # AND tests/wheel-and-click.py IS NOT A THIRD ATTEMPT AT IT EITHER. It
+      # asks about behaviour rather than about types, over three files rather
+      # than a hundred, and it gets past `root:/` by pointing the scheme at an
+      # empty directory and handing Theme in as a context property -- which is
+      # fine for three components and answers nothing at all for a linter that
+      # has to resolve every name in every file. Sixty files with imports
+      # qmllint cannot follow is still the state of things.
 
   # ---------------------------------------------------------------------------
   # THE ONE CHECK THAT RUNS install.sh.
