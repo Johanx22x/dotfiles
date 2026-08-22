@@ -28,6 +28,34 @@
 // The type was right and the workaround would have been brittle string
 // matching solving a problem that did not exist.
 //
+// ONE PHYSICAL PERIPHERAL, ONE ROW, WHICH IS NOT ONE UPower DEVICE. Plug the
+// Logitech mouse in to charge and UPower grows a SECOND battery for it: the
+// wireless one behind the Lightspeed receiver, and a new one for the cable.
+// Same charge, same serial, different native-path -- and the bar drew both,
+// the second one wearing a keyboard glyph. That glyph was faithful. UPower
+// types every enumeration from the HID interface it attached to, and the
+// wired interface of this mouse advertises a keyboard collection for its
+// buttons, so UPower says keyboard and means it. The device was double, not
+// the type.
+//
+// SO THEY ARE MERGED ON THE KERNEL'S OWN IDENTITY FOR THE HARDWARE: the
+// manufacturer, the model and the serial exactly as they sit in
+// /sys/class/power_supply/<native-path>/uevent, which is where UPower read
+// them in the first place. Not the model NAME -- see the paragraph above.
+// Nothing here recognises a string; it only compares two of them, and the
+// serial has to be present for a merge to be possible at all. All three have
+// to agree, so two devices collapse only when every word the kernel has about
+// them is the same word. Anything less keeps its own row, which is the safe
+// way to be wrong: a duplicate is visible and annoying, a wrong merge hides a
+// device.
+//
+// READ OUT OF sysfs BECAUSE IT IS NOT ON THE OBJECT. Quickshell's UPowerDevice
+// carries type, state, percentage, model and native-path and no serial at all,
+// so the one field that ties the two entries together cannot be reached from
+// the device -- but native-path IS the kernel's name for the power supply, and
+// the uevent beside it has all three fields. Roughly 7 us a read, measured
+// over a thousand of them, once per device per reading.
+//
 // IT IS ONLY THERE WHEN THERE IS SOMETHING TO SAY. No peripheral, no glyph --
 // a permanent empty slot on the bar is worse than the reading being absent,
 // because the eye learns to skip the place where it lives.
@@ -76,6 +104,203 @@ Row {
         // "A battery" is the honest answer when the only thing known about
         // the device is that it has one.
         return Icons.battery;
+    }
+
+    // Charging OR full: something sitting on its cable at 100% is still on its
+    // cable, and every rule below that asks "is this the wired one" is asking
+    // this question.
+    function isCharging(device: var): bool {
+        return device.state === UPowerDeviceState.Charging
+            || device.state === UPowerDeviceState.FullyCharged;
+    }
+
+    // ---------------- Which devices are the same device ----------------
+
+    // native-path -> the kernel's identity for whatever is behind it, or "".
+    //
+    // AND FILLED IN HERE RATHER THAN WHERE IT IS USED, which is not a matter
+    // of taste. Reading a FileView from inside a binding makes that FileView's
+    // path and text into dependencies OF THAT BINDING, so a loop that points
+    // one FileView at each device's file in turn marks its own binding dirty
+    // on every device and re-runs it forever -- a shell pinned at 100% of a
+    // core with nothing on screen to say why. The reads happen in a handler,
+    // the binding reads this map, and the map is reassigned only when it has
+    // actually changed so that the rows are not rebuilt for nothing.
+    property var identities: ({})
+
+    onUpowerDevicesChanged: root.relearnIdentities()
+    // The handler above covers every device that arrives later; this covers
+    // the ones that were already there when the shell started, whose binding
+    // may well have settled before anything was listening.
+    Component.onCompleted: root.relearnIdentities()
+
+    function relearnIdentities(): void {
+        const learned = {};
+        let changed = false;
+
+        for (const device of root.upowerDevices) {
+            const path = device.nativePath;
+            if (!path)
+                continue;
+
+            learned[path] = root.identityOf(path);
+            if (root.identities[path] !== learned[path])
+                changed = true;
+        }
+
+        if (changed || Object.keys(learned).length !== Object.keys(root.identities).length)
+            root.identities = learned;
+    }
+
+    // The kernel's own identity for the hardware behind a power supply --
+    // manufacturer, model and serial, joined on a byte none of them can
+    // contain. "" is this saying "do not merge me", and it says it whenever
+    // there is no serial to anchor the answer.
+    function identityOf(nativePath: string): string {
+        if (!nativePath)
+            return "";
+
+        // UPower's native-path is the kernel's name for the power supply for
+        // everything that IS one. For a Bluetooth battery it is a bluez object
+        // path instead, and for the rest it is something else again -- in
+        // every one of those cases this file does not exist, the read fails
+        // quietly, and the device keeps its own row.
+        ueventFile.path = `/sys/class/power_supply/${nativePath}/uevent`;
+        // RELOADED AND NOT MERELY READ. The path is the same string on every
+        // pass for a device that stays where it is, and a FileView asked for a
+        // path it already holds hands back what it read the first time -- for
+        // as long as the shell runs, including after the kernel has recycled
+        // that name onto different hardware. A stale identity is a wrong
+        // merge, which is the one outcome worth paying 7 us to avoid.
+        ueventFile.reload();
+
+        const fields = {};
+        for (const line of (ueventFile.text() || "").split("\n")) {
+            const eq = line.indexOf("=");
+            if (eq > 0)
+                fields[line.slice(0, eq)] = line.slice(eq + 1).trim();
+        }
+
+        const serial = fields["POWER_SUPPLY_SERIAL_NUMBER"] || "";
+        if (serial === "")
+            return "";
+
+        return [fields["POWER_SUPPLY_MANUFACTURER"] || "",
+                fields["POWER_SUPPLY_MODEL_NAME"] || "",
+                serial].join("\u0000");
+    }
+
+    FileView {
+        id: ueventFile
+
+        // Read synchronously, the same way SessionInfo reads /proc/uptime and
+        // for the same reason: the caller wants the answer in the expression
+        // it asked in. It is two hundred bytes of sysfs.
+        blockLoading: true
+        // Absent for every device that is not a power supply, which is not an
+        // error and must not print one on every reading.
+        printErrors: false
+    }
+
+    // ---------------- Who speaks for a merged device ----------------
+    //
+    // TWO ANSWERS, BECAUSE THE TWO ENTRIES ARE GOOD AT DIFFERENT THINGS.
+    //
+    // WHAT IT IS comes from the member that is NOT on the cable. The second
+    // entry exists *because* something was plugged in: it is a fresh
+    // enumeration of the same hardware over a different interface, and its
+    // type is whatever HID class that interface advertises -- which is exactly
+    // how this mouse came to be a keyboard. The member that is there with the
+    // cable and without it is the one describing the peripheral, and it is
+    // also the one that survives unplugging, so the glyph does not change when
+    // the cable comes out.
+    function compareIdentity(a: var, b: var): int {
+        if (root.isCharging(a) !== root.isCharging(b))
+            return root.isCharging(a) ? 1 : -1;
+
+        // There is nothing to prefer about a type UPower does not have.
+        const aTyped = a.type !== UPowerDeviceType.Unknown;
+        const bTyped = b.type !== UPowerDeviceType.Unknown;
+        if (aTyped !== bTyped)
+            return aTyped ? -1 : 1;
+
+        // Arbitrary, and here precisely so that it is never a coin flip:
+        // without a last resort the winner would depend on the order UPower
+        // happened to list them in, and the glyph could swap between readings
+        // with nothing having changed.
+        return root.byNativePath(a, b);
+    }
+
+    // WHAT IT IS DOING comes from the member that knows. UPowerDeviceState
+    // .Unknown is UPower saying it has no reading, and the wireless side goes
+    // exactly that quiet while the cable is in -- the cable's own entry is the
+    // only one that can see the cable. Where both know and disagree, charging
+    // wins, which is the rule the alert further down already follows and for
+    // the same reason.
+    function compareState(a: var, b: var): int {
+        const aKnown = a.state !== UPowerDeviceState.Unknown;
+        const bKnown = b.state !== UPowerDeviceState.Unknown;
+        if (aKnown !== bKnown)
+            return aKnown ? -1 : 1;
+
+        if (root.isCharging(a) !== root.isCharging(b))
+            return root.isCharging(a) ? -1 : 1;
+
+        return root.byNativePath(a, b);
+    }
+
+    function byNativePath(a: var, b: var): int {
+        return a.nativePath < b.nativePath ? -1 : a.nativePath > b.nativePath ? 1 : 0;
+    }
+
+    // ONE ENTRY OUT OF EVERY UPower DEVICE THAT IS THE SAME PIECE OF HARDWARE.
+    // Almost always there is exactly one of them, in which case every rule in
+    // here picks the only candidate and this is the old code with more words
+    // around it.
+    function entryFor(key: string, members: var): var {
+        const identity = members.slice().sort(root.compareIdentity)[0];
+        const teller = members.slice().sort(root.compareState)[0];
+        const charging = root.isCharging(teller);
+
+        // THE LONGEST NAME ANY OF THEM GIVES IT. The two here are "Logitech
+        // PRO X 2" and "PRO X 2" -- one name, one of them with the maker still
+        // attached -- and the longer string is never the less correct one.
+        // Decided by length rather than taken from the identity winner so that
+        // the label cannot change when the cable goes in.
+        const label = members.reduce((best, m) =>
+            (m.model || "").length > best.length ? m.model : best, "");
+
+        // THE LOWEST OF THEM WHEN THEY DISAGREE AT ALL. There is one battery
+        // behind both readings and they should agree -- both say 36% here --
+        // but they are polled separately, so one can be a percent behind for a
+        // cycle. The pessimistic reading is the safe one, and it is the same
+        // rule the earphones below use to stand for three components at once.
+        const charge = Math.round(members.reduce((low, m) =>
+            Math.min(low, m.percentage ?? 0), 1) * 100);
+
+        // From whichever one measures it, if any of them does.
+        const healthy = members.find(m => m.healthSupported ?? false);
+
+        return {
+            key: key,
+            glyph: root.glyphFor(identity),
+            // 0..1 from UPower -- measured against `upower -i`, which prints
+            // the same charge as a whole number.
+            charge: charge,
+            charging: charging,
+            label: label || "Wireless device",
+            stateText: root.stateTextOf(teller.state),
+            remaining: root.remainingText(
+                charging ? (teller.timeToFull ?? 0) : (teller.timeToEmpty ?? 0), charging),
+            // The same estimate again, unformatted, for the notification.
+            // BatteryAlerts words that one itself -- taking `remaining` would
+            // be taking a sentence written for the panel, which is how the two
+            // battery widgets ended up saying the same thing two different
+            // ways in the first place.
+            secondsLeft: charging ? 0 : (teller.timeToEmpty ?? 0),
+            health: healthy ? Math.round(healthy.healthPercentage ?? 0) : -1,
+            parts: []
+        };
     }
 
     // Plain words and not UPowerDeviceState.toString(), which returns the
@@ -199,32 +424,47 @@ Row {
     readonly property var entries: {
         const out = [];
 
-        for (const device of root.upowerDevices) {
-            const charging = device.state === UPowerDeviceState.Charging
-                || device.state === UPowerDeviceState.FullyCharged;
+        // GROUPED BEFORE ANY OF THEM IS DRAWN. See the header: one peripheral
+        // can be two UPower devices, and the key is the thing that says so.
+        //
+        // AND IT IS THE SAME KEY WIRED OR WIRELESS, which matters further down
+        // more than it matters here. BatteryAlerts remembers, under this
+        // string, that it has already shouted about a device -- and the string
+        // used to be the native-path, so a mouse put on its cable acquired a
+        // second one and became, to that map, a device it had never seen. Both
+        // entries now reduce to the hardware's own identity, the survivor
+        // keeps that identity when the cable comes out, and `shownKey` holds
+        // the panel open on it across the whole transition.
+        const groups = [];
+        const slotOf = ({});
 
-            out.push({
-                key: device.nativePath || device.model,
-                glyph: root.glyphFor(device),
-                // 0..1 from UPower -- measured against `upower -i`, which
-                // prints the same charge as a whole number.
-                charge: Math.round((device.percentage ?? 0) * 100),
-                charging: charging,
-                label: device.model || "Wireless device",
-                stateText: root.stateTextOf(device.state),
-                remaining: root.remainingText(
-                    charging ? (device.timeToFull ?? 0) : (device.timeToEmpty ?? 0), charging),
-                // The same estimate again, unformatted, for the notification.
-                // BatteryAlerts words that one itself -- taking `remaining`
-                // would be taking a sentence written for the panel, which is
-                // how the two battery widgets ended up saying the same thing
-                // two different ways in the first place.
-                secondsLeft: charging ? 0 : (device.timeToEmpty ?? 0),
-                health: (device.healthSupported ?? false)
-                    ? Math.round(device.healthPercentage ?? 0) : -1,
-                parts: []
-            });
+        for (let i = 0; i < root.upowerDevices.length; i++) {
+            const device = root.upowerDevices[i];
+            const identity = root.identities[device.nativePath] || "";
+
+            // THREE KINDS OF KEY AND ONLY THE FIRST MERGES ANYTHING. A device
+            // whose kernel identity cannot be read falls back to its own
+            // native-path, which is unique per UPower device, so it stands
+            // alone -- which is what should happen when there is nothing to
+            // prove it is a duplicate of anything. The third is for a device
+            // with no native-path either: keyed on its place in the list,
+            // which is not stable across another device coming or going, and
+            // that costs at worst a repeated notification. Two nameless
+            // devices sharing one key would cost one of them disappearing.
+            const key = identity !== "" ? `serial:${identity}`
+                : device.nativePath ? `path:${device.nativePath}`
+                : `slot:${i}`;
+
+            if (slotOf[key] === undefined) {
+                slotOf[key] = groups.length;
+                groups.push({ key: key, members: [device] });
+            } else {
+                groups[slotOf[key]].members.push(device);
+            }
         }
+
+        for (const group of groups)
+            out.push(root.entryFor(group.key, group.members));
 
         // AND ONLY WHILE THEY ARE ACTUALLY CONNECTED. The file is written by a
         // script on a three-minute timer, so on its own it is up to three
