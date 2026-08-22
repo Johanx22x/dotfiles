@@ -61,7 +61,7 @@ Hyprland. `--compositor=hyprland|niri|both` overrides either way. See
 | | |
 |---|---|
 | `packages` | `packages/required/*.txt` and the chosen compositor's list — repo or AUR, worked out per name |
-| `optional` | `packages/optional/*.txt`: apps, backup, gaming, hardware, laptop, neovim. Tick a pack, or open one and tick packages inside it |
+| `optional` | `packages/optional/*.txt`: apps, backup, gaming, hardware, neovim. Tick a pack, or open one and tick packages inside it. `laptop` is the sixth and is not a box: it follows the laptop answer |
 | `gpu` | `packages/gpu/<vendor>.txt`, with the card read off the bus and `none` as a real answer |
 | `aur-patched` | builds `packages/xwayland-satellite/`, which carries a fix niri needs for DaVinci Resolve |
 | `symlinks` | `stow` links the config into `$HOME` |
@@ -72,7 +72,7 @@ Hyprland. `--compositor=hyprland|niri|both` overrides either way. See
 | `shell` | `chsh -s /usr/bin/zsh` |
 | `services-user` | the wallpaper and battery timers, and the polkit agent |
 | `services-system` | SDDM, NetworkManager, bluetooth, the daemon that puts snapshots in the GRUB menu, and the snapshot, TRIM, mirror and cache timers |
-| `laptop` | battery and brightness widgets — asked, because no detection can answer it |
+| `laptop` | battery and brightness widgets, and the `laptop` package group behind them — asked, because no detection can answer it, and asked before the groups are settled so `brightnessctl` goes in with them |
 | `monitors` | says whether every attached screen is recorded, and prints the command that records one |
 
 It refuses to run as root or off Arch. A package it cannot install is reported

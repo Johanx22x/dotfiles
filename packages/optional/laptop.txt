@@ -1,11 +1,18 @@
-# Hardware a desktop does not have. The `laptop` unit already asks whether this
-# machine is one and records the answer; this group follows that answer rather
-# than being a taste question like the other optional groups.
+# Hardware a desktop does not have. The full run asks whether this machine is a
+# laptop BEFORE it settles the optional groups, and this group follows that
+# answer rather than being a taste question like the other five. The wiring is
+# tui_laptop in install.sh; the answer is `laptop` in the profile, and the
+# `laptop` unit reads the same line rather than asking a second time.
 #
-# brightnessctl owns the backlight. `desktop-brightness` wraps it, and both
-# compositors bind XF86MonBrightnessUp/Down to that wrapper, so on a machine with
-# a panel those two keys are dead without it. On a desktop there is no
-# /sys/class/backlight to write to and the package is pure weight -- which is
-# exactly the state this repository was in: declared as required, not installed,
-# and nobody noticing because the machine has no backlight to miss.
+# brightnessctl owns the backlight, and both compositors bind
+# XF86MonBrightnessUp/Down STRAIGHT TO IT -- `brightnessctl -e4 -n2 set 5%+`,
+# in hyprland.lua and in config.kdl -- so on a machine with a panel those two
+# keys are dead without this package. `desktop-brightness` is the other writer,
+# the wrapper the settings window's slider goes through, and it needs
+# brightnessctl too; its own header says why the keys are better off not going
+# through it (-e4 steps along a perceptual curve, and a slider has to be
+# linear). On a desktop there is no /sys/class/backlight to write to and the
+# package is pure weight -- which is exactly the state this repository was in:
+# declared as required, not installed, and nobody noticing because the machine
+# has no backlight to miss.
 brightnessctl
