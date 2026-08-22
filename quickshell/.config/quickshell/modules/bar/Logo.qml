@@ -63,8 +63,37 @@ Item {
         }
     }
 
+    // CENTRED ON ITS INK, NOT ON ITS TEXT BOX, and the difference is visible
+    // the moment there is a disc behind it. Measured in the font itself:
+    // nf-linux-archlinux draws from x=0 to x=1000 inside an advance of only
+    // 600 units per 1000-unit em, so the mark overhangs its own cell by 400
+    // and its ink centre sits 0.2 em right of the centre `anchors.centerIn`
+    // would use. Vertically it is already exact -- ink centre 360 against a
+    // box centre of 360 -- which is why only one axis is corrected here.
+    //
+    // The offset is READ FROM THE FONT rather than written down, because a
+    // number would be right for this glyph at this size and silently wrong
+    // for a different Nerd Font release or a changed logoSize.
+    //
+    // ONLY x IS TAKEN FROM THE METRIC, and the vertical stays on an anchor on
+    // purpose: tightBoundingRect measures its y from the BASELINE while a
+    // Text item's y is measured from the top of its line box, so using it
+    // vertically would mix two origins and introduce an error on the one axis
+    // the font already gets right. Horizontally the two agree -- both start at
+    // the text origin -- so there is nothing to reconcile.
+    TextMetrics {
+        id: ink
+
+        font: logo.font
+        text: logo.text
+    }
+
     Text {
-        anchors.centerIn: parent
+        id: logo
+
+        x: (root.width - ink.tightBoundingRect.width) / 2 - ink.tightBoundingRect.x
+        anchors.verticalCenter: parent.verticalCenter
+
         text: Icons.arch
         color: Theme.primary
         font.family: Theme.fontFamily
