@@ -21,26 +21,56 @@
 # fragments and a fragment with a shebang invites somebody to execute it. Their
 # first line is `# shellcheck shell=bash`, which tells shellcheck what dialect
 # to read them in and tells this loop nothing whatsoever. Counted rather than
-# guessed: of the 49 files in the net, 28 have a shebang and 21 are here on
+# guessed: of the 51 files in the net, 31 have a shebang and 20 are here on
 # their suffix alone -- all of lib/, plus bin/.local/lib/desktop-lib.sh, which
 # is sourced by nine scripts in bin/.local/bin/ for the same reason. Drop the
 # suffix branch and the installer leaves the sweep without a word, the count
-# reads 28, and the check still prints "no errors" -- which is the failure mode
-# this whole file exists to prevent.
+# reads 31, and the check still prints that it found nothing -- which is the
+# failure mode this whole file exists to prevent.
 #
-# WHY THE GATE IS AT -S error AND NOT -S warning. At the time this was written
-# the tree had thirty findings at warning level across seven files and, read
-# one by one, nearly all of them are shellcheck being unable to see through
-# `readonly -A ARRAY=([key]=value)`: it reads the keys as variable references
-# and reports SC2154 "referenced but not assigned" for each one. Gating on that
-# would mean a red check on day one over code that is correct, and a check that
-# is red on arrival is a check everybody learns to scroll past -- at which point
-# it is worse than not having one, because the next failure is red too and
-# nobody looks.
+# THE GATE IS AT -S warning, AND IT USED TO BE AT -S error. When this was
+# written the tree had thirty findings at warning level across seven files and,
+# read one by one, nearly all of them were shellcheck being unable to see
+# through `readonly -A ARRAY=([key]=value)`: it reads the unquoted keys as
+# variable references and reports SC2154 "referenced but not assigned" for each
+# one. Gating on that would have meant a red check on day one over code that is
+# correct, and a check that is red on arrival is a check everybody learns to
+# scroll past -- at which point it is worse than not having one, because the
+# next failure is red too and nobody looks.
 #
-# So: errors gate, warnings are printed but do not. The warning sweep is still
-# run and still shown, because the point of printing it is that somebody
-# reading a pull request can see a new one appear.
+# THAT SHAPE IS NOT IN THE TREE ANY MORE. Every associative array here is now
+# `declare -A NAME=()`, and the one with literal keys quotes them, which the
+# tool reads correctly: the probe is two lines, `readonly -A A=([one]=1)` still
+# reports SC2154 today and `["one"]=1` does not. So the thirty are gone.
+# Counted over the same file set this script lints, with the same arguments,
+# under version 0.11.0:
+#
+#     -S error      0
+#     -S warning    0
+#     -S info      26
+#     -S style     29
+#
+# Which is the only condition under which this raise was worth making: a gate
+# moves up when the tree is already clean at the new level, never by silencing
+# what is underneath it. Nothing was disabled to get here.
+#
+# INFO AND STYLE STAY OUT, and the two numbers above are the whole reason.
+# Fifty-five findings printed on every run is the wall of text the paragraph
+# before last is about, and neither level is where a bug lives. They are one
+# flag away for anybody who wants an afternoon with them -- and the `$` is not
+# decoration, a comment line whose first word is the tool's name is read as a
+# directive and fails this check on itself, which is the same trap the note at
+# the top of this file is about:
+#
+#     $ shellcheck -x -P SCRIPTDIR --severity=info $(git ls-files '*.sh')
+#
+# WHAT THE RAISE COSTS, said out loud because it is not nothing. A new release
+# adding a warning-level check can turn this red on a pull request
+# that touched none of the code being complained about, and the container in
+# checks.yml installs whatever Arch has that morning. That is the price of
+# warnings being visible at all rather than scrolled past, and the way out of
+# one is fixing it or writing `# shellcheck disable=SCxxxx` with the reason
+# next to it -- not moving the gate back down.
 #
 # Run it from anywhere:  tests/shell-lint.sh
 set -euo pipefail
@@ -99,23 +129,18 @@ fi
 
 echo "shell-lint: ${#scripts[@]} shell script(s)"
 
-# --- Advisory: everything at warning level ---------------------------------
-# `|| true` because shellcheck exits non-zero whenever it has something to say,
-# and here it is allowed to have something to say.
-warnings="$(shellcheck "${SHELLCHECK_ARGS[@]}" --severity=warning \
-    "${scripts[@]}" || true)"
-if [[ -n $warnings ]]; then
-    echo
-    echo "shell-lint: warnings (not gating, see the header of this script):"
-    sed 's/^/  /' <<<"$warnings"
-fi
-
-# --- The gate: errors only --------------------------------------------------
+# --- The gate: errors and warnings ------------------------------------------
+# ONE SWEEP AND NOT TWO. There used to be an advisory pass at warning level
+# above a gate at error level, printed so that somebody reading a pull request
+# could see a new warning appear. With the gate at warning that pass is the
+# same command as the gate, and a warning can no longer appear without being
+# seen -- it fails the run.
 echo
-if shellcheck "${SHELLCHECK_ARGS[@]}" --severity=error "${scripts[@]}"; then
-    echo "shell-lint: no errors"
+if shellcheck "${SHELLCHECK_ARGS[@]}" --severity=warning "${scripts[@]}"; then
+    echo "shell-lint: no errors and no warnings"
 else
     echo
-    echo "shell-lint: the findings above are errors, not style. Fix them." >&2
+    echo "shell-lint: the findings above are errors or warnings, not style." >&2
+    echo "shell-lint: fix them, or disable the one that is wrong where it is wrong, with the reason next to it." >&2
     exit 1
 fi
