@@ -419,45 +419,84 @@ Item {
                 return;
             }
 
-            // toggleAt and not requestToggleAt: a click names the bar it
-            // landed on, so it opens here whichever monitor has the focus.
-            root.popout.toggleAt(root.anchorX(), dashboardComponent);
+            // THROUGH THE SINGLETON AND NOT STRAIGHT AT THE POPOUT, which
+            // it used to be. The click still names THIS bar -- that is what
+            // the argument passes -- but the dashboard is one panel with one
+            // place it is drawn, and a click that opened it behind the
+            // singleton's back would be a copy nothing could move or close.
+            IslandState.toggleDashboardOn(root.popout.screen?.name ?? "");
         }
     }
 
-    // SUPER + D, through IslandState's IpcHandler. The same anchor the click
-    // uses, so the keybind and the pointer cannot drift apart about WHERE the
-    // panel comes out: one of them opening what the other closes is the kind of
-    // bug that only shows up months later.
+    // ---------------- Drawing the dashboard ----------------
     //
-    // WHERE IT DIFFERS IS WHICH BAR ANSWERS, and it has to. This signal reaches
-    // every Island there is -- one per bar -- and the plain toggleAt below made
-    // each of them open its own copy, so the dashboard appeared on every
-    // monitor carrying a bar at once. requestToggleAt is the same toggle asked
-    // of the one bar Screens.panelScreen names, with the others putting away a
-    // dashboard they happen to be holding rather than opening a second one.
+    // WHETHER THIS BAR IS THE ONE SHOWING IT. IslandState.dashboardScreen holds
+    // the connector name of the bar the dashboard is on, or "" when it is down;
+    // every Island compares that against its own bar and at most one of them
+    // matches. That is what makes SUPER + D open ONE dashboard: the keybind
+    // reaches every Island there is, and it used to make each of them toggle
+    // its own popout, so the panel appeared on every monitor carrying a bar.
     //
-    // The CLOSE stays unconditional on purpose. It exists so that a selection
-    // tool started from inside the panel is not launched behind a focus grab,
-    // and for that the panel has to be gone from every monitor it could be on
-    // -- there is nothing to be careful about in closing what is already shut.
-    Connections {
-        target: IslandState
+    // AND IT IS WHAT MAKES IT MOVE. The string is retargeted when the focus
+    // settles on another monitor, so this goes false on the bar that had it and
+    // true on the bar that now does, and the panel is torn down on one side and
+    // built on the other. See the header over dashboardScreen in IslandState.
+    readonly property bool showsDashboard: IslandState.dashboardScreen !== ""
+        && IslandState.dashboardScreen === (root.popout.screen?.name ?? "")
 
-        function onDashboardCloseRequested(): void {
+    // WHAT THE MOVE COSTS, written where somebody will look for it: the panel
+    // is REBUILT. The popout destroys its content when it closes -- that is how
+    // a popout is kept from carrying stale state between openings -- so the
+    // dashboard that appears on the other monitor is a new one, and anything it
+    // was holding that is not derived from a singleton is gone. In practice
+    // that is the calendar's month, which already resets on every close for the
+    // same reason; the clock, the media block and the readings all come off
+    // Track, Volume, Brightness and Compositor and rebuild identical. The
+    // launcher looks like it pays the same price for the same reason -- its
+    // query is a property on a window Variants rebuilds -- but that is read off
+    // the code rather than watched happening, so take it as the argument it is
+    // and not as a measurement.
+    function syncDashboard(): void {
+        // The Component at the bottom of this file may not exist yet if this
+        // runs while the object is still being built. Completion calls it
+        // again, so there is nothing to lose by waiting.
+        if (!dashboardComponent)
+            return;
+
+        if (root.showsDashboard)
+            root.popout.openAt(root.anchorX(), dashboardComponent);
+        else if (root.popout.contentComponent === dashboardComponent)
             root.popout.close();
-        }
+    }
 
-        function onDashboardRequested(): void {
-            root.popout.requestToggleAt(root.anchorX(), dashboardComponent);
-        }
+    onShowsDashboardChanged: root.syncDashboard()
 
-        // An onDashboardOpenRequested was here, opening rather than toggling
-        // for the one caller that sent you to a named tab. That caller was the
-        // do-not-disturb badge and the tab was Notifications, which is now a
-        // widget of its own at the right end of the bar. There are no tabs at
-        // all now -- the dashboard is one view -- so there is nothing left to
-        // be sent to. See the header of modules/island/Dashboard.qml.
+    // A bar built while the dashboard is already up on it -- a monitor plugged
+    // back in, the bar switched on for a screen in the settings window -- gets
+    // it drawn without waiting for the string to change again.
+    Component.onCompleted: root.syncDashboard()
+
+    // THE OTHER DIRECTION, and it is what keeps the string from outliving the
+    // panel. The popout can stop showing the dashboard without anybody asking
+    // the singleton: a click outside dismisses it through FocusGrab, a click on
+    // the bar's own empty space closes it, the tray or the bell takes the
+    // window over with something else. Any of those leaves this bar showing
+    // something that is not the dashboard while the string still says it is
+    // here, and the next focus change would move a panel that is not up.
+    //
+    // Guarded on showsDashboard so it is the bar that HAS the panel doing the
+    // clearing. On a move the string changes first, so the bar losing it is
+    // already not the one showing it by the time its popout closes -- which is
+    // exactly the difference between a move and a dismissal.
+    Connections {
+        target: root.popout
+
+        function onContentComponentChanged(): void {
+            const mine = root.popout.contentComponent === dashboardComponent;
+
+            if (root.showsDashboard && !mine)
+                IslandState.dashboardScreen = "";
+        }
     }
 
     // A ClippingRectangle and not a Rectangle, because the cover art is drawn
