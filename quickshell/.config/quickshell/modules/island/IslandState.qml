@@ -234,6 +234,14 @@ Singleton {
     // so a selection tool launched from a button inside it appears and then
     // cannot be used. Whatever starts a screen selection has to get the panel
     // out of the way first.
+    //
+    // ITS OTHER CALLER IS modules/Surfaces.qml, which calls it for every surface
+    // the shell raises over the bar. Clearing the string there rather than
+    // closing the popout is what stops the follow-the-focus rule above from
+    // rebuilding this panel on each monitor the pointer crosses onto, behind
+    // something the user believes closed everything -- see the mirror of this
+    // note over NotificationState.closeHistory(), which is the same door on the
+    // same kind of panel and must stay the same shape.
     function closeDashboard(): void {
         root.dashboardScreen = "";
     }

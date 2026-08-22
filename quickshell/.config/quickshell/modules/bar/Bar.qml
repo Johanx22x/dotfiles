@@ -23,10 +23,9 @@ import Quickshell.Wayland
 import QtQuick
 import "root:/"
 import "root:/components"
+import "root:/modules"
 import "root:/modules/island"
-import "root:/modules/launcher"
 import "root:/modules/notifications"
-import "root:/modules/settings"
 
 PanelWindow {
     id: bar
@@ -105,73 +104,54 @@ PanelWindow {
         modelData: bar.modelData
     }
 
-    // The island's dashboard and the launcher hang from the same place and
-    // cannot both be up. This file is the wiring for that, and it is here
-    // because it is the only one that can see both the popout and the
-    // singleton: a popout is per bar and a singleton is not.
+    // THIS FILE REPORTS AND OBEYS; IT DOES NOT DECIDE. Which of the shell's own
+    // surfaces may be on screen together is one rule in one file,
+    // modules/Surfaces.qml, and the membership is read there. What is left here
+    // is the two lines a singleton cannot write itself, because a popout is per
+    // bar and a singleton is not.
     //
-    // WHAT THIS PUBLISHES IS THE POPOUT AND NOT THE DASHBOARD. The one popout
-    // a bar owns shows the dashboard, the tray menus, the notification history
-    // and the peripheral batteries, and `popoutOpen` says only that one of
-    // them is up. It was called `dashboardOpen`, which is exactly what led
-    // three other files to assign it false believing that closed the panel --
-    // see the note over it in LauncherState.
+    // IT USED TO BE THE RULE, in part. This file carried a clause for the
+    // launcher and another for the settings window, each naming one surface and
+    // closing the popout for it, while the cheatsheet and the carousel had
+    // grown their own versions elsewhere and the power menu had none at all. A
+    // per-bar file is the wrong place to keep a fact about the whole shell --
+    // it is the shape the `dashboardOpen` bug had -- and it is also how the
+    // list came to be short by a surface.
+    //
+    // WHAT THIS PUBLISHES IS THE POPOUT AND NOT THE DASHBOARD. The one popout a
+    // bar owns shows the dashboard, the tray menus, the notification history
+    // and the peripheral batteries, and `popoutOpen` says only that one of them
+    // is up. It was called `dashboardOpen`, which is exactly what led three
+    // other files to assign it false believing that closed the panel -- see the
+    // note over it in Surfaces.
     //
     // AN ASSIGNMENT AND NOT A Binding, and the reason is that this file is
-    // INSTANTIATED ONCE PER BAR. A `Binding { target: LauncherState; property:
+    // INSTANTIATED ONCE PER BAR. A `Binding { target: Surfaces; property:
     // "popoutOpen" }` written here is one binding per bar onto one property of
     // a singleton, and a property holds one binding: whichever bar was built
     // last owned it and the rest were writing nowhere. So the dashboard opening
     // on the wrong bar closed no launcher at all -- a per-screen file quietly
-    // fighting over a global, which is the same shape as the bug above it.
+    // fighting over a global.
     //
-    // Nothing reads the flag as a level -- LauncherState, CheatsheetState and
-    // WallpaperState each act only where it turns TRUE -- so a bar reporting
-    // false while another bar still has a popout up costs nothing, and the next
-    // opening raises the edge again.
+    // Nothing reads the flag as a level, only where it turns TRUE, so a bar
+    // reporting false while another bar still has a popout up costs nothing and
+    // the next opening raises the edge again.
     Connections {
         target: barPopout
 
         function onIsOpenChanged(): void {
-            LauncherState.popoutOpen = barPopout.isOpen;
+            Surfaces.popoutOpen = barPopout.isOpen;
         }
     }
 
+    // The other half: the broadcast that puts this bar's popout away, whatever
+    // it is showing and whichever surface asked for the screen. The rule decides
+    // WHEN; this knows only how to shut its own window.
     Connections {
-        target: LauncherState
+        target: Surfaces
 
-        function onIsOpenChanged(): void {
-            if (LauncherState.isOpen)
-                barPopout.close();
-        }
-    }
-
-    // AND THE SETTINGS WINDOW, WHICH IS NOT TIDINESS BUT CLICKS.
-    //
-    // On a compositor with no focus-grab protocol -- niri, and anything that
-    // is not Hyprland -- an open popout is backed by a transparent
-    // full-screen surface on the Top layer that swallows the first click
-    // landing anywhere outside the panel. Top is ABOVE every ordinary
-    // window, so while that catcher is up the settings window is a window
-    // nobody can click: the first press on it is spent putting the popout
-    // away, and the control under the pointer never hears about it at all.
-    //
-    // Nothing used to close the popout on the way there. The gear that opens
-    // the window lives on the bar, and the bar is exactly the strip the
-    // catcher leaves out of its input region so that moving between panels
-    // costs one click -- so the press reached the gear, the window opened,
-    // and the catcher stayed up over it. The keybind never touches the bar
-    // at all and left it up the same way.
-    //
-    // Closed from here and not from the button: SUPER + C goes through this
-    // singleton and through no widget, and this is the file that can see
-    // both it and the popout -- the same argument as the launcher above.
-    Connections {
-        target: SettingsState
-
-        function onIsOpenChanged(): void {
-            if (SettingsState.isOpen)
-                barPopout.close();
+        function onDismissPopouts(): void {
+            barPopout.close();
         }
     }
 

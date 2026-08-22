@@ -217,15 +217,17 @@ Singleton {
     // directly would work today and would be the wrong example to leave lying
     // around.
     //
-    // WHO NEEDS IT: the fullscreen sheets. The cheatsheet and the wallpaper
-    // carousel cover the screen and take an exclusive keyboard grab, so a list
-    // left up behind one is invisible, unreachable, and still there when the
-    // sheet goes away. And worse than merely stale -- `historyScreen` stays
-    // set, so the rule below retargets it every time the focus settles
-    // somewhere else and the list is torn down and rebuilt on each monitor the
-    // pointer crosses onto, behind a sheet the user believes closed
+    // WHO NEEDS IT: modules/Surfaces.qml, which is the only caller and calls it
+    // for every surface the shell raises over the bar -- the launcher, the power
+    // menu, the cheatsheet, the carousel and the settings window. A list left up
+    // behind any of those is invisible, unreachable, and still there when the
+    // thing in front of it goes away. And worse than merely stale --
+    // `historyScreen` stays set, so the rule below retargets it every time the
+    // focus settles somewhere else and the list is torn down and rebuilt on each
+    // monitor the pointer crosses onto, behind a sheet the user believes closed
     // everything. That is exactly what the dashboard was doing before
-    // IslandState.closeDashboard() was wired into those two.
+    // IslandState.closeDashboard() was wired into the sheets, and what the
+    // history was doing for as long as nothing reached it at all.
     //
     // NOT toggleHistory() WITH THE PANEL UP, which would look equivalent from
     // the outside. A toggle answers the key that opened the list; this is a

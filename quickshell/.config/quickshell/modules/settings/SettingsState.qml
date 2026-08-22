@@ -7,9 +7,19 @@
 //
 // NO MUTUAL EXCLUSION, unlike the cheatsheet and the power menu. Those are
 // layer surfaces that take an exclusive keyboard grab, so two of them up at
-// once is two surfaces fighting over the keyboard. This is an ordinary
-// window: the compositor stacks it, focuses it and closes it like any other,
-// and it has no more claim on the rest of the shell than a terminal does.
+// once is two surfaces fighting over the keyboard. This is an ordinary window:
+// the compositor stacks it, focuses it and closes it like any other, and it has
+// no more claim on the rest of the shell than a terminal does. It is therefore
+// NOT one of the five surfaces modules/Surfaces.qml keeps to one at a time, and
+// nothing in this shell ever closes it -- a window that vanished because a key
+// was pressed somewhere else is a window that loses work.
+//
+// ONE THING STILL WATCHES THIS FLAG, and it is the pointer rather than the
+// keyboard: opening this window dismisses whatever the bars have hanging off
+// them, because an open popout is backed by a full-screen click catcher on the
+// Top layer and Top is above every ordinary window. The whole of that argument
+// is the last clause in Surfaces, which is also where it can be seen not to be
+// the same rule as the four grabbing surfaces above it.
 //
 // DO NOT name an IPC function `show`: `qs ipc show` is a CLI subcommand and
 // it swallows the call, printing the handler listing and exiting 0. See
