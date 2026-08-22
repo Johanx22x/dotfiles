@@ -554,13 +554,20 @@ Item {
                     property bool maxResFailed: false
                     onYoutubeIdChanged: media.maxResFailed = false
 
-                    // WHAT THE PLAYER IS OFFERING RIGHT NOW, which is not the
-                    // same thing as what the card should be drawing. See
-                    // `held` below for why the two had to be separated.
+                    // THE COVER THIS PLAYER IS KNOWN TO HAVE, which is not
+                    // the same thing as the one it is admitting to right now.
+                    // Track remembers the last art URL each player published
+                    // and drops it only on a genuine track change, so this
+                    // survives the retraction described there -- and, because
+                    // it lives in a singleton rather than in this card, it
+                    // survives the panel being closed and rebuilt too.
+                    readonly property string remembered: Track.covers[mediaCard.player?.dbusName ?? ""] ?? ""
+
+                    // WHAT IS WORTH LOADING RIGHT NOW. See `held` below for
+                    // why this and what is actually drawn had to be separated.
                     readonly property string offered: {
-                        const direct = mediaCard.player?.trackArtUrl ?? "";
-                        if (direct)
-                            return direct;
+                        if (media.remembered)
+                            return media.remembered;
                         if (!media.youtubeId)
                             return "";
                         const size = media.maxResFailed ? "mqdefault" : "maxresdefault";
@@ -577,10 +584,10 @@ Item {
                     // ---- The cover that is actually on screen ----
                     //
                     // THE COVER USED TO APPEAR AS A TRACK STARTED AND VANISH A
-                    // FRAME LATER, and both halves of why were measured on the
-                    // bus rather than guessed at. Watching every
-                    // PropertiesChanged on org.mpris.MediaPlayer2.Player while
-                    // a track started in Zen:
+                    // FRAME LATER, and why was measured on the bus rather than
+                    // guessed at. Watching every PropertiesChanged on
+                    // org.mpris.MediaPlayer2.Player while a track started in
+                    // Zen:
                     //
                     //   19:38:53.286  Metadata, no mpris:artUrl    (new track)
                     //   19:38:53.730  Metadata WITH mpris:artUrl    -> art
@@ -597,57 +604,59 @@ Item {
                     // a card that draws the stand-in whenever the image is not
                     // Ready dropped the cover on the floor.
                     //
-                    // AND THE FILE DOES NOT SURVIVE EITHER. The two URLs above
-                    // are ~/.zen/firefox-mpris/3304_257.png and _258.png --
-                    // numbered temporaries, and that directory holds exactly
-                    // one of them: 257 was already unlinked by the time 258
-                    // existed. So "remember the URL and put it back later" is
-                    // not a fix; the picture has to be held, not the path.
+                    // FIXING ONLY THAT WAS NOT ENOUGH, and the reason is the
+                    // last line of the trace rather than the fast pair in the
+                    // middle. The retraction is not a blip the track recovers
+                    // from -- it is where the track SETTLES. A player left
+                    // paused reports no artwork at all, indefinitely, while
+                    // the file sits on disk. So a card that starts from
+                    // nothing and waits to be offered a cover is never offered
+                    // one, and the first attempt at this kept its memory in
+                    // this item -- which `Loader { active: root.isOpen }`
+                    // DESTROYS on every close. Reopening the panel started
+                    // from nothing every time. The memory therefore had to
+                    // move somewhere that outlives the panel, and it has: see
+                    // Track.qml, which is armed from shell.qml so that it is
+                    // watching before anyone opens anything.
                     //
-                    // WHICH IS WHAT THIS DOES. `offer` below loads whatever is
-                    // being offered and is never drawn; only when it actually
-                    // reaches Ready does its source become `held`, which is
-                    // what the two visible Images are bound to. An offer of
-                    // nothing is therefore ignored -- `held` does not change,
-                    // their source does not change, so Qt neither reloads nor
-                    // releases anything and the cover stays put.
+                    // WHAT IS LEFT HERE is the part that is genuinely about
+                    // drawing. `offer` below loads whatever is worth loading
+                    // and is never drawn; only when it actually reaches Ready
+                    // does its source become `held`, which is what the two
+                    // visible Images are bound to. So the visible cover is
+                    // never replaced by a load in progress, and never by a
+                    // load that failed -- if Zen has already unlinked the file
+                    // it named, the old picture simply stays up.
                     //
                     // The Images share one decode: same URL and the same
                     // sourceSize, so the rest are the pixmap cache answering.
-                    // That sharing is also what makes the deleted file safe --
-                    // the visible Images take their reference while the loader
-                    // still holds it, so the picture outlives the file it came
-                    // from and is never read off disk twice.
                     //
-                    // end-4's own card does NOT survive this. It copies every
-                    // cover into a cache directory with curl and shows the
-                    // copy, and the copy's path is derived from the art URL --
-                    // so the same retraction empties the path and blanks their
-                    // card too. This is the one piece of behaviour here that
-                    // is ours rather than theirs.
+                    // end-4's own card does NOT survive any of this. It copies
+                    // every cover into a cache directory with curl and shows
+                    // the copy, and the copy's path is derived from the art
+                    // URL -- so the same retraction empties the path and blanks
+                    // their card too, and nothing in their build remembers a
+                    // cover for longer than the player admits to it. This is
+                    // the one piece of behaviour here that is deliberately
+                    // ours rather than theirs.
                     property string held: ""
 
-                    // WHAT MUST CLEAR IT: the track changing, and nothing else.
-                    // Holding a cover across a track change would be worse than
-                    // holding none, because it would confidently show the wrong
-                    // album -- the failure this is fixing is only ever "the
-                    // same track, source retracted".
+                    // WHAT CLEARS IT: the remembered cover going away, which
+                    // Track does only on a genuine track change. Holding a
+                    // cover across a track change would be worse than holding
+                    // none, because it would confidently show the wrong album
+                    // -- the failure being fixed is only ever "the same track,
+                    // source retracted".
                     //
-                    // Built from what the track IS rather than from
-                    // mpris:trackid, which this player publishes as one
-                    // constant string for every track it plays. The player's
-                    // own bus name is in there so that a card handed a
-                    // DIFFERENT player starts from nothing: a sender that
-                    // publishes no art at all must reach the stand-in, not
-                    // inherit whatever the last one was showing.
-                    readonly property string trackKey: [
-                        mediaCard.player?.dbusName ?? "",
-                        mediaCard.player?.trackTitle ?? "",
-                        mediaCard.player?.trackAlbum ?? "",
-                        mediaCard.player?.trackArtist ?? ""
-                    ].join(" - ")
-
-                    onTrackKeyChanged: media.held = ""
+                    // Note this is keyed off the REMEMBERED cover and not off
+                    // the track's own fields. Deciding "is this a new track"
+                    // twice, in two files, with two slightly different rules,
+                    // is how the two end up disagreeing; Track decides, and
+                    // this follows.
+                    onRememberedChanged: {
+                        if (media.remembered === "")
+                            media.held = "";
+                    }
 
                     // THE ONE THAT LOADS, AND IT IS NEVER DRAWN.
                     //
