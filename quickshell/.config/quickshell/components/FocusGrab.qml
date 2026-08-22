@@ -45,20 +45,48 @@ Item {
         // Nothing is created while the popout is closed: a catcher that existed
         // all the time would eat every click on the desktop.
         active: root.active
-        source: Compositor.can("focusGrab")
-            ? "HyprlandGrab.qml"
-            : "ClickCatcher.qml"
+
+        // SOURCE AND ITS INITIAL VALUES TOGETHER, WHICH IS THE WHOLE POINT.
+        //
+        // ClickCatcher declares `targetScreen` REQUIRED -- a window with no
+        // screen is nothing anyone can place. A required property has to be
+        // supplied at construction, and a `source` binding constructs with
+        // nothing: the object then fails to build, `onLoaded` never runs, and
+        // the assignment meant to fill the property never happens either.
+        // Which is what used to happen on every compositor without a grab of
+        // its own: the catcher never existed, so a popout could not be
+        // dismissed by clicking outside it at all -- the only sign was one
+        // "Required property targetScreen was not initialized" line in the log.
+        //
+        // setSource() takes the values with the url, so the catcher is built
+        // with a screen already on it. Done as the grab turns on rather than at
+        // startup, because that is when the screen is known and when the
+        // compositor has been detected.
+        onActiveChanged: {
+            if (!active) {
+                // Forgotten on the way out, or the next activation builds the
+                // remembered source on its own -- before this handler runs --
+                // and setSource then tears that item down to put an identical
+                // one in its place. One layer surface created and destroyed for
+                // nothing, every single time the popout opens.
+                source = "";
+                return;
+            }
+
+            // The two implementations do not share a shape -- one is a grab,
+            // the other is a window -- so each is handed what it needs.
+            if (Compositor.can("focusGrab"))
+                setSource("HyprlandGrab.qml", { grabWindows: [root.window] });
+            else
+                setSource("ClickCatcher.qml", { targetScreen: root.targetScreen });
+        }
 
         onLoaded: {
-            // The two implementations do not share a shape -- one is a grab,
-            // the other is a window -- so the wiring happens here rather than
-            // through a common base neither of them would fit.
-            if (Compositor.can("focusGrab")) {
-                item.grabWindows = [root.window];
+            // Only the Hyprland side has anything left to wire: its grab
+            // follows `active` for as long as it lives, where the catcher is
+            // simply created and destroyed with it.
+            if (Compositor.can("focusGrab"))
                 item.grabActive = Qt.binding(() => root.active);
-            } else {
-                item.targetScreen = root.targetScreen;
-            }
             item.dismissed.connect(root.dismissed);
         }
     }
