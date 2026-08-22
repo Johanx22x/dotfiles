@@ -202,17 +202,12 @@ Singleton {
         return root.terminalUnits.indexOf(id) >= 0;
     }
 
-    // THE ONE UNIT NOTHING OFFERS TO APPLY. `etc` stopped writing anything: it
-    // diffs system/ against /etc, reports what differs and prints the command,
-    // because half of those files describe one machine and pacman owns the
-    // other half. Its state is always `na`, so it never counts as outstanding
-    // either -- this list is here so the page can say why, rather than leaving
-    // a row with no action looking broken.
-    readonly property var reportOnlyUnits: ["etc"]
-
-    function isReportOnly(id: string): bool {
-        return root.reportOnlyUnits.indexOf(id) >= 0;
-    }
+    // THERE IS NO REPORT-ONLY UNIT ANY MORE. `etc` was one -- it diffed system/
+    // against /etc and never wrote -- so this file carried a list of ids the
+    // page had to explain instead of offer. That unit is gone: system/ is
+    // documentation applied by hand, and every unit the installer reports is
+    // now a unit something can actually apply. If one ever needs the exception
+    // again, it belongs here and not in a page.
 
     // What this shell may run itself: ticked, not already in place, and with
     // no password anywhere in it.
@@ -220,7 +215,7 @@ Singleton {
         const out = [];
 
         for (const unit of (root.outstandingUnits ?? [])) {
-            if (root.needsTerminal(unit.id) || root.isReportOnly(unit.id))
+            if (root.needsTerminal(unit.id))
                 continue;
             if (!root.unitWanted(unit.id))
                 continue;

@@ -832,7 +832,7 @@ mode_setup() {
   ui_ok "== Ready =="
   cat <<'END'
 
-Two things are still yours, and both are decisions rather than chores:
+One thing is still yours, and it is a decision rather than a chore:
 
   The monitor layout, if the table above listed a screen as not recorded.
   Which screen is the main one and where the others sit around it cannot be
@@ -843,12 +843,10 @@ Two things are still yours, and both are decisions rather than chores:
   or do it from the settings window, SUPER + C, which applies a change live and
   puts it back unless you confirm it.
 
-  /etc, which nothing here writes. Half of system/ describes THIS machine --
-  fstab's UUIDs, the GRUB theme, where the greeter puts these screens -- so
-  copying it onto another one reproduces nothing. This shows every difference
-  with the exact command for it, and runs none of them:
-
-      ./install.sh apply etc
+Outside $HOME, nothing here is automated at all: no unit reads /etc, reports on
+it or writes to it. system/ is a tracked record of what this machine needs out
+there, kept as documentation and applied by hand -- read system/README.md when
+you need it.
 
 Everything else has a unit. To see where this machine stands at any moment:
 
