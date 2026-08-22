@@ -478,16 +478,168 @@ Singleton {
     // typed: `./install.sh apply packages`. Somebody watching it should be
     // able to run it again without translating anything.
     //
-    // execDetached and not a Process: the terminal must outlive this shell. A
-    // `git pull` that changes a .qml file reloads Quickshell, and a
-    // half-finished pacman transaction dying with it is not a trade anybody
-    // would take.
+    // execDetached and not a Process: the terminal must outlive this shell.
+    // Anything that rewrites the .qml files underneath a running Quickshell
+    // leaves it in a state it cannot be driven out of -- see takeUpdate below
+    // for what that state actually is -- and a half-finished pacman
+    // transaction dying with the shell is not a trade anybody would take.
     function handOff(ids: var): void {
         if (!root.repoKnown || ids.length === 0)
             return;
 
         Quickshell.execDetached(["kitty", "--hold", "--directory", root.repoDir,
                                  "-e", "./install.sh", "apply"].concat(ids));
+    }
+
+    // ---------------- How far the checkout is from origin ----------------
+    //
+    // TWO DIFFERENT QUESTIONS SHARE THE WORD "UPDATE", and the page was only
+    // answering one of them. `check` asks "does this machine match the
+    // checkout on disk" -- it never runs `git fetch` and never looks at
+    // origin. So merging a pull request and then pressing Check again is a
+    // press that truthfully reports no change, because nothing on this machine
+    // did change: the checkout is what moved, and only away from origin.
+    //
+    // This measures the other distance and the page says it out loud, so that
+    // "up to date" on that page can be read without having to know which of
+    // the two it meant.
+
+    // "" until something has been measured, then one of: synced, behind,
+    // ahead, diverged, detached, no-upstream, unreachable.
+    //
+    // AHEAD AND DIVERGED ARE REAL STATES HERE, not theoretical ones. This
+    // repository is worked on from several sessions at once and lands its work
+    // through pull requests, so a checkout sitting on local commits that
+    // origin has not seen is an ordinary afternoon.
+    property string originState: ""
+    property int behindOrigin: 0
+    property int aheadOfOrigin: 0
+    property double originCheckedAt: 0
+    property bool measuring: false
+
+    // THE PROBE IS A SHELL SCRIPT AND NOT FOUR Process OBJECTS, because every
+    // branch in it is a git exit code and shell is where those are read
+    // without ceremony. It prints exactly one line, which is the whole of this
+    // file's parsing problem.
+    //
+    // `git fetch` IS SAFE TO RUN FROM A DESKTOP SHELL and that is why this
+    // exists at all: it updates remote-tracking refs inside .git and touches
+    // no file in the working tree, so it cannot disturb the running session
+    // the way a pull would. It is still network I/O, so it is wrapped in
+    // `timeout` and told never to ask for credentials -- an unreachable origin
+    // has to come back as a word on the page within twenty seconds, not as a
+    // page that quietly stops answering.
+    readonly property string originProbeScript: `
+        git symbolic-ref -q HEAD >/dev/null 2>&1 || { echo detached; exit 0; }
+        git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1 || { echo no-upstream; exit 0; }
+        GIT_TERMINAL_PROMPT=0 timeout 20 git fetch --quiet >/dev/null 2>&1 || { echo unreachable; exit 0; }
+        git rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null || echo unreachable
+    `
+
+    function measureOrigin(): void {
+        if (root.measuring || !root.repoKnown)
+            return;
+
+        root.measuring = true;
+        originProbe.running = true;
+    }
+
+    // NOT ON A TIMER, for the same reason the check is not, and with a longer
+    // memory than it. A poll would spend somebody's network on a question
+    // whose answer changes when THEY merge something, which is a moment they
+    // are present for; this rides along with the page coming on screen and
+    // with the button, and five minutes is long enough that clicking down the
+    // rail past this page does not fetch once per glance.
+    function measureOriginIfStale(): void {
+        if (Date.now() - root.originCheckedAt < 300000)
+            return;
+
+        root.measureOrigin();
+    }
+
+    // ---------------- Taking what origin has ----------------
+    //
+    // IT CANNOT RUN IN THIS PROCESS, and this is the one hand-off that is not
+    // about passwords. Git takes an update by writing new files and renaming
+    // them over the old ones, which replaces inodes; Quickshell's file watcher
+    // is holding the inodes that were there before, so after a pull it is
+    // watching files that no longer exist. The process does not die and
+    // nothing is logged -- it goes on running the code it already had, and the
+    // log never says "Reloading configuration" again. A crash would be kinder,
+    // because a crash is visible. The button therefore hands the whole thing
+    // to a terminal that is not this process, and puts the shell back
+    // afterwards.
+    //
+    // `./install.sh update --pull` AND NOT `git pull && ./install.sh update`.
+    // The flag is already there, it is already --ff-only, and it does one
+    // thing a hand-written chain cannot: after a successful pull it re-execs
+    // itself, so a release that changed a unit file is applied by the new unit
+    // file rather than by the copy that was sourced before the pull. Writing
+    // the chain out by hand would silently lose that.
+    //
+    // THIS DOES NOT MAKE `update` PULL ON ITS OWN. --pull is an explicit
+    // opt-in, which is exactly the shape install.sh argues for in its own
+    // comment above mode_update: the pull stays visible, deliberate, and in a
+    // terminal where a person can see what arrived. Nothing here changes what
+    // a bare `./install.sh update` does.
+    //
+    // WHEN --ff-only REFUSES, the run stops and says so -- "the pull did not
+    // fast-forward; nothing applied" -- and --hold keeps that on screen. That
+    // is the whole handling it needs: the terminal is open, the reason is in
+    // it, and a shell cannot resolve a divergence on somebody's behalf.
+
+    // HOW LONG TO WAIT BEFORE TELLING ANYTHING TO RE-READ THE TREE. Reloading
+    // the instant the last git object lands has repeatedly produced errors
+    // from both the compositor and the shell: they are pointed at a tree that
+    // is still settling -- files renamed into place, stow relinking on top of
+    // them -- and they read it half-written.
+    //
+    // THIS IS NOT SUPERSTITION AND IT SHOULD NOT BE DELETED as a stray sleep.
+    // It is one named number precisely so it can be raised or lowered from
+    // measurement instead of being rewritten.
+    readonly property int settleSeconds: 3
+
+    // WHAT HAS TO BE TOLD, AND WHAT DOES NOT. Hyprland needs `hyprctl reload`;
+    // niri live-reloads its config on save and has no equivalent to ask for --
+    // stated in niri/.config/niri/config.kdl and again by symlinks_post, which
+    // prints these same lines for a person to run by hand. Quickshell has to
+    // be restarted outright, because the watcher problem above is the reason
+    // this button exists.
+    //
+    // `compositor is hyprland` is this repository's own probe and it reads the
+    // compositor's socket rather than XDG_CURRENT_DESKTOP, so it is right
+    // inside a nested session too. Its own header prefers asking what a
+    // compositor CAN DO over which one it is; there is no capability for "must
+    // be told to reload" and inventing one for a single caller would be a
+    // wider change than this.
+    //
+    // SEQUENCED WITH NEWLINES AND NOT `&&`, deliberately. The dangerous state
+    // is files having moved while a shell holds the old inodes, and that
+    // happens whether or not the units that ran afterwards all succeeded -- so
+    // a failed unit must not be what leaves the session running stale code
+    // with no sign of it. The cost of the other case is a bar that blinks once
+    // for nothing, which is a fair price at a button somebody pressed on
+    // purpose.
+    //
+    // symlinks_post says out loud that it restarts none of this, and that
+    // stays true: restarting the session someone is sitting in does not belong
+    // to a step whose job was to make symlinks. It does belong here, where the
+    // whole of what was pressed was "take the update".
+    readonly property string takeUpdateScript: `
+        ./install.sh update --pull
+        sleep ${root.settleSeconds}
+        compositor is hyprland && hyprctl reload
+        qs kill
+        sleep 1
+        qs -d -p ~/.config/quickshell/shell.qml
+    `
+
+    function takeUpdate(): void {
+        if (!root.repoKnown)
+            return;
+
+        Quickshell.execDetached(["kitty", "--hold", "--directory", root.repoDir,
+                                 "-e", "sh", "-c", root.takeUpdateScript]);
     }
 
     // ---------------- Opening the page ----------------
@@ -599,6 +751,56 @@ Singleton {
             root.checkError = "";
             root.units = parsed;
             root.checkedAt = Date.now();
+        }
+    }
+
+    Process {
+        id: originProbe
+
+        workingDirectory: root.repoDir
+        command: ["sh", "-c", root.originProbeScript]
+
+        stdout: StdioCollector {
+            id: originOut
+        }
+
+        // The script swallows every git failure into a word of its own, so
+        // there is no exit code worth reading here: whatever happened, the
+        // answer is on stdout and it is one line.
+        onExited: {
+            root.measuring = false;
+            root.originCheckedAt = Date.now();
+
+            const out = (originOut.text || "").trim();
+
+            if (out === "detached" || out === "no-upstream" || out === "unreachable") {
+                root.behindOrigin = 0;
+                root.aheadOfOrigin = 0;
+                root.originState = out;
+                return;
+            }
+
+            // `rev-list --left-right --count @{upstream}...HEAD` prints the
+            // two counts in that order: what upstream has and we do not, then
+            // what we have and it does not. Left is behind, right is ahead --
+            // and getting them the wrong way round would report a machine that
+            // needs a pull as one that needs a push, so it is worth naming.
+            const parts = out.split(/\s+/);
+            const behind = parseInt(parts[0], 10);
+            const ahead = parseInt(parts[1], 10);
+
+            if (isNaN(behind) || isNaN(ahead)) {
+                console.warn("InstallerState: could not read the distance to origin --", out);
+                root.originState = "unreachable";
+                return;
+            }
+
+            root.behindOrigin = behind;
+            root.aheadOfOrigin = ahead;
+            root.originState = behind > 0 && ahead > 0 ? "diverged"
+                : behind > 0 ? "behind"
+                : ahead > 0 ? "ahead"
+                : "synced";
         }
     }
 
