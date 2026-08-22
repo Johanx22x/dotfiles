@@ -144,8 +144,11 @@ not pull by itself** — this repo is worked on from several sessions at once, a
 a `git pull` hidden inside a command that also installs things is a surprise at
 the wrong moment. `--pull` is there for an unattended run and is `--ff-only`.
 
-Nothing running picks the changes up on its own, except niri, which polls its
-config and re-reads it unaided:
+Only niri picks the changes up reliably on its own — it holds no inotify watch
+and polls its config every 500 ms, so nothing a pull or a relink does to the
+file gets past it. Hyprland usually manages too, but stops forever and without
+a word if a link is ever unlinked with a gap before it comes back, and the
+shell has to be asked:
 
 ```sh
 hyprctl reload && hyprctl configerrors    # Hyprland, and only if hypr/ moved
@@ -164,8 +167,9 @@ and deleting it again is heard at the exact moment every file watch is dead.
 Appending a newline to a `.qml` file does the same thing *only* on a file the
 pull did not touch, and nothing at all, silently, on one it did.
 
-`hyprctl reload` always answers `ok` and exits 0, so `hyprctl configerrors` is
-the only thing that will say whether the config it just read was accepted.
+`hyprctl reload` always answers `ok` and exits 0 — and so does `hyprctl
+configerrors`, on a syntax error, on an unknown key and on a clean config
+alike. Neither status means anything; the errors are the output.
 
 `~/.config/nvim` is a separate repository and updates on its own.
 
@@ -228,7 +232,7 @@ so next to the line that depends on it.
 | | Hyprland | niri |
 |---|---|---|
 | Model | dynamic tiling (dwindle) | scrollable tiling (columns) |
-| Config | `hypr/` — Lua, must be told: `hyprctl reload` | `niri/` — KDL, polls and re-reads itself |
+| Config | `hypr/` — Lua, inotify + `hyprctl reload` | `niri/` — KDL, polls every 500 ms |
 | Packages | `packages/compositor/hyprland.txt` | `packages/compositor/niri.txt` |
 | Session | `uwsm` | `niri-session` |
 | Portal | `xdg-desktop-portal-hyprland` | `xdg-desktop-portal-gnome` |
