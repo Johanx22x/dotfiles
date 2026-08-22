@@ -604,15 +604,8 @@ wallpaper without rebuilding anything.
 
 The shell's media card and the drawing behind it come from
 [end-4/dots-hyprland](https://github.com/end-4/dots-hyprland), which is where
-this configuration learned most of what it knows about Quickshell. Every file
-that carries something of theirs says so at the point it matters, and these are
-those files: `ColorUtils.qml` and `AdaptedMaterialScheme.qml` are ports;
-`components/WavySlider.qml`, `WaveVisualizer.qml` and `WavyLine.qml` are the
-seek bar and the sine drawn behind it; `modules/island/Island.qml`,
-`Dashboard.qml` and `Spectrum.qml` are that media card at bar size and the cava
-bars beside it, down to the ratios they were sized by; and `cava-wave.conf` is
-their cava configuration with the bar count changed. `Config.qml` argues with
-them rather than borrowing, and is named here for the same reason: the in-code
-notes are where the detail is, and this list is how a reader finds them.
+this configuration learned most of what it knows about Quickshell. It is
+GPL-3.0, which is why this repository is — see `LICENSE`.
 
-dots-hyprland is GPL-3.0.
+Every file carrying something of theirs says so at the point it matters, which
+is where the detail belongs; `grep -rl dots-hyprland quickshell/` finds them.
