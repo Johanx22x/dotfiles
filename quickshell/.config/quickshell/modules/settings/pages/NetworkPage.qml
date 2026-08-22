@@ -1,11 +1,13 @@
 // The network page: the radio switch, and everything in range.
 //
-// THIS IS THE ONE PLACE IN THE SHELL THAT TAKES A PASSWORD. The island's
-// WifiControl deliberately refuses to -- it shows what is in range and hands
-// anything it does not already know to nm-connection-editor, because a form
-// does not belong in a panel that hangs off the bar. A settings window is
-// where that job lives, so the inline field below is the payoff for that
-// refusal rather than a contradiction of it.
+// THIS IS THE ONE PLACE IN THE SHELL THAT TAKES A PASSWORD, and the rule
+// behind that is that a form does not belong in a panel hanging off the bar.
+// The island carried a Wi-Fi card once and it refused the job on exactly those
+// grounds: it showed what was in range and handed anything it did not already
+// know to nm-connection-editor rather than grow a field. This page is where
+// that refusal sent the work, so the inline field below is the payoff for it
+// rather than a contradiction of it. The card itself is gone -- this page had
+// replaced it -- and the rule stands here on its own.
 //
 // Everything comes off Quickshell's NetworkManager backend: no nmcli is
 // spawned, nothing is polled, and the list moves on NetworkManager's own
@@ -16,8 +18,9 @@
 // WHAT IT STILL WILL NOT DO: enterprise (EAP) and hidden networks. Both need
 // a full connection profile, and NMSettings is not creatable from QML, so
 // there is no honest way to build one here. Those rows say what they are and
-// open nm-connection-editor, which is the same answer WifiControl gives and
-// for the same reason.
+// OPEN nm-connection-editor rather than merely naming it: a limit is only
+// honest if the way round it is one click away. BluetoothPage answers its own
+// missing third the same way, with bluetoothctl.
 
 import Quickshell
 import Quickshell.Networking
@@ -608,9 +611,9 @@ SettingsPage {
                                         // A profile, not a password. See the
                                         // header: NMSettings cannot be built
                                         // from QML, so this is handed to the
-                                        // tool that can -- the same thing
-                                        // WifiControl does with everything it
-                                        // cannot handle.
+                                        // tool that can, rather than faked
+                                        // with a field that could not have
+                                        // finished the job.
                                         if (entry.enterprise) {
                                             Quickshell.execDetached(["nm-connection-editor"]);
                                             return;
