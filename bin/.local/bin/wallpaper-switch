@@ -130,7 +130,7 @@ FRAME_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-frames"
 THUMB_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-thumbs"
 THUMB_WIDTH="${WALLPAPER_THUMB_WIDTH:-960}"
 
-# A SMALL, SILENT COPY OF EACH VIDEO, for the carousel to play.
+# A NUMBERED RUN OF JPEGs PER VIDEO, for the carousel to flip through.
 #
 # WHY NOT JUST PLAY THE WALLPAPER ITSELF. The collection is 4K -- one of these
 # files is 4K at 120 fps and 40 Mbit/s -- and the carousel draws five cards at
@@ -138,39 +138,66 @@ THUMB_WIDTH="${WALLPAPER_THUMB_WIDTH:-960}"
 # means five 4K decoders running to fill five thumbnails: measured at about
 # two thirds of a core EACH, before any of them has been scaled down.
 #
-# A 720p30 copy decodes in 0.34 s of CPU per twenty seconds of video -- call it
-# 2% of one core in real time, so all five together cost a fraction of what one
-# original did. It is built once, in the background, and reused for good.
+# WHY NOT A SMALL VIDEO EITHER, which is what this cache used to hold: a 960x540
+# clip at 24 fps, played by a QtMultimedia MediaPlayer on the centred card. The
+# clip was not the problem. The PLAYER was, and on this hardware specifically.
+# Measured on an RTX 5070 (driver 610.57.04) against these very wallpapers:
 #
-# THE NUMBERS ARE SIZED BY WHAT COSTS, and what costs is not the decoding.
-# Measured with five previews playing at once: the h264 threads sit at nearly
-# nothing because the decode lands on NVDEC, and the process' MAIN thread --
-# the one that also runs the carousel's animation -- carries 25 to 40% of a
-# core taking each decoded frame and turning it into a texture. That work is
-# pixels per second and nothing else, so that is the number to cut:
+#   * A MediaPlayer costs the same whatever you feed it. One playing a 960x540
+#     24 fps clip and one playing a 480x270 15 fps clip both cost 9.8% of a
+#     core. Shrinking the clip further bought nothing at all.
+#   * The cost is a CUDA context. qt6-multimedia-ffmpeg picks NVDEC here, and
+#     the two `cuda-EvtHandlr` threads that come with it burn a flat 3.2% of a
+#     core doing no decoding, plus 412 MB of VRAM for as long as a player
+#     exists. On Intel or AMD this would be VA-API and those threads would not
+#     be there -- the tax is specific to this machine.
+#   * Building or destroying one costs 250 to 466 ms, and a third of that lands
+#     on the GUI thread. That was the whole of "it sticks when I move through
+#     the videos": stepping through the fan created and tore down a decoder per
+#     step, 6.7% of frames arrived late, and the process sat at 65% of a core.
+#     Re-pointing an existing player at another file is just as expensive --
+#     Qt rebuilds the decoder either way.
 #
-#   WIDTH    960, which is the width of the largest card on a 1440p screen. A
-#            preview wider than the card it is drawn in is pixels decoded,
-#            uploaded and then thrown away by the scaler. On a 4K monitor the
-#            centre card is wider than this and the preview is upscaled: a
-#            deliberate trade, since sizing every clip for the largest monitor
-#            anyone might plug in costs every other monitor the difference.
-#   FPS      24. These are ambient loops -- clouds, rain, a character breathing
-#            -- and the 120 fps original is not carrying information a
-#            thumbnail needs. Together with the width this is less than half
-#            the pixels per second of the first version (1280 at 30), and the
-#            carousel's movement is what got that time back.
-#   SECONDS  12. Long enough to read as motion rather than as a GIF, short
-#            enough that the longest wallpaper here (nearly two minutes) does
-#            not cost two minutes of decoding to convert.
-#   CRF      30, at this size, which lands around 300 KB for the twelve seconds.
+# So the carousel no longer decodes video at all. It flips an Image through a
+# run of numbered JPEGs on a timer, which costs the same as the MediaPlayer did
+# at rest (9.7% of a core against 9.8%), half the memory (311 MB against 622),
+# no VRAM, no CUDA context, and -- the point of the exercise -- no stall at all
+# when you step through the fan.
+#
+# THE NUMBERS, and what each of them is paying for:
+#
+#   WIDTH    960, unchanged, and for the reason it always was: it is the widest
+#            a card gets on a 1440p screen. A frame wider than the card it is
+#            drawn in is pixels decoded and thrown away by the scaler; a 4K
+#            monitor upscales rather than every other monitor paying for it.
+#   FPS      15, down from the clip's 24. These are ambient loops -- clouds,
+#            rain, a character breathing -- and every frame is now a file on
+#            disk rather than a delta against the one before it, so frames are
+#            the thing that costs. 15 is where the motion still reads.
+#   SECONDS  6, down from twelve, for the same reason. See the arithmetic
+#            below: seconds are megabytes here in a way they never were in an
+#            h264 clip.
+#   QUALITY  8, ffmpeg's -q:v scale where 2 is best and 31 is worst. At 960 px
+#            this is a photograph seen for a fifteenth of a second inside a
+#            card, not something anyone inspects.
 #   THREADS  4 and nice 19, because this runs while someone is using the
-#            machine. Unrestrained it takes every core for four seconds.
+#            machine. Unrestrained it takes every core.
+#
+# WHAT IT COSTS ON DISK, because this is the one place the new design is worse
+# and the number should be written down rather than discovered. An h264 clip
+# spends bits only on what CHANGED between frames; a run of JPEGs pays full
+# price for every one. Twelve seconds of 960x540 at 24 fps came to about 300 KB.
+# Six seconds at 15 fps comes to about 2.9 MB -- ninety files of roughly 32 KB.
+# Measured over the eight videos in this collection: 23 MB, against 2 MB before.
+#
+# That is about 2.9 MB per video per six seconds, so a longer loop is roughly
+# half a megabyte per video per extra second. `WALLPAPER_PREVIEW_SECONDS=12`
+# doubles both the loop and the bill; it is a knob rather than a rewrite.
 PREVIEW_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-previews"
 PREVIEW_WIDTH="${WALLPAPER_PREVIEW_WIDTH:-960}"
-PREVIEW_FPS="${WALLPAPER_PREVIEW_FPS:-24}"
-PREVIEW_SECONDS="${WALLPAPER_PREVIEW_SECONDS:-12}"
-PREVIEW_CRF="${WALLPAPER_PREVIEW_CRF:-30}"
+PREVIEW_FPS="${WALLPAPER_PREVIEW_FPS:-15}"
+PREVIEW_SECONDS="${WALLPAPER_PREVIEW_SECONDS:-6}"
+PREVIEW_QUALITY="${WALLPAPER_PREVIEW_QUALITY:-8}"
 PREVIEW_THREADS="${WALLPAPER_PREVIEW_THREADS:-4}"
 
 # The frozen frame `still` puts up, which is NOT one of those thumbnails and so
@@ -315,39 +342,54 @@ thumb_for() {
     printf '%s\n' "$out"
 }
 
-# Path of the cached preview clip for a video. Named the same way the still
-# frame is -- the whole source path with its slashes flattened -- so the two
-# caches answer to the same question and neither can confuse two videos of the
-# same basename.
+# The DIRECTORY of the cached preview frames for a video. Named the same way
+# the still frame is -- the whole source path with its slashes flattened -- so
+# the two caches answer to the same question and neither can confuse two videos
+# of the same basename. The frames inside it are 001.jpg, 002.jpg and so on.
+#
+# A DIRECTORY AND NOT A PREFIX, which was the other way to file ninety numbered
+# files: `<flat>.001.jpg` beside its neighbours would have let sweep_cache stay
+# as it is, but it also means the sweep's keep-list carries every frame of every
+# video -- hundreds of paths compared against hundreds of files -- to answer a
+# question one directory name already answers.
 preview_path() {
     local flat="${1#/}"
-    printf '%s/%s.mp4' "$PREVIEW_CACHE" "${flat//\//_}"
+    printf '%s/%s' "$PREVIEW_CACHE" "${flat//\//_}"
 }
 
-# Build that clip if it is missing or older than the video, and print where it
-# is. See the note on PREVIEW_CACHE for what the numbers are for.
+# Build those frames if they are missing or older than the video, and print the
+# directory. See the note on PREVIEW_CACHE for what the numbers are for.
 #
-# THE FILE IS CHECKED FOR CONTENT, not the exit code, for the same reason
-# extract_frame does it: ffmpeg has ways of exiting 0 having written nothing,
-# and an empty file left behind would be newer than the video and so pass the
-# freshness test above forever.
+# PUBLISHED ATOMICALLY, and here that is load-bearing rather than tidy. The
+# carousel finds the end of the sequence by asking for one frame past the last
+# one it managed to load, so a directory caught half-written would teach it that
+# the loop is however long ffmpeg had got to, and it would keep believing that
+# for as long as the card lives. Frames are written into a `.part` directory and
+# the whole thing is moved into place, so a directory that is visible is
+# complete.
 #
-# scale takes min(width, iw) so a video that is already smaller than the
-# preview width is copied rather than blown up.
+# THE FILE COUNT IS CHECKED, not the exit code, for the same reason
+# extract_frame checks for content: ffmpeg has ways of exiting 0 having written
+# nothing, and an empty directory left behind would be newer than the video and
+# so pass the freshness test above forever.
+#
+# scale takes min(width, iw) so a video that is already smaller than the preview
+# width is copied rather than blown up.
 #
 # IT STARTS WHERE THE STILL FRAME WAS TAKEN, two seconds in, and that is not a
-# detail: the carousel draws the still and then crossfades the clip in over it,
-# so if the clip began at zero the fade would be a cut from one picture to a
-# different one -- which is what a "flash when it starts playing" is. Starting
-# both at the same second makes the two nearly the same picture and the fade
-# invisible. The same fallback as extract_frame for a clip too short to seek
-# into, and for the same reason: seeking past the end is not an error to
-# ffmpeg, it just writes nothing.
+# detail. Every card that is not the centred one shows the still frame, and the
+# centred one shows this sequence; a card being stepped onto swaps one for the
+# other. Starting both at the same second makes 001.jpg and the still the same
+# picture, so the swap is invisible and no crossfade is needed to hide it. The
+# same fallback as extract_frame for a clip too short to seek into, and for the
+# same reason: seeking past the end is not an error to ffmpeg, it just writes
+# nothing.
 preview_for() {
-    local src="$1" out seek=2 duration
+    local src="$1" out part seek=2 duration
+
     out="$(preview_path "$src")"
 
-    if [[ -f "$out" && "$out" -nt "$src" ]]; then
+    if [[ -d "$out" && "$out" -nt "$src" ]]; then
         printf '%s\n' "$out"
         return 0
     fi
@@ -357,43 +399,48 @@ preview_for() {
 
     # ONLY SHORTEN THE SEEK WHEN THE DURATION IS KNOWN AND SMALL. No ffprobe,
     # or a container that answers "N/A", used to fall through to seek 0 -- and
-    # a clip starting at zero against a still frame taken at two seconds is
-    # exactly the mismatch the carousel's crossfade turns into a flash. Unknown
-    # means keep the seek; the empty-output check below catches a clip too
-    # short for it.
+    # a sequence starting at zero against a still frame taken at two seconds is
+    # exactly the mismatch that turns stepping onto a card into a flash.
+    # Unknown means keep the seek; the empty-output check below catches a clip
+    # too short for it.
     if command -v ffprobe >/dev/null; then
         duration="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$src" 2>/dev/null)"
         awk -v d="${duration:-0}" 'BEGIN { exit !(d + 0 > 0 && d + 0 < 6) }' && seek=0
     fi
 
-    # Beside itself and moved into place, so a run that is killed halfway does
-    # not destroy a working clip -- see thumb_for.
+    part="$out.part"
+    rm -rf -- "$part"
+    mkdir -p -- "$part" || return 1
+
     nice -n 19 ffmpeg -y -loglevel error \
         -ss "$seek" -t "$PREVIEW_SECONDS" -i "$src" \
         -an -sn -threads "$PREVIEW_THREADS" \
         -vf "scale=w='min($PREVIEW_WIDTH,iw)':h=-2,fps=$PREVIEW_FPS" \
-        -c:v libx264 -preset veryfast -crf "$PREVIEW_CRF" -pix_fmt yuv420p \
-        -movflags +faststart "$out.part.mp4" >/dev/null 2>&1
+        -q:v "$PREVIEW_QUALITY" "$part/%03d.jpg" >/dev/null 2>&1
 
     # A seek past the end is not an error to ffmpeg: it exits 0 having written
-    # nothing. So the retry is on the FILE, and it is what covers a clip whose
-    # duration could not be read.
-    if [[ ! -s "$out.part.mp4" && "$seek" != 0 ]]; then
+    # nothing. So the retry is on the DIRECTORY, and it is what covers a clip
+    # whose duration could not be read.
+    if [[ -z "$(ls -A -- "$part" 2>/dev/null)" && "$seek" != 0 ]]; then
         seek=0
         nice -n 19 ffmpeg -y -loglevel error \
             -ss "$seek" -t "$PREVIEW_SECONDS" -i "$src" \
             -an -sn -threads "$PREVIEW_THREADS" \
             -vf "scale=w='min($PREVIEW_WIDTH,iw)':h=-2,fps=$PREVIEW_FPS" \
-            -c:v libx264 -preset veryfast -crf "$PREVIEW_CRF" -pix_fmt yuv420p \
-            -movflags +faststart "$out.part.mp4" >/dev/null 2>&1
+            -q:v "$PREVIEW_QUALITY" "$part/%03d.jpg" >/dev/null 2>&1
     fi
 
-    if [[ ! -s "$out.part.mp4" ]]; then
-        rm -f "$out.part.mp4"
+    if [[ -z "$(ls -A -- "$part" 2>/dev/null)" ]]; then
+        rm -rf -- "$part"
         return 1
     fi
 
-    mv -f "$out.part.mp4" "$out"
+    # `mv` cannot replace a directory the way it replaces a file -- moving onto
+    # an existing one puts the source INSIDE it -- so the old sequence goes
+    # first. Narrow on purpose: $out is a path this function computed inside a
+    # cache directory this script owns, never anything a caller handed in.
+    rm -rf -- "$out"
+    mv -f -- "$part" "$out"
     printf '%s\n' "$out"
 }
 
@@ -417,6 +464,30 @@ sweep_cache() {
             done
             rm -f -- "$cached" && gone=$(( gone + 1 ))
         done < <(find "$dir" -maxdepth 1 -type f -name "$pattern" -print0)
+    fi
+
+    printf '%s\n' "$gone"
+}
+
+# The same narrowing, for a cache whose entries are DIRECTORIES rather than
+# files: one per video, holding that video's numbered preview frames.
+#
+# A SEPARATE FUNCTION AND NOT A `-type` ARGUMENT ON THE ONE ABOVE. What makes
+# sweep_cache safe to read is that every clause in it is a constant -- one
+# directory, one depth, files only -- and a caller cannot widen any of them.
+# Passing in the type is exactly the parameter that would let a future caller
+# turn a file sweep into `rm -rf` by accident.
+sweep_dirs() {
+    local dir="$1" gone=0 cached keep
+    shift
+
+    if [[ -d "$dir" ]]; then
+        while IFS= read -r -d '' cached; do
+            for keep in "$@"; do
+                [[ "$cached" == "$keep" ]] && continue 2
+            done
+            rm -rf -- "$cached" && gone=$(( gone + 1 ))
+        done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d -print0)
     fi
 
     printf '%s\n' "$gone"
@@ -532,13 +603,14 @@ fi
 # ---------------------------------------------------------------
 # THREE CACHES, ONE PASS. Every wallpaper gets a thumbnail, because decoding a
 # 4K PNG to draw a card costs a fifth of a second. A video gets two more: a
-# still frame, because an Image cannot decode an mp4 and the card has to show
-# something, and a small preview clip, because the card in the middle of the
-# carousel plays and the original is 4K at up to 120 fps.
+# still frame, because an Image cannot decode an mp4 and every card that is not
+# the centred one shows exactly that, and a run of numbered preview frames,
+# because the centred card moves and the original is 4K at up to 120 fps.
 #
 # All three are named after the file they came from, all three are rebuilt when
 # it is newer, and all three are swept when it goes away, so they are built
-# together.
+# together. The first two are files; the third is a directory per video, which
+# is the only reason the sweep below needs two functions instead of one.
 #
 # A separate mode and not something every run does in passing: this is a
 # fraction of a second of ffmpeg per still and seconds per video, and the
@@ -575,7 +647,7 @@ if [[ "$MODE" == "thumbs" ]]; then
             frame_for "$W" >/dev/null && MADE=$(( MADE + 1 ))
         fi
 
-        if [[ ! -f "$PREVIEW" || ! "$PREVIEW" -nt "$W" ]]; then
+        if [[ ! -d "$PREVIEW" || ! "$PREVIEW" -nt "$W" ]]; then
             preview_for "$W" >/dev/null && CLIPS=$(( CLIPS + 1 ))
         fi
     done
@@ -596,10 +668,18 @@ if [[ "$MODE" == "thumbs" ]]; then
     if [[ -z "$DIR_FROM_ENV" ]]; then
         GONE=$(sweep_cache "$THUMB_CACHE" '*.jpg' ${KEEP_THUMBS[@]+"${KEEP_THUMBS[@]}"})
         GONE=$(( GONE + $(sweep_cache "$FRAME_CACHE" '*.png' ${KEEP_FRAMES[@]+"${KEEP_FRAMES[@]}"}) ))
-        GONE=$(( GONE + $(sweep_cache "$PREVIEW_CACHE" '*.mp4' ${KEEP_PREVIEWS[@]+"${KEEP_PREVIEWS[@]}"}) ))
+        GONE=$(( GONE + $(sweep_dirs "$PREVIEW_CACHE" ${KEEP_PREVIEWS[@]+"${KEEP_PREVIEWS[@]}"}) ))
+
+        # AND THE PREVIEWS THIS CACHE USED TO HOLD. Until the carousel stopped
+        # decoding video, every entry here was a `<flat>.mp4` clip; they are now
+        # directories of JPEGs, and nothing else would ever collect the old
+        # files. Swept with an empty keep-list, so the first run after the
+        # change takes all of them and every run afterwards finds none -- which
+        # is why this needs no flag, no version marker and no removing later.
+        GONE=$(( GONE + $(sweep_cache "$PREVIEW_CACHE" '*.mp4') ))
     fi
 
-    echo "wallpaper thumbnails: $THUMBS stills, $MADE frames, $CLIPS previews, $GONE stale removed"
+    echo "wallpaper thumbnails: $THUMBS stills, $MADE frames, $CLIPS preview sequences, $GONE stale removed"
     exit 0
 fi
 
