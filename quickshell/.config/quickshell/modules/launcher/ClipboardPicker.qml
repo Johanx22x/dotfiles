@@ -151,16 +151,23 @@ Item {
         // list went anywhere. This is the only thing here that says how much of
         // the history is off the top and the bottom.
         //
-        // Placed and not anchored -- a child of a Flickable rides its contents,
-        // so `y` gives back exactly what the scroll took -- and hard against
-        // the right edge, in the groupPadding the row labels already keep clear
-        // before they elide.
+        // Anchored, and to this ListView itself. A child declared inside a
+        // ListView or a GridView is a child of the VIEW, not of its
+        // contentItem -- QQuickListView overrides the default property back to
+        // `data`, unlike a plain Flickable, which sends children to the thing
+        // that scrolls. So the `y: history.contentY` this used to carry was
+        // never giving back what the scroll took: nothing had taken anything,
+        // and it pushed the bar down the full scroll instead, out through the
+        // clip and off the list after one row.
+        //
+        // Hard against the right edge, in the groupPadding the row labels
+        // already keep clear before they elide.
         ScrollBar {
             view: history
 
-            x: history.width - width
-            y: history.contentY
-            height: history.height
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
         }
 
         delegate: Rectangle {
