@@ -12,6 +12,14 @@
 // than where the last frame left off. Nothing drives it on its own -- the
 // caller repaints it, with a FrameAnimation while it should be moving.
 //
+// IT DRAWS THE FLAT HALF OF THE SEEK BAR TOO, at amplitudeMultiplier 0. That
+// is not a trick: a stroke and a rectangle of the same nominal width do not
+// read as the same weight -- an antialiased stroke of W is fully opaque
+// across W - 1 and ramps over the half pixel at each edge, where a hard-edged
+// rectangle of W is opaque across all W -- so the two halves of a seek bar
+// drawn by different techniques will always disagree. Both halves come
+// through here now. See the note on the rail in components/WavySlider.qml.
+//
 // FULLLENGTH IS NOT WIDTH, and that separation is theirs and is the point of
 // the component. The phase is computed against `fullLength` -- the whole rail
 // -- while the loop only draws as far as `width`. So the played part of a seek
@@ -53,12 +61,21 @@ Canvas {
         ctx.lineCap = "round";
         ctx.beginPath();
 
+        // `started` and not `x === 0`, which was a branch that never ran: the
+        // loop begins at half the line width -- 2 at the 4 this is drawn with
+        // -- so x is never 0 and moveTo was never reached. It worked because
+        // a lineTo with no subpath open behaves as a moveTo, which is the
+        // Canvas spec doing by accident what this meant to do on purpose.
+        // Output-identical; the point is that it stops being luck.
+        let started = false;
         for (let x = ctx.lineWidth / 2; x <= root.width - ctx.lineWidth / 2; x += 1) {
             const waveY = centerY + amplitude * Math.sin(frequency * 2 * Math.PI * x / root.fullLength + phase);
-            if (x === 0)
+            if (!started) {
                 ctx.moveTo(x, waveY);
-            else
+                started = true;
+            } else {
                 ctx.lineTo(x, waveY);
+            }
         }
 
         ctx.stroke();
