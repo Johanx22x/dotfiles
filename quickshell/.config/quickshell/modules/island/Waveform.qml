@@ -15,11 +15,16 @@
 // vocabulary the workspaces use.
 //
 // COLOUR
-// A gradient across the bars from primary to tertiary, both from the
-// wallpaper. Two roles rather than one because a single accent makes the
-// waveform a solid block of colour; and these two specifically because
-// matugen derives them from the same image, so they always agree -- picking a
-// second colour by hand would be a new thing to get wrong on every wallpaper.
+// A gradient across the bars between two roles. Two rather than one because a
+// single accent makes the waveform a solid block of colour, and two that come
+// from the SAME image so they always agree -- picking a second colour by hand
+// would be a new thing to get wrong on every wallpaper.
+//
+// WHICH image is the caller's business now. The defaults are matugen's
+// primary and tertiary, both derived from the wallpaper, which is what this
+// drew before and what it still draws anywhere nothing is said. The island
+// hands it the COVER's palette instead, so the bars are in the album's
+// colours like the panel the island opens into. See Island.qml.
 //
 // BOTH ENDS WERE PROPERTIES for a while, so the dashboard's media card could
 // draw this twice for its progress line -- once flat and muted for the part of
@@ -53,6 +58,10 @@ Row {
     // nothing, so the waveform holds its shape between tracks.
     readonly property int minHeight: barWidth
 
+    // The two ends of the gradient. See COLOUR above.
+    property color lowColor: Theme.primary
+    property color highColor: Theme.tertiary
+
     spacing: 3
     height: maxHeight
 
@@ -74,7 +83,7 @@ Row {
             // middle instead of standing it on the bottom edge.
             anchors.verticalCenter: parent.verticalCenter
 
-            color: Qt.tint(Theme.primary, Qt.alpha(Theme.tertiary, bar.index / (Spectrum.bars - 1)))
+            color: Qt.tint(root.lowColor, Qt.alpha(root.highColor, bar.index / (Spectrum.bars - 1)))
 
             // Quiet bars fade as well as shrink. Height alone leaves a hard
             // row of dots at rest; opacity makes the tail of the spectrum
