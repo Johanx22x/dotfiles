@@ -23,18 +23,47 @@
 //                        the seek wave and the transport sit on top of it
 //   the three dials      a label, a big percentage and a short bar, three
 //                        across one strip. See `Reading`
-//   the volume slider    a hairline along the very bottom edge of the panel.
-//                        A control that needs one dimension gets one
-//   the brightness       the same hairline, above it, on a machine that has
+//   the volume slider    a band of its own, with the glyph that mutes it and
+//                        the number always on show
+//   the brightness       the second row of that band, on a machine that has
 //                        a backlight
-//   the capture buttons  labels in the actions strip rather than 56px tiles
+//   the capture buttons  labelled tiles in the actions strip rather than 56px
+//                        glyph-over-label squares
 //
 // NOTHING WAS DROPPED. Time, date, month, what is playing, the three machine
-// readings, volume, the three capture targets and the instant replay are all
-// still here, and so is the brightness on a laptop and the connector name the
-// replay is pointed at. The mute button is the one control that changed shape
-// rather than place: the hairline has no room for a button, so muting is a
-// right-click on it and the whole line goes dim to say so.
+// readings, volume and its mute, the three capture targets and the instant
+// replay are all still here, and so is the brightness on a laptop and the
+// connector name the replay is pointed at.
+//
+// ---------------------------------------------------------------------------
+// AND THEN IT WAS BUILT, LOOKED AT, AND CHANGED AGAIN
+// ---------------------------------------------------------------------------
+//
+// Three things were wrong with the first build and all three were the same
+// mistake in different places: a drawing had been trusted past the point
+// where it stops being able to answer.
+//
+// IT WAS TOO SPREAD OUT, measurably -- about a fifth of the panel was ground
+// with nothing on it. The geometry note below carries the two places it went
+// and what closed them.
+//
+// THE VOLUME WAS A SIX-PIXEL RULE ALONG THE BOTTOM EDGE. "A control that
+// needs one dimension gets one dimension" is a good line and it cost the mute
+// its button, put the number behind a hover, and left the whole thing on the
+// edge of the panel where a pointer travels rather than aims. When a control
+// needs a paragraph to explain how to reach it, the control is wrong and not
+// the reader. See VolumeControl.qml.
+//
+// AND NOTHING LOOKED LIKE A BUTTON. This is the one worth remembering,
+// because this panel can fall into it again: on an ordinary card a button can
+// be a bare label, because the card's own edge says where the surface is. The
+// ground here is a PHOTOGRAPH and has no edges at all, so a label whose
+// background only appears on hover is indistinguishable from a caption until
+// the pointer is already on it. Every control now carries a fill AT REST --
+// the capture tiles, the replay's save, the skip buttons, the month steppers,
+// the mute. The other half of the rule does the real work: nothing that
+// cannot be pressed gets a surface, so the readings, the clock, the date and
+// the elapsed time stay bare and the difference is what reads.
 //
 // ---------------------------------------------------------------------------
 // THE TWO THINGS THIS DESIGN CAN GET WRONG
@@ -112,52 +141,70 @@ Item {
 
     // ---------------- Geometry ----------------
     //
-    // The panel is 1014 wide, which is what it already was: the old note here
-    // derived that from three dials at 124 and recorded that it lands on the
-    // main monitor at about 40% of its width. The dials are gone; the width
-    // is kept because that judgement about the screen has not changed and
-    // because the composition below was drawn against it.
+    // COMPACTED, AND THE FIX WAS NOT "MAKE EVERYTHING SMALLER". The panel was
+    // 1014 x 470 and about a fifth of it was ground with nothing on it, in
+    // two places:
+    //
+    //   158 px between the columns   the leftover of a width that had been
+    //                               fixed at 1014 since the dials set it. It
+    //                               was never chosen; it was what was left
+    //   105 px under the media      the left column had three bands adding
+    //                               up to 323 and the right column had 410,
+    //                               so the left one simply ran out of things
+    //                               to hold before the calendar ran out of
+    //                               height
+    //
+    // The second is the real one, and the volume is what fixes it: moved off
+    // the bottom edge into a band of its own, the left column has four bands
+    // and comes to 338 against the right column's 341. Three pixels apart
+    // instead of eighty-seven, and there is no hole left to look at.
+    //
+    // Everything else here is trimmed rather than redesigned -- margins,
+    // gaps, padding, the art square, the calendar cell and the type scale --
+    // and together with the two above the panel comes out near 792 x 381,
+    // about 36% less area.
 
     // From the panel's edge to anything in it. The popout adds
-    // Theme.groupPadding of its own outside this, so the visible margin from
-    // the window's edge is about forty pixels.
-    readonly property int edge: 30
+    // Theme.groupPadding of its own outside this.
+    readonly property int edge: 20
 
     // Between two glass panels.
-    readonly property int gap: 18
+    readonly property int gap: 12
 
-    // Inside one. Chosen so the calendar's own width plus two of these comes
-    // to the 274 the right-hand column is drawn at.
-    readonly property int glassPad: 18
+    // Inside one.
+    readonly property int glassPad: 14
 
-    readonly property int glassRadius: 16
+    readonly property int glassRadius: 14
 
-    // The left column holds three things, and the widest of them decides it:
-    // three capture targets, a rule, and the replay's button and switch, all
-    // on one row. 522 is what that row needs at 9pt with the labels intact;
-    // below it the record targets start eliding, which is the first thing
-    // anyone would notice. The readings strip and the media block above are
-    // both comfortable at this width and neither asks for it.
-    readonly property int leftWidth: 522
+    // DERIVED FROM THE ACTIONS ROW, which is the direction the dependency has
+    // to run. That row is the widest fixed thing in this column -- three
+    // capture targets, a rule, the replay's button, the connector it is
+    // pointed at and its switch, all on one line -- and every string in it
+    // grows with Theme.fontSize. Stated as a literal, a larger font would
+    // elide "Display" down to "Disp..." instead of widening the panel, which
+    // is the failure the old literal 522 was one setting away from.
+    //
+    // The floor is what the media block needs: the art square, the seek wave
+    // and the transport. Nothing above the actions row asks for more than
+    // this, so nothing above it appears in the sum.
+    readonly property int leftWidth: Math.max(460, actionsRow.implicitWidth + root.glassPad * 2)
 
     // The right column is the month, which is a fixed seven columns and
     // cannot be negotiated with.
     readonly property int rightWidth: month.implicitWidth + root.glassPad * 2
 
-    // THE GROUND SHOWING THROUGH. This is not a gutter between two columns of
-    // a grid, it is the part of the picture with nothing on it -- the whole
-    // point of the design is that there IS a picture, and a panel packed edge
-    // to edge with glass would only have a tinted border. It is the widest
-    // single number here and it is deliberate.
-    // Floored at one gap, so a large enough Theme.fontSize takes the ground
-    // away rather than folding the calendar back over the readings strip.
-    readonly property int columnGap: Math.max(root.gap,
-        root.implicitWidth - root.edge * 2 - root.leftWidth - root.rightWidth)
+    // THE GROUND SHOWING THROUGH, and now a decision rather than a remainder.
+    // The picture is the point of this design and a panel packed edge to edge
+    // with glass would only have a tinted border -- but 158 pixels of it was
+    // not a decision, it was the width left over once the two columns had
+    // taken theirs. Twelve is a gutter; the ground shows through above and
+    // below the columns instead, where it is not a channel down the middle.
+    readonly property int columnGap: 14
 
-    implicitWidth: 1014
+    implicitWidth: root.edge * 2 + root.leftWidth + root.columnGap + root.rightWidth
 
     // The art square, top left, and the height of the whole media block.
-    readonly property int artSize: 132
+    readonly property int artSize: 104
 
     // ASKED, NOT ASSERTED, exactly as the old grid did it: the calendar grows
     // with the type size and the readings row grows with it too, so a stated
@@ -165,20 +212,21 @@ Item {
     // the first person who changes Theme.fontSize.
     readonly property int actionsHeight: actionsRow.implicitHeight + root.glassPad * 2
     readonly property int readingsHeight: readingsRow.implicitHeight + root.glassPad * 2
+    readonly property int slidersHeight: sliders.implicitHeight + root.glassPad * 2
     readonly property int clockHeight: clockLines.implicitHeight + root.glassPad * 2
     readonly property int calendarHeight: month.implicitHeight + root.glassPad * 2
 
-    readonly property int leftHeight: root.artSize + root.gap + root.readingsHeight + root.gap + root.actionsHeight
+    readonly property int leftHeight: root.artSize + root.gap + root.readingsHeight
+        + root.gap + root.slidersHeight + root.gap + root.actionsHeight
     readonly property int rightHeight: root.clockHeight + root.gap + root.calendarHeight
 
-    // THE RIGHT COLUMN IS THE TALL ONE and that is why the panel is taller
-    // than the drawing this came from. The drawing sketched the month as a
-    // block of 11px monospace; the real one is a steppable grid at body size
-    // with a today marker, and it is 250-odd pixels rather than 182. Shrinking
-    // it to match a sketch would have been shrinking the one thing in the
-    // panel people actually read a date off. The left column's spare height
-    // goes into the ground between the media block and the readings strip,
-    // which is the gap the picture shows through.
+    // THE TWO COLUMNS NOW AGREE, which is the whole compaction. The right one
+    // is the month and cannot be argued with -- it is a steppable grid at body
+    // size, and the only thing that moved there is the cell, from 34 x 30 to
+    // 30 x 26, which took 39 pixels off without touching the type inside it.
+    // The left one gained the volume as a fourth band and reaches 338 against
+    // that 341. Whichever wins, the difference now lands in the ground as a
+    // few pixels rather than as the 105-pixel hole that was there.
     readonly property int bodyHeight: Math.max(root.leftHeight, root.rightHeight) + root.edge * 2
 
     implicitHeight: root.bodyHeight
@@ -209,12 +257,20 @@ Item {
     // The two smallest are rounded UP from the drawing: its 9.5px labels come
     // out at 6.7pt against an 11pt body, which is smaller than anything else
     // in this shell and smaller than I am willing to ask anyone to read.
-    readonly property real clockSize: Theme.fontSize * 3.6
-    readonly property real titleSize: Theme.fontSize * 2.1
+    //
+    // THE THREE LARGEST CAME DOWN in the compaction -- the clock from 3.6 to
+    // 3.0, the title from 2.1 to 1.6, the readings from 1.55 to 1.35. That is
+    // the one part of "make it smaller" that is genuinely about size rather
+    // than about spacing, and it is limited to the three that were set large
+    // to fill a panel that no longer needs filling. Nothing at or below body
+    // size moved: the artist, the elapsed time, the labels and every day in
+    // the calendar are exactly as legible as they were.
+    readonly property real clockSize: Theme.fontSize * 3.0
+    readonly property real titleSize: Theme.fontSize * 1.6
     readonly property real artistSize: Theme.fontSize * 0.9
     readonly property real timeSize: Theme.fontSize * 0.8
     readonly property real labelSize: Theme.fontSize * 0.78
-    readonly property real readingSize: Theme.fontSize * 1.55
+    readonly property real readingSize: Theme.fontSize * 1.35
     readonly property real actionSize: Theme.fontSize * 0.85
 
     // Seconds to m:ss. MPRIS reports seconds as a double.
@@ -1027,7 +1083,7 @@ Item {
             width: root.leftWidth
             height: root.readingsHeight
 
-            anchors.bottom: actionsGlass.top
+            anchors.bottom: slidersGlass.top
             anchors.bottomMargin: root.gap
 
             RowLayout {
@@ -1102,6 +1158,58 @@ Item {
             }
         }
 
+        // ================ The two values you set by feel ================
+        //
+        // THE VOLUME CAME UP OFF THE BOTTOM EDGE, and this band is both
+        // halves of the fix at once. As a control it is the obvious one: a
+        // six-pixel rule at the very edge of the panel had nowhere to put the
+        // mute button, so muting became a right-click nobody would find, and
+        // the number only appeared when you pointed at it. As a LAYOUT it is
+        // what closes the 105-pixel hole this panel had -- the left column
+        // was three bands where the right column needed four bands' worth of
+        // height. See the note on `bodyHeight`.
+        //
+        // The brightness is the second row of the same panel and exists only
+        // on a machine with a backlight; a Column skips an invisible child
+        // AND the spacing in front of it, so on a desktop this band is
+        // exactly one slider tall.
+        Glass {
+            id: slidersGlass
+
+            x: root.edge
+            width: root.leftWidth
+            height: root.slidersHeight
+
+            anchors.bottom: actionsGlass.top
+            anchors.bottomMargin: root.gap
+
+            Column {
+                id: sliders
+
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: root.glassPad
+                anchors.rightMargin: root.glassPad
+                anchors.verticalCenter: parent.verticalCenter
+
+                spacing: 4
+
+                VolumeControl {
+                    width: parent.width
+
+                    ink: root.ink
+                    rest: Qt.alpha(root.ink, 0.13)
+                    wash: Qt.alpha(root.ink, 0.26)
+                }
+
+                BrightnessControl {
+                    width: parent.width
+
+                    ink: root.ink
+                }
+            }
+        }
+
         // ================ What produces a file ================
         Glass {
             id: actionsGlass
@@ -1121,13 +1229,15 @@ Item {
                 spacing: 14
 
                 RecordControl {
-                    ink: root.ink
-                    inkMuted: Qt.alpha(root.ink, 0.65)
-                    wash: Qt.alpha(root.ink, 0.14)
-                }
-
-                Item {
+                    // FILL, so the three targets share whatever the replay
+                    // block beside them does not take. Their own implicit
+                    // width is still what sets the panel's -- see leftWidth.
                     Layout.fillWidth: true
+
+                    ink: root.ink
+                    rest: Qt.alpha(root.ink, 0.14)
+                    wash: Qt.alpha(root.ink, 0.28)
+                    stroke: Qt.alpha(root.ink, 0.22)
                 }
 
                 Rectangle {
@@ -1141,7 +1251,13 @@ Item {
                 ReplayControl {
                     ink: root.ink
                     inkMuted: Qt.alpha(root.ink, 0.65)
-                    wash: Qt.alpha(root.ink, 0.14)
+
+                    // A step brighter than the capture targets at rest and on
+                    // hover alike: this is the one control in the panel that
+                    // writes a file.
+                    rest: Qt.alpha(root.ink, 0.22)
+                    wash: Qt.alpha(root.ink, 0.38)
+                    stroke: Qt.alpha(root.ink, 0.3)
                     inkInverse: root.inkInverse
                 }
             }
@@ -1156,18 +1272,22 @@ Item {
             width: root.rightWidth
             height: root.clockHeight
 
+            // CENTRED IN THE BOX, both ways, and so is the month below it.
+            // They were set against the left edge, which is right when a
+            // panel is a column of left-aligned rows and wrong here: these
+            // two are the only things in their glass, the glass is as wide as
+            // the calendar demands rather than as wide as they need, and
+            // anything left-aligned in a box that is wider than it reads as
+            // having been pushed there.
             Column {
                 id: clockLines
 
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.leftMargin: root.glassPad
-                anchors.rightMargin: root.glassPad
-                anchors.verticalCenter: parent.verticalCenter
+                anchors.centerIn: parent
 
                 spacing: 2
 
                 Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
                     text: Qt.formatDateTime(dashClock.date, "HH:mm")
                     font.family: Theme.fontFamily
                     font.pointSize: root.clockSize
@@ -1176,6 +1296,8 @@ Item {
                 }
 
                 Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+
                     // Upper case and tracked out, which is the drawing's, and
                     // it is doing a job: a date set in the same case as the
                     // title across the panel would read as a second heading
@@ -1211,7 +1333,11 @@ Item {
                 // behind the glass.
                 ink: root.ink
                 inkMuted: Qt.alpha(root.ink, 0.6)
-                hoverWash: Qt.alpha(root.ink, 0.12)
+
+                // The month steppers are controls, so they carry a surface at
+                // rest like every other control on this ground.
+                restWash: Qt.alpha(root.ink, 0.1)
+                hoverWash: Qt.alpha(root.ink, 0.24)
 
                 // Today is the panel's one inverted mark, matching the play
                 // button rather than taking an accent that could land on a
@@ -1221,40 +1347,6 @@ Item {
             }
         }
 
-        // ================ The two hairlines ================
-        //
-        // A CONTROL THAT NEEDS ONE DIMENSION GETS ONE DIMENSION. The volume
-        // was a card with a glyph, a percentage and a slider in it, and the
-        // whole card said one number. Along the bottom edge it says the same
-        // number, takes no height from anything else, and is a wider target
-        // than the slider ever was because it spans the panel.
-        //
-        // THE BRIGHTNESS IS ABOVE IT AND IS NOT IN THE DRAWING. The drawing
-        // was made against this desktop, which has no backlight; a laptop
-        // does, and dropping the control on a machine that has one would be
-        // dropping content to make a layout work. It only exists where
-        // Brightness.present is true, which is the same gate the island's
-        // acknowledgement uses.
-        BrightnessControl {
-            id: brightnessLine
-
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: volumeLine.top
-            anchors.bottomMargin: 2
-
-            ink: root.ink
-        }
-
-        VolumeControl {
-            id: volumeLine
-
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-
-            ink: root.ink
-        }
     }
 
     // ---------------- The pieces ----------------
@@ -1407,7 +1499,10 @@ Item {
         implicitHeight: 24
         radius: width / 2
 
-        color: buttonMouse.containsMouse ? Qt.alpha(root.ink, 0.16) : "transparent"
+        // A SURFACE AT REST, like everything else that can be pressed here.
+        // These were transparent until hovered, which on a photograph makes a
+        // control indistinguishable from a glyph somebody drew.
+        color: buttonMouse.containsMouse ? Qt.alpha(root.ink, 0.24) : Qt.alpha(root.ink, 0.1)
 
         Behavior on color {
             ColorAnimation { duration: Theme.animDuration }

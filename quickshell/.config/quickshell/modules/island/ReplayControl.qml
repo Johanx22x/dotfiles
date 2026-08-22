@@ -36,6 +36,13 @@
 // belongs with the rest of the configuration; SEEING which one it is belongs
 // wherever the save button is.
 //
+// AND THE SAVE BUTTON LOOKS LIKE A BUTTON NOW. It was a bare label with a
+// background that only appeared on hover, which on a photographic ground is
+// indistinguishable from a caption -- see the long note in RecordControl.qml
+// for why that happens and what the rule is. It carries a fill at rest, and a
+// stronger one than the three capture targets beside it: this is the control
+// that produces a file, and it is the reason the buffer is running at all.
+//
 // THE COLOURS COME FROM THE CALLER, for the reason RecordControl.qml gives.
 //
 // The state, the process and the persisted duration live in
@@ -50,13 +57,18 @@ Item {
 
     property color ink: Theme.textOnSurface
     property color inkMuted: Theme.textOnSurfaceVariant
-    property color wash: Theme.surfaceContainerHighest
+
+    // One step brighter than RecordControl's pair, at rest and on hover
+    // alike.
+    property color rest: Theme.surfaceContainerHighest
+    property color wash: Theme.primary
+    property color stroke: Theme.outlineVariant
 
     // What is legible ON the switch's own fill when it is on.
     property color inkInverse: Theme.textOnPrimary
 
     implicitWidth: line.implicitWidth
-    implicitHeight: 34
+    implicitHeight: 40
 
     Row {
         id: line
@@ -78,12 +90,15 @@ Item {
 
             anchors.verticalCenter: parent.verticalCenter
 
-            implicitWidth: saveRow.implicitWidth + 22
-            implicitHeight: 34
+            implicitWidth: saveRow.implicitWidth + 26
+            implicitHeight: 40
             radius: 10
 
             opacity: ReplayState.armed ? 1 : 0.45
-            color: saveMouse.containsMouse && ReplayState.armed ? root.wash : "transparent"
+            color: saveMouse.containsMouse && ReplayState.armed ? root.wash : root.rest
+            border.width: 1
+            border.color: root.stroke
+            antialiasing: true
 
             Behavior on color {
                 ColorAnimation { duration: Theme.animDuration }

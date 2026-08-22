@@ -34,6 +34,20 @@ Item {
 
     property color accent: Theme.primary
 
+    // ---- The two colours that are not the accent ----
+    //
+    // Parameterised for the dashboard, which draws this slider on a
+    // PHOTOGRAPH: there, a role derived from the wallpaper has nothing to do
+    // with what is behind the rail. The defaults are exactly the roles that
+    // were read in place here before, so the sound page gets the slider it
+    // had.
+    property color railColor: Theme.surfaceContainerHighest
+
+    // The mark reads as a gap cut through the bar rather than as a third
+    // colour, so it wants whatever is BEHIND the slider -- the window's own
+    // background on a settings page, the scrimmed cover on the dashboard.
+    property color notchColor: Theme.surface
+
     // How far one wheel click moves it, in the same units. Five percent, the
     // step the bar's own wheel handler has always used.
     property real step: 0.05
@@ -71,7 +85,7 @@ Item {
         width: parent.width
         height: 6
         radius: 3
-        color: Theme.surfaceContainerHighest
+        color: root.railColor
 
         Behavior on color {
             ColorAnimation { duration: Theme.recolorDuration }
@@ -107,10 +121,10 @@ Item {
         height: 12
         radius: 1
 
-        // The window's own background, so it reads as a gap cut through the
-        // bar rather than as a third colour. That works over the rail and
-        // over the fill alike, which no ink colour does.
-        color: Theme.surface
+        // See notchColor: it reads as a gap cut through the bar rather than
+        // as a third colour, which works over the rail and over the fill
+        // alike where no ink colour does.
+        color: root.notchColor
 
         Behavior on color {
             ColorAnimation { duration: Theme.recolorDuration }
