@@ -20,20 +20,30 @@
 // MUTUAL EXCLUSION
 // The carousel is a fullscreen sheet that takes an EXCLUSIVE keyboard grab, so
 // everything else in the shell is both behind it and deaf while it is up.
-// Opening it therefore closes the launcher, the dashboard, the power menu and
-// the cheatsheet, and any of those opening closes it. Without this rule
-// SUPER + SPACE over an open carousel leaves two surfaces holding the keyboard
-// and the one that answers is whichever the compositor happened to hand it to.
+// Opening it therefore closes the launcher, the dashboard, the notification
+// history, the power menu and the cheatsheet, and any of those opening closes
+// it. Without this rule SUPER + SPACE over an open carousel leaves two surfaces
+// holding the keyboard and the one that answers is whichever the compositor
+// happened to hand it to.
+//
+// THE HISTORY IS IN THAT LIST BECAUSE IT WAS MISSING FROM IT, and so was the
+// behaviour -- the same omission CheatsheetState carried, corrected in the
+// same change. The sentence is the contract; see the longer version there.
 //
 // The rule lives HERE, in the newcomer, which is the convention CheatsheetState
 // set and states: one file to read when the windows disagree about who is up,
-// rather than a clause added to each of the four older singletons.
+// rather than a clause added to each of the FIVE others this file reaches --
+// LauncherState, IslandState, NotificationState, PowerMenuState and
+// CheatsheetState. It said four before the notification history was counted in.
 //
-// THE DASHBOARD IS REACHED THROUGH IslandState.closeDashboard(), the singleton
-// that owns which bar the panel is drawn on. It used to be reached by assigning
-// LauncherState.dashboardOpen false, and that closed nothing: the flag is a
-// report Bar.qml publishes about its own popout. CheatsheetState carried the
-// same line and lost it in the same change; the long version of why is there.
+// THE TWO PANELS THAT LIVE IN A POPOUT ARE REACHED THROUGH THEIR OWN
+// SINGLETONS: IslandState.closeDashboard() and NotificationState.closeHistory().
+// Each owns the connector name of the bar its panel is drawn on, and clearing
+// that string is what makes the panel go. The dashboard used to be reached by
+// assigning LauncherState.dashboardOpen false, which closed nothing -- that
+// flag is a report Bar.qml publishes about its own popout -- and the history
+// was not reached from here at all. CheatsheetState carried both faults and
+// lost them in the same changes; the long version of why is there.
 //
 // DO NOT name an IPC function `show` -- `qs ipc show` is a subcommand of the
 // CLI and swallows the call, printing the handler listing and exiting 0. It
@@ -49,6 +59,7 @@ import QtQuick
 import "root:/modules/cheatsheet"
 import "root:/modules/island"
 import "root:/modules/launcher"
+import "root:/modules/notifications"
 import "root:/modules/powermenu"
 
 Singleton {
@@ -74,6 +85,7 @@ Singleton {
 
         LauncherState.isOpen = false;
         IslandState.closeDashboard();
+        NotificationState.closeHistory();
         PowerMenuState.isOpen = false;
         CheatsheetState.isOpen = false;
     }
