@@ -5,21 +5,37 @@
 // these three already say. While a recording is running the same row collapses
 // to one stop button -- there is nothing else to decide at that point.
 //
-// THEY WERE 56-PIXEL TILES with the glyph stacked over the label, which was
-// the right shape while this had a card of its own to fill. It shares one
-// strip with the instant replay now (see the actions row in Dashboard.qml), so
-// the tiles are rows: the same glyph and the same word, side by side, at the
-// height of everything else on that line. Nothing about what they do changed.
+// THEY NOW LOOK LIKE BUTTONS, WHICH THEY DID NOT, and the reason they did not
+// is worth writing down because it is a trap this whole panel can fall into
+// again. On an ordinary card a button can be a bare label, because the card's
+// own edge tells you where the surface is and the label is simply what is
+// written on it. The dashboard's ground is a PHOTOGRAPH -- there is no edge
+// anywhere -- so a label whose background only appears on hover is
+// indistinguishable from a caption until the pointer is already on it. It read
+// as text because it was text.
 //
-// THE COLOURS COME FROM THE CALLER. This is drawn on a photograph now, and a
-// Theme role is derived from the WALLPAPER, which is not what is behind it.
-// The defaults are the roles that used to be read here, so the component still
-// works anywhere else.
+// So every one of these carries a fill AT REST, one step brighter on hover.
+// The rule that goes with it, and the half that does the real work: nothing
+// that cannot be pressed gets a surface. The readings, the clock, the date and
+// the elapsed time stay bare, and the contrast between them is what makes
+// these read as controls.
+//
+// THE GLYPH WENT AND THE WORD STAYED. They were a glyph stacked over a label
+// in a 56-pixel tile, and the note here used to say the glyph was what stopped
+// the three buttons from being "mostly text". The fill does that job now, and
+// it does it at rest rather than on hover -- so the glyph was paying for a
+// problem that no longer exists, in the one dimension this row has none of.
+// The word is what anybody actually reads.
+//
+// THE COLOURS COME FROM THE CALLER, because Theme is the WALLPAPER's palette
+// and the wallpaper is not what is behind this. The defaults are the roles
+// that used to be read here, so the component still works anywhere else.
 //
 // The state, the command and the reasoning about SIGINT live in
 // modules/recorder/RecorderState.qml.
 
 import QtQuick
+import QtQuick.Layouts
 import "root:/"
 import "root:/modules/recorder"
 
@@ -27,38 +43,34 @@ Item {
     id: root
 
     property color ink: Theme.textOnSurface
-    property color inkMuted: Theme.textOnSurfaceVariant
-    property color wash: Theme.surfaceContainerHighest
+    property color rest: Theme.surfaceContainerHighest
+    property color wash: Theme.primary
+    property color stroke: Theme.outlineVariant
     property color danger: Theme.critical
 
     implicitWidth: RecorderState.recording ? stop.implicitWidth : targets.implicitWidth
-    implicitHeight: 34
+    implicitHeight: 40
 
     // ---------------- Idle: pick a target ----------------
-    Row {
+    RowLayout {
         id: targets
 
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-
-        spacing: 2
+        anchors.fill: parent
+        spacing: 6
         visible: !RecorderState.recording
 
         Repeater {
             model: [
                 {
                     id: "display",
-                    glyph: Icons.display,
                     label: "Display"
                 },
                 {
                     id: "window",
-                    glyph: Icons.window,
                     label: "Window"
                 },
                 {
                     id: "region",
-                    glyph: Icons.region,
                     label: "Region"
                 }
             ]
@@ -68,38 +80,42 @@ Item {
 
                 required property var modelData
 
-                implicitWidth: content.implicitWidth + 22
-                implicitHeight: 34
+                // FILL THE ROW, but never below what the word needs: the
+                // panel's own width is derived from this row's implicit
+                // width, so a larger Theme.fontSize widens the panel rather
+                // than eliding "Display" down to "Disp...".
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+
+                implicitWidth: label.implicitWidth + 22
+                implicitHeight: 40
                 radius: 10
 
-                color: optionMouse.containsMouse ? root.wash : "transparent"
+                color: optionMouse.containsMouse ? root.wash : root.rest
+                border.width: 1
+                border.color: root.stroke
+                antialiasing: true
+
+                scale: optionMouse.pressed ? 0.97 : 1
 
                 Behavior on color {
                     ColorAnimation { duration: Theme.animDuration }
                 }
 
-                Row {
-                    id: content
+                Behavior on scale {
+                    NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
+                }
+
+                Text {
+                    id: label
 
                     anchors.centerIn: parent
-                    spacing: 7
-
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: option.modelData.glyph
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.iconSize
-                        color: optionMouse.containsMouse ? root.ink : root.inkMuted
-                    }
-
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: option.modelData.label
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize * 0.85
-                        font.weight: Theme.fontWeight
-                        color: root.ink
-                    }
+                    text: option.modelData.label
+                    elide: Text.ElideRight
+                    font.family: Theme.fontFamily
+                    font.pointSize: Theme.fontSize * 0.85
+                    font.weight: Font.Bold
+                    color: root.ink
                 }
 
                 MouseArea {
@@ -131,12 +147,15 @@ Item {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
 
-        implicitWidth: stopRow.implicitWidth + 24
-        implicitHeight: 34
+        implicitWidth: stopRow.implicitWidth + 26
+        implicitHeight: 40
         radius: 10
 
         visible: RecorderState.recording
-        color: stopMouse.containsMouse ? root.danger : Qt.alpha(root.danger, 0.25)
+        color: stopMouse.containsMouse ? root.danger : Qt.alpha(root.danger, 0.28)
+        border.width: 1
+        border.color: Qt.alpha(root.danger, 0.5)
+        antialiasing: true
 
         Behavior on color {
             ColorAnimation { duration: Theme.animDuration }

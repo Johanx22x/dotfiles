@@ -2,10 +2,11 @@
 // which is what end-4/dots-hyprland put behind theirs.
 //
 // Ported from their modules/common/widgets/WaveVisualizer.qml. This shell
-// already had a spectrum -- modules/island/Waveform.qml, a row of rounded bars
-// -- and the first port of this card reused it. That was the wrong call and
-// was rejected: the bars are the island's shape, and the whole point of the
-// card was to look like theirs.
+// already had a spectrum -- a row of rounded bars in the island -- and the
+// first port of the media card reused it. That was the wrong call and was
+// rejected: the bars were the island's shape and the point of the card was to
+// look like theirs. The bars are gone entirely now; this draws the spectrum
+// everywhere in the shell that one is drawn.
 //
 // It is a Canvas because theirs is a Canvas, and it fills one closed path from
 // the bottom-left corner, along the spectrum, to the bottom-right -- so the

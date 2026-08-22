@@ -1,14 +1,15 @@
-// The backlight, as a hairline directly above the volume's.
+// The backlight: a glyph, a slider, and the number.
 //
-// SHAPED LIKE THE VOLUME because they are the same kind of thing: a value with
-// a floor and a ceiling that you set by feel and then stop thinking about.
-// Anything else here would be a second vocabulary for one idea. See
-// VolumeControl.qml, which carries the argument for the shape.
+// SHAPED LIKE THE VOLUME AND SITTING DIRECTLY UNDER IT, because they are the
+// same kind of thing: a value with a floor and a ceiling that you set by feel
+// and then stop thinking about. Anything else here would be a second
+// vocabulary for one idea. See VolumeControl.qml, which carries the argument
+// for the shape and the history of the hairline this replaced.
 //
-// IT IS NOT IN THE DASHBOARD'S DRAWING, which was made against this desktop --
-// a machine with no backlight, where this control has always measured zero.
-// A laptop has one, and dropping it to make a layout work would be dropping
-// content. It appears only where there is a backlight to talk about.
+// IT IS NOT IN THE DRAWING THE DASHBOARD CAME FROM, which was made against
+// this desktop -- a machine with no backlight, where this control has always
+// measured zero. A laptop has one, and dropping it to make a layout work
+// would be dropping content.
 //
 // A VIEW AND NOTHING ELSE. The device query and the two FileViews that used to
 // be in this file live in Brightness.qml, and the move was not tidiness: this
@@ -23,81 +24,74 @@
 
 import QtQuick
 import "root:/"
+import "root:/components"
 
 Item {
     id: root
 
     property color ink: Theme.textOnSurface
-
-    readonly property int reach: 12
+    property color rest: Qt.alpha(root.ink, 0.13)
 
     visible: Brightness.present
-    implicitHeight: Brightness.present ? 6 : 0
+    implicitHeight: Brightness.present ? 34 : 0
 
-    readonly property real fraction: Math.max(0, Math.min(1, Brightness.percent / 100))
-
+    // NOT A BUTTON, so no hover and no resting surface beyond the disc it
+    // shares with the volume's glyph for alignment. There is nothing to
+    // toggle about a backlight -- the volume's twin of this mutes, and this
+    // one does not, so it does not pretend it can be pressed.
     Rectangle {
-        anchors.fill: parent
-        color: Qt.alpha(root.ink, 0.15)
-    }
+        id: mark
 
-    Rectangle {
         anchors.left: parent.left
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
+        anchors.verticalCenter: parent.verticalCenter
 
-        width: parent.width * root.fraction
-        // Quieter than the volume's fill on purpose: two identical rules
-        // stacked two pixels apart read as one thick rule, and the one you
-        // reach for more often should be the one that looks brighter.
-        color: Qt.alpha(root.ink, 0.6)
+        width: 30
+        height: 30
+        radius: width / 2
+        color: "transparent"
+
+        Text {
+            anchors.centerIn: parent
+            text: Icons.brightness
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.iconSize
+            color: Qt.alpha(root.ink, 0.8)
+        }
     }
 
     Text {
-        anchors.right: parent.right
-        anchors.rightMargin: 30
-        anchors.bottom: parent.top
-        anchors.bottomMargin: 6
+        id: readout
 
-        visible: opacity > 0
-        opacity: rail.containsMouse ? 1 : 0
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
 
         text: `${Brightness.percent}%`
         font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize * 0.85
+        font.pointSize: Theme.fontSize
         font.weight: Font.Bold
         color: root.ink
-
-        Behavior on opacity {
-            NumberAnimation { duration: Theme.animDuration }
-        }
     }
 
-    MouseArea {
-        id: rail
+    VolumeSlider {
+        anchors.left: mark.right
+        anchors.leftMargin: 14
+        anchors.right: readout.left
+        anchors.rightMargin: 14
+        anchors.verticalCenter: parent.verticalCenter
 
-        anchors.fill: parent
-        anchors.topMargin: -root.reach
+        // Named for the volume because that is where it was extracted from,
+        // and it is not audio-specific: a track, a fill and a handle over a
+        // range. See its header.
+        value: Brightness.percent
+        maximum: 100
+        step: Brightness.step
 
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
+        // Quieter than the volume's fill: two identical rows stacked read as
+        // one control, and the one reached for more often should be the one
+        // that looks brighter.
+        accent: Qt.alpha(root.ink, 0.62)
+        railColor: Qt.alpha(root.ink, 0.18)
 
-        function report(mouseX: real): void {
-            if (root.width <= 0)
-                return;
-            Brightness.setPercent(Math.round(Math.max(0, Math.min(100, mouseX / root.width * 100))));
-        }
-
-        onPressed: mouse => rail.report(mouse.x)
-
-        onPositionChanged: mouse => {
-            if (rail.pressed)
-                rail.report(mouse.x);
-        }
-
-        onWheel: wheel => {
-            const step = wheel.angleDelta.y > 0 ? Brightness.step : -Brightness.step;
-            Brightness.setPercent(Math.max(0, Math.min(100, Brightness.percent + step)));
-        }
+        onMoved: value => Brightness.setPercent(Math.round(value))
     }
 }

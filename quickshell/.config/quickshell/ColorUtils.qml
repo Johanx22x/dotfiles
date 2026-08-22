@@ -18,6 +18,11 @@
 // card actually uses are here; the rest of theirs can be added if something
 // asks for it.
 //
+// ONE FUNCTION AT THE BOTTOM IS NOT THEIRS and says so where it is. It is
+// here rather than in a caller because two different surfaces now need the
+// same answer to the same question, and a legibility rule with two copies is
+// a legibility rule that will eventually have two answers.
+//
 // KEPT OUT OF Theme.qml deliberately. Theme is the tokens -- what the palette
 // IS -- and it is generated from the wallpaper. This is arithmetic on colours
 // and has no opinion about where they came from. Theme.glass() is the one
@@ -78,5 +83,41 @@ Singleton {
     function applyAlpha(colour: color, alpha: real): color {
         const c = Qt.color(colour);
         return Qt.rgba(c.r, c.g, c.b, Math.max(0, Math.min(1, alpha)));
+    }
+
+    // ---- OURS, NOT THEIRS: how dark a scrim has to be to read on ----
+    //
+    // Both the dashboard and the island draw white type over a picture
+    // somebody else chose -- the cover art, or the wallpaper behind it -- and
+    // a fixed scrim opacity cannot serve a black album sleeve and a white one
+    // at once. So the scrim is measured: a ColorQuantizer reduces the picture
+    // to a single colour, and this turns that colour into how much black has
+    // to go over it.
+    //
+    // TAKES THE QUANTIZER'S LIST AND NOT A COLOUR, because "no measurement"
+    // is a real case with a different answer and passing a fallback colour
+    // would hide it. ColorQuantizer reads LOCAL FILES ONLY -- its source is
+    // `QImage(source.toLocalFile())` in Quickshell's
+    // src/core/colorquantizer.cpp, with no network code near it -- so an
+    // https cover or a YouTube thumbnail yields an empty list.
+    //
+    // WITH NOTHING MEASURED it returns 0.62 rather than the middle of the
+    // range. The safe assumption about a picture you cannot see is that it is
+    // bright: being wrong that way costs a dark panel, being wrong the other
+    // way costs a panel you cannot read.
+    //
+    // RELATIVE LUMINANCE AND NOT `hslLightness`, because the question is
+    // whether white type will read and a saturated blue and a saturated
+    // yellow at equal HSL lightness are nowhere near equally bright to look
+    // at. These are the sRGB coefficients without the gamma linearisation --
+    // an approximation, and an approximation is enough to choose between 0.30
+    // and 0.74.
+    function scrimFor(quantized: var): real {
+        if (!quantized || quantized.length === 0)
+            return 0.62;
+
+        const c = Qt.color(quantized[0]);
+        const luminance = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+        return Math.max(0.3, Math.min(0.74, 0.3 + 0.45 * luminance));
     }
 }
