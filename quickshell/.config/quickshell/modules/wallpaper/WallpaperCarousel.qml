@@ -472,15 +472,59 @@ PanelWindow {
             onClicked: WallpaperState.close()
         }
 
-        // The wheel walks the fan. PathView has no wheel handling of its own --
-        // it is the flicking, not the scrolling, that it implements.
+        // The wheel walks the fan. PathView has no wheel handling of its own
+        // -- it is the flicking, not the scrolling, that it implements -- and
+        // there is nothing underneath this to catch what it drops either: the
+        // view is `interactive: false` a few lines down, so there is no
+        // Flickable taking the events this handler does not. Whatever goes
+        // wrong here goes wrong in silence and in full.
+        //
+        // EVERY DEVICE, which is the lesson components/ScrollList.qml was
+        // written for and states at length. Naming device types fails by
+        // declining events without saying so, and qtbase types this machine's
+        // mouse as a TouchPad whenever the compositor advertises
+        // zwp_pointer_gestures_v1 -- which niri does. Mouse | TouchPad
+        // happens to cover that particular surprise; the point of AllDevices
+        // is that there is no device this surface wants to refuse, so there
+        // is nothing left to be surprised by.
+        //
+        // A NOTCH WITH NO ANGLE IN IT USED TO STEP BACKWARDS, and that is the
+        // bug this replaces. The test was `angleDelta.y < 0 ||
+        // angleDelta.x > 0` with `else` meaning "go back", so every wheel
+        // event carrying no angle at all took the else: measured with
+        // qmltestrunner, feeding the old handler a zero-delta wheel event
+        // moved the fan one card BACKWARDS. Those events are ordinary rather
+        // than theoretical -- a device that reports a continuous scroll fills
+        // in pixelDelta and leaves angleDelta at zero, and the phase events
+        // that begin and end a touchpad gesture carry no delta on either.
+        //
+        // So the angle is read first and the pixels stand in for it, exactly
+        // as ScrollList does, and a nonzero step is required in one direction
+        // or the other before the fan moves at all. Down or right is forward;
+        // the vertical axis decides when both report, which is the one thing
+        // here that differs from the old test -- it consulted the horizontal
+        // even when the vertical had already answered.
+        //
+        // ONE CARD PER EVENT and not per pixel: the step this drives is
+        // discrete, so what paces it is the stream of events rather than the
+        // size of any one of them. A device that reports a continuous scroll
+        // would therefore step per event, which is untested here because no
+        // device on this machine reports that way. An accumulator is the fix
+        // if it ever turns out to be too fast; it is not invented today for a
+        // device nobody has.
         WheelHandler {
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            acceptedDevices: PointerDevice.AllDevices
 
             onWheel: event => {
-                if (event.angleDelta.y < 0 || event.angleDelta.x > 0)
+                const y = event.angleDelta.y !== 0 ? event.angleDelta.y
+                    : event.pixelDelta.y;
+                const x = event.angleDelta.x !== 0 ? event.angleDelta.x
+                    : event.pixelDelta.x;
+                const step = y !== 0 ? -y : x;
+
+                if (step > 0)
                     view.incrementCurrentIndex();
-                else
+                else if (step < 0)
                     view.decrementCurrentIndex();
             }
         }
