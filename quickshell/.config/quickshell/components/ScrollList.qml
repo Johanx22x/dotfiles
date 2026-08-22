@@ -203,11 +203,76 @@ Flickable {
     // space, and the same four pixels placed four in from the edge leave none
     // at all -- which is what the first draft of this did, and it read as a bar
     // drawn through the word.
+    // ABOVE THE CONTENT, AND WITHOUT IT THIS BAR DOES NOTHING AT ALL. It is
+    // declared here, in the base document, and the call site's Column is
+    // appended to the same `flickableData` afterwards -- so the two are
+    // SIBLINGS under one contentItem, with the Column second. Measured:
+    // `contentItem.children` comes back as [ScrollBar, Column] and
+    // `column.parent === contentItem` is true. Qt Quick sorts a parent's
+    // children by z and then by declaration order, and hands that one order
+    // to both the renderer and the press delivery, so second meant the rows
+    // won both:
+    //
+    //   The bar was painted UNDER the rows. Grabbed offscreen, on a list
+    //   whose rows paint an opaque background, the four pixels where the bar
+    //   is came back the row's own colour and not a pixel of bar with them.
+    //   Every row in this shell is transparent at rest and paints on hover or
+    //   selection, so what this looked like was a bar that vanished under
+    //   whatever you pointed at.
+    //
+    //   The bar heard NO PRESS at five of the seven call sites -- Bluetooth
+    //   twice, Input, Network and the Updates packs -- because their rows
+    //   carry a MouseArea across the full width and it took every pixel the
+    //   bar's target lay under. Drawn, and not grabbable at any x. Three of
+    //   the five swallow it outright; the other two swallow it only
+    //   sometimes, which is worse to use rather than better. Input's handler
+    //   is `enabled: entry.addable`, so the bar comes back on the rows
+    //   already in the cycle and on every row once the cycle is full, and
+    //   Network's fills only the collapsed 32 px of a row, so the bar comes
+    //   back down the side of whichever row has its password box open. A
+    //   control that works on some rows and not others is not a control.
+    //
+    // ONE IS ENOUGH, and not because one is a big number. Stacking in Qt
+    // Quick is per parent: a z inside a row orders that row's own children
+    // and cannot lift anything over a sibling of the row's ancestor. A row
+    // carrying z=99, and z=1000, still loses to this -- measured, and kept as
+    // a control in tests/scrollbar-target.py, because "raise it higher" is
+    // the wrong repair if it ever stops being true.
+    //
+    // AND THE BAR STAYS IN THE CONTENT, which is why `y: root.contentY` below
+    // is still right. Nothing is reparented and nothing is wrapped: what put
+    // the bar underneath was declaration order among siblings, and z is
+    // exactly the override for declaration order among siblings. Wrapping
+    // the view to make the bar a sibling of it is the other way to get here
+    // and is not taken: it is what emptied the launcher, where the wrapper
+    // carried `visible: grid.visible`, QML's `visible` is the EFFECTIVE one,
+    // and the pair latched at false with no exception and no warning.
+    //
+    // WHAT THE ROWS GIVE UP is the seven pixels the bar's target covers --
+    // its own four and the three of inward margin -- and no more. Every one
+    // of the seven was read for what sits there: the tightest is eight
+    // pixels of inset on the Bluetooth and Network rows, and the thing at
+    // eight is a status LABEL. The Forget and Cancel chips, which are the
+    // controls in those rows, are a hundred pixels further in. Nothing
+    // clickable anywhere in the seven is within the strip; what the rows lose
+    // is empty padding they were only collecting because the whole row is one
+    // target.
+    //
+    // ONE PAINT COLLISION IS NOT FIXED, and z decides which way round it
+    // fails rather than removing it. The installer log at UpdatesPage.qml:806
+    // is a wrapped Text with no right inset at all, so its lines run to the
+    // last pixel of the list. Before, the text covered the bar and the bar
+    // was invisible; now the bar covers four pixels of a long line. That is
+    // the better of the two -- an indicator that shows beats one that never
+    // does -- but it is a collision either way, and the repair belongs in
+    // that file's Text, not here.
     ScrollBar {
         id: scrollBar
 
         view: root
         wanted: root.showScrollBar
+
+        z: 1
 
         x: root.width - width
         y: root.contentY
