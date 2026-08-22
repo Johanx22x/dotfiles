@@ -745,8 +745,8 @@ SettingsPage {
                     // same reason the two rows below print theirs: somebody
                     // who would rather type it should not have to guess what
                     // this window is about to run on their behalf.
-                    return "./install.sh update --pull, then a reload of "
-                        + "the compositor and of this shell.";
+                    return "./install.sh update --pull, then a reload of the "
+                        + "compositor and a restart of this shell.";
                 }
             }
 

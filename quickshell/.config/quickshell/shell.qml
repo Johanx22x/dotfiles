@@ -10,17 +10,25 @@
 //   qs                      foreground, logs on the terminal
 //   qs -d                   detached
 //
-// Quickshell reloads the whole config as soon as a .qml file is saved IN
-// PLACE. It does not when the file is REPLACED -- `git pull`, `git checkout`,
-// an editor that writes a temp file and renames it -- because the watch was on
-// the inode that got unlinked, and nothing is logged when that happens. What
-// still works then is the directory watch, so:
+// Quickshell reloads when the CONTENT of a watched .qml file differs from the
+// last generation that loaded successfully. Not on mtime -- touching a file
+// does nothing -- and not on a rewrite with identical content. Measured, along
+// with everything below it, in a headless compositor running these same files.
 //
-//   : > ~/.config/quickshell/.reload-nudge && rm -f ~/.config/quickshell/.reload-nudge
+// It does NOT reload when a file is REPLACED: `git pull`, `git checkout`, an
+// editor that writes a temp file and renames it. The watch was on the inode
+// that got unlinked, so it dies, and nothing is logged when it does. After a
+// pull the count of live file watches here goes from 122 to zero and NOTHING
+// on the filesystem brings them back -- not touching, not chmod, not creating
+// or deleting files in the watched directories, not `stow -R`. Only starting
+// the process again, which then re-registers all 159 watches:
 //
-// Nudge it rather than restarting it. A reload that cannot parse the tree
-// leaves this process up on the code it already had; a cold start on the same
-// tree exits and leaves no shell at all. The whole measurement is beside the
+//   qs kill && qs -d --no-duplicate
+//
+// So editing works, and pulling needs the restart. Be aware of the asymmetry
+// before automating either: a reload that cannot parse the tree leaves this
+// process up on the code it already had, while a cold start on the same tree
+// exits 255 and leaves no shell at all. The whole measurement is beside the
 // update chain in modules/installer/InstallerState.qml.
 //
 // The wallpaper palette does NOT go through that path: it is read live from
