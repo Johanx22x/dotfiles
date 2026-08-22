@@ -218,33 +218,29 @@ FloatingWindow {
             // the page host at the bottom of this file for the order.
             //
             // ScrollList AND NOT A PLAIN Flickable, WHICH IS THE BUG THIS
-            // FILE WAS EDITED FOR, TWICE. A Flickable that is left to scroll
-            // itself keeps hold of the next mouse press: while it is moving
-            // it takes every press away from the item under the pointer, so
-            // that the press continues the gesture instead of landing on
-            // whatever slid underneath. On a rail that is only ever scrolled
-            // and clicked, that means the click after a scroll is thrown
-            // away, and only the one after it -- half a second later --
-            // arrives.
-            //
-            // TWO GESTURES PUT IT IN THAT STATE and the fix had to cover
-            // both. A wheel notch starts a scroll animation of its own, which
-            // ScrollList avoids by moving contentY by hand; and a DRAG leaves
-            // the view moving for the best part of a second after it is let
-            // go, which ScrollList avoids by refusing to be dragged at all.
-            // The first of those shipped alone and did not close the
-            // complaint, because the bench that measured it only ever sent
-            // wheel events. The whole of the reasoning lives in
-            // components/ScrollList.qml; this is the call site that found it.
+            // FILE WAS EDITED FOR. A Flickable answers a wheel notch by
+            // starting a scroll animation of its own, and for as long as that
+            // animation is running it takes the next mouse press for itself
+            // in order to stop the flick -- the item under the pointer is
+            // never told there was a press at all. So the click that follows
+            // a scroll is thrown away, and only the one after it, half a
+            // second later, arrives. ScrollList moves contentY on the wheel
+            // itself and never starts that animation, so nothing is ever
+            // owed a click.
             //
             // ONLY TWO ENTRIES HERE ARE EVER REACHED BY SCROLLING, which is
             // why a window-wide effect was reported as one page misbehaving.
-            // At this window's fixed 820x580 -- the niri window-rule pins it,
-            // and hyprland.lua carries the same pair -- the rail shows 452 px
-            // and its fourteen entries are 530 tall, so Updates and About are
-            // the only two below the fold, and About is not a page anybody
+            // At this window's fixed 820x580 the rail shows 452 px and its
+            // fourteen entries are 530 tall, so Updates and About are the
+            // only two below the fold -- and About is not a page anybody
             // visits. "Updates does not open on the first click" was the
             // whole of the report, and it was the rail, not that page.
+            //
+            // Measured on Qt 6.11.1 offscreen, on this geometry: with a plain
+            // Flickable a click 0 ms, 100 ms and 300 ms after the notch was
+            // lost every time and only the one at 600 ms landed; through
+            // ScrollList all four landed, and dragging the rail still scrolls
+            // it.
             ScrollList {
                 id: railScroll
 
@@ -404,12 +400,12 @@ FloatingWindow {
         // `onScreen` instead, which is that flag AND the window being open.
         //
         // ScrollList for the same reason the rail is one, and it matters here
-        // too: a plain Flickable swallows the press that follows a scroll, so
-        // scrolling down a page and reaching for the switch that just came
-        // into view costs a click. The capped lists inside the pages are
-        // already ScrollLists and already take the wheel first while they can
-        // still move; this only settles what happens when the pointer is on
-        // the page itself.
+        // too: a plain Flickable swallows the press that follows a wheel
+        // notch, so scrolling down a page and reaching for the switch that
+        // just came into view costs a click. The capped lists inside the
+        // pages are already ScrollLists and already take the wheel first
+        // while they can still move; this only settles what happens when the
+        // pointer is on the page itself.
         ScrollList {
             id: pages
 
