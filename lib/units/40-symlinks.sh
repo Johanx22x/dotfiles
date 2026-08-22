@@ -280,18 +280,20 @@ symlinks_move_aside() {
 # login. Both lines below are one command, both are in the README, and neither
 # belongs to a step whose job was to make symlinks.
 #
-# WHAT THESE LINES USED TO SAY, and why they no longer say it. Quickshell was
-# printed here as `qs kill && qs -d -p ...`, a restart, and a restart is the
-# wrong shape: measured in a nested compositor, a reload that cannot parse the
-# new tree leaves the shell up and running the code it already had, while a
-# COLD START on that same tree exits -- "Failed to load configuration",
-# "PROCESS EXITED" -- and leaves no bar, no island and no launcher at all. So
-# what is printed is the nudge instead. It creates a file in the config
-# directory and removes it again, which is what Quickshell notices when a pull
-# has replaced every inode its file watches were holding: the directory watch
-# is on an inode nothing replaced. The full reasoning, and the reload chain
-# the settings window drives, are in
-# quickshell/.config/quickshell/modules/installer/InstallerState.qml.
+# WHAT IS PRINTED FOR QUICKSHELL IS A RESTART, and it was briefly something
+# else. A "nudge" -- create a file in ~/.config/quickshell, delete it again --
+# was printed here for one commit on the strength of a report that it made the
+# shell re-read the tree. It does not, in any state, and the version of these
+# lines that said so was telling people to run a no-op. Quickshell reloads on
+# the CONTENT of a watched .qml file changing, and a stow run that has just
+# replaced inodes has left it watching nothing at all: measured, live file
+# watches go from 122 to zero and no filesystem operation gets through, `stow
+# -R` included. Restarting the process is the only thing that does.
+#
+# It is printed and not run, and that part has not changed: this unit is not
+# where somebody's bar gets taken away. Note when running it by hand that a
+# start is not free the way a reload is -- if the tree does not parse, `qs`
+# exits 255 and there is no shell until it does.
 #
 # niri is not printed at all any more. It holds no inotify watch and polls its
 # config every 500 ms instead, so it survives every shape of relink this unit
@@ -318,8 +320,7 @@ symlinks_post() {
   if want_hyprland; then
     ui_dim "     hyprctl reload && hyprctl configerrors   # Hyprland, if hypr/ moved"
   fi
-  ui_dim "     : > ~/.config/quickshell/.reload-nudge \\"
-  ui_dim "       && rm -f ~/.config/quickshell/.reload-nudge   # Quickshell"
+  ui_dim "     qs kill && qs -d --no-duplicate           # Quickshell"
   return 0
 }
 

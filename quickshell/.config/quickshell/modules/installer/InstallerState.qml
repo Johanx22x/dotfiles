@@ -588,81 +588,102 @@ Singleton {
     // is the whole handling it needs: the terminal is open, the reason is in
     // it, and a shell cannot resolve a divergence on somebody's behalf.
 
-    // NUDGE THE SHELL, DO NOT RESTART IT. This is the correction that matters
-    // most, because the two failures are nothing like the same size. A RELOAD
-    // that cannot parse the new tree degrades gracefully: the process stays
-    // up, goes on running the code it already had, and writes the reason into
-    // its log. A COLD START on that same tree EXITS --
+    // RESTART THE SHELL, BECAUSE NOTHING ELSE REACHES IT. The commit before
+    // this one replaced the restart with a "nudge" -- create a file inside
+    // ~/.config/quickshell, delete it again -- on the strength of a report
+    // that it reloaded the shell in 15 ms. It does not. Run against this
+    // shell's real 121 files in a headless compositor with its own runtime
+    // dir, HOME and private bus, the nudge produced ZERO reloads in every
+    // trial, in the symlink layout and in the real `stow --no-folding` one,
+    // on a healthy shell, on a shell whose watches were all dead, and after a
+    // failed reload. So did creating without deleting, deleting without
+    // creating, doing it with a .qml name, `mv`-ing a file into a watched
+    // directory, touching the directory, and chmod-ing it.
+    //
+    // THE CENSUS THAT WAS MISREAD. Quickshell really does hold 18 watches on
+    // DIRECTORIES -- ~/.config/quickshell and its 17 subdirectories, mask
+    // 0x7c4, which does include IN_CREATE and IN_DELETE -- alongside 122 on
+    // the resolved .qml FILES inside the clone, mask 0xcc6. The kernel
+    // therefore does deliver the dotfile's create and delete. Quickshell just
+    // does not reload on them: the directory watches are there to notice
+    // files appearing and vanishing for the NEXT scan, not to start one.
+    //
+    // WHAT ACTUALLY TRIGGERS A RELOAD, established by experiment rather than
+    // by reading the census: the CONTENT of a currently watched .qml file
+    // differing from the last generation that loaded SUCCESSFULLY. Rewriting
+    // a watched file with identical content reloads nothing; touching it for
+    // mtime alone reloads nothing; appending a newline reloads; taking that
+    // newline back off reloads again. One rule, and it explains every result
+    // above, the nudge included.
+    //
+    // AND AFTER A PULL THERE IS NOTHING LEFT TO CHANGE. Replacing the inode of
+    // every .qml file -- which is what git does -- takes the live file watches
+    // from 122 to 0 and produces no reload and no log line. In that state
+    // nothing on the filesystem got through: not the nudge, not appending to
+    // the new inode, not appending through the stow symlink, not replacing
+    // shell.qml's symlink, and not `stow -R --no-folding` with thirteen
+    // seconds to answer in. Only starting the process again recovered it, and
+    // one successful load re-registers all 159 watches on the current inodes.
+    // The shipped chain that this replaces was therefore not a gentler way of
+    // doing the same thing -- it was a no-op, and the button did nothing to
+    // the shell at all.
+
+    // WHICH LEAVES THE DANGEROUS PART, and it is real and was measured too.
+    // The two failures are not the same size. A RELOAD that cannot parse the
+    // tree degrades gracefully: the process stays up, goes on serving IPC --
+    // `qs ipc call dnd status` still answered -- and runs the code it already
+    // had. A COLD START on that same tree EXITS 255 in about half a second:
     //
     //   ERROR: Failed to load configuration
-    //   caused by @modules/bar/Bar.qml[410:17]: UpdatesButton is not a type
-    //   PROCESS EXITED
+    //   ERROR:   caused by @shell.qml[91:9]: Type Bar unavailable
+    //   ERROR:   caused by @modules/bar/Bar.qml[410:17]: UpdatesButton is not a type
     //
-    // -- and leaves no bar, no island, no notifications and no launcher, on a
-    // desktop whose only way back is a terminal that may not be open. A stow
-    // link that does not exist yet ends the same way. So `qs kill` is gone
-    // from this chain: the version of it that shipped in #110 turned every
-    // pull that did not parse into a dead session, and the reload it was
-    // standing in for would have survived the same pull untouched.
+    // A config directory that is not linked yet ends the same way, exit 255,
+    // `Could not find "default" config directory`. So the restart cannot be
+    // made safe, only made LOUD: it is the last thing the chain does, it is
+    // checked afterwards, and the terminal it runs in is --hold, so what comes
+    // out of a failed start is on the screen with the file and the line in it.
+    // Nothing in this chain can pre-flight a tree for loadability, because the
+    // only thing that can answer that question is Quickshell starting, and
+    // starting a second one alongside the live one would stack a second copy
+    // of every layer surface.
     //
-    // HOW A RELOAD IS ASKED FOR, since Quickshell has no `reload` subcommand
-    // and this configuration declares no IpcHandler for one. Creating a file
-    // inside ~/.config/quickshell and deleting it again is what does it:
+    // WHAT IS CHECKED. `qs log` prints the running instance's own log and
+    // exits 255 when there is no instance, so it answers "did a shell come
+    // back" in one command with no PID to keep. It is asked AFTER the restart
+    // and its answer is only ever used to print; nothing here retries a start
+    // that failed, because a start fails for a reason that is in the tree and
+    // trying twice does not change the tree.
     //
-    //   : > ~/.config/quickshell/.reload-nudge && rm -f ~/.config/quickshell/.reload-nudge
-    //
-    // It works for the same reason the pull broke the watches. Quickshell
-    // watches the DIRECTORY as well as the files inside it, and the directory
-    // is an inode git never replaces -- so the directory watch is still alive
-    // at the exact moment every file watch in the tree is dead, which is the
-    // moment this has to work in.
-    //
-    // NOT THE OLDER TRICK of appending a newline to one of the .qml files.
-    // That works on a file the pull did not touch and does nothing at all on
-    // a file it did, silently, because the watch is on the inode git unlinked
-    // -- and the file it did touch is exactly the one somebody reaching for
-    // that trick would pick.
+    // THE LOG'S GRAMMAR, for anyone extending this. Every RELOAD opens with
+    // "INFO: Reloading configuration..." and is closed by exactly one of
+    // "INFO: Configuration Loaded" or "ERROR: Failed to load configuration",
+    // followed by one indented "caused by @file[line:col]" per level with the
+    // real cause innermost. A cold start prints the closing line WITHOUT the
+    // opening one. Both were seen; neither was ever seen twice or missing.
+    // The trap is that the common failure is NEITHER line -- a trigger that
+    // did nothing leaves the log completely silent -- so silence has to count
+    // as failure anywhere this is used, which is the shape of the check below.
 
-    // HOW LONG TO WAIT, AND WHAT THE WAIT IS FOR. Not for a half-written
-    // tree, which is what this used to say and is not what happens: git
-    // renames whole files into place, so there is no instant at which one is
-    // half there. The race is against STOW, and it is a COALESCING race -- a
-    // nudge that lands while a reload is already pending is folded into it,
-    // and what comes out is the one reload that was already scheduled against
-    // the older tree.
+    // HOW LONG TO WAIT, AND WHAT THE WAIT IS FOR. Not for a half-written tree,
+    // which is what this said before the measurements and is not what happens:
+    // git renames whole files into place, so there is no instant at which one
+    // is half there. It is for `install.sh` to have finished its own last unit
+    // and for `qs kill` to have let go of the sockets before the next `qs`
+    // asks for them.
     //
-    // MEASURED, and the numbers are the reason this is one second and not
-    // three. In a lab -- a bare origin, clones off it, this shell's real 121
-    // files running inside a nested Hyprland with its own runtime dir, state
-    // dir, HOME and private bus -- a nudge fired 0-50 ms after the tree moved
-    // was swallowed and left the old code running in 8 of 11 trials. At 100 ms
-    // and above it produced a second, successful reload in 12 of 12. With
-    // this repository's own stow arguments -- --no-folding, which relinks file
-    // by file instead of swinging one directory link -- the whole chain came
-    // out right 13 of 13 with no delay at all.
-    //
-    // So one second is ten times what was needed, costs nothing anybody can
-    // feel, and is a margin rather than a mechanism. Three was never measured.
-    // Raising it would buy nothing, because the safety is not in the number:
-    // it is in reading the log back.
+    // ONE SECOND, AND THE OLD THREE WAS NEVER MEASURED. What the lab did
+    // measure, while the nudge was still believed in, was that a reload takes
+    // 146-164 ms over twelve consecutive runs of this config, and that a
+    // second trigger arriving inside that window is absorbed by the reload
+    // already running rather than starting another -- the threshold sits
+    // between 150 and 200 ms, which is the reload's own duration and not a
+    // debounce. Coalescing never produced a wrong ANSWER in twelve trials,
+    // only one reload where two were expected. It does not bear on the chain
+    // below any more, since a restart cannot be coalesced with anything, but
+    // it is the number to start from if anybody ever finds a trigger that
+    // does work and wants to know how long it takes.
     readonly property int settleSeconds: 1
-
-    // AND THEN CHECK, because a delay is a guess and a log line is an answer.
-    // `qs log` prints the running instance's own log, and exits 255 when
-    // there is no instance to print -- which makes one command answer both
-    // "is there a shell" and "did it take the update". "Configuration Loaded"
-    // is what a reload that worked writes; "Failed to load configuration" is
-    // what a reload that did not writes; the LAST of the two is the state the
-    // shell is in now. A nudge that produced neither is counted a failure as
-    // well, and costs one more nudge.
-    //
-    // ONE RETRY AND NOT A LOOP. The two things a second nudge can fix are a
-    // swallowed first one and a stow still finishing; a third would only
-    // re-ask a question whose answer is already on the screen. And what
-    // follows a failed retry is deliberately NOT a restart, for the reason at
-    // the top: the shell is still up and still working, so the worst thing
-    // this could do at that point is take it away. It prints the nudge
-    // instead, to be run again once the configuration parses.
 
     // WHAT ELSE HAS TO BE TOLD, AND WHAT DOES NOT. Both compositors were put
     // in a nested headless instance of their own -- own runtime dir, own HOME,
@@ -760,9 +781,22 @@ Singleton {
     // with no sign of it.
     //
     // symlinks_post prints these same steps for a person to run by hand and
-    // still runs none of them, which is a smaller claim than it used to be:
-    // what it declined to do was restart a session somebody was sitting in,
-    // and nothing here restarts anything any more.
+    // still runs none of them. That is its call and it stands: restarting the
+    // session somebody is sitting in does not belong to a step whose job was
+    // to make symlinks. It belongs here, where the whole of what was pressed
+    // was "take the update", and where there is a terminal to catch it if the
+    // shell does not come back.
+    //
+    // NIGHT LIGHT NEEDS NOTHING ADDED HERE, and it is worth writing down
+    // because it nearly did. The filter is lost during an update run and the
+    // daemon cannot be asked what is on the screen -- wl-gammarelay-rs holds
+    // the temperature in memory and re-stating the same number uploads no
+    // ramp -- so nothing downstream can detect the need. What repairs it is
+    // NightLight.qml's own `Component.onCompleted`, which runs `night-light
+    // apply` on every load of this configuration. That handler is reached
+    // because this chain starts a shell. A chain that had managed to reload
+    // in place would reach it too; a chain that had done neither, which is
+    // what the nudge version of this actually did, reached nothing at all.
     //
     // NO ${} IN THE SHELL BELOW. This is a JavaScript template literal, so
     // ${...} would be read by QML and not by sh; $name and $(...) are safe and
@@ -781,31 +815,24 @@ Singleton {
                 echo '^ hyprctl said "ok" anyway; it always does'
         fi
 
-        last_load() {
-            qs log -t 200 2>/dev/null |
-                grep -Eo 'Configuration Loaded|Failed to load configuration' |
-                tail -1
-        }
-
-        nudge_shell() {
-            : > ~/.config/quickshell/.reload-nudge
-            rm -f ~/.config/quickshell/.reload-nudge
-            sleep ${root.settleSeconds}
-            [ "$(last_load)" = 'Configuration Loaded' ]
-        }
+        qs kill
+        sleep ${root.settleSeconds}
+        qs -d --no-duplicate
+        sleep ${root.settleSeconds}
 
         if ! qs log -t 1 >/dev/null 2>&1; then
-            qs -d --no-duplicate
-        elif ! nudge_shell && ! nudge_shell; then
             echo
-            echo 'The shell did not load the new configuration and is STILL'
-            echo 'RUNNING the code it had, which is why this does not restart'
-            echo 'it: a reload that fails costs nothing, a cold start that'
-            echo 'fails leaves no shell at all. Fix what the log below names,'
-            echo 'then nudge it again with:'
-            echo '  : > ~/.config/quickshell/.reload-nudge && rm -f ~/.config/quickshell/.reload-nudge'
+            echo 'THE SHELL DID NOT COME BACK. What was just pulled does not'
+            echo 'load, so there is no bar, no island and no launcher until it'
+            echo 'does. Nothing here can undo that: a reload could have been'
+            echo 'survived, a start cannot.'
             echo
-            qs log -t 40
+            echo "The commit before this pull was $head_before."
+            echo 'Fix what the innermost "caused by" names, then:  qs -d --no-duplicate'
+            echo 'If a shell starts below instead, it is tied to THIS window --'
+            echo 'Ctrl-C it and start it detached.'
+            echo
+            qs
         fi
     `
 
