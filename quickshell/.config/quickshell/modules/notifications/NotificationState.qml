@@ -161,9 +161,12 @@ Singleton {
     // hand. So this singleton asks, and modules/bar/NotificationButton.qml --
     // the only file that can see both the popout and the list -- answers.
     //
-    // Every bar answers, which is what makes the key work on a bar where the
-    // widget is switched off. See NotificationButton.anchorX for where the
-    // panel comes out in that case.
+    // IT REACHES EVERY BAR AND ONE OF THEM OPENS. The signal has to go to all
+    // of them -- a singleton cannot know which bar is which -- and every bar
+    // used to act on it, which put this one list on every monitor carrying a
+    // bar at once. The popout's request doors settle it between the bars: see
+    // Screens.panelScreen for which one answers, and NotificationButton.anchorX
+    // for where the panel comes out when that bar does not draw a bell.
     signal historyToggleRequested
     signal historyOpenRequested
 

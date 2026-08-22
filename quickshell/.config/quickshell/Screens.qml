@@ -138,6 +138,43 @@ Singleton {
         return focused ? [focused] : root.mainOnly;
     }
 
+    // WHICH BAR ANSWERS A PANEL THAT WAS ASKED FOR RATHER THAN CLICKED ON --
+    // the island's dashboard and the notification history.
+    //
+    // Both are CONTENT inside the bar's shared popout, and that popout is per
+    // bar because the bar is (see barScreens below). So SUPER + D reached every
+    // bar at once and every bar opened its own copy: the dashboard inherited
+    // the bar's multiplicity by being welded to it, and it is a panel, not a
+    // bar. Exactly one of them has to answer.
+    //
+    // WHICH one is a question grabScreens has already answered -- where a
+    // surface the user summoned out of nowhere belongs -- so it is ASKED here
+    // rather than answered a second time. A second rule would be free to
+    // disagree with the first, and the dashboard and the launcher are
+    // alternatives that hang off the same place: opening on different monitors
+    // is the one thing they must not do. The unknown-output case and the first
+    // instants of a session come with it, already handled up there.
+    //
+    // THE ONE THING THIS ADDS is that a panel welded to the bar needs a BAR to
+    // hang from, which grabScreens knows nothing about. The focused monitor may
+    // carry none -- that is a setting -- and there is no popout on a screen
+    // with no bar, so the keybind would land nowhere and read as broken. It
+    // falls back to the main bar, and to the first bar when the main screen is
+    // not one of the screens carrying one.
+    readonly property var panelScreen: {
+        const bars = root.barScreens;
+
+        if (bars.length === 0)
+            return null;
+
+        const wanted = root.grabScreens[0] ?? null;
+
+        if (wanted && bars.some(screen => screen.name === wanted.name))
+            return wanted;
+
+        return bars.find(screen => screen.name === root.mainName) ?? bars[0];
+    }
+
     // The main screen's key, for the settings window and for anything that has
     // to say "this one" in the same spelling Config stores.
     readonly property string mainKey: Config.screenKey(root.main)
@@ -147,6 +184,11 @@ Singleton {
     // only one that never takes a keyboard grab. The launcher, the power menu,
     // the cheatsheet and the carousel all do, and two of those on two monitors
     // would be two surfaces fighting over the keyboard -- see the header.
+    //
+    // WHAT RIDES ALONG WITH IT does not inherit that licence. The popout that
+    // hangs off the bar is per bar too, and the panels inside it that are
+    // opened by a KEY are single things that were being drawn once per bar
+    // because of where they live. panelScreen above is which bar answers those.
     //
     // Falls back to the main screen when the chosen monitors are all
     // disconnected. Coming back from an undocked laptop, or from a monitor that
