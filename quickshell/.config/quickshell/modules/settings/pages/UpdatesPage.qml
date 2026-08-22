@@ -22,11 +22,21 @@
 // One button that did both would have to pick one of those two worlds, and
 // either choice is a lie about half the list.
 //
-// WHAT THIS PAGE CANNOT DO, said on it rather than only here: a first install
-// is still a terminal. A fresh clone has no desktop to draw this on. That is
-// not the case anybody was complaining about -- the complaint was about the
-// second time onward, and every time after that -- but a page offering to set
-// a machine up would be promising something it cannot reach.
+// WHAT THIS PAGE CANNOT DO, and why it no longer says so on itself. A first
+// install is still a terminal: a fresh clone has no desktop to draw this on.
+// That is not the case anybody was complaining about -- the complaint was
+// about the second time onward, and every time after that -- but a page
+// offering to set a machine up would be promising something it cannot reach.
+// That used to be a "Limits" section at the bottom, three paragraphs of it,
+// and it was cut: nobody who is looking at this page needs to be told what a
+// page they cannot see cannot do. The README states it where somebody with no
+// desktop yet can actually read it, which is a terminal.
+//
+// THE PROSE THAT WAS ON THIS PAGE IS NOW IN THESE COMMENTS, which is the other
+// half of the same cut. Every paragraph below explaining a boundary -- the
+// privilege split, what `etc` does, what a pack is -- was once a note drawn on
+// screen. The reasoning is worth keeping and the wall of text was not, so it
+// moved to where the person who needs it is already reading.
 
 import Quickshell
 import QtQuick
@@ -151,11 +161,34 @@ SettingsPage {
             Text {
                 width: parent.width
 
-                // The title and the id together, because they are for two
-                // different readers of the same row: the title is what it is,
-                // the id is what you type after `./install.sh apply` when you
-                // want to do something about it.
-                text: `${unitRow.modelData.title}  ·  ${unitRow.modelData.id}`
+                // The title and the id are for two different readers of the
+                // same row: the title is what the unit is, the id is what you
+                // type after `./install.sh apply` when you want to do
+                // something about it. So the id cannot go -- it is the only
+                // word on this row that is also a command argument.
+                //
+                // IT IS PRINTED ONLY WHERE IT SAYS SOMETHING THE TITLE DOES
+                // NOT. Four of the fifteen units are titled exactly their own
+                // id, and those rows read as a rendering fault: `Packages ·
+                // packages`, `Symlinks · symlinks`, `Seeds · seeds`,
+                // `Monitors · monitors`.
+                //
+                // The rule is the whole test -- print the id when it differs
+                // from the lowercased title. Checked against the real list
+                // from `./install.sh check --json`: it suppresses those four
+                // and keeps every id that earns its place, which is the eleven
+                // where the id is an abbreviation, a fragment or a different
+                // word altogether -- `GPU driver · gpu`, `Neovim config ·
+                // nvim`, `User services · services-user`, `System files ·
+                // etc`, `Optional packages · optional`. Nothing hyphenated can
+                // ever match a title, so no two-word id is at risk of being
+                // swallowed by it.
+                readonly property bool idSaysMore:
+                    (unitRow.modelData.id ?? "") !== (unitRow.modelData.title ?? "").toLowerCase()
+
+                text: idSaysMore
+                    ? `${unitRow.modelData.title}  ·  ${unitRow.modelData.id}`
+                    : (unitRow.modelData.title ?? "")
                 wrapMode: Text.WordWrap
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.fontSize
@@ -253,61 +286,287 @@ SettingsPage {
 
     // ---------------- What the machine says ----------------
 
-    SettingsSection {
+    // THE ANSWER, AND THE ONE CONTROL THAT ASKS FOR IT AGAIN. Everything
+    // below this is detail: which units, which packs, what to press. This is
+    // the sentence somebody opened the page to read, so it is the largest
+    // thing on it.
+    //
+    // IT IS NOT A SettingsSection, on purpose. That component is a heading
+    // over a card of like things, and there is only one thing here -- filed
+    // inside it, the verdict became an InfoRow label, the same size as every
+    // reading in the window, under a heading ("This machine") that named the
+    // page a second time. A header stops being a header when it is shaped
+    // like the list underneath it.
+    //
+    // NOTHING RUNS THE CHECK ON A TIMER, which is why this button exists at
+    // all rather than a timestamp. `./install.sh check` costs about three
+    // seconds whether it is run from here or typed, and a machine that falls
+    // behind a few times a week does not repay spending them on a poll. It
+    // runs when this page comes on screen -- see onOnScreenChanged above --
+    // and when somebody presses this.
+    Rectangle {
+        id: verdictCard
+
+        // The colour rule is StateChip's, which is the CLI table's: `ok` is
+        // the accent, `missing` is yellow, `drift` is red, because something
+        // that is there and wrong outranks something not there yet. The bar
+        // widget spends its one colour the same way. Three frontends over one
+        // engine should not disagree about what a state looks like.
+        readonly property color tone: {
+            if (!InstallerState.repoKnown || InstallerState.checkError !== "")
+                return Theme.critical;
+            if (!InstallerState.ready)
+                return Theme.textOnSurfaceVariant;
+            if (InstallerState.outstanding === 0)
+                return Theme.primary;
+
+            return InstallerState.worst === "drift" ? Theme.critical : Theme.warning;
+        }
+
+        // The second line is empty in every ordinary state -- up to date, n
+        // units outstanding, not checked yet -- and the card is the height of
+        // its one sentence. It fills only when something has gone wrong that
+        // the verdict cannot carry on its own, and losing the reason a check
+        // failed to a redesign would be trading an answer for a tidy box.
+        readonly property string detail: {
+            if (!InstallerState.repoKnown)
+                return "This shell was started from a path with no install.sh "
+                    + "above it, so there is nothing here to drive. Everything "
+                    + "else in this window still works.";
+
+            return InstallerState.checkError;
+        }
+
         width: parent.width
-        glyph: Icons.update
-        title: "This machine"
+        implicitHeight: Math.max(88, verdictColumn.implicitHeight + Theme.groupPadding * 2.5)
 
-        // The action belongs to the section and not to a row of its own: a
-        // button filed among readings becomes a reading that answers to a
-        // click, which is the thing InfoRow exists to prevent.
-        actionText: InstallerState.checking ? "Checking…" : "Check again"
-        actionGlyph: Icons.refresh
-        onActionTriggered: InstallerState.check()
+        radius: Theme.cardRadius
+        color: Theme.surfaceContainer
 
-        InfoRow {
-            glyph: Icons.update
-            label: {
-                if (!InstallerState.repoKnown)
-                    return "No clone found";
-                if (InstallerState.checkError !== "")
-                    return "The check did not finish";
-                if (!InstallerState.ready)
-                    return "Not checked yet";
-                if (InstallerState.outstanding === 0)
-                    return "Everything applicable is in place";
+        Behavior on color {
+            ColorAnimation { duration: Theme.recolorDuration }
+        }
 
-                return InstallerState.outstanding === 1
-                    ? "1 unit needs attention"
-                    : `${InstallerState.outstanding} units need attention`;
+        // A band of the verdict's own colour down the leading edge, clipped
+        // to the card's rounded corner by a second rectangle over its inner
+        // side. It is the only thing on the page that is coloured at full
+        // strength, and it is what makes this read as a header at a glance
+        // from across the room rather than as one more card.
+        Rectangle {
+            id: toneBand
+
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+
+            width: 4
+            radius: verdictCard.radius
+            color: verdictCard.tone
+            opacity: InstallerState.checking ? 0.35 : 1
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.animDuration }
             }
 
-            description: {
-                if (!InstallerState.repoKnown)
-                    return "This shell was started from a path with no "
-                        + "install.sh above it, so there is nothing here to "
-                        + "drive. Everything else in this window still works.";
+            Behavior on opacity {
+                NumberAnimation { duration: Theme.animDuration }
+            }
 
-                if (InstallerState.checkError !== "")
-                    return InstallerState.checkError;
+            Rectangle {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
 
-                // The command, always, because it is the point: this page and
-                // that line are the same act, and somebody who would rather
-                // type it should be told what to type rather than left to
-                // guess that this window has a CLI behind it.
-                const when = InstallerState.checkedAt === 0
-                    ? "It has not run yet in this session."
-                    : `Last read at ${Qt.formatTime(new Date(InstallerState.checkedAt), "HH:mm:ss")}.`;
+                width: parent.width / 2
+                color: parent.color
+            }
+        }
 
-                return `${when} ./install.sh check says the same thing in a `
-                    + "terminal, and takes about three seconds either way — "
-                    + "which is why nothing here runs it on a timer.";
+        Text {
+            id: verdictGlyph
+
+            anchors.left: toneBand.right
+            anchors.leftMargin: Theme.groupPadding * 1.5
+            anchors.verticalCenter: parent.verticalCenter
+
+            text: Icons.update
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize * 1.9
+            color: verdictCard.tone
+
+            // Dimmed while the check is running, which is this shell's way of
+            // saying "busy". There is no spinner anywhere in it, and adding
+            // one for a three-second command would be a component nothing
+            // else uses -- the bar widget dims the same glyph for the same
+            // three seconds.
+            opacity: InstallerState.checking ? 0.45 : 1
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.animDuration }
+            }
+
+            Behavior on opacity {
+                NumberAnimation { duration: Theme.animDuration }
+            }
+        }
+
+        Column {
+            id: verdictColumn
+
+            anchors.left: verdictGlyph.right
+            anchors.leftMargin: Theme.groupPadding
+            anchors.right: checkButton.left
+            anchors.rightMargin: Theme.itemSpacing
+            anchors.verticalCenter: parent.verticalCenter
+
+            spacing: 4
+
+            Text {
+                width: parent.width
+
+                text: {
+                    if (!InstallerState.repoKnown)
+                        return "No clone found";
+                    if (InstallerState.checkError !== "")
+                        return "The check did not finish";
+                    if (!InstallerState.ready)
+                        return "Not checked yet";
+
+                    // "Up to date" and not "everything applicable is in
+                    // place", which is what this line used to say. The
+                    // qualifier was earning its keep against the `na` rows --
+                    // a desktop is not broken for not being a laptop -- but
+                    // those rows are three centimetres below this sentence
+                    // with their own word on them, and a headline is not the
+                    // place to litigate its own footnotes.
+                    if (InstallerState.outstanding === 0)
+                        return "Up to date";
+
+                    return InstallerState.outstanding === 1
+                        ? "1 unit needs attention"
+                        : `${InstallerState.outstanding} units need attention`;
+                }
+                wrapMode: Text.WordWrap
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize + 3
+                font.weight: Font.Bold
+                color: verdictCard.tone
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
+            }
+
+            Text {
+                width: parent.width
+
+                visible: text !== ""
+                text: verdictCard.detail
+                wrapMode: Text.WordWrap
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize - 2
+                color: Theme.textOnSurfaceVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+            }
+        }
+
+        // The pill SettingsSection puts on a heading, borrowed rather than
+        // inherited: this card has no heading to hang one on, and a check
+        // button that did not look like every other section action in the
+        // window would be a new kind of control for an old kind of job.
+        Rectangle {
+            id: checkButton
+
+            readonly property bool armed: InstallerState.repoKnown && !InstallerState.checking
+
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.groupPadding * 1.5
+            anchors.verticalCenter: parent.verticalCenter
+
+            implicitWidth: checkRow.implicitWidth + Theme.groupPadding * 1.6
+            implicitHeight: Theme.groupHeight - 8
+            radius: height / 2
+
+            opacity: checkButton.armed ? 1 : 0.5
+            color: checkMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+            border.width: 1
+            border.color: Theme.outlineVariant
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.animDuration }
+            }
+
+            Behavior on opacity {
+                NumberAnimation { duration: Theme.animDuration }
+            }
+
+            Row {
+                id: checkRow
+
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    text: Icons.refresh
+                    font.family: Theme.fontFamily
+                    font.pointSize: Theme.iconSize - 2
+                    color: checkMouse.containsMouse ? Theme.primary : Theme.textOnSurfaceVariant
+
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.animDuration }
+                    }
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    // "Check again" is a lie the first time, and the first
+                    // time is the whole of every session until this runs.
+                    text: InstallerState.checking ? "Checking…"
+                        : InstallerState.ready ? "Check again"
+                        : "Check now"
+                    font.family: Theme.fontFamily
+                    font.pointSize: Theme.fontSize - 2
+                    font.weight: Theme.fontWeight
+                    color: checkMouse.containsMouse ? Theme.primary : Theme.textOnSurfaceVariant
+
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.animDuration }
+                    }
+                }
+            }
+
+            MouseArea {
+                id: checkMouse
+
+                anchors.fill: parent
+                enabled: checkButton.armed
+                hoverEnabled: checkButton.armed
+                cursorShape: Qt.PointingHandCursor
+                onClicked: InstallerState.check()
             }
         }
     }
 
     // ---------------- The table ----------------
 
+    // WHY ONE ROW HERE NEVER TURNS UP UNDER EITHER BUTTON. `etc` reports and
+    // never writes: system/ is diffed against /etc and the differences are
+    // printed with the command that would close them, because half those
+    // files describe one machine and pacman owns the rest. So it is the one
+    // unit that is always `na`, never counts as outstanding, and is left out
+    // of both apply lists -- see reportOnlyUnits in InstallerState.
+    //
+    // That used to be a paragraph at the bottom of this page and it is a
+    // comment now, because the row already says it better than the paragraph
+    // did: `etc` prints its own note, and that note ends with the command
+    // that shows the differences. A unit explaining itself in its own words
+    // does not need this page to explain it a second time.
     SettingsSection {
         width: parent.width
         glyph: Icons.packages
@@ -355,16 +614,21 @@ SettingsPage {
         glyph: Icons.terminal
         title: "Bringing it up to date"
 
-        InfoRow {
-            glyph: Icons.update
-            label: "Two halves, and only one of them belongs in this window"
-            description: "The units that write into your home directory run "
-                + "here, as you. The ones that install packages or change your "
-                + "login shell need a password, so they open a terminal "
-                + "running the same command — this shell never asks for one "
-                + "and never runs anything as root."
-        }
-
+        // THE SPLIT IS IN THE TWO LABELS AND NOT IN A NOTE ABOVE THEM. There
+        // was a paragraph here saying that units writing into $HOME run in
+        // this session and units needing a password open a terminal, that
+        // this shell never asks for a password and never runs anything as
+        // root. All of that is still true and none of it needed a paragraph:
+        // two buttons that say "what needs no password" and "what needs a
+        // password" draw the same line in eight words, and the reason the
+        // line exists at all is at the top of this file under WHY THERE ARE
+        // TWO BUTTONS AND NOT ONE.
+        //
+        // The guarantee that went with it -- no password is ever typed into
+        // this shell and nothing here runs as root -- is not a claim a label
+        // can carry, and it is not this page's to make either: it falls out
+        // of the privilege split in InstallerState, whose own note lists the
+        // six units and the grep that found them.
         ActionRow {
             glyph: Icons.update
             label: "Catch up on what needs no password"
@@ -379,7 +643,7 @@ SettingsPage {
 
         ActionRow {
             glyph: Icons.terminal
-            label: "Hand the rest to a terminal"
+            label: "Hand what needs a password to a terminal"
             description: InstallerState.runnableInTerminal.length === 0
                 ? "Nothing outstanding needs a password."
                 : `./install.sh apply ${InstallerState.runnableInTerminal.join(" ")}`
@@ -430,21 +694,34 @@ SettingsPage {
 
     // ---------------- The packs ----------------
 
+    // ONE PROFILE, TWO WAYS OF WRITING IT. Ticking a pack here writes
+    // ${XDG_STATE_HOME}/dotfiles-profile, which is the same file
+    // `./install.sh update` reads and the terminal menu writes. The window
+    // and the terminal are two ways of saying the same thing, not two places
+    // to say it -- which is the reason nothing on this page keeps a
+    // preference of its own, and the reason a pack ticked here is still
+    // ticked at a terminal tomorrow.
     SettingsSection {
         width: parent.width
         glyph: Icons.packages
         title: "Optional packs"
 
-        InfoRow {
-            glyph: Icons.packages
-            label: "Opt in by the pack, or by the name"
-            description: "Nothing in these lists is needed for the desktop to "
-                + "work, which is the whole line between packages/required and "
-                + "packages/optional. A pack is one box; opening one is for "
-                + "the case no set of packs somebody else drew can cover — "
-                + "\"gaming, but not Steam\"."
-        }
-
+        // WHAT "OPTIONAL" MEANS HERE, which was a note on the page and is a
+        // comment now. Nothing in these lists is needed for the desktop to
+        // come up: that is the whole line between packages/required and
+        // packages/optional, and it is the reason this section is a set of
+        // choices while the table above is a reading.
+        //
+        // WHY A PACK OPENS. A pack is one box and most people will only ever
+        // want the box. The drill-down is for the case no set of packs
+        // somebody else drew can cover -- "gaming, but not Steam" -- and it
+        // is a second control precisely so that looking inside a pack is not
+        // the same act as turning it on.
+        //
+        // Neither of those needed saying on screen. The section is titled
+        // "Optional packs", every pack carries its own summary from its own
+        // list file, and the drill-down line says what it does in the words
+        // "pick them one at a time".
         Repeater {
             model: InstallerState.groups
 
@@ -623,37 +900,4 @@ SettingsPage {
         }
     }
 
-    // ---------------- What this page does not do ----------------
-
-    SettingsSection {
-        width: parent.width
-        glyph: Icons.info
-        title: "Limits"
-
-        InfoRow {
-            glyph: Icons.terminal
-            label: "A first install is still a terminal"
-            description: "A fresh clone has no desktop to draw this on. Clone "
-                + "the repo, run ./install.sh, and every time after that is "
-                + "what this page is for."
-        }
-
-        InfoRow {
-            glyph: Icons.info
-            label: "The etc unit reports and never writes"
-            description: "system/ is diffed against /etc and the differences "
-                + "are printed with the command that would close them. Half "
-                + "those files describe one machine and pacman owns the rest, "
-                + "so nothing here offers to apply it."
-        }
-
-        InfoRow {
-            glyph: Icons.update
-            label: "The profile is the same file the terminal reads"
-            description: "Ticking a pack here writes " + Config.stateDir
-                + "/dotfiles-profile, which is what ./install.sh update reads. "
-                + "The window and the terminal are two ways of saying the same "
-                + "thing, not two places to say it."
-        }
-    }
 }
