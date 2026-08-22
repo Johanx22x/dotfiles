@@ -19,6 +19,25 @@
 // hands the event back to the page: a list of two devices inside a 150px
 // ceiling is not a scroll surface at all, and swallowing the wheel there
 // would leave a dead patch on the page.
+//
+// A SECOND REASON, FOUND LATER, AND IT IS WHY THIS IS NOW THE ONLY SCROLLING
+// VIEW IN THE SETTINGS WINDOW. Taking the wheel by hand also keeps the click
+// that follows it. A Flickable left to answer the wheel itself starts a
+// scroll animation, and while that animation runs it takes the next mouse
+// press in order to stop the flick -- QQuickFlickable does this on purpose,
+// so that a press lands on a moving list rather than on whatever happened to
+// slide under the pointer -- and the item beneath never hears about the press
+// at all. On a list that is dragged, that is right. On a list that is only
+// ever wheeled and clicked, it means the first click after every scroll is
+// thrown away.
+//
+// Measured on Qt 6.11.1, offscreen, against the settings rail's real
+// geometry: through a plain Flickable a click 0 ms, 100 ms and 300 ms after
+// one wheel notch was lost every time, and only the one at 600 ms landed.
+// Through this component all four landed, and dragging still scrolls. It cost
+// a real complaint first -- the settings rail's Updates entry is the only one
+// anybody reaches by scrolling, so a window-wide effect was reported, and
+// hunted, as one page refusing to open on the first click.
 
 import QtQuick
 import "root:/"

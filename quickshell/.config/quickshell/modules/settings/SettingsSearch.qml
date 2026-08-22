@@ -110,15 +110,19 @@ Item {
         }
     }
 
-    Flickable {
+    // ScrollList and not a plain Flickable, for the reason written over the
+    // rail in Settings.qml: a Flickable takes the mouse press that follows a
+    // wheel notch in order to stop its own scroll animation, so picking a
+    // result you have just scrolled to costs a click.
+    ScrollList {
         id: resultView
 
         anchors.fill: parent
 
-        contentWidth: width
         contentHeight: list.implicitHeight
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
+
+        // The window hangs its own bar on this list, in the margin beside it.
+        showScrollBar: false
 
         Column {
             id: list
