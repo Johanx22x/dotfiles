@@ -603,9 +603,9 @@ Material 3 recolouring by
 wallpaper without rebuilding anything.
 
 The shell's media card and the drawing behind it come from
-[end-4/dots-hyprland](https://github.com/end-4/dots-hyprland), which is where
-this configuration learned most of what it knows about Quickshell. It is
-GPL-3.0, which is why this repository is — see `LICENSE`.
+[end-4/dots-hyprland](https://github.com/end-4/dots-hyprland) — that card, its
+seek bar and the wave under it, and nothing else here. It is GPL-3.0, which is
+why this repository is — see `LICENSE`.
 
 Every file carrying something of theirs says so at the point it matters, which
 is where the detail belongs; `grep -rl dots-hyprland quickshell/` finds them.
