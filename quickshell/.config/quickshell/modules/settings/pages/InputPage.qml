@@ -570,9 +570,7 @@ SettingsPage {
         // same thing is a click away on the bar. Not an explanation of the
         // control above it -- that one explains itself now -- which is why it
         // is two short lines instead of the paragraph that used to be here.
-        Text {
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
+        SectionNote {
             topPadding: 4
             bottomPadding: 4
 
@@ -581,14 +579,6 @@ SettingsPage {
                   + "does clicking the layout on the bar."
                 : "One layout, so there is nothing to step. Add a second "
                   + "below and SUPER + K starts cycling."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
     }
 
@@ -604,24 +594,13 @@ SettingsPage {
         // this part of the card. It sits above the field rather than below
         // the list, because it is the reason nothing in the list can be
         // clicked and that is worth knowing before scrolling it.
-        Text {
+        SectionNote {
             visible: Config.keyboardLayouts.length >= Config.keyboardLayoutMax
-
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
 
             text: "Four layouts is the most an xkb keymap can hold. Remove "
                 + "one above before adding another — a fifth would be "
                 + "accepted and then never reached."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
             color: Theme.warning
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         SearchField {

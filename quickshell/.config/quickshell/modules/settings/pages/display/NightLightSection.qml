@@ -37,25 +37,15 @@ SettingsSection {
     // wl-gammarelay-rs under niri -- and naming the wrong one is how a
     // person spends an evening trying to start a service that was never
     // going to help.
-    Text {
+    SectionNote {
         visible: !root.nightLightAvailable
 
-        x: Theme.groupPadding
-        width: parent.width - Theme.groupPadding * 2
         topPadding: 4
-        bottomPadding: 6
 
         text: "Nothing below will reach the screen: this session has no blue-light "
             + "daemon. Hyprland uses hyprsunset and niri uses wl-gammarelay-rs; "
             + "`night-light show` says which one it looked for and what it found."
-        wrapMode: Text.WordWrap
-        font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize - 1
         color: Theme.warning
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
     }
 
     ToggleRow {
@@ -71,22 +61,13 @@ SettingsSection {
         onToggled: value => NightLight.setEnabled(value)
     }
 
-    Text {
+    SectionNote {
         visible: NightLight.scheduled
 
-        x: Theme.groupPadding
-        width: parent.width - Theme.groupPadding * 2
         bottomPadding: 4
 
         text: "The schedule below is driving this."
-        wrapMode: Text.WordWrap
-        font.family: Theme.fontFamily
         font.pointSize: Theme.fontSize - 2
-        color: Theme.textOnSurfaceVariant
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
     }
 
     StepperRow {

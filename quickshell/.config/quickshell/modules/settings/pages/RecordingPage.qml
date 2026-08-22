@@ -208,24 +208,14 @@ SettingsPage {
         // It is not silent and it is not a failure: the setting stays put, so
         // plugging the screen back in puts the buffer back on it. See
         // ReplayState.screen.
-        Text {
+        SectionNote {
             visible: ReplayState.monitorMissing
-
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
 
             text: `The chosen screen is not connected, so the buffer is keeping `
                 + `${ReplayState.monitor} instead. It moves back on its own when `
                 + `the screen returns.`
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 2
             color: Theme.warning
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
     }
 
@@ -328,24 +318,14 @@ SettingsPage {
         // the name against the live node list and quietly sends the system
         // default instead, which keeps the buffer running and would otherwise
         // be completely invisible. This is where it stops being invisible.
-        Text {
+        SectionNote {
             visible: ReplayState.microphoneMissing
-
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
 
             text: "That microphone is not connected, so the system default is "
                 + "being recorded instead. The choice stays put and takes "
                 + "effect again when the device comes back."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 2
             color: Theme.warning
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         // AAC AND NOT THE mp4 DEFAULT OF opus, and the reason has to live next
@@ -510,26 +490,16 @@ SettingsPage {
         // is a control, and none of them is silence: a list that is empty
         // because a command has not finished looks exactly like a list that is
         // empty because the command is not installed.
-        Text {
+        SectionNote {
             visible: RecorderCodecs.probing || RecorderCodecs.failed
-
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
-            bottomPadding: 6
 
             text: RecorderCodecs.probing
                 ? "Asking gpu-screen-recorder what this card can encode…"
                 : "gpu-screen-recorder could not be asked what this card can "
                   + "encode, so only Automatic is offered. It is either not "
                   + "installed or it could not reach the GPU."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 2
             color: RecorderCodecs.failed ? Theme.warning : Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
 
         InfoRow {

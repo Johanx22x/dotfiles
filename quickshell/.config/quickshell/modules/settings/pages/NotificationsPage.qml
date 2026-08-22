@@ -87,9 +87,7 @@ SettingsPage {
         // ONCE, UNDER THE THREE, rather than repeated in each row's note:
         // this is true of all of them, and a sentence that appears three
         // times reads as three different sentences that have to be compared.
-        Text {
-            x: Theme.groupPadding
-            width: parent.width - Theme.groupPadding * 2
+        SectionNote {
             topPadding: 4
             bottomPadding: 4
 
@@ -98,14 +96,6 @@ SettingsPage {
                 + "“never expire” is refused whatever the urgency — it is "
                 + "asked for far too easily, and the answer is a panel that "
                 + "only grows."
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
     }
 
