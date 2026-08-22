@@ -54,12 +54,14 @@
 // resize BETWEEN, which is the other half of the reason the tabs are gone.
 
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import QtQuick.Effects
 import QtQuick.Layouts
 import QtQuick
 import "root:/"
+import "root:/components"
 import "root:/modules/bar"
 
 Item {
@@ -444,11 +446,29 @@ Item {
             // button on the right. Behind all of it the cover art again,
             // blurred and dimmed, with the cava spectrum drawn across it.
             //
-            // WHAT COULD NOT BE TAKEN AS-IS is listed in the pull request; the
-            // short version is that they derive the card's whole palette from
-            // the cover art with a ColorQuantizer we do not have, they draw
-            // their progress as a wavy slider, and they download every cover
-            // to disk with curl before showing it. None of those three port.
+            // THREE THINGS WERE DECLARED UNPORTABLE HERE AND WERE NOT. The
+            // first version of this card kept our bar spectrum instead of
+            // their wave, drew the progress as a plain bar instead of their
+            // wavy slider, and left the whole palette on the wallpaper's
+            // colours on the grounds that ColorQuantizer was "a ColorQuantizer
+            // we do not have". All three are now ported, and the last of those
+            // claims was simply false: ColorQuantizer ships in Quickshell
+            // 0.3.0, which is what is installed --
+            // /usr/lib/qt6/qml/Quickshell/quickshell-core.qmltypes declares it
+            // as Quickshell/ColorQuantizer with source, depth, rescaleSize and
+            // colors.
+            //
+            // WHAT GENUINELY DOES NOT PORT is one thing and it has a specific
+            // blocker. ColorQuantizer reads LOCAL FILES ONLY -- its source is
+            // `QImage(this->source.toLocalFile())` in Quickshell's
+            // src/core/colorquantizer.cpp, with no network code anywhere near
+            // it -- so it can quantize Zen's covers, which are file:// paths
+            // in ~/.zen/firefox-mpris/, and cannot quantize the YouTube
+            // thumbnail fallback or any player that publishes an https cover.
+            // THAT is what their curl-to-disk step buys them, and it is the
+            // one respect in which not porting it costs something. Where the
+            // cover is not a local file the card falls back to the wallpaper's
+            // accent; see artDominantColor below.
             //
             // NOT IMPROVED. Where their design looks odd to me it is
             // implemented anyway; the instruction on this card is fidelity.
@@ -482,8 +502,10 @@ Item {
                 // the port is that this card looks like that card.
                 radius: 19
 
-                // What the Card component would have given it.
-                color: Theme.surfaceContainerHigh
+                // Theirs: applyAlpha(colLayer0, 1). The alpha is forced back
+                // to 1 because mix() lerps alpha along with the channels, so
+                // a blend against a translucent role comes out translucent.
+                color: ColorUtils.applyAlpha(mediaCard.blendedColors.colLayer0, 1)
 
                 Behavior on color {
                     ColorAnimation { duration: Theme.recolorDuration }
@@ -504,6 +526,98 @@ Item {
                 readonly property real artistSize: Theme.fontSize * 12 / 16
                 readonly property real timeSize: Theme.fontSize * 15 / 16
                 readonly property real glyphSize: Theme.fontSize * 22 / 16
+
+                // ---- THE CARD'S OWN PALETTE, TAKEN FROM THE COVER ART ----
+                //
+                // Theirs, and the thing that makes their card look like their
+                // card rather than like a card in our colours. Every colour
+                // below this point comes from `blendedColors` and not from
+                // Theme, so while a cover is on screen this card is in the
+                // ALBUM's colours and the panel around it is in the
+                // WALLPAPER's. That divergence is deliberate and is what was
+                // asked for; see components/AdaptedMaterialScheme.qml.
+                ColorQuantizer {
+                    id: coverQuantizer
+
+                    // LOCAL FILES ONLY, and this guard is not defensive
+                    // programming -- it is the documented limit of the type.
+                    // Quickshell's src/core/colorquantizer.cpp loads with
+                    // `QImage(this->source.toLocalFile())` and contains no
+                    // network code at all, so an https cover yields an empty
+                    // path and a warning on stderr once per track. Zen's
+                    // covers are file:// paths and quantize fine; the YouTube
+                    // thumbnail fallback is remote and does not, which is
+                    // exactly what end-4's curl-to-disk step exists to solve.
+                    source: media.held.startsWith("file:") ? media.held : ""
+
+                    // Theirs: 2^0 = one colour, off a 1x1 rescale. The whole
+                    // job is "what colour is this picture, roughly", and doing
+                    // it on one pixel is why it costs nothing.
+                    depth: 0
+                    rescaleSize: 1
+                }
+
+                // THE QUANTIZER'S COLOUR IS NOT USED RAW, and theirs is not
+                // either. It is pulled 20% of the way toward the shell's own
+                // primary container first, which is what stops a saturated
+                // cover from producing a card that glows. Their line is
+                // mix(colors[0] ?? colPrimary, colPrimaryContainer, 0.8) and
+                // this is the same one.
+                //
+                // With no quantized colour -- no cover, or a remote one -- the
+                // base is Theme.primary, so the card falls back to the
+                // wallpaper's accent rather than to grey.
+                readonly property color artDominantColor: {
+                    const quantized = coverQuantizer.colors.length > 0
+                        ? coverQuantizer.colors[0]
+                        : Theme.primary;
+                    return ColorUtils.mix(quantized, Theme.primaryContainer, 0.8);
+                }
+
+                property QtObject blendedColors: AdaptedMaterialScheme {
+                    color: mediaCard.artDominantColor
+                }
+
+                // ---- The wave's own cava ----
+                //
+                // A SECOND cava, not the island's. Spectrum.qml runs 14 bars
+                // for a row of bars in a capsule; a wave wants 50. See
+                // cava-wave.conf for the settings, which are theirs.
+                //
+                // Gated on playback rather than merely on the panel being
+                // open: this whole component is destroyed when the panel
+                // closes, so `running` already means "somebody is looking",
+                // and Spectrum.qml's argument about cava running a full FFT
+                // against silence still applies to the other half.
+                property var visualizerPoints: []
+
+                Process {
+                    id: waveCava
+
+                    running: mediaCard.player?.isPlaying ?? false
+                    command: ["cava", "-p", Quickshell.shellPath("cava-wave.conf")]
+
+                    onRunningChanged: {
+                        if (!waveCava.running)
+                            mediaCard.visualizerPoints = [];
+                    }
+
+                    stdout: SplitParser {
+                        splitMarker: "\n"
+
+                        onRead: line => {
+                            // "0;12;40;...;3;" -- a trailing separator, hence
+                            // the filter. Raw values, NOT normalised: the
+                            // visualiser divides by maxVisualizerValue itself,
+                            // which is how theirs is wired.
+                            const points = line.split(";")
+                                .map(v => parseFloat(v.trim()))
+                                .filter(v => !isNaN(v));
+                            if (points.length > 0)
+                                mediaCard.visualizerPoints = points;
+                        }
+                    }
+                }
 
                 // WHEN NOTHING IS PLAYING the card is one line of text and the
                 // rest of the view is untouched. Their build puts a separate
@@ -554,13 +668,20 @@ Item {
                     property bool maxResFailed: false
                     onYoutubeIdChanged: media.maxResFailed = false
 
-                    // WHAT THE PLAYER IS OFFERING RIGHT NOW, which is not the
-                    // same thing as what the card should be drawing. See
-                    // `held` below for why the two had to be separated.
+                    // THE COVER THIS PLAYER IS KNOWN TO HAVE, which is not
+                    // the same thing as the one it is admitting to right now.
+                    // Track remembers the last art URL each player published
+                    // and drops it only on a genuine track change, so this
+                    // survives the retraction described there -- and, because
+                    // it lives in a singleton rather than in this card, it
+                    // survives the panel being closed and rebuilt too.
+                    readonly property string remembered: Track.covers[mediaCard.player?.dbusName ?? ""] ?? ""
+
+                    // WHAT IS WORTH LOADING RIGHT NOW. See `held` below for
+                    // why this and what is actually drawn had to be separated.
                     readonly property string offered: {
-                        const direct = mediaCard.player?.trackArtUrl ?? "";
-                        if (direct)
-                            return direct;
+                        if (media.remembered)
+                            return media.remembered;
                         if (!media.youtubeId)
                             return "";
                         const size = media.maxResFailed ? "mqdefault" : "maxresdefault";
@@ -577,10 +698,10 @@ Item {
                     // ---- The cover that is actually on screen ----
                     //
                     // THE COVER USED TO APPEAR AS A TRACK STARTED AND VANISH A
-                    // FRAME LATER, and both halves of why were measured on the
-                    // bus rather than guessed at. Watching every
-                    // PropertiesChanged on org.mpris.MediaPlayer2.Player while
-                    // a track started in Zen:
+                    // FRAME LATER, and why was measured on the bus rather than
+                    // guessed at. Watching every PropertiesChanged on
+                    // org.mpris.MediaPlayer2.Player while a track started in
+                    // Zen:
                     //
                     //   19:38:53.286  Metadata, no mpris:artUrl    (new track)
                     //   19:38:53.730  Metadata WITH mpris:artUrl    -> art
@@ -597,57 +718,68 @@ Item {
                     // a card that draws the stand-in whenever the image is not
                     // Ready dropped the cover on the floor.
                     //
-                    // AND THE FILE DOES NOT SURVIVE EITHER. The two URLs above
-                    // are ~/.zen/firefox-mpris/3304_257.png and _258.png --
-                    // numbered temporaries, and that directory holds exactly
-                    // one of them: 257 was already unlinked by the time 258
-                    // existed. So "remember the URL and put it back later" is
-                    // not a fix; the picture has to be held, not the path.
+                    // FIXING ONLY THAT WAS NOT ENOUGH, and the reason is the
+                    // last line of the trace rather than the fast pair in the
+                    // middle. The retraction is not a blip the track recovers
+                    // from -- it is where the track SETTLES. A player left
+                    // paused reports no artwork at all, indefinitely, while
+                    // the file sits on disk. So a card that starts from
+                    // nothing and waits to be offered a cover is never offered
+                    // one, and the first attempt at this kept its memory in
+                    // this item -- which `Loader { active: root.isOpen }`
+                    // DESTROYS on every close. Reopening the panel started
+                    // from nothing every time. The memory therefore had to
+                    // move somewhere that outlives the panel, and it has: see
+                    // Track.qml, which is armed from shell.qml so that it is
+                    // watching before anyone opens anything.
                     //
-                    // WHICH IS WHAT THIS DOES. `offer` below loads whatever is
-                    // being offered and is never drawn; only when it actually
-                    // reaches Ready does its source become `held`, which is
-                    // what the two visible Images are bound to. An offer of
-                    // nothing is therefore ignored -- `held` does not change,
-                    // their source does not change, so Qt neither reloads nor
-                    // releases anything and the cover stays put.
+                    // WHAT IS LEFT HERE is the part that is genuinely about
+                    // drawing. `offer` below loads whatever is worth loading
+                    // and is never drawn; only when it actually reaches Ready
+                    // does its source become `held`, which is what the two
+                    // visible Images are bound to. So the visible cover is
+                    // never replaced by a load in progress, and never by a
+                    // load that failed -- if Zen has already unlinked the file
+                    // it named, the old picture simply stays up.
                     //
                     // The Images share one decode: same URL and the same
                     // sourceSize, so the rest are the pixmap cache answering.
-                    // That sharing is also what makes the deleted file safe --
-                    // the visible Images take their reference while the loader
-                    // still holds it, so the picture outlives the file it came
-                    // from and is never read off disk twice.
                     //
-                    // end-4's own card does NOT survive this. It copies every
-                    // cover into a cache directory with curl and shows the
-                    // copy, and the copy's path is derived from the art URL --
-                    // so the same retraction empties the path and blanks their
-                    // card too. This is the one piece of behaviour here that
-                    // is ours rather than theirs.
+                    // end-4's own card does NOT survive any of this. It copies
+                    // every cover into a cache directory with curl and shows
+                    // the copy, and the copy's path is derived from the art
+                    // URL -- so the same retraction empties the path and blanks
+                    // their card too, and nothing in their build remembers a
+                    // cover for longer than the player admits to it. This is
+                    // the one piece of behaviour here that is deliberately
+                    // ours rather than theirs.
                     property string held: ""
 
-                    // WHAT MUST CLEAR IT: the track changing, and nothing else.
-                    // Holding a cover across a track change would be worse than
-                    // holding none, because it would confidently show the wrong
-                    // album -- the failure this is fixing is only ever "the
+                    // WHAT CLEARS IT: there being nothing left to show.
+                    // Holding a cover across a track change would be worse
+                    // than holding none, because it would confidently show the
+                    // wrong album -- the failure being fixed is only ever "the
                     // same track, source retracted".
                     //
-                    // Built from what the track IS rather than from
-                    // mpris:trackid, which this player publishes as one
-                    // constant string for every track it plays. The player's
-                    // own bus name is in there so that a card handed a
-                    // DIFFERENT player starts from nothing: a sender that
-                    // publishes no art at all must reach the stand-in, not
-                    // inherit whatever the last one was showing.
-                    readonly property string trackKey: [
-                        mediaCard.player?.dbusName ?? "",
-                        mediaCard.player?.trackTitle ?? "",
-                        mediaCard.player?.trackAlbum ?? "",
-                        mediaCard.player?.trackArtist ?? ""
-                    ].join(" - ")
-
-                    onTrackKeyChanged: media.held = ""
+                    // KEYED ON `offered` AND NOT ON `remembered`, and the
+                    // difference is not cosmetic. `remembered` only ever comes
+                    // from mpris:artUrl, so for a player that never publishes
+                    // one it is permanently empty -- and a property that is
+                    // always "" never emits a change. A track change on such a
+                    // player would therefore clear nothing, and if the new
+                    // track had no YouTube id either, the PREVIOUS track's
+                    // thumbnail would simply stay on screen. `offered` is
+                    // empty only when the remembered cover and the fallback
+                    // are BOTH empty, which is the real "nothing to show".
+                    //
+                    // Note this still does not decide "is this a new track" on
+                    // its own. Deciding that twice, in two files, with two
+                    // slightly different rules, is how the two end up
+                    // disagreeing; Track decides, and this follows.
+                    onOfferedChanged: {
+                        if (media.offered === "")
+                            media.held = "";
+                    }
 
                     // THE ONE THAT LOADS, AND IT IS NEVER DRAWN.
                     //
@@ -716,25 +848,29 @@ Item {
                     Rectangle {
                         anchors.fill: parent
                         visible: media.held !== ""
-                        color: Qt.alpha(Theme.surfaceContainerHigh, 0.7)
+                        color: ColorUtils.transparentize(mediaCard.blendedColors.colLayer0, 0.3)
                     }
 
                     // ---- The spectrum, across the whole card ----
                     //
-                    // Their WaveVisualizer, which is cava drawn as one
-                    // continuous wave over the card. Ours is the same cava
-                    // feed through the component this shell already has, so it
-                    // is a row of bars rather than a wave -- see the pull
-                    // request. Behind the text, as theirs is.
-                    Waveform {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
+                    // THEIR WaveVisualizer, which is cava drawn as one
+                    // continuous filled wave over the whole card, behind the
+                    // text. This used to be modules/island/Waveform.qml -- the
+                    // row of bars the island draws -- and reusing it was the
+                    // single thing most obviously not-theirs about the card.
+                    //
+                    // No opacity here: theirs fills at 0.15 alpha inside the
+                    // canvas and blurs the result, and stacking an item
+                    // opacity on top of that would be a second dimming they
+                    // do not have.
+                    WaveVisualizer {
+                        anchors.fill: parent
 
-                        maxHeight: Math.round(mediaCard.height * 0.5)
-                        barWidth: 6
-                        spacing: Math.max(2, (mediaCard.width - Spectrum.bars * 6) / (Spectrum.bars - 1))
-                        opacity: 0.25
+                        live: mediaCard.player?.isPlaying ?? false
+                        points: mediaCard.visualizerPoints
+                        maxVisualizerValue: 1000
+                        smoothing: 2
+                        color: mediaCard.blendedColors.colPrimary
                     }
 
                     // ---- Their RowLayout ----
@@ -758,7 +894,7 @@ Item {
                             implicitWidth: height
 
                             radius: 8
-                            color: Qt.alpha(Theme.surfaceContainerHighest, 0.5)
+                            color: ColorUtils.transparentize(mediaCard.blendedColors.colLayer1, 0.5)
 
                             Image {
                                 id: art
@@ -791,7 +927,7 @@ Item {
                                 text: Icons.music
                                 font.family: Theme.fontFamily
                                 font.pointSize: Math.max(12, Math.round(artBackground.height * 0.28))
-                                color: Theme.outline
+                                color: mediaCard.blendedColors.colSubtext
                             }
                         }
 
@@ -809,7 +945,7 @@ Item {
                                 font.family: Theme.fontFamily
                                 font.pointSize: mediaCard.titleSize
                                 font.weight: Font.Bold
-                                color: Theme.textOnSurface
+                                color: mediaCard.blendedColors.colOnLayer0
                             }
 
                             Text {
@@ -825,7 +961,7 @@ Item {
                                 elide: Text.ElideRight
                                 font.family: Theme.fontFamily
                                 font.pointSize: mediaCard.artistSize
-                                color: Theme.outline
+                                color: mediaCard.blendedColors.colSubtext
                             }
 
                             // Their spacer: everything above sits at the top,
@@ -849,7 +985,7 @@ Item {
                                     elide: Text.ElideRight
                                     font.family: Theme.fontFamily
                                     font.pointSize: mediaCard.timeSize
-                                    color: Theme.outline
+                                    color: mediaCard.blendedColors.colSubtext
                                 }
 
                                 RowLayout {
@@ -863,62 +999,72 @@ Item {
                                         glyph: Icons.skipPrevious
                                         enabled: mediaCard.player?.canGoPrevious ?? false
                                         onActivated: mediaCard.player?.previous()
+
+                                        colBackgroundHover: mediaCard.blendedColors.colSecondaryContainerHover
+                                        colGlyph: mediaCard.blendedColors.colOnSecondaryContainer
                                     }
 
                                     Item {
-                                        id: progressBarContainer
-
                                         Layout.fillWidth: true
-                                        implicitHeight: 4
 
-                                        // THEIRS IS A WAVY SLIDER, and this is
-                                        // a plain bar -- see the pull request.
-                                        Rectangle {
+                                        // 24, which is their handle height and
+                                        // therefore the height of the control.
+                                        // The row is 24 tall either way -- the
+                                        // skip buttons set that -- so this
+                                        // does not move the layout.
+                                        implicitHeight: 24
+
+                                        // THEIRS IS A WAVY SLIDER AND SO IS
+                                        // THIS NOW. It was a plain filled
+                                        // rectangle, which was the second of
+                                        // the three things the first port
+                                        // decided not to take. See
+                                        // components/WavySlider.qml.
+                                        WavySlider {
                                             anchors.left: parent.left
                                             anchors.right: parent.right
                                             anchors.verticalCenter: parent.verticalCenter
 
-                                            height: 4
-                                            radius: height / 2
-                                            color: Theme.secondaryContainer
+                                            value: media.fraction
+                                            seekable: mediaCard.player?.canSeek ?? false
 
-                                            Rectangle {
-                                                anchors.left: parent.left
-                                                anchors.top: parent.top
-                                                anchors.bottom: parent.bottom
+                                            // The wave travels while the track
+                                            // does. Paused, the curve stays
+                                            // where it is rather than
+                                            // flattening -- theirs.
+                                            animateWave: mediaCard.player?.isPlaying ?? false
 
-                                                width: parent.width * media.fraction
-                                                radius: parent.radius
-                                                color: Theme.primary
+                                            highlightColor: mediaCard.blendedColors.colPrimary
+                                            trackColor: mediaCard.blendedColors.colSecondaryContainer
+                                            handleColor: mediaCard.blendedColors.colPrimary
+                                            dotColor: mediaCard.blendedColors.colOnSecondaryContainer
+                                            dotColorHighlighted: mediaCard.blendedColors.colOnPrimary
 
-                                                // Smoothed, or the fill jumps
-                                                // twice a second instead of
-                                                // creeping. Same 480 the old
-                                                // seek bar used, just under
-                                                // the poll.
-                                                Behavior on width {
-                                                    NumberAnimation { duration: 480 }
-                                                }
-                                            }
-                                        }
-
-                                        // The target is taller than the bar it
-                                        // drives -- four pixels is the right
-                                        // thickness to look at and an unfair
-                                        // thing to ask anyone to hit.
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            anchors.topMargin: -10
-                                            anchors.bottomMargin: -10
-
-                                            cursorShape: Qt.PointingHandCursor
-                                            enabled: mediaCard.player?.canSeek ?? false
-
-                                            onClicked: mouse => {
+                                            onMoved: at => {
                                                 const p = mediaCard.player;
                                                 if (!p || !p.length)
                                                     return;
-                                                p.position = (mouse.x / progressBarContainer.width) * p.length;
+                                                p.position = at * p.length;
+
+                                                // AND MOVE THE BAR NOW. The
+                                                // position is read back off
+                                                // MPRIS twice a second, so
+                                                // without this the handle
+                                                // snaps back to where the
+                                                // track was and animates
+                                                // forward again when the next
+                                                // poll lands -- a visible
+                                                // rubber-band after every
+                                                // seek.
+                                                root.livePosition = at * p.length;
+                                            }
+
+                                            // Smoothed, or the fill jumps
+                                            // twice a second instead of
+                                            // creeping. Same 480 the old seek
+                                            // bar used, just under the poll.
+                                            Behavior on value {
+                                                NumberAnimation { duration: 480 }
                                             }
                                         }
                                     }
@@ -927,6 +1073,9 @@ Item {
                                         glyph: Icons.skipNext
                                         enabled: mediaCard.player?.canGoNext ?? false
                                         onActivated: mediaCard.player?.next()
+
+                                        colBackgroundHover: mediaCard.blendedColors.colSecondaryContainerHover
+                                        colGlyph: mediaCard.blendedColors.colOnSecondaryContainer
                                     }
                                 }
 
@@ -950,10 +1099,12 @@ Item {
                                     radius: playPause.playing ? 17 : width / 2
 
                                     color: playPause.playing
-                                        ? (playMouse.containsMouse ? Qt.lighter(Theme.primary, 1.15) : Theme.primary)
+                                        ? (playMouse.containsMouse
+                                            ? mediaCard.blendedColors.colPrimaryHover
+                                            : mediaCard.blendedColors.colPrimary)
                                         : (playMouse.containsMouse
-                                            ? Qt.tint(Theme.secondaryContainer, Qt.alpha(Theme.textOnSecondaryContainer, 0.1))
-                                            : Theme.secondaryContainer)
+                                            ? mediaCard.blendedColors.colSecondaryContainerHover
+                                            : mediaCard.blendedColors.colSecondaryContainer)
 
                                     opacity: (mediaCard.player?.canTogglePlaying ?? false) ? 1 : 0.3
 
@@ -970,7 +1121,9 @@ Item {
                                         text: playPause.playing ? Icons.pause : Icons.play
                                         font.family: Theme.fontFamily
                                         font.pointSize: mediaCard.glyphSize
-                                        color: playPause.playing ? Theme.textOnPrimary : Theme.textOnSecondaryContainer
+                                        color: playPause.playing
+                                            ? mediaCard.blendedColors.colOnPrimary
+                                            : mediaCard.blendedColors.colOnSecondaryContainer
                                     }
 
                                     MouseArea {
@@ -1152,15 +1305,20 @@ Item {
 
         property string glyph: ""
 
+        // The card derives these from the cover art; the defaults are the
+        // shell's, so the component still works anywhere else.
+        property color colBackgroundHover: Qt.tint(Theme.secondaryContainer, Qt.alpha(Theme.textOnSecondaryContainer, 0.1))
+        property color colGlyph: Theme.textOnSecondaryContainer
+
         signal activated
 
         implicitWidth: 24
         implicitHeight: 24
         radius: width / 2
 
-        color: buttonMouse.containsMouse
-            ? Qt.tint(Theme.secondaryContainer, Qt.alpha(Theme.textOnSecondaryContainer, 0.1))
-            : "transparent"
+        // Theirs: transparentize(colSecondaryContainer, 1) at rest, which is
+        // the container colour at zero alpha, and the hover colour on hover.
+        color: buttonMouse.containsMouse ? button.colBackgroundHover : "transparent"
 
         Behavior on color {
             ColorAnimation { duration: Theme.animDuration }
@@ -1179,7 +1337,7 @@ Item {
             text: button.glyph
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize * 22 / 16
-            color: Theme.textOnSecondaryContainer
+            color: button.colGlyph
 
             Behavior on color {
                 ColorAnimation { duration: Theme.animDuration }

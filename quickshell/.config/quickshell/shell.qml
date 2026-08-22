@@ -98,6 +98,22 @@ ShellRoot {
         Component.onCompleted: NightLight.armed
     }
 
+    // THE COVER ART IS REMEMBERED FROM LOGIN, and this line is what lets it,
+    // for the same reason as the four above. Track watches every MPRIS player
+    // and keeps the last cover each one published, because Zen publishes an
+    // artwork URL and then republishes its metadata without the key -- and
+    // then STAYS that way, so a paused track reports no artwork at all while
+    // the picture sits on disk.
+    //
+    // Nothing asks for Track until something draws a track, and everything
+    // that draws one is built behind a Loader that is destroyed when it
+    // closes. Left lazy, the singleton would come into being at the moment
+    // the dashboard opened -- already too late to have seen the cover it was
+    // supposed to remember, which was published while the panel was shut.
+    Scope {
+        Component.onCompleted: Track.armed
+    }
+
     // A Bar on each screen that is meant to have one -- the main screen alone
     // until the Bar page says otherwise. See Screens.qml for how the main one
     // is chosen and why it is no longer a model name written out five times.
