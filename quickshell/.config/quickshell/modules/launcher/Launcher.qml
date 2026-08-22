@@ -457,108 +457,130 @@ PanelWindow {
             // not be doing that while the application grid is what is on
             // screen.
 
-            // The application grid.
-            GridView {
-                id: grid
-
-                visible: !root.commandMode && root.picker === ""
+            // The application grid, inside a plain Item that exists only to
+            // give the scrollbar somewhere to stand.
+            //
+            // WITHOUT IT THE BAR RIDES THE GRID'S CONTENTS. Anything declared
+            // inside a GridView becomes a child of its contentItem, and the
+            // contentItem is the thing that scrolls -- so the bar scrolled
+            // away with the apps, and the code here used to cancel that out
+            // with `y: grid.contentY`. Moving something every frame and then
+            // moving it back is only still while the two agree on every
+            // frame, and they did not: the bar wobbled against the grid it
+            // was meant to be describing. The fix is not a better
+            // cancellation, it is not being moved in the first place.
+            //
+            // AND THE WRAPPER IS WHAT ANCHORS NEED. QML will only anchor an
+            // item to its parent or to a sibling; `layout` is a Column, so a
+            // bar declared beside it would take a slot in the column and
+            // still could not anchor to a grid that is not its sibling. This
+            // Item makes the two siblings, which is the arrangement every
+            // other call site already has -- components/ScrollBar.qml says
+            // both its placements are anchored from outside the view.
+            Item {
                 width: layout.width
-                height: visible ? root.rows * root.cellHeight : 0
+                height: grid.height
+                visible: grid.visible
 
-                cellWidth: root.cellWidth
-                cellHeight: root.cellHeight
-
-                model: root.results
-                currentIndex: root.selected
-
-                highlightFollowsCurrentItem: true
-                snapMode: GridView.SnapToRow
-                clip: true
-
-                // Twelve cells of everything installed. The header up there
-                // says four rows is as many as can be scanned without reading
-                // and that past it you should be typing instead -- which is an
-                // argument for this rather than against it: a grid that ends
-                // flush with the bottom row looks like the whole answer, and
-                // the bar is what says the answer is four hundred long and
-                // typing is the way through it.
-                //
-                // Placed and not anchored, like every other one of these: a
-                // child of a Flickable rides its contents, so `y` gives back
-                // exactly what the scroll took. Hard against the right edge,
-                // where the third column's cell already keeps a groupPadding
-                // clear before its label starts.
+                // Hard against the right edge, where the third column's cell
+                // already keeps a groupPadding clear before its label starts.
                 ScrollBar {
                     view: grid
 
-                    x: grid.width - width
-                    y: grid.contentY
-                    height: grid.height
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
                 }
 
-                delegate: Item {
-                    id: cell
+                GridView {
+                    id: grid
 
-                    required property int index
-                    required property var modelData
+                    visible: !root.commandMode && root.picker === ""
+                    width: parent.width
+                    height: visible ? root.rows * root.cellHeight : 0
 
-                    width: root.cellWidth
-                    height: root.cellHeight
+                    cellWidth: root.cellWidth
+                    cellHeight: root.cellHeight
 
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: 4
-                        radius: Theme.cardRadius - 6
+                    model: root.results
+                    currentIndex: root.selected
 
-                        color: cell.index === root.selected
-                            ? Qt.alpha(Theme.primary, 0.18)
-                            : cellMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+                    highlightFollowsCurrentItem: true
+                    snapMode: GridView.SnapToRow
+                    clip: true
 
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.animDuration }
+                    // Twelve cells of everything installed. The header up there
+                    // says four rows is as many as can be scanned without reading
+                    // and that past it you should be typing instead -- which is an
+                    // argument for this rather than against it: a grid that ends
+                    // flush with the bottom row looks like the whole answer, and
+                    // the bar is what says the answer is four hundred long and
+                    // typing is the way through it.
+                    //
+                    delegate: Item {
+                        id: cell
+
+                        required property int index
+                        required property var modelData
+
+                        width: root.cellWidth
+                        height: root.cellHeight
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            radius: Theme.cardRadius - 6
+
+                            color: cell.index === root.selected
+                                ? Qt.alpha(Theme.primary, 0.18)
+                                : cellMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+
+                            Behavior on color {
+                                ColorAnimation { duration: Theme.animDuration }
+                            }
                         }
-                    }
 
-                    Row {
-                        anchors.left: parent.left
-                        anchors.leftMargin: Theme.groupPadding
-                        anchors.right: parent.right
-                        anchors.rightMargin: Theme.groupPadding
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        spacing: Theme.itemSpacing
-
-                        Image {
+                        Row {
+                            anchors.left: parent.left
+                            anchors.leftMargin: Theme.groupPadding
+                            anchors.right: parent.right
+                            anchors.rightMargin: Theme.groupPadding
                             anchors.verticalCenter: parent.verticalCenter
-                            source: Icons.resolve(cell.modelData.icon ?? "")
-                            visible: status === Image.Ready
-                            width: 34
-                            height: 34
-                            sourceSize.width: width
-                            sourceSize.height: height
+
+                            spacing: Theme.itemSpacing
+
+                            Image {
+                                anchors.verticalCenter: parent.verticalCenter
+                                source: Icons.resolve(cell.modelData.icon ?? "")
+                                visible: status === Image.Ready
+                                width: 34
+                                height: 34
+                                sourceSize.width: width
+                                sourceSize.height: height
+                            }
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: cell.modelData.name ?? ""
+                                elide: Text.ElideRight
+                                width: root.cellWidth - 34 - Theme.itemSpacing - Theme.groupPadding * 2
+                                font.family: Theme.fontFamily
+                                font.pointSize: Theme.fontSize
+                                font.weight: Theme.fontWeight
+                                color: Theme.textOnSurface
+                            }
                         }
 
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: cell.modelData.name ?? ""
-                            elide: Text.ElideRight
-                            width: root.cellWidth - 34 - Theme.itemSpacing - Theme.groupPadding * 2
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize
-                            font.weight: Theme.fontWeight
-                            color: Theme.textOnSurface
+                        MouseArea {
+                            id: cellMouse
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+
+                            onEntered: root.selected = cell.index
+                            onClicked: root.launch(cell.modelData)
                         }
-                    }
-
-                    MouseArea {
-                        id: cellMouse
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-
-                        onEntered: root.selected = cell.index
-                        onClicked: root.launch(cell.modelData)
                     }
                 }
             }
@@ -688,7 +710,7 @@ PanelWindow {
                 id: clipboardComponent
 
                 ClipboardPicker {
-                    width: layout.width
+                    width: parent.width
                     filter: root.query
 
                     onPicked: LauncherState.close()
