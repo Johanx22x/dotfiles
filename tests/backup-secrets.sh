@@ -61,11 +61,43 @@ fi
 # gives away nothing, but it is also this machine's and belongs in local.env
 # with the rest of what is this machine's -- and once one literal is accepted
 # there, `ssh://user:token@host/./repo` is the next one somebody writes.
+#
+# AND THE LOOP IS COUNTED, WHICH IS THE HALF THIS DID NOT HAVE. The key names
+# in the case below are not a detail of the implementation, they ARE this
+# check: a loop that matches nothing runs its body nought times, executes no
+# assertion, and falls through to the line at the bottom that says the
+# configuration holds no secret. Measured on this file rather than reasoned
+# about -- `encryption_passphrase` renamed to `encryption_secret` and `path`
+# to `location`, with a literal passphrase and `ssh://user:token@host/./repo`
+# put in as their values:
+#
+#     $ tests/backup-secrets.sh
+#     backup-secrets: the tracked backup configuration holds no secret
+#     $ echo $?
+#     0
+#
+# Two secrets in a tracked file in a PUBLIC repository, and a green check. The
+# floor below turns that into a stop, and it is `exit 2` rather than a failed
+# assertion because "this check no longer knows what it is looking at" is a
+# different answer from "this file holds a literal" and deserves to read as
+# one. Every other collection in the suite has the same floor -- see
+# config-syntax.sh, package-lists.sh, stow-conflicts.sh, shell-lint.sh and
+# bind-parity.py -- and this was the one that did not.
+#
+# COUNTED IN TWO GROUPS AND NOT AS ONE TOTAL. Renaming one key of the two
+# would leave a bare `(( fields ))` floor perfectly satisfied by the other,
+# which is the same silence one step smaller. Both must be present: a
+# borgmatic config with no repository path is not a config at all, and one
+# with neither encryption field is one whose passphrase has gone somewhere
+# this check cannot see.
+seen_path=0
+seen_encryption=0
 while IFS= read -r line; do
     [[ ${line#"${line%%[![:space:]]*}"} == '#'* ]] && continue
 
     case "$line" in
-        *encryption_passphrase:*|*encryption_passcommand:*|*path:*) ;;
+        *encryption_passphrase:*|*encryption_passcommand:*) seen_encryption=1 ;;
+        *path:*) seen_path=1 ;;
         *) continue ;;
     esac
 
@@ -79,6 +111,14 @@ while IFS= read -r line; do
         fail "$key holds a literal value. It must come from ~/.config/borgmatic/local.env as \${SOMETHING}, never from this file -- the repository is public."
     fi
 done < "$CONFIG"
+
+if (( ! seen_path || ! seen_encryption )); then
+    missing=""
+    (( seen_path ))       || missing="a repository \`path:\`"
+    (( seen_encryption )) || missing="${missing:+$missing and }an \`encryption_passphrase:\` or \`encryption_passcommand:\`"
+    echo "backup-secrets: ${CONFIG#"$REPO"/} does not have $missing -- those key names are what this check IS, so it has just examined nothing. Either the layout changed and this script has to be taught the new names, or the field went missing; both need a person." >&2
+    exit 2
+fi
 
 # --- Nothing that looks like key material anywhere in the package ------------
 #
