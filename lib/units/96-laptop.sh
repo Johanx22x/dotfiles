@@ -10,6 +10,14 @@
 # Asked rather than defaulted, and OFF unless answered. The widgets also hide
 # themselves when the hardware is genuinely absent, so a wrong answer costs
 # nothing -- it is the intention that is being recorded, not a guess.
+#
+# THE FULL RUN ASKS THIS BEFORE THE MENU'S OPTIONAL GROUPS AND NOT HERE, and
+# the reason is in install.sh over tui_laptop: the same answer decides whether
+# brightnessctl goes in, and packages are settled before any unit runs. So the
+# profile is where the answer lives, this unit reads it, and the question below
+# is the fallback for the paths that never went through the menu -- `apply
+# laptop` on a machine that has never run it, and an `update` that finds the
+# unit outstanding.
 
 laptop_meta() {
   echo "Laptop widgets"
@@ -54,11 +62,25 @@ laptop_apply() {
   # file it writes -- the one thing _check looks at -- was never written, so the
   # unit reported success now and "nobody has said whether this is a laptop"
   # forever after.
-  ui_say "   Off by default; they are only useful on a machine that has both."
-  if ui_confirm "Is this a laptop?"; then
-    answer=on
+  #
+  # THE PROFILE FIRST, AND ASKING IS THE FALLBACK. A run that went through the
+  # menu answered this before the optional groups were settled, and asking a
+  # second time here would be offering to disagree with a decision that has
+  # already installed -- or not installed -- a package.
+  if state_has laptop; then
+    if [[ "$(state_get laptop)" == 1 ]]; then answer=on; else answer=off; fi
+    ui_dim "   the profile says $answer"
   else
-    answer=off
+    ui_say "   Off by default; they are only useful on a machine that has both."
+    if ui_confirm "Is this a laptop?"; then
+      answer=on
+    else
+      answer=off
+    fi
+    # Written down so the next run of the menu offers it back rather than
+    # asking again, and so `optional` can follow it the way its list says.
+    if [[ $answer == on ]]; then state_set laptop 1; else state_set laptop 0; fi
+    state_save
   fi
 
   if run "$modules" "$answer" >/dev/null; then

@@ -686,6 +686,60 @@ tui_units() {
 }
 
 # ---------------------------------------------------------------------------
+# IS THIS A LAPTOP -- ASKED HERE, AND NOT ONLY BY THE UNIT THAT NEEDS IT.
+#
+# The answer decides two different things and only one of them is the unit's.
+# The WIDGETS are: laptop-modules writes them under $HOME and the `laptop` unit
+# does that at 96, near the end of a run. The other is a PACKAGE.
+# packages/optional/laptop.txt is brightnessctl, which owns the backlight that
+# both compositors bind XF86MonBrightnessUp/Down to -- and packages are settled
+# HERE, in the menu, before any unit has run at all.
+#
+# THAT ORDERING IS THE WHOLE REASON THIS EXISTS. Asked at 96, the answer
+# arrived after the optional unit had already installed, so the laptop group
+# sat among the boxes as an ordinary matter of taste with nothing behind it. A
+# laptop that said yes got its widgets and no brightnessctl, and both
+# brightness keys were dead -- silently, on the one kind of machine the group
+# is for. packages/optional/laptop.txt has always said the group follows this
+# answer; nothing wired the two together until now.
+#
+# DETECTION PICKS THE DEFAULT AND DECIDES NOTHING, which is the trade the GPU
+# question already makes. A battery is not proof -- a desktop with a UPS
+# reports one, and a laptop whose driver has not loaded reports none -- so this
+# stays a question, with an answer that is usually Enter.
+laptop_detected() {
+  compgen -G '/sys/class/backlight/*' >/dev/null 2>&1 && return 0
+  compgen -G '/sys/class/power_supply/BAT*' >/dev/null 2>&1 && return 0
+  return 1
+}
+
+tui_laptop() {
+  local default=n answer=0
+
+  # An answer already in the profile is the default, so a second run of the
+  # menu is Enter rather than the same decision taken twice.
+  if state_has laptop; then
+    [[ "$(state_get laptop)" == 1 ]] && default=y
+  elif laptop_detected; then
+    default=y
+  fi
+
+  ui_head "Laptop"
+  ui_say "   A battery indicator on the bar, a brightness slider in the island,"
+  ui_say "   and brightnessctl, which is what the brightness keys write through."
+  ui_confirm "  Is this a laptop?" "$default" && answer=1
+
+  state_set laptop "$answer"
+
+  # AND THE GROUP FOLLOWS IT, rather than being offered as a box of its own
+  # below. Two places to answer one question is two places for the answers to
+  # disagree, and the one that would have won is the one the machine cannot
+  # see: a machine with no backlight has nothing for brightnessctl to write to,
+  # and a machine with one has two dead keys without it.
+  state_set group.laptop "$answer"
+}
+
+# ---------------------------------------------------------------------------
 # THE OPTIONAL GROUPS, at two levels.
 #
 # The first is the one anybody wants: one box per pack. The second is
@@ -700,9 +754,17 @@ tui_units() {
 # what lets a package added to a list in a later release reach the machines that
 # ticked its group.
 tui_optional() {
-  local groups=() labels=() chosen=() pre="" group label count i wanted
+  local groups=() discovered=() labels=() chosen=() pre="" group label count i wanted
 
-  mapfile -t groups < <(optional_groups)
+  # EVERY GROUP EXCEPT `laptop`, WHICH IS NOT A MATTER OF TASTE. tui_laptop has
+  # already set it from the laptop answer, and a box here would be a second
+  # chance to contradict that -- see the note over tui_laptop for why the
+  # answer has to be settled before this menu rather than by the unit at 96.
+  mapfile -t discovered < <(optional_groups)
+  for group in "${discovered[@]}"; do
+    [[ $group == laptop ]] && continue
+    groups+=("$group")
+  done
   (( ${#groups[@]} )) || return 0
 
   for i in "${!groups[@]}"; do
@@ -801,6 +863,13 @@ mode_setup() {
   # ASKED BEFORE THE PROFILE IS SAVED AND BEFORE ANYTHING RUNS, because the
   # groups decide what the optional unit will install and there is no sense
   # ticking the unit and then being asked nothing.
+  #
+  # The laptop question comes first of the two: its answer is what settles one
+  # of those groups, so asking it after them would be asking it too late.
+  if state_unit_wanted laptop 0; then
+    tui_laptop
+  fi
+
   if state_unit_wanted optional 0; then
     tui_optional
   fi
