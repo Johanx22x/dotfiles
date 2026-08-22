@@ -48,7 +48,14 @@ Item {
     property color stroke: Theme.outlineVariant
     property color danger: Theme.critical
 
-    implicitWidth: RecorderState.recording ? stop.implicitWidth : targets.implicitWidth
+    // THE WIDER OF THE TWO STATES AND NOT THE ONE CURRENTLY SHOWING. The
+    // panel's width is derived from the row this sits in, so a control that
+    // reports only its live width moves the edge of the dashboard every time
+    // its state changes -- which is exactly what the replay's save button was
+    // doing when the switch was flipped. Starting a recording swaps three
+    // targets for one stop button; reserving the maximum means the panel does
+    // not jump when it does.
+    implicitWidth: Math.max(targets.implicitWidth, stop.implicitWidth)
     implicitHeight: 40
 
     // ---------------- Idle: pick a target ----------------
