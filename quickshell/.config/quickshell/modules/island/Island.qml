@@ -993,10 +993,34 @@ Item {
             }
 
             Column {
+                id: trackText
+
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 1
 
+                // THE ARTIST IS THE LINE THAT GIVES WAY, and it gives way
+                // rather than being clipped. Two lines of Theme.fontSize and
+                // its 12/16 fraction come to about 34.9px at 11pt inside a
+                // capsule of Theme.groupHeight, which is 36 -- so one point
+                // more and the second line does not fit. It stopped being an
+                // overflow and became a CLIP when this capsule became a
+                // ClippingRectangle to hold the blurred cover, which is worse:
+                // an overflowing line is visible and wrong, a clipped one is
+                // half a line of somebody's name.
+                //
+                // Measured against the capsule rather than against a font
+                // size, so it answers any setting rather than the two we
+                // happen to know about. No latch here: implicitHeight is what
+                // a Text would need, and a Text reports it whether or not it
+                // is visible -- so hiding the artist cannot change the sum
+                // that decided to hide it. That distinction is the one
+                // components/ScrollList.qml warns about at length.
+                readonly property bool artistFits: title.implicitHeight
+                    + trackText.spacing + artist.implicitHeight <= Theme.groupHeight
+
                 Text {
+                    id: title
+
                     text: root.player?.trackTitle ?? ""
                     elide: Text.ElideRight
                     width: Math.min(implicitWidth, 240)
@@ -1011,6 +1035,9 @@ Item {
                 }
 
                 Text {
+                    id: artist
+
+                    visible: trackText.artistFits
                     text: Track.artist(root.player?.trackArtist ?? "")
                     elide: Text.ElideRight
                     width: Math.min(implicitWidth, 240)
