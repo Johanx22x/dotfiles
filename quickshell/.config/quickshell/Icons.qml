@@ -259,10 +259,100 @@ Singleton {
     readonly property string skipNext: String.fromCodePoint(0xF04AD)      // nf-md-skip_next
     readonly property string play: String.fromCodePoint(0xF040A)         // nf-md-play
 
+    // ---------------- Where the audio is coming from ----------------
+    //
+    // Two kinds of answer, and they are not the same question. The four
+    // below name an APPLICATION; the four after them name a SERVICE, which
+    // is what somebody actually means by "where is this playing from" when
+    // one browser plays all of them. sourceGlyph() puts them in order.
     readonly property string chromium: String.fromCodePoint(0xF02AF)     // nf-md-google_chrome
     readonly property string firefox: String.fromCodePoint(0xF0239)      // nf-md-firefox
     readonly property string vlc: String.fromCodePoint(0xF057C)          // nf-md-vlc
     readonly property string spotify: String.fromCodePoint(0xF1BC)       // nf-fa-spotify
+
+    // CHECKED BY GLYPH NAME AND NOT BY CODEPOINT, which is not the same
+    // thing and this file has been bitten by the difference twice already --
+    // see the shield and the music box below. Every one of these was read out
+    // of the installed JetBrainsMono Nerd Font with fontTools and confirmed to
+    // resolve to the glyph its name claims:
+    //
+    //   0xF05C3 -> md-youtube        0xF1BE -> fa-soundcloud
+    //   0xF0543 -> md-twitch         0xF059F -> md-web
+    //
+    // FOUR OF THE OBVIOUS CANDIDATES ARE TRAPS in this build and are NOT
+    // used: 0xF167 claims to be nf-fa-youtube and is fa-CLOUDSMITH, 0xF0AC6
+    // claims nf-md-spotify and is md-HEXAGON_SLICE_4, 0xF0A8F claims
+    // nf-md-soundcloud and is md-ANIMATION_OUTLINE, and 0xF0AB9 claims
+    // nf-md-podcast and is md-FILE_MOVE. The Material range was renumbered
+    // between MDI versions and the Nerd Font cheat sheets have not all
+    // caught up. Check the font, not the sheet.
+    readonly property string youtube: String.fromCodePoint(0xF05C3)      // nf-md-youtube
+    readonly property string soundcloud: String.fromCodePoint(0xF1BE)    // nf-fa-soundcloud
+    readonly property string twitch: String.fromCodePoint(0xF0543)       // nf-md-twitch
+    readonly property string web: String.fromCodePoint(0xF059F)          // nf-md-web
+
+    // WHERE THIS TRACK IS COMING FROM, answered service first.
+    //
+    // The island used to match the player's D-Bus IDENTITY against a table of
+    // application names, and that was wrong twice over. It never matched what
+    // is actually playing here -- Zen's identity is "Mozilla zen", which
+    // contains none of "firefox", "chromium", "brave" or "chrome", so
+    // everything fell through to the generic note. And identity names the
+    // APPLICATION, which is not what is being asked: one browser plays
+    // YouTube, YouTube Music, Spotify and Twitch, so "Zen" is the least
+    // useful true answer available.
+    //
+    // The host in xesam:url is what distinguishes them, and it is a field
+    // this shell already reads -- Track.videoId pulls the YouTube id out of
+    // the same string. So: the SERVICE if the URL names one, then the
+    // APPLICATION for native players and for anything with no useful URL,
+    // then the generic note.
+    //
+    // The two can disagree usefully. Spotify's web player inside a browser is
+    // Spotify, and that is the right answer even though the application is
+    // Zen.
+    //
+    // DELIBERATELY SHORT. This covers what actually plays on this machine and
+    // lets everything else fall to the globe; a table of forty brands is
+    // forty things to rot, and thirty-eight of them would never be seen.
+    // Matched on the registrable domain so www., m. and music. subdomains all
+    // land in one line each.
+    function sourceGlyph(url: string, identity: string, entry: string): string {
+        const host = ((url ?? "").match(/^https?:\/\/([^/?#]+)/i)?.[1] ?? "").toLowerCase();
+
+        if (host) {
+            if (host.endsWith("youtube.com") || host === "youtu.be")
+                return root.youtube;
+            if (host.endsWith("spotify.com"))
+                return root.spotify;
+            if (host.endsWith("soundcloud.com"))
+                return root.soundcloud;
+            if (host.endsWith("twitch.tv"))
+                return root.twitch;
+
+            // Something on the web that this shell has no mark for, which is
+            // still more than "a music note" says.
+            return root.web;
+        }
+
+        // No URL, or a local file: fall back to what the application is.
+        // Both fields, because a browser's identity and its desktop entry do
+        // not always carry the same word -- Zen answers "Mozilla zen" to one
+        // and "zen" to the other.
+        const app = `${identity ?? ""} ${entry ?? ""}`.toLowerCase();
+        if (app.includes("spotify"))
+            return root.spotify;
+        if (app.includes("vlc"))
+            return root.vlc;
+        // "mozilla" rather than "firefox": it catches Firefox and Zen alike,
+        // which is the bug this replaces.
+        if (app.includes("firefox") || app.includes("mozilla") || app.includes("zen"))
+            return root.firefox;
+        if (app.includes("chrom") || app.includes("brave"))
+            return root.chromium;
+
+        return root.music;
+    }
 
     // ---------------- Launcher commands ----------------
     // The ">" mode's entries. Same rule as everything else in this file:
