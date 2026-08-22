@@ -77,6 +77,19 @@ build() {
   cargo build --frozen --release --features systemd
 }
 
+# KEPT, AND THE REASON IS THE PATCH ITSELF. Upstream PR #480 is two hunks: the
+# classification change in src/xstate/mod.rs and a regression test beside it in
+# src/xstate/tests.rs called davinci_resolve_project_manager. This block is what
+# runs that test, so deleting it -- or reaching for `makepkg --nocheck` -- would
+# leave the one thing this whole directory exists for verified by nobody.
+#
+# It runs headless in the installer CI container without trouble: 81 unit tests
+# and 28 Xwayland integration tests, green on every build of this package since
+# the job was added, davinci_resolve_project_manager among them. If one of the
+# integration tests ever does turn flaky in there -- they drive a real Xwayland
+# through software rendering, so it is a fair thing to worry about -- exclude
+# that test BY NAME with `--skip`, and say which one and why. Dropping all 109
+# to silence one is trading the patch's own proof for a quieter log.
 check() {
   cd $pkgname-$pkgver
   export XDG_RUNTIME_DIR="$(mktemp -d)"
@@ -87,5 +100,18 @@ package() {
   cd $pkgname-$pkgver
   install -vDm 755 target/release/$pkgname -t "$pkgdir/usr/bin/"
   install -vDm 644 resources/$pkgname.service -t "$pkgdir/usr/lib/systemd/user/"
-  install -vDm 644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgdir/"
+  # $pkgname, NOT $pkgdir, AND THE UPSTREAM PKGBUILD HAS THIS WRONG. Arch's
+  # own file says `licenses/$pkgdir/`, which expands to the absolute path of
+  # the build directory pasted inside itself. The CI build log shows where the
+  # licence landed:
+  #
+  #   usr/share/licenses//tmp/tmp.4JmHBBNZH9/repo/packages/xwayland-satellite/
+  #     pkg/xwayland-satellite/LICENSE
+  #
+  # -- a path made of whoever's machine did the build, so no two builds of this
+  # package agree, and `pacman -Ql xwayland-satellite` cannot find the licence
+  # where every other package keeps it. This is the one place this file departs
+  # from upstream other than the patch; it is a typo, not a decision, and it
+  # goes with the directory when the directory goes.
+  install -vDm 644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
 }
