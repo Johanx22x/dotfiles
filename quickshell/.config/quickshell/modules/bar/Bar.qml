@@ -106,20 +106,24 @@ PanelWindow {
     }
 
     // The island's dashboard and the launcher hang from the same place and
-    // cannot both be up. The rule itself lives in LauncherState; these two
-    // are the wiring, and they are here because this is the only file that
-    // can see both the popout and that singleton.
+    // cannot both be up. This file is the wiring for that, and it is here
+    // because it is the only one that can see both the popout and the
+    // singleton: a popout is per bar and a singleton is not.
+    //
+    // WHAT THIS PUBLISHES IS THE POPOUT AND NOT THE DASHBOARD. The one popout
+    // a bar owns shows the dashboard, the tray menus, the notification history
+    // and the peripheral batteries, and `popoutOpen` says only that one of
+    // them is up. It was called `dashboardOpen`, which is exactly what led
+    // three other files to assign it false believing that closed the panel --
+    // see the note over it in LauncherState.
     //
     // AN ASSIGNMENT AND NOT A Binding, and the reason is that this file is
     // INSTANTIATED ONCE PER BAR. A `Binding { target: LauncherState; property:
-    // "dashboardOpen" }` written here is one binding per bar onto one property
-    // of a singleton, and a property holds one binding: whichever bar was built
+    // "popoutOpen" }` written here is one binding per bar onto one property of
+    // a singleton, and a property holds one binding: whichever bar was built
     // last owned it and the rest were writing nowhere. So the dashboard opening
     // on the wrong bar closed no launcher at all -- a per-screen file quietly
-    // fighting over a global, which is the same shape as the bug above it. It
-    // also could not survive CheatsheetState and WallpaperState, both
-    // of which ASSIGN this flag false when they open: an imperative write to a
-    // bound property takes the binding away for good.
+    // fighting over a global, which is the same shape as the bug above it.
     //
     // Nothing reads the flag as a level -- LauncherState, CheatsheetState and
     // WallpaperState each act only where it turns TRUE -- so a bar reporting
@@ -129,7 +133,7 @@ PanelWindow {
         target: barPopout
 
         function onIsOpenChanged(): void {
-            LauncherState.dashboardOpen = barPopout.isOpen;
+            LauncherState.popoutOpen = barPopout.isOpen;
         }
     }
 
