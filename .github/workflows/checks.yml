@@ -153,7 +153,17 @@ jobs:
       # anybody's $HOME -- and stow above is what it needs installed.
       - name: A deleted file leaves no link behind
         if: ${{ !cancelled() }}
-        run: tests/stale-links.sh
+        # UNDER A USER OF ITS OWN, because it sources install.sh for `run`, the
+        # ui and the unit, and install.sh refuses to be run as root -- with
+        # `exit`, which from a sourced script would end the test before its
+        # first assertion. This container is root, so the test gets somebody to
+        # be: it only reads the checkout and writes into mktemp, so no
+        # ownership of anything has to change. The installer job next door
+        # solves the same refusal the same way, with its `ci` user.
+        run: |
+          set -euo pipefail
+          useradd --create-home --shell /bin/bash checker
+          sudo -u checker -H "$GITHUB_WORKSPACE/tests/stale-links.sh"
 
       # LAST, BECAUSE IT IS ABOUT THE OTHER CHECKS RATHER THAN ABOUT THE
       # REPOSITORY. It answers whether the workflows in this directory run at
