@@ -30,6 +30,13 @@ PULL=0
 WITH_REQUIRES=0
 COMPOSITOR=""
 
+# THE FLAGS THAT MUST SURVIVE A RE-EXEC, kept as they were typed rather than
+# rebuilt from the variables they set. `update --pull` re-runs this script once
+# the pull has landed, and what it hands the new copy is the whole of what that
+# copy knows about the run: anything not in here is a flag the operator gave and
+# the second half of the run never saw. See mode_update.
+REEXEC_ARGS=()
+
 # Whether a question may be put on screen at all. `update` turns this off: it is
 # the mode meant to run from a script or out of a keybind, and a mode that is
 # non-interactive in principle and blocks on a prompt in practice is worse than
@@ -246,7 +253,7 @@ while (( $# )); do
       ;;
     --pull)        PULL=1 ;;
     --with-requires) WITH_REQUIRES=1 ;;
-    -y|--yes)      ASSUME_YES=1 ;;
+    -y|--yes)      ASSUME_YES=1; REEXEC_ARGS+=("$1") ;;
     -n|--dry-run)  DRY_RUN=1 ;;
     --json)        JSON=1 ;;
     --compositor=*)
@@ -255,10 +262,11 @@ while (( $# )); do
         hyprland|niri|both) ;;
         *) ui_bad "--compositor takes hyprland, niri or both, not '$COMPOSITOR'" >&2; exit 2 ;;
       esac
+      REEXEC_ARGS+=("$1")
       ;;
     --compositor)
       ui_bad "write it as --compositor=hyprland" >&2; exit 2 ;;
-    --profile=*)   PROFILE_PATH="${1#*=}" ;;
+    --profile=*)   PROFILE_PATH="${1#*=}"; REEXEC_ARGS+=("$1") ;;
     --profile)
       ui_bad "write it as --profile=/path/to/file" >&2; exit 2 ;;
     -h|--help)     usage; exit 0 ;;
@@ -538,10 +546,26 @@ mode_update() {
     # half in effect -- the new unit files on disk, the old ones in memory.
     # Re-exec with the same arguments minus the pull and let what arrived do the
     # work. Skipped under --dry-run, where nothing was pulled to re-read.
+    #
+    # AND WITH THE FLAGS IT WAS GIVEN, which it was not. The line that rebuilt
+    # this said `again=(update)` plus --yes and dropped everything else, so
+    # `update --pull --compositor=hyprland` re-ran as a bare `update` and the
+    # second half of the run resolved the compositor from the profile or from
+    # what happened to be installed -- on this machine that stowed BOTH
+    # compositor packages, linking configuration nobody had asked for, in the
+    # mode meant for a cron job and a keybind. --profile went the same way,
+    # which is worse in kind: the run reads and writes a different file after
+    # the pull from the one it read before it.
+    #
+    # --pull IS THE ONE FLAG DELIBERATELY LEFT OUT, because it has already
+    # happened and passing it on would pull again on every re-exec. Of what is
+    # left, --json and a unit id are refused for this mode by the argument
+    # parser, --dry-run never reaches this line, and --with-requires belongs to
+    # `apply` and is read nowhere in this mode -- so the three flags recorded
+    # in REEXEC_ARGS are the whole of what an `update` can be told.
     if (( ! DRY_RUN )); then
       ui_dim "  re-running with what the pull brought in"
-      again=(update)
-      (( ASSUME_YES )) && again+=(--yes)
+      again=(update "${REEXEC_ARGS[@]}")
       exec "$DOT/install.sh" "${again[@]}"
     fi
   fi
