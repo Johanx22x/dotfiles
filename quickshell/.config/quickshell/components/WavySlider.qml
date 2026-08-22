@@ -26,7 +26,10 @@
 //                    4px line width
 //   stop indicator   a 3px dot at the far end
 //   inner corners    2, their rounding.unsharpen, on the ends that meet the
-//                    handle -- the outer ends are fully rounded
+//                    handle -- the outer ends are fully rounded. GIVEN UP on
+//                    the unplayed half, which is a stroke now so that it
+//                    cannot disagree with the played half about weight; see
+//                    the note there
 
 import QtQuick
 import "root:/"
@@ -127,23 +130,60 @@ Item {
     }
 
     // ---- The part not played yet ----
-    Rectangle {
+    //
+    // THE SAME COMPONENT AS THE PLAYED HALF, WITH THE WAVE TURNED OFF, and
+    // that is the whole point of it rather than a shortcut.
+    //
+    // IT WAS A Rectangle, and next to the wave it read as a different weight:
+    // the played half looked thinner and looked jagged where this looked
+    // crisp. Nothing had changed it -- neither this file nor WavyLine.qml has
+    // been touched since they arrived -- what changed is that a stroke and a
+    // rectangle were being compared at all.
+    //
+    // THE ARITHMETIC, which is why compensating the width would have been the
+    // wrong answer. An antialiased stroke of width W centred on a pixel row
+    // is fully opaque only across W - 1 pixels and ramps to nothing over the
+    // half pixel at each edge; a hard-edged rectangle of height W is fully
+    // opaque across all W. The two lay down the same TOTAL ink -- both
+    // integrate to W -- but the eye reads the solid core, and at the 4 used
+    // here that core is 3 against 4. Twenty-five per cent thinner, from
+    // technique alone, with both sides asking for the same number.
+    //
+    // It also explains why it comes and goes: a rectangle whose y lands on a
+    // fraction antialiases too, and then the two match.
+    //
+    // Compensating the stroke to LOOK like the rectangle would drift, because
+    // the compensation is a function of the width, the colour and what is
+    // behind it. Drawing both halves through the same code cannot drift,
+    // because there is no second technique left to disagree with.
+    //
+    // WHAT IT COSTS: their per-corner radii on this half -- fully rounded at
+    // the far end, barely rounded at the end that meets the handle. A stroke
+    // has caps rather than corners, so both ends are round now. That is a
+    // detail of theirs given up to stop the two halves disagreeing, which is
+    // the trade this is.
+    WavyLine {
         id: rail
 
         anchors.verticalCenter: parent.verticalCenter
 
         x: root.visualPosition * root.effectiveDraggingWidth + root.handleMargins * 2 + root.handleWidth / 2
         width: Math.max(0, (1 - root.visualPosition) * root.effectiveDraggingWidth - root.handleWidth / 2)
-        height: root.trackWidth
+        height: root.handleHeight
+
+        visible: width > 0
 
         color: root.trackColor
+        lineWidth: root.trackWidth
 
-        // Fully rounded at the far end, barely rounded at the end that meets
-        // the handle. Theirs.
-        topRightRadius: height / 2
-        bottomRightRadius: height / 2
-        topLeftRadius: root.unsharpenRadius
-        bottomLeftRadius: root.unsharpenRadius
+        // Zero amplitude is a straight line drawn by the code that draws the
+        // wave: same path builder, same stroke, same caps, same rasteriser.
+        amplitudeMultiplier: 0
+        frequency: root.waveFrequency
+        fullLength: root.width
+
+        onWidthChanged: rail.requestPaint()
+        onColorChanged: rail.requestPaint()
     }
 
     // ---- The stop indicator ----
