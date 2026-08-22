@@ -569,33 +569,11 @@ Item {
         rescaleSize: 1
     }
 
-    readonly property bool groundMeasured: groundQuantizer.colors.length > 0
-    readonly property color groundColor: root.groundMeasured ? groundQuantizer.colors[0] : Theme.surface
-
-    // RELATIVE LUMINANCE AND NOT `hslLightness`, because the question being
-    // asked is "will white type read on this", and lightness answers a
-    // different one: a saturated blue and a saturated yellow at the same HSL
-    // lightness are nowhere near equally bright to look at. These are the
-    // sRGB coefficients, without the gamma linearisation -- an approximation,
-    // and an approximation is enough to choose between 0.30 and 0.74.
-    readonly property real groundLuminance: 0.2126 * root.groundColor.r
-        + 0.7152 * root.groundColor.g
-        + 0.0722 * root.groundColor.b
-
-    // THE SCRIM, MEASURED. A fixed opacity cannot serve a black sleeve and a
-    // white one, and that is the named risk of this whole design. The range
-    // is wide on purpose: at the pale end a cover is knocked back to about a
-    // quarter of its own brightness, which is what puts white type back on
-    // solid ground.
-    //
-    // WITH NO MEASUREMENT -- an https cover, which the quantizer cannot read
-    // -- it goes to 0.62 rather than to the middle. The safe assumption about
-    // a picture you cannot see is that it is bright, and the cost of being
-    // wrong that way is a dark panel, while the cost of being wrong the other
-    // way is a panel you cannot read.
-    readonly property real scrimOpacity: root.groundMeasured
-        ? Math.max(0.30, Math.min(0.74, 0.30 + 0.45 * root.groundLuminance))
-        : 0.62
+    // THE SCRIM, MEASURED, and the rule lives in ColorUtils because the island
+    // needs the same answer about the same picture. See scrimFor there for
+    // what it does with an unmeasurable cover and why it uses luminance
+    // rather than lightness.
+    readonly property real scrimOpacity: ColorUtils.scrimFor(groundQuantizer.colors)
 
     // ---------------- What replaced the sampling gate ----------------
     //
@@ -617,42 +595,6 @@ Item {
         id: dashClock
 
         precision: SystemClock.Minutes
-    }
-
-    // ---- The wave's own cava ----
-    //
-    // A SECOND cava, not the island's. Spectrum.qml runs 14 bars for a row of
-    // bars in a capsule; this one draws a continuous wave across the panel.
-    // See cava-wave.conf, and see the note there about what the number became
-    // when the card it was chosen for turned into a panel two and a half
-    // times as wide.
-    property var visualizerPoints: []
-
-    Process {
-        id: waveCava
-
-        running: root.player?.isPlaying ?? false
-        command: ["cava", "-p", Quickshell.shellPath("cava-wave.conf")]
-
-        onRunningChanged: {
-            if (!waveCava.running)
-                root.visualizerPoints = [];
-        }
-
-        stdout: SplitParser {
-            splitMarker: "\n"
-
-            onRead: line => {
-                // "0;12;40;...;3;" -- a trailing separator, hence the filter.
-                // Raw values, NOT normalised: the visualiser divides by
-                // maxVisualizerValue itself.
-                const points = line.split(";")
-                    .map(v => parseFloat(v.trim()))
-                    .filter(v => !isNaN(v));
-                if (points.length > 0)
-                    root.visualizerPoints = points;
-            }
-        }
     }
 
     // ---------------- The wall itself ----------------
@@ -810,9 +752,14 @@ Item {
             anchors.bottom: parent.bottom
             height: Math.min(root.bodyHeight, 190)
 
-            live: root.player?.isPlaying ?? false
-            points: root.visualizerPoints
-            maxVisualizerValue: 1000
+            live: Spectrum.active
+            // ONE FEED FOR THE WHOLE SHELL. This panel used to run a cava of
+            // its own beside the island's, because the island drew 14 fat
+            // bars and this drew a wave and the two wanted different numbers.
+            // The island draws the same wave now, so there is one process and
+            // one config; see Spectrum.qml.
+            points: Spectrum.values
+            maxVisualizerValue: Spectrum.maxValue
             smoothing: 2
             color: root.ink
         }
