@@ -472,6 +472,27 @@ PanelWindow {
                 snapMode: GridView.SnapToRow
                 clip: true
 
+                // Twelve cells of everything installed. The header up there
+                // says four rows is as many as can be scanned without reading
+                // and that past it you should be typing instead -- which is an
+                // argument for this rather than against it: a grid that ends
+                // flush with the bottom row looks like the whole answer, and
+                // the bar is what says the answer is four hundred long and
+                // typing is the way through it.
+                //
+                // Placed and not anchored, like every other one of these: a
+                // child of a Flickable rides its contents, so `y` gives back
+                // exactly what the scroll took. Hard against the right edge,
+                // where the third column's cell already keeps a groupPadding
+                // clear before its label starts.
+                ScrollBar {
+                    view: grid
+
+                    x: grid.width - width
+                    y: grid.contentY
+                    height: grid.height
+                }
+
                 delegate: Item {
                     id: cell
 
