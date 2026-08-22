@@ -121,6 +121,12 @@ PanelWindow {
     // of six. With None there is no focus to lose, no cancelled press, and no
     // dead click.
     //
+    // Checked on both compositors rather than assumed, since this is the one
+    // line of that work which applies to Hyprland as well: the same battery
+    // run in a nested Hyprland 0.56.2 with this set to None and again with it
+    // set back to OnDemand produced identical logs, so its focus grab does not
+    // depend on the surface taking keyboard focus.
+    //
     // Give this back the day something in here types, and give it back
     // narrowly -- bound to the content that needs it rather than to every
     // popout that opens.
