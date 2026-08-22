@@ -34,7 +34,7 @@
 //
 // THE PROSE THAT WAS ON THIS PAGE IS NOW IN THESE COMMENTS, which is the other
 // half of the same cut. Every paragraph below explaining a boundary -- the
-// privilege split, what `etc` does, what a pack is -- was once a note drawn on
+// privilege split, what a pack is, what the profile is -- was once drawn on
 // screen. The reasoning is worth keeping and the wall of text was not, so it
 // moved to where the person who needs it is already reading.
 
@@ -163,34 +163,27 @@ SettingsPage {
             Text {
                 width: parent.width
 
-                // The title and the id are for two different readers of the
-                // same row: the title is what the unit is, the id is what you
-                // type after `./install.sh apply` when you want to do
-                // something about it. So the id cannot go -- it is the only
-                // word on this row that is also a command argument.
+                // THE TITLE ALONE. The row used to carry the unit's id after
+                // it -- `GPU driver · gpu`, `User services · services-user` --
+                // on the argument that the id is what you type after
+                // `./install.sh apply`, so it had to be somewhere.
                 //
-                // IT IS PRINTED ONLY WHERE IT SAYS SOMETHING THE TITLE DOES
-                // NOT. Four of the fifteen units are titled exactly their own
-                // id, and those rows read as a rendering fault: `Packages ·
-                // packages`, `Symlinks · symlinks`, `Seeds · seeds`,
-                // `Monitors · monitors`.
+                // It did not have to be here. Printing it on every row made a
+                // reading table carry a second column of command arguments
+                // for a reader who, by definition, has already left this page
+                // for a terminal; the dot and the word after it were on
+                // fifteen rows to serve the one visit in twenty where
+                // somebody wanted them. A first pass suppressed only the ids
+                // that repeated their own title, which fixed `Seeds · seeds`
+                // and left every other row still trailing a word that the
+                // title had already said in full.
                 //
-                // The rule is the whole test -- print the id when it differs
-                // from the lowercased title. Checked against the real list
-                // from `./install.sh check --json`: it suppresses those four
-                // and keeps every id that earns its place, which is the eleven
-                // where the id is an abbreviation, a fragment or a different
-                // word altogether -- `GPU driver · gpu`, `Neovim config ·
-                // nvim`, `User services · services-user`, `System files ·
-                // etc`, `Optional packages · optional`. Nothing hyphenated can
-                // ever match a title, so no two-word id is at risk of being
-                // swallowed by it.
-                readonly property bool idSaysMore:
-                    (unitRow.modelData.id ?? "") !== (unitRow.modelData.title ?? "").toLowerCase()
-
-                text: idSaysMore
-                    ? `${unitRow.modelData.title}  ·  ${unitRow.modelData.id}`
-                    : (unitRow.modelData.title ?? "")
+                // WHERE THE ID STILL SURFACES, and it is not a quieter copy of
+                // this: the two hand-off rows below print the exact command
+                // they are about to run, ids and all, and that is the moment
+                // somebody actually needs to read one. The id belongs next to
+                // the command, not next to the state.
+                text: unitRow.modelData.title ?? ""
                 wrapMode: Text.WordWrap
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.fontSize
@@ -630,18 +623,18 @@ SettingsPage {
 
     // ---------------- The table ----------------
 
-    // WHY ONE ROW HERE NEVER TURNS UP UNDER EITHER BUTTON. `etc` reports and
-    // never writes: system/ is diffed against /etc and the differences are
-    // printed with the command that would close them, because half those
-    // files describe one machine and pacman owns the rest. So it is the one
-    // unit that is always `na`, never counts as outstanding, and is left out
-    // of both apply lists -- see reportOnlyUnits in InstallerState.
+    // A ROW EXPLAINS ITSELF IN ITS OWN WORDS, which is why nothing here adds
+    // to it. Every unit writes its own note and this page prints that note
+    // unedited: the code that found the problem is the only thing that knows
+    // what the problem is.
     //
-    // That used to be a paragraph at the bottom of this page and it is a
-    // comment now, because the row already says it better than the paragraph
-    // did: `etc` prints its own note, and that note ends with the command
-    // that shows the differences. A unit explaining itself in its own words
-    // does not need this page to explain it a second time.
+    // This section briefly carried a paragraph about `etc`, the one unit that
+    // reported and never wrote -- always `na`, never outstanding, absent from
+    // both apply lists. That unit has since been dropped and system/ is
+    // documentation now, so the paragraph went with it. It is left recorded
+    // here only because "why is there a row nothing offers to fix" is a
+    // reasonable question to have about this table, and the answer today is
+    // that there is no such row.
     SettingsSection {
         width: parent.width
         glyph: Icons.packages
