@@ -122,11 +122,12 @@ Item {
     // PeripheralBattery make.
     //
     // The fallback is for the bar where this widget is switched OFF. The keys
-    // still work there -- SUPER + SHIFT + N reaches every bar, exactly as
-    // SUPER + D opens the dashboard on a bar with no island -- but a Row does
-    // not lay out an invisible child, so this item's own x has never been set
-    // and says nothing. The right edge of the screen puts the panel where the
-    // widget would have been, and Popout's own clamp brings it back inside.
+    // still work there -- SUPER + SHIFT + N is answered by whichever bar is
+    // being asked whether or not it draws a bell, exactly as SUPER + D opens
+    // the dashboard on a bar with no island -- but a Row does not lay out an
+    // invisible child, so this item's own x has never been set and says
+    // nothing. The right edge of the screen puts the panel where the widget
+    // would have been, and Popout's own clamp brings it back inside.
     function anchorX(): real {
         if (root.visible)
             return root.mapToItem(null, root.width / 2, 0).x;
@@ -147,15 +148,22 @@ Item {
     // A second press of a key pressed by mistake should put the panel away; a
     // click on a badge that has just sent you somewhere should not close the
     // thing it opened. The same split the dashboard's two entry points had.
+    //
+    // AND ONE BAR ANSWERS, not all of them. "Every bar answers" was the note
+    // that used to stand over the signals in NotificationState, and it was
+    // exactly the bug the dashboard had: this list is ONE panel, and every bar
+    // opening its own copy through toggleAt put it on every monitor carrying a
+    // bar. The request doors take the same two behaviours to the single bar
+    // Screens.panelScreen names -- see the note there.
     Connections {
         target: NotificationState
 
         function onHistoryToggleRequested(): void {
-            root.popout.toggleAt(root.anchorX(), historyComponent);
+            root.popout.requestToggleAt(root.anchorX(), historyComponent);
         }
 
         function onHistoryOpenRequested(): void {
-            root.popout.openAt(root.anchorX(), historyComponent);
+            root.popout.requestOpenAt(root.anchorX(), historyComponent);
         }
     }
 
