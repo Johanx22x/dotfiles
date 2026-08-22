@@ -377,9 +377,11 @@ Item {
     //   positionMs() = lastValueTheSenderPublished + wallClockSinceItArrived
     //
     // So it is an EXTRAPOLATION from an anchor, not a value fetched from the
-    // bus. Nothing in QML can ask for the anchor to be refreshed: Quickshell
-    // re-requests it by itself on a track change and on a playback-state
-    // change, and at no other time.
+    // bus. Nothing in QML can ask for the anchor to be refreshed. Quickshell
+    // re-takes it by itself on a track change, on a playback-state change,
+    // and whenever the player emits `Seeked` -- and at no other time. That
+    // third one is the whole story below, because it is the one the player is
+    // in charge of.
     //
     // Reading it on a timer is still necessary and is all this does. The
     // property's notify signal only fires when the anchor moves, so a plain
@@ -391,13 +393,58 @@ Item {
     // has no length -- so the poke did nothing for the position and made a
     // fabricated length look alive. See `hasLength`.
     //
-    // WHAT THIS COSTS US, stated because it is not fixable from here: a
-    // player that publishes Position once and never again -- Zen, on a plain
-    // youtube.com video, publishes a constant 0 -- gives an anchor that is
-    // only re-taken when the track or the playback state changes. Between
-    // those events the elapsed time shown is "time since that event", which
-    // is right for a track played from its start and wrong for one joined in
-    // the middle.
+    // WHY THE ANCHOR GOES MINUTES STALE, and it is the PLAYER's doing rather
+    // than Quickshell's. This is where the note that used to be here gave up
+    // and called the drift unfixable; the mechanism turns out to be simpler
+    // and to have a name.
+    //
+    // Firefox builds BOTH `Position` and `mpris:length` out of one thing: the
+    // position state a page hands it through
+    // `navigator.mediaSession.setPositionState()`. From
+    // widget/gtk/MPRISServiceHandler.cpp:
+    //
+    //   GetPositionSeconds()  mPositionState.isSome() ? ... : 0.0
+    //   mpris:length          added to Metadata only if mPositionState.isSome()
+    //   EmitSeekedSignal()    declines: "No position state. Cannot emit seeked"
+    //
+    // So for a page that has not called it, Position is a hard 0, there is no
+    // length, AND the one signal that would re-anchor Quickshell never fires.
+    // music.youtube.com calls it. A plain youtube.com watch page does not --
+    // not until something makes it, which a pause or a seek does. Read off
+    // the live bus with Zen playing a youtube.com video, `busctl --user
+    // get-property ... Position` returned 0 six times over twelve seconds
+    // with PlaybackStatus reading "Playing".
+    //
+    // WHAT THAT MAKES `position` IN THAT WINDOW is a stopwatch started at the
+    // last track or playback-state change, and nothing else. Measured through
+    // Quickshell itself -- an offscreen `qs` reading this same bus, printing
+    // only when something changed -- over four minutes of ordinary watching:
+    //
+    //   t=1.0     lengthSupported=false  position=0.4    length=0.4
+    //   t=163.5   lengthSupported=true   position=265.0  length=266.0
+    //   t=165.5   paused                 position=266.0  length=266.0
+    //   t=166.5   lengthSupported=false  position=0.1    length=0.1
+    //   t=167.0   lengthSupported=true   position=0.1    length=313.0
+    //
+    // The first line to the second is the whole bug: for TWO AND A HALF
+    // MINUTES the card counted 0:00 upwards while the video ran from 1:42 to
+    // 4:25, a hundred and one seconds out and staying out, because the page
+    // was already that far in when the anchor was taken. The second line is
+    // the page finally publishing, and the card jumping straight to the
+    // truth. That is also why pausing and resuming looked like a cure: the
+    // pause is what makes the page publish, and the `Seeked` that follows
+    // re-anchors Quickshell for nothing.
+    //
+    // The last two lines are the other shape it comes in -- a track change,
+    // and the length back within the second. The window is however long the
+    // page takes, which is anything from half a second to the two and a half
+    // minutes above.
+    //
+    // AND THERE IS NOTHING TO POLL, which is the part worth writing down so
+    // the next attempt is not a busctl loop. The number is not on the bus to
+    // be read -- not by Quickshell, not by `busctl`, not by anything -- until
+    // the page volunteers it. The only honest move left is not to print one:
+    // see `hasLength`.
     //
     // Twice a second: a seek bar that steps once a second visibly ticks.
     property real livePosition: 0
@@ -407,7 +454,13 @@ Item {
         repeat: true
         // The popout destroys its content when it closes, so this stops on
         // its own the rest of the time rather than polling all day.
-        running: root.visible && (root.player?.isPlaying ?? false)
+        //
+        // AND NOT WHILE THERE IS NO LENGTH: everything downstream of
+        // `livePosition` is gated on `hasLength` now, so in that window this
+        // would read a stopwatch twice a second for nobody. It starts again
+        // by itself on the update that brings the length, and
+        // `triggeredOnStart` fills the value in on that same tick.
+        running: root.visible && root.hasLength && (root.player?.isPlaying ?? false)
         triggeredOnStart: true
 
         onTriggered: {
@@ -457,9 +510,26 @@ Item {
         ? Math.min(root.livePosition, root.player?.length ?? 0)
         : root.livePosition
 
+    // NO LENGTH MEANS NO ELAPSED EITHER, and this is the fix rather than a
+    // tidy-up. The card already refused to print a total it did not have; it
+    // went on printing an elapsed time beside it, and on this player the two
+    // absences are the SAME absence -- one `mPositionState`, feeding both.
+    // With it missing the left-hand number was never the video's position, it
+    // was the age of Quickshell's anchor, and a clock that is right only for
+    // a video watched from its first frame without a pause is a clock that
+    // lies without ever saying so.
+    //
+    // An em dash and not "0:00", which is a position and would be a third
+    // wrong answer, and not a hidden row, which would move the seek bar up
+    // and back down on every track change. Same mark the display page uses
+    // for a question it cannot answer.
+    //
+    // WHAT THIS DOES NOT DO is make the bar track a plain youtube.com video,
+    // because nothing can until the page publishes. What it does is stop the
+    // panel from claiming to know.
     readonly property string timeText: root.hasLength
         ? root.clockFormat(root.elapsed) + " / " + root.clockFormat(root.player?.length ?? 0)
-        : root.clockFormat(root.elapsed)
+        : "—"
 
     readonly property real fraction: {
         if (!root.hasLength)
