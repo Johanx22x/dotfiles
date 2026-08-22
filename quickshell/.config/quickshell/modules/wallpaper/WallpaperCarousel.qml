@@ -18,11 +18,60 @@
 // the fan running off both edges.
 //
 // WHAT IT COSTS TO HAVE OPEN, because the answer was not obvious and is worth
-// keeping: about 7% of one core over the shell's idle, with the centred card
-// playing. Nearly all of the work that used to be there was self-inflicted --
+// keeping. Nearly all of the work that used to be here was self-inflicted --
 // decoding 4K originals to fill card-sized thumbnails, a live layer per card
 // feeding the corner mask, and playing the 4K wallpaper itself. See the
-// thumbnail cache in Config, the shared mask below, and root.atRest.
+// thumbnail cache in Config and the shared mask below.
+//
+// THE CENTRED CARD MOVES BY FLIPPING THROUGH JPEGs, and that is the one design
+// decision here that was settled by measurement rather than by argument, so the
+// measurements stay. It used to be a QtMultimedia MediaPlayer playing a small
+// h264 copy of the wallpaper, and stepping through the fan was not fluid.
+//
+// Measured on THIS machine -- an RTX 5070 on driver 610.57.04, where
+// qt6-multimedia-ffmpeg decodes through NVDEC -- against the wallpapers in this
+// collection. Five cards at 819x461 on a 2560x1440 surface, the fan under a
+// continuous animation, frame pacing from a FrameAnimation, CPU from /proc:
+//
+//   five still cards, nothing moving        5.1% of a core   306 MB
+//   one MediaPlayer, 960x540 at 24 fps      9.8%             622 MB
+//   one MediaPlayer, 480x270 at 15 fps      9.9%             594 MB
+//   five MediaPlayers, 960x540              19.6%            954 MB
+//   one card flipping JPEGs at 15 fps       9.7%             311 MB
+//   five cards flipping JPEGs               29.8%            320 MB
+//
+// and, stepping to the next card every 500 ms, which is the gesture the whole
+// complaint was about:
+//
+//   MediaPlayer built and torn down per step   65.0%   p99 frame 249 ms, 6.7% late
+//   one MediaPlayer, source re-pointed          66.2%   p99 frame 332 ms, 6.8% late
+//   JPEG sequences, sources rotating            31.3%   p99 frame  19 ms, 0.3% late
+//
+// THE COST WAS NEVER THE DECODING. A MediaPlayer costs the same whatever you
+// feed it -- the two rows above differ by a tenth of a point across a 4x
+// difference in pixels -- because the bill is a CUDA context: two
+// `cuda-EvtHandlr` threads burning a flat 3.2% of a core doing nothing, and
+// 412 MB of VRAM, for as long as a player exists. On Intel or AMD that would be
+// VA-API and those threads would not be there; this tax is specific to this
+// machine. What made the fan stutter was CONSTRUCTION: building or destroying a
+// player costs 250 to 466 ms with a third of it on the GUI thread, and
+// re-pointing an existing one at another file is just as expensive, because Qt
+// rebuilds the decoder either way. Five players kept permanently alive were
+// perfectly fluid. There was simply no way to change WHICH video was playing
+// without paying a quarter of a second for it.
+//
+// So nothing here decodes video any more, and everything that existed to hide
+// that quarter of a second went with it: the pause-while-moving gate, the
+// settle timer, the warmup delay before a player was allowed to exist, and the
+// crossfade that covered the swap from still to video. A frame flip costs
+// nothing to start or stop, so none of them have anything left to protect.
+//
+// THE NUMBERS ARE FROM A 60 Hz HEADLESS RIG, not from this desktop's 165 Hz
+// screen, and not from this file -- they come from a harness that reproduced
+// the card geometry, the masking and the media path and nothing else. Read them
+// as ratios between the rows rather than as what the shell draws. The per-frame
+// costs are the same at any refresh rate; there are simply 2.75x more frames
+// here.
 //
 // A PathView AND NOT A HAND-ROLLED ROW OF TRANSFORMS. The scale, the stacking
 // order, the fade at the ends and the drop along the arc are all one
@@ -42,10 +91,6 @@ import Quickshell.Wayland
 import QtQuick
 import Qt.labs.folderlistmodel
 import QtQuick.Effects
-// The player for a live wallpaper. NOT a Quickshell module -- it is Qt's own,
-// from qt6-multimedia, which is a hard dependency of this file and of nothing
-// else in the shell.
-import QtMultimedia
 import "root:/"
 
 PanelWindow {
@@ -99,16 +144,16 @@ PanelWindow {
                 name: folder.get(i, "fileName").replace(/\.[^.]+$/, ""),
                 path: path,
                 video: Config.isWallpaperVideo(path),
-                // NOT THE WALLPAPER ITSELF but the small copy of it that
-                // wallpaper-switch keeps beside the still frames: 960x540 at
-                // 24 fps against a 4K original at up to 120.
+                // NOT THE WALLPAPER ITSELF but the DIRECTORY of small frames
+                // that wallpaper-switch keeps beside the still ones: 960 px
+                // JPEGs at 15 fps against a 4K original at up to 120.
                 //
                 // EMPTY FOR A STILL, and empty for nothing else: this is the
-                // name the clip WOULD have, worked out from the extension, and
-                // nothing here goes to disk to find out whether it is there. A
-                // video whose clip has not been built yet gets a player
-                // pointed at a file that does not exist, which is what the
-                // error handler below is for.
+                // name the directory WOULD have, worked out from the extension,
+                // and nothing here goes to disk to find out whether it is
+                // there. A video whose frames have not been built yet gets a
+                // card pointed at a file that does not exist, which is what
+                // card.framesMissing below is for.
                 previewUrl: Config.wallpaperPreviewUrl(path),
                 // NEVER the wallpaper itself either: a cached thumbnail for a
                 // still, the extracted frame for a video. See the note on
@@ -153,12 +198,6 @@ PanelWindow {
             Config.refreshWallpaperThumbs();
             if (WallpaperState.isOpen)
                 Qt.callLater(root.revealCurrent);
-            // Opening counts as movement: the fan is landing on the applied
-            // wallpaper and the players should start after it has, not during.
-            // This also covers the case where positionViewAtIndex has nothing
-            // to do because the view was already there -- currentIndex never
-            // changes, so nothing else here would ever start the wait.
-            root.stir();
         }
     }
 
@@ -211,50 +250,6 @@ PanelWindow {
         const i = root.entries.findIndex(e => e.path === root.currentPath);
         if (i >= 0)
             view.positionViewAtIndex(i, PathView.Center);
-    }
-
-    // ---------------- Is the fan moving? ----------------
-    //
-    // NOTHING DECODES WHILE YOU ARE MOVING, and this property is the whole of
-    // that rule. It is the difference between a carousel that scrolls and one
-    // that drags.
-    //
-    // WHY, measured rather than guessed: the decoding itself lands on the
-    // GPU -- the h264 threads sit at nearly nothing and NVDEC does the work --
-    // but the frames come back to the process' MAIN thread to be turned into
-    // textures, and that is the same thread that runs this view's animation.
-    // Five previews playing put 25 to 40% of a core on it. The animation gets
-    // whatever is left, which is what "it sticks when I move through the
-    // videos" was.
-    //
-    // So a keypress PAUSES every player, the movement has the thread to itself,
-    // and the pictures start moving again once the fan is still. A paused
-    // player keeps its last frame on screen, so a card freezes and thaws
-    // rather than going blank.
-    //
-    // PAUSED AND NOT DESTROYED, which was the first version of this and was
-    // measurably worse than the problem: tearing down five decoders at every
-    // keypress and building them again a fifth of a second later put the
-    // process over a full core while walking the fan. Pausing costs nothing on
-    // either side of the gesture. What this flag ALSO does is hold back the
-    // creation of new players -- a card sliding into the fan waits for the
-    // movement to end before it gets a decoder -- so the only thing a step can
-    // cost is the teardown of the one card that left.
-    property bool atRest: true
-
-    Timer {
-        id: settle
-
-        // Longer than highlightMoveDuration (90 ms) so the animation is
-        // genuinely finished, short enough that stopping on a live wallpaper
-        // feels like it starts by itself.
-        interval: 180
-        onTriggered: root.atRest = true
-    }
-
-    function stir(): void {
-        root.atRest = false;
-        settle.restart();
     }
 
     function apply(entry: var): void {
@@ -478,9 +473,6 @@ PanelWindow {
             // as the strip this replaces.
             highlightMoveDuration: 90
 
-            // Every step pauses the players and starts the wait. See atRest.
-            onCurrentIndexChanged: root.stir()
-
             // The curve the cards ride: a shallow arc, widest in the middle,
             // fading out at both ends.
             //
@@ -593,7 +585,19 @@ PanelWindow {
                 // load a 4K original for a thumbnail that is perfectly fine.
                 property bool thumbMissing: false
 
-                onModelDataChanged: card.thumbMissing = false
+                // EVERYTHING LEARNT ABOUT THE OLD WALLPAPER GOES WITH IT. The
+                // same recycling that makes thumbMissing dangerous makes a
+                // remembered sequence length dangerous in a worse way: carried
+                // onto a shorter video it would loop past the end of it for
+                // ever, and onto a longer one it would show a third of it.
+                onModelDataChanged: {
+                    card.thumbMissing = false;
+                    card.frameCount = 0;
+                    card.frameShown = 0;
+                    card.framePending = 0;
+                    card.frontIsA = true;
+                    card.framesMissing = false;
+                }
 
                 Image {
                     id: picture
@@ -646,9 +650,11 @@ PanelWindow {
                     // NO `layer.enabled`, unlike every other masked image in
                     // this shell. An Image is already a texture provider, so
                     // MultiEffect can sample it directly; turning on a layer
-                    // wraps it in a SECOND texture that is re-rendered from the
-                    // image on every frame the window draws -- which, with a
-                    // video playing anywhere on the sheet, is every frame.
+                    // wraps it in a SECOND texture that has to be re-rendered
+                    // from the image whenever the item is marked dirty, to draw
+                    // a picture that never changes. The pair of frames below
+                    // does take a layer, and that is not an inconsistency: two
+                    // Images cannot be one MultiEffect source without it.
                     visible: false
                 }
 
@@ -660,255 +666,272 @@ PanelWindow {
                     maskThresholdMin: 0.5
                     maskSpreadAtMin: 1.0
 
-                    // OFF ONCE THE VIDEO HAS FINISHED FADING IN, and not one
-                    // frame before: the video covers this exactly, edge to
-                    // edge and corner to corner, but while it is still
-                    // translucent this is what shows through it. Hiding it at
-                    // the START of the fade -- which is what testing whether
-                    // the player is showing amounts to -- makes the card dip
-                    // towards the sheet behind it and back, which is the flash
-                    // the fade exists to remove.
+                    // OFF THE MOMENT A PREVIEW FRAME IS ON SCREEN, and there
+                    // is no fade between the two because there is nothing to
+                    // hide: 001.jpg is extracted at the same second as the
+                    // still frame, so the two are the same picture and the swap
+                    // is invisible. See preview_for in wallpaper-switch, which
+                    // seeks both to two seconds for exactly this reason.
                     //
                     // And it does come off, rather than being left to draw
-                    // under an opaque video for ever: nothing in the scene
-                    // graph knows the video covers it, so without this the card
-                    // renders the still into a texture and runs the mask shader
-                    // over it on every frame the video delivers.
-                    visible: player.cover < 0.99
+                    // under an opaque picture for ever: nothing in the scene
+                    // graph knows the sequence covers it, so without this the
+                    // card renders the still into a texture and runs the mask
+                    // shader over it again on every frame the sequence flips.
+                    visible: card.frameShown === 0
                 }
 
-                // A LIVE WALLPAPER ACTUALLY MOVES HERE, on the card in the
-                // middle. Everywhere else in the shell a video wallpaper is
-                // the still frame ffmpeg pulled out of it, because an Image
-                // cannot decode an mp4. On this surface the still is a lie
-                // worth spending a decoder on: the whole question the carousel
-                // answers is "what will my desktop look like", and for these
-                // files the answer moves.
+                // ---- A LIVE WALLPAPER ACTUALLY MOVES HERE ----
                 //
-                // AND IT IS NOT THE WALLPAPER THAT PLAYS. The collection is 4K
-                // -- one file is 4K at 120 fps -- and one of those measured
-                // about two thirds of a core on its own. wallpaper-switch
-                // keeps a 960x540 copy of every video beside the still frames,
-                // and twelve seconds of one of those decodes in a third of a
-                // second of CPU.
+                // On the card in the middle, and nowhere else. Everywhere else
+                // in the shell a video wallpaper is the still frame ffmpeg
+                // pulled out of it, because an Image cannot decode an mp4. On
+                // this surface the still is a lie worth spending something on:
+                // the whole question the carousel answers is "what will my
+                // desktop look like", and for these files the answer moves.
                 //
-                // A LOADER AND NOT A `playing` FLAG, so the player is
-                // DESTROYED when the card leaves the middle or the sheet
-                // closes. A paused MediaPlayer still holds its decoder and its
-                // file open, and this window spends most of its life
-                // invisible.
+                // AND IT IS NOT THE WALLPAPER THAT MOVES. The collection is 4K
+                // -- one file is 4K at 120 fps -- so wallpaper-switch keeps a
+                // run of numbered 960 px JPEGs beside the still frames and this
+                // flips through them on a timer. See the header for why it is
+                // frames on a timer and not a video, and what that was measured
+                // against.
                 //
-                // The still underneath is left in place rather than hidden: it
-                // is the poster while the first frame is being decoded, and it
-                // is the whole picture for a video whose preview has not been
-                // built yet -- a file dropped into the collection a moment ago
-                // plays the next time the carousel is opened.
-                // -------- Which card carries a decoder --------
-                //
-                // THE CARD IN THE MIDDLE AND NOTHING ELSE, and that was
-                // measured rather than assumed. Playing all five cost the same
-                // as playing one -- around two thirds of a core either way --
-                // because the price is not the decoding, which happens on the
-                // GPU: it is that a moving picture anywhere in this window
-                // makes the whole window repaint, and the window is the
-                // screen. Five moving cards buy four more animations for
-                // nothing, and they buy them on the same thread that has to
-                // animate the fan.
-                //
-                // So the middle card moves and the other four are the still
-                // frame, which is also how every carousel that plays anything
-                // behaves.
-                readonly property bool inFan: card.modelData.previewUrl !== ""
+                // THE MIDDLE CARD AND NOTHING ELSE, which was measured rather
+                // than assumed even for this cheap version: one card flipping
+                // costs 9.7% of a core and five cost 29.8%, because a moving
+                // picture anywhere in this window makes the whole window
+                // repaint and the window is the screen. Four more moving cards
+                // buy four more repaints of a 2560x1440 surface to animate
+                // pictures nobody is looking at.
+                readonly property bool hasFrames: card.modelData.previewUrl !== ""
                     && WallpaperState.isOpen
                     && card.PathView.onPath
 
-                readonly property bool wantsVideo: card.inFan && card.centred
+                readonly property bool playing: card.hasFrames && card.centred
 
-                // A LAST BEAT AFTER THE FAN HAS STOPPED. Creating a player is
-                // a decoder, a handful of threads and a CUDA context, and doing
-                // that in the same frame the animation finishes in is a visible
-                // stall -- it was the "it sticks for a moment when I open it on
-                // a video". A tenth of a second later, the animation is over
-                // and nothing is competing with it.
-                Timer {
-                    id: warmup
-
-                    interval: 100
-                    onTriggered: player.wanted = true
-                }
-
-                // NOTHING IS CREATED *OR* DESTROYED WHILE THE FAN IS MOVING,
-                // and the second half of that was a bug worth naming: tearing
-                // the player down is as expensive as building it -- a decoder,
-                // its threads and a CUDA context all go at once -- and doing it
-                // at the first keypress put that cost inside the very animation
-                // it was supposed to protect. Stepping off a playing card was
-                // heavy while stepping between still ones was smooth, which is
-                // exactly what it looked like.
+                // ---- Where the sequence has got to ----
                 //
-                // So a step only PAUSES what is playing (see root.atRest), and
-                // this function does nothing at all until the fan is still
-                // again. The one exception is a card that has left the fan
-                // altogether, or the sheet closing: then the player has to go
-                // whatever else is happening, because the card it belongs to is
-                // about to be destroyed under it.
-                function syncPlayer(): void {
-                    if (!card.inFan) {
-                        warmup.stop();
-                        player.wanted = false;
+                // HOW LONG THE SEQUENCE IS, DISCOVERED RATHER THAN TOLD. It
+                // depends on the video -- a clip shorter than the preview
+                // length yields fewer frames -- and on knobs that live in
+                // wallpaper-switch and can be overridden per run. A number
+                // written down here as well would be a second place for it to
+                // be, and the two would disagree the first time anyone touched
+                // either. So this asks for one frame past the last one that
+                // loaded, and the failure IS the answer: 0 means "not found
+                // yet", and it is filled in exactly once per card.
+                //
+                // That works only because a sequence directory is published
+                // whole -- wallpaper-switch writes into `.part` and moves it
+                // into place -- so a directory caught half built cannot teach
+                // this card a length that is too short and have it believe that
+                // for the rest of the card's life.
+                property int frameCount: 0
+
+                // What is on screen; 0 until the first frame has loaded, which
+                // is what keeps the still visible underneath until then.
+                property int frameShown: 0
+
+                // What is decoding, if anything. Also the "busy" flag: one load
+                // is in flight at a time, so a tick that arrives while the
+                // previous frame is still being decoded is dropped rather than
+                // queued. The preview runs a little slow on a slow disk instead
+                // of building a backlog.
+                property int framePending: 0
+
+                // Which of the two Images below is the one being shown.
+                property bool frontIsA: true
+
+                // Set when 001.jpg itself is not there, which is any video the
+                // script has not been over yet. Stops the clock rather than
+                // letting it ask for a file that does not exist fifteen times a
+                // second; the card stays on its still frame, and the rebuild
+                // that follows Config's thumbnail run replaces the model entry
+                // and clears this.
+                property bool framesMissing: false
+
+                // THE ONE FRAME AHEAD OF THE ONE ON SCREEN. Two Images and not
+                // one: an Image handed a new source has to decode it before it
+                // can draw it, and a single Image would be showing SOMETHING
+                // during that gap -- either the old frame, if Qt happens to
+                // keep it, or nothing, which at fifteen flips a second reads as
+                // a strobe. Loading into the hidden one and swapping when it
+                // reports Ready means the visible picture only ever changes
+                // from one finished frame to the next, and a slow decode costs
+                // a late preview frame rather than a blank card.
+                function advanceFrame(): void {
+                    if (card.framePending !== 0 || card.framesMissing)
+                        return;
+
+                    const next = card.frameCount > 0
+                        ? (card.frameShown % card.frameCount) + 1
+                        : card.frameShown + 1;
+
+                    const url = Config.wallpaperPreviewFrameUrl(card.modelData.previewUrl, next);
+                    const back = card.frontIsA ? frameB : frameA;
+
+                    card.framePending = next;
+
+                    // THE FRAME WE WANT MAY ALREADY BE IN THE HIDDEN IMAGE, and
+                    // then nothing will ever tell us so. The two Images hold
+                    // frames two apart, so on a sequence of one or two frames
+                    // the wrap lands back on the one the hidden Image is still
+                    // carrying -- and assigning a source that has not changed
+                    // emits no status, so the card would simply stop. Rare
+                    // enough to be a fifth of a second of video, common enough
+                    // that "the preview froze" would be impossible to explain.
+                    if (back.source.toString() === url && back.status === Image.Ready) {
+                        card.showPendingFrame();
                         return;
                     }
 
-                    if (!root.atRest)
-                        return;
-
-                    if (!card.wantsVideo) {
-                        warmup.stop();
-                        player.wanted = false;
-                        return;
-                    }
-
-                    // Already carrying one: nothing to do, and restarting the
-                    // timer here would be a way to never actually start.
-                    if (!player.wanted)
-                        warmup.restart();
+                    back.source = url;
                 }
 
-                onWantsVideoChanged: card.syncPlayer()
-                onInFanChanged: card.syncPlayer()
-
-                // A card that comes into existence already eligible never
-                // fires the handler above.
-                Component.onCompleted: card.syncPlayer()
-
-                Connections {
-                    target: root
-
-                    function onAtRestChanged(): void {
-                        card.syncPlayer();
-                    }
+                function showPendingFrame(): void {
+                    card.frameShown = card.framePending;
+                    card.framePending = 0;
+                    card.frontIsA = !card.frontIsA;
                 }
 
-                Loader {
-                    id: player
+                // A FRAME THAT IS NOT THERE MEANS ONE OF TWO THINGS, and they
+                // are told apart by whether anything has ever loaded. Past the
+                // first frame it is the end of the sequence, which is how the
+                // length is learnt. On the first frame it is a video the script
+                // has not built yet, and there is nothing to learn.
+                function endOfSequence(): void {
+                    card.framePending = 0;
 
-                    // Set by the timer above rather than bound to wantsVideo,
-                    // which is the point of the timer: the decision to carry a
-                    // decoder is deferred, the decision to drop one is not.
-                    property bool wanted: false
+                    if (card.frameShown === 0) {
+                        card.framesMissing = true;
+                        return;
+                    }
 
+                    card.frameCount = card.frameShown;
+                }
+
+                Timer {
+                    // From Config, which is where the number that has to agree
+                    // with wallpaper-switch's WALLPAPER_PREVIEW_FPS lives. A
+                    // disagreement here plays the loop fast or slow; it does
+                    // not break it, which is why this one constant is allowed
+                    // to be shared where the frame count is not.
+                    interval: Math.round(1000 / Config.wallpaperPreviewFps)
+                    repeat: true
+                    running: card.playing && !card.framesMissing
+                    // Or the card sits on its still frame for a first
+                    // sixty-sixth of a second before asking for anything.
+                    triggeredOnStart: true
+                    onTriggered: card.advanceFrame()
+                }
+
+                // NOTHING IS CREATED OR DESTROYED WHEN YOU STEP, which is the
+                // whole point of the design and the reason this is a plain Item
+                // rather than the Loader it used to be. Two Images and a Timer
+                // cost nothing to keep on a card that is not playing -- an
+                // Image with no source is not a picture -- so stepping is a
+                // property change and not a teardown.
+                Item {
                     anchors.fill: parent
 
-                    active: player.wanted
+                    // Not drawn at all until there is a frame to draw: the
+                    // still underneath is the picture until then.
+                    visible: card.frameShown > 0
 
-                    // What the still underneath is being crossfaded out by.
-                    // Read as a number rather than a boolean because the fade
-                    // is what decides when the still stops being drawn.
-                    readonly property real cover: player.item?.opacity ?? 0
+                    // The same mask as the still, over the same shared texture.
+                    // ON THE PAIR AND NOT ON EACH, because the two Images are
+                    // one picture that happens to be double buffered, and two
+                    // mask passes to draw one card would be the second one
+                    // running over a fully transparent image every flip.
+                    layer.enabled: true
+                    layer.effect: MultiEffect {
+                        maskEnabled: true
+                        maskSource: cardMask
+                        maskThresholdMin: 0.5
+                        maskSpreadAtMin: 1.0
+                    }
 
-                    sourceComponent: Item {
-                        // NOT A SWAP, A CROSSFADE. The still is the frame two
-                        // seconds into the video and the preview starts at that
-                        // same second, so the two pictures are nearly the same
-                        // -- but "nearly" over an abrupt swap is exactly what
-                        // reads as a flash. A quarter of a second of fade turns
-                        // it into the picture simply starting to move.
-                        opacity: showing ? 1 : 0
-
-                        Behavior on opacity {
-                            NumberAnimation {
-                                duration: 260
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-
-                        // Republished for the card outside: a Loader's
-                        // component has its own scope and nothing out there
-                        // can reach an id declared in here.
-                        // Paused counts as showing: the player keeps its last
-                        // frame on screen, and swapping back to the still under
-                        // it at every keypress would be a flicker on the whole
-                        // fan for nothing.
-                        readonly property bool showing: media.hasVideo
-                            && media.playbackState !== MediaPlayer.StoppedState
+                    Image {
+                        id: frameA
 
                         anchors.fill: parent
+                        fillMode: Image.PreserveAspectCrop
+                        visible: card.frontIsA
+                        // Decoded off the GUI thread. Safe here in a way it is
+                        // not for a single Image, because nothing waits on it:
+                        // this one is hidden until it reports Ready.
+                        asynchronous: true
+                        smooth: true
 
-                        VideoOutput {
-                            id: output
+                        // NO sourceSize, unlike the still above. These frames
+                        // are already 960 px -- the script sized them for the
+                        // widest card a 1440p screen has -- so asking for a
+                        // card-sized decode buys a scale pass per frame to save
+                        // texture memory that is measured in kilobytes.
+                        //
+                        // AND NO CACHE. Qt remembers a URL that FAILED and will
+                        // not go back to disk for it, and 001.jpg not existing
+                        // is the ordinary state of a video added a moment ago:
+                        // a pinned failure there is a card that never animates
+                        // again for the rest of the session. The frames also
+                        // turn over faster than any cache of this size would
+                        // keep them, so there is little to give up.
+                        cache: false
 
-                            anchors.fill: parent
-                            // Crop to fill, exactly like the still under it and
-                            // like mpvpaper's own panscan=1.0 on the desktop.
-                            // Letterboxing here would show a shape the
-                            // wallpaper will never have.
-                            fillMode: VideoOutput.PreserveAspectCrop
+                        onStatusChanged: {
+                            if (card.framePending === 0)
+                                return;
 
-                            visible: false
-                            layer.enabled: true
-                        }
-
-                        MediaPlayer {
-                            id: media
-
-                            source: card.modelData.previewUrl
-                            videoOutput: output
-                            loops: MediaPlayer.Infinite
-                            // NO AudioOutput, deliberately. Leaving the
-                            // property unset is what mutes it: a picker that
-                            // makes noise is a picker nobody opens twice, and
-                            // the wallpaper itself is started with --no-audio
-                            // for the same reason. The preview clips are
-                            // written without an audio track at all, so this
-                            // is the second of two locks on the same door.
-
-                            // Playing is what costs -- every frame goes to the
-                            // main thread to become a texture -- so it happens
-                            // only while the fan is still. See root.atRest.
-                            Component.onCompleted: if (root.atRest)
-                                media.play()
-
-                            // A CLIP THAT IS NOT THERE. The preview is built
-                            // in the background, so a video added to the
-                            // collection a moment ago has a name here and no
-                            // file behind it. Dropping the player rather than
-                            // leaving it to retry is what keeps the card on
-                            // its still frame -- and the still, unlike a
-                            // failed player, is a picture.
-                            onErrorOccurred: (error, message) => {
-                                player.wanted = false;
-                            }
-                        }
-
-                        // OUTSIDE the MediaPlayer and not in it: MediaPlayer is
-                        // not an Item and has no default property, so a child
-                        // declared inside it fails to load the whole file --
-                        // with "cannot assign to non-existent default
-                        // property", which does not say that.
-                        Connections {
-                            target: root
-
-                            function onAtRestChanged(): void {
-                                if (root.atRest)
-                                    media.play();
-                                else
-                                    media.pause();
-                            }
-                        }
-
-                        // The same mask as the still, over the same Rectangle:
-                        // a VideoOutput is as rectangular as an Image and its
-                        // square corners would poke out past the card exactly
-                        // the same way.
-                        MultiEffect {
-                            anchors.fill: parent
-                            source: output
-                            maskEnabled: true
-                            maskSource: cardMask
-                            maskThresholdMin: 0.5
-                            maskSpreadAtMin: 1.0
+                            if (frameA.status === Image.Ready)
+                                card.showPendingFrame();
+                            else if (frameA.status === Image.Error)
+                                card.endOfSequence();
                         }
                     }
+
+                    Image {
+                        id: frameB
+
+                        anchors.fill: parent
+                        fillMode: Image.PreserveAspectCrop
+                        visible: !card.frontIsA
+                        asynchronous: true
+                        smooth: true
+                        cache: false
+
+                        onStatusChanged: {
+                            if (card.framePending === 0)
+                                return;
+
+                            if (frameB.status === Image.Ready)
+                                card.showPendingFrame();
+                            else if (frameB.status === Image.Error)
+                                card.endOfSequence();
+                        }
+                    }
+                }
+
+                // A CARD THAT STOPS BEING THE MIDDLE ONE LETS GO OF ITS FRAMES.
+                // The sources are what hold two decoded pictures alive, and a
+                // fan of five cards each keeping the last frame it drew is four
+                // pictures nobody is looking at. Stepping back onto it starts
+                // again from 001, which is also where the still frame is, so
+                // there is nothing to see in the restart.
+                onPlayingChanged: {
+                    if (card.playing)
+                        return;
+
+                    // The pending load is dropped FIRST. Clearing a source
+                    // while one is in flight moves that Image to Null rather
+                    // than to Error, so nothing here would misread it -- but
+                    // the handlers below only have to be right about states
+                    // that can reach them, and this is what keeps that true.
+                    card.framePending = 0;
+                    card.frameShown = 0;
+                    card.frontIsA = true;
+                    frameA.source = "";
+                    frameB.source = "";
                 }
 
                 // The frame IS the selection: a thumbnail is already a picture,
