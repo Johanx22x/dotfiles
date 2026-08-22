@@ -87,8 +87,8 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Pipewire
 import QtQuick
-import "root:/"
-import "root:/modules/island"
+import qs
+import qs.modules.island
 
 Singleton {
     id: root

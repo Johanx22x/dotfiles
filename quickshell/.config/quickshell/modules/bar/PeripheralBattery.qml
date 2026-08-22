@@ -65,7 +65,7 @@ import Quickshell.Bluetooth
 import Quickshell.Io
 import Quickshell.Services.UPower
 import QtQuick
-import "root:/"
+import qs
 
 Row {
     id: root

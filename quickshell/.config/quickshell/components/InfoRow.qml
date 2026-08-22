@@ -12,7 +12,7 @@
 // sidebar is an explanation nobody finishes reading.
 
 import QtQuick
-import "root:/"
+import qs
 
 Item {
     id: root

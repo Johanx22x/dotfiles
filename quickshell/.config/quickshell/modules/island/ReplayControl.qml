@@ -49,8 +49,8 @@
 // modules/recorder/ReplayState.qml.
 
 import QtQuick
-import "root:/"
-import "root:/modules/recorder"
+import qs
+import qs.modules.recorder
 
 Item {
     id: root

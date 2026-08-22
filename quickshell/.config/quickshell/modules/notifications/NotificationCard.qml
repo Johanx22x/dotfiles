@@ -12,7 +12,7 @@
 import Quickshell
 import Quickshell.Services.Notifications
 import QtQuick
-import "root:/"
+import qs
 
 Rectangle {
     id: root

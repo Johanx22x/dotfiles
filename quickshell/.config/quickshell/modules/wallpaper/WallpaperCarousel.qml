@@ -107,7 +107,7 @@ import Quickshell.Wayland
 import QtQuick
 import Qt.labs.folderlistmodel
 import QtQuick.Effects
-import "root:/"
+import qs
 
 PanelWindow {
     id: root

@@ -93,14 +93,14 @@
 // a design.
 
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 // SettingsPage lives one directory UP, and QML's implicit import covers a
 // file's own directory only.
-import "root:/modules/settings"
+import qs.modules.settings
 // The parts this page is composed of, for the same reason: they live one
 // directory DOWN.
-import "root:/modules/settings/pages/display"
+import qs.modules.settings.pages.display
 
 SettingsPage {
     id: root

@@ -52,7 +52,7 @@
 // view's own clip eats it. Check which kind of view you are in before copying
 // a placement from another call site.
 import QtQuick
-import "root:/"
+import qs
 
 Rectangle {
     id: root

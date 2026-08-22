@@ -18,8 +18,8 @@
 import Quickshell
 import Quickshell.Io
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 
 Item {
     id: root

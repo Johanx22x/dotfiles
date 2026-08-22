@@ -12,7 +12,7 @@
 // writer to a value it also displays.
 
 import QtQuick
-import "root:/"
+import qs
 
 Rectangle {
     id: root

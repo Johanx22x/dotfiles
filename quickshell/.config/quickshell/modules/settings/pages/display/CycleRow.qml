@@ -9,8 +9,8 @@
 // want it too.
 
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 
 Rectangle {
     id: root

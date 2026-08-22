@@ -18,8 +18,8 @@
 // do the last step themselves.
 
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 
 Item {
     id: root

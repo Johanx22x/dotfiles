@@ -73,13 +73,13 @@ import Quickshell
 // For Connections. A singleton that only declares properties does not need
 // QtQuick; every handler below does.
 import QtQuick
-import "root:/modules/cheatsheet"
-import "root:/modules/island"
-import "root:/modules/launcher"
-import "root:/modules/notifications"
-import "root:/modules/powermenu"
-import "root:/modules/settings"
-import "root:/modules/wallpaper"
+import qs.modules.cheatsheet
+import qs.modules.island
+import qs.modules.launcher
+import qs.modules.notifications
+import qs.modules.powermenu
+import qs.modules.settings
+import qs.modules.wallpaper
 
 Singleton {
     id: root

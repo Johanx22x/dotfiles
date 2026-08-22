@@ -28,7 +28,7 @@ pragma Singleton
 
 import Quickshell
 import QtQuick
-import "compositor"
+import qs.compositor
 
 Singleton {
     id: root

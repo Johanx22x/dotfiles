@@ -36,16 +36,15 @@
 
 import Quickshell
 import QtQml
-import "root:/"
-import "modules"
-import "modules/bar"
-import "modules/cheatsheet"
-import "modules/notifications"
-import "modules/launcher"
-import "modules/powermenu"
-import "modules/recorder"
-import "modules/settings"
-import "modules/wallpaper"
+import qs.modules
+import qs.modules.bar
+import qs.modules.cheatsheet
+import qs.modules.notifications
+import qs.modules.launcher
+import qs.modules.powermenu
+import qs.modules.recorder
+import qs.modules.settings
+import qs.modules.wallpaper
 
 ShellRoot {
     // THE INSTANT REPLAY ARMS ITSELF, and this line is what lets it.

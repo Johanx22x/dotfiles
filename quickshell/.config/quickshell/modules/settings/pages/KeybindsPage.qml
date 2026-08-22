@@ -33,11 +33,11 @@
 // listed too, marked as undescribed rather than left blank.
 
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 // SettingsPage lives one directory UP, and QML's implicit import covers a
 // file's own directory only.
-import "root:/modules/settings"
+import qs.modules.settings
 
 SettingsPage {
     id: root

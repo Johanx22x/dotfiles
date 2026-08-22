@@ -28,7 +28,7 @@
 
 import Quickshell
 import QtQuick
-import "root:/"
+import qs
 
 Column {
     id: root

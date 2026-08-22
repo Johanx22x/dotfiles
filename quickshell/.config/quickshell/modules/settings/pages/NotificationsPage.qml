@@ -2,10 +2,10 @@
 // it does while it is there.
 
 import QtQuick
-import "root:/"
-import "root:/components"
-import "root:/modules/settings"
-import "root:/modules/notifications"
+import qs
+import qs.components
+import qs.modules.settings
+import qs.modules.notifications
 
 SettingsPage {
     id: root

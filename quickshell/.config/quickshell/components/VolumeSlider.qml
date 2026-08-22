@@ -16,7 +16,7 @@
 // loud is too loud.
 
 import QtQuick
-import "root:/"
+import qs
 
 Item {
     id: root

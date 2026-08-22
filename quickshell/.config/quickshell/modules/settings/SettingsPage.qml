@@ -9,7 +9,7 @@
 // the file says everything about itself.
 
 import QtQuick
-import "root:/"
+import qs
 
 Column {
     id: root

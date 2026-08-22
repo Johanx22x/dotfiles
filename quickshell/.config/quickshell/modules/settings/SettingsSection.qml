@@ -6,7 +6,7 @@
 // stays a list of like things.
 
 import QtQuick
-import "root:/"
+import qs
 
 Column {
     id: root

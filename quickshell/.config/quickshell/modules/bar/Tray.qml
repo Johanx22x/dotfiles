@@ -10,8 +10,8 @@
 import Quickshell
 import Quickshell.Services.SystemTray
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 
 Row {
     id: root

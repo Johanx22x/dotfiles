@@ -27,9 +27,9 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Services.Notifications
 import QtQuick
-import "root:/"
-import "root:/components"
-import "root:/modules/powermenu"
+import qs
+import qs.components
+import qs.modules.powermenu
 
 PanelWindow {
     id: root

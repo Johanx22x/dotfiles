@@ -5,7 +5,7 @@
 // for why the shape is a carved wedge and why it takes no input.
 
 import QtQuick
-import "root:/components"
+import qs.components
 
 Item {
     id: root

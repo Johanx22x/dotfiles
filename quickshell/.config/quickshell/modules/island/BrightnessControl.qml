@@ -23,8 +23,8 @@
 // island's acknowledgement can never disagree about whether there is one.
 
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 
 Item {
     id: root

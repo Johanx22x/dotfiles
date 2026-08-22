@@ -27,7 +27,7 @@
 // instead of a wave that gets squashed as the track plays.
 
 import QtQuick
-import "root:/"
+import qs
 
 Canvas {
     id: root

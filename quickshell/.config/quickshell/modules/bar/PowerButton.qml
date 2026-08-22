@@ -13,8 +13,8 @@
 // something else, and colour is the cheapest way to say it before the click.
 
 import QtQuick
-import "root:/"
-import "root:/modules/powermenu"
+import qs
+import qs.modules.powermenu
 
 Item {
     id: root

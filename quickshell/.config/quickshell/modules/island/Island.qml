@@ -64,10 +64,10 @@ import Quickshell.Services.Pipewire
 import Quickshell.Widgets
 import QtQuick.Effects
 import QtQuick
-import "root:/"
-import "root:/components"
-import "root:/modules/notifications"
-import "root:/modules/recorder"
+import qs
+import qs.components
+import qs.modules.notifications
+import qs.modules.recorder
 
 Item {
     id: root

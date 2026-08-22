@@ -30,8 +30,8 @@
 // frontends you are looking at.
 
 import QtQuick
-import "root:/"
-import "root:/modules/installer"
+import qs
+import qs.modules.installer
 
 Item {
     id: root

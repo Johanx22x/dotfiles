@@ -19,7 +19,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Notifications
 import QtQuick
-import "root:/"
+import qs
 
 Singleton {
     id: root

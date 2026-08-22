@@ -28,8 +28,8 @@
 // This file is only the badge.
 
 import QtQuick
-import "root:/"
-import "root:/modules/recorder"
+import qs
+import qs.modules.recorder
 
 Item {
     id: root

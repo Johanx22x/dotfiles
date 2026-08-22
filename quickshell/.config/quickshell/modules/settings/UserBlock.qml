@@ -20,7 +20,7 @@
 import Quickshell
 import QtQuick
 import QtQuick.Effects
-import "root:/"
+import qs
 
 Rectangle {
     id: root

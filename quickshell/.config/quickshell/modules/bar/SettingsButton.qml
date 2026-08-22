@@ -11,8 +11,8 @@
 // is the other half of what makes the red on the power button mean anything.
 
 import QtQuick
-import "root:/"
-import "root:/modules/settings"
+import qs
+import qs.modules.settings
 
 Item {
     id: root

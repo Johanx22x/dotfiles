@@ -48,9 +48,9 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
-import "root:/"
+import qs
 // ScrollList, which the columns sit in.
-import "root:/components"
+import qs.components
 
 PanelWindow {
     id: root

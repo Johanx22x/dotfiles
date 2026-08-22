@@ -95,8 +95,8 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "root:/"
-import "root:/modules/settings"
+import qs
+import qs.modules.settings
 
 Singleton {
     id: root

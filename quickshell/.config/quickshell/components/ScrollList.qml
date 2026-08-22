@@ -92,7 +92,7 @@
 // pixels tall.
 
 import QtQuick
-import "root:/"
+import qs
 
 Flickable {
     id: root

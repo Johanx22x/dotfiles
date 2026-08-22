@@ -40,10 +40,10 @@
 
 import Quickshell
 import QtQuick
-import "root:/"
-import "root:/components"
-import "root:/modules/installer"
-import "root:/modules/settings"
+import qs
+import qs.components
+import qs.modules.installer
+import qs.modules.settings
 
 SettingsPage {
     id: root

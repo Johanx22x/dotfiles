@@ -12,7 +12,7 @@
 // through the signal. It does not write anything itself.
 
 import QtQuick
-import "root:/"
+import qs
 
 Rectangle {
     id: root

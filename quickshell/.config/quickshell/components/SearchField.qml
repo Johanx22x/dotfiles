@@ -12,7 +12,7 @@
 // window. Merging them would mean one component with two layouts.
 
 import QtQuick
-import "root:/"
+import qs
 
 Rectangle {
     id: root

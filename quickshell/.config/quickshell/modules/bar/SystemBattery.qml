@@ -21,7 +21,7 @@
 
 import Quickshell.Services.UPower
 import QtQuick
-import "root:/"
+import qs
 
 Rectangle {
     id: root

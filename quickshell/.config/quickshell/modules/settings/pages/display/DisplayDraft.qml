@@ -29,7 +29,7 @@
 import Quickshell
 import Quickshell.Io
 import QtQuick
-import "root:/"
+import qs
 
 Scope {
     id: root

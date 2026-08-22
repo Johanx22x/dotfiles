@@ -57,9 +57,9 @@
 //     that is always empty teaches the eye to skip the page.
 
 import QtQuick
-import "root:/"
-import "root:/components"
-import "root:/modules/settings"
+import qs
+import qs.components
+import qs.modules.settings
 
 SettingsPage {
     id: root

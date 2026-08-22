@@ -75,8 +75,8 @@
 // there for why the flash lives in that file and not in the singleton.
 
 import QtQuick
-import "root:/"
-import "root:/modules/notifications"
+import qs
+import qs.modules.notifications
 
 Item {
     id: root

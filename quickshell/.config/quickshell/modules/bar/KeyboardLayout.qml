@@ -35,7 +35,7 @@
 // theme row when only one theme is installed.
 
 import QtQuick
-import "root:/"
+import qs
 
 Item {
     id: root

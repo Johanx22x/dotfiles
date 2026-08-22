@@ -10,7 +10,7 @@
 // button, which is a bigger claim than the one file that uses it can support.
 
 import QtQuick
-import "root:/"
+import qs
 
 Rectangle {
     id: root
