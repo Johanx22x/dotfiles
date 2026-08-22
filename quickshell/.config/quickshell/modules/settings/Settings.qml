@@ -216,7 +216,32 @@ FloatingWindow {
             //
             // Index 0 is the user page, so the Repeater starts at 1 -- see
             // the page host at the bottom of this file for the order.
-            Flickable {
+            //
+            // ScrollList AND NOT A PLAIN Flickable, WHICH IS THE BUG THIS
+            // FILE WAS EDITED FOR. A Flickable answers a wheel notch by
+            // starting a scroll animation of its own, and for as long as that
+            // animation is running it takes the next mouse press for itself
+            // in order to stop the flick -- the item under the pointer is
+            // never told there was a press at all. So the click that follows
+            // a scroll is thrown away, and only the one after it, half a
+            // second later, arrives. ScrollList moves contentY on the wheel
+            // itself and never starts that animation, so nothing is ever
+            // owed a click.
+            //
+            // ONLY TWO ENTRIES HERE ARE EVER REACHED BY SCROLLING, which is
+            // why a window-wide effect was reported as one page misbehaving.
+            // At this window's fixed 820x580 the rail shows 452 px and its
+            // fourteen entries are 530 tall, so Updates and About are the
+            // only two below the fold -- and About is not a page anybody
+            // visits. "Updates does not open on the first click" was the
+            // whole of the report, and it was the rail, not that page.
+            //
+            // Measured on Qt 6.11.1 offscreen, on this geometry: with a plain
+            // Flickable a click 0 ms, 100 ms and 300 ms after the notch was
+            // lost every time and only the one at 600 ms landed; through
+            // ScrollList all four landed, and dragging the rail still scrolls
+            // it.
+            ScrollList {
                 id: railScroll
 
                 anchors.top: search.bottom
@@ -226,10 +251,12 @@ FloatingWindow {
                 anchors.bottom: parent.bottom
                 anchors.margins: rail.padding
 
-                contentWidth: width
                 contentHeight: railItems.implicitHeight
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
+
+                // The bar this rail wants sits in the padding beside it, which
+                // is placed below and anchored from outside; the one ScrollList
+                // would draw over its own inside edge is not wanted here.
+                showScrollBar: false
 
                 Column {
                     id: railItems
@@ -355,9 +382,10 @@ FloatingWindow {
 
         // ---------------- Pages ----------------
         //
-        // Flickable rather than a plain Column: the window is resizable, and
-        // one that can be made shorter than its contents needs somewhere for
-        // the rest to go. It does not scroll while everything fits.
+        // A scrolling view rather than a plain Column: the window is
+        // resizable, and one that can be made shorter than its contents needs
+        // somewhere for the rest to go. It does not scroll while everything
+        // fits.
         //
         // EVERY PAGE IS BUILT AND ONE IS VISIBLE. It keeps each page's state
         // -- a scroll position, a half-typed password, an expanded row --
@@ -370,7 +398,15 @@ FloatingWindow {
         // Pages that turn hardware on when looked at -- the microphone meters,
         // the Wi-Fi scanner, Bluetooth discovery -- must gate on
         // `onScreen` instead, which is that flag AND the window being open.
-        Flickable {
+        //
+        // ScrollList for the same reason the rail is one, and it matters here
+        // too: a plain Flickable swallows the press that follows a wheel
+        // notch, so scrolling down a page and reaching for the switch that
+        // just came into view costs a click. The capped lists inside the
+        // pages are already ScrollLists and already take the wheel first
+        // while they can still move; this only settles what happens when the
+        // pointer is on the page itself.
+        ScrollList {
             id: pages
 
             anchors.top: header.bottom
@@ -379,11 +415,12 @@ FloatingWindow {
             anchors.bottom: parent.bottom
             anchors.margins: Theme.groupPadding
 
-            contentWidth: width
             contentHeight: pageHost.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
             visible: !root.searching
+
+            // As in the rail: the bar for this pane is placed below, in the
+            // margin that is already there.
+            showScrollBar: false
 
             // BUILT THE FIRST TIME THE WINDOW IS OPENED, AND KEPT AFTER THAT.
             // `everOpened` latches true and never goes back, so this is not a
@@ -515,7 +552,7 @@ FloatingWindow {
         }
 
         // ---------------- Search results ----------------
-        // The pane's own bar, and the reason the pages Flickable above says it
+        // The pane's own bar, and the reason the pages list above says it
         // does not scroll while everything fits: now that it can be seen to
         // scroll, it can also be seen not to. Most pages fit on a window of
         // any size, and on those nothing is drawn here.
