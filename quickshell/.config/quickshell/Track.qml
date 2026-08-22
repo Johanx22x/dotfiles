@@ -86,6 +86,53 @@ Singleton {
         return list.find(p => p.isPlaying) ?? list[0];
     }
 
+    // ---- WHERE A PICTURE FOR THIS TRACK CAN BE FOUND ----
+    //
+    // Zen publishes title, album and artist over MPRIS but not mpris:artUrl
+    // for every track, so anything drawing a cover comes up blank. What is
+    // worked around here is the symptom, using the one thing it does publish:
+    // xesam:url. For anything YouTube -- which is what music.youtube.com is --
+    // the video id in that URL maps to a public thumbnail. No key, no API, no
+    // extra process.
+    //
+    // SCOPE, so nobody expects more than it does: YouTube URLs only. Any
+    // other site still shows the stand-in, and every non-Firefox player is
+    // untouched because the remembered art wins whenever it exists.
+    //
+    // IT LIVES HERE BECAUSE TWO THINGS DRAW A COVER NOW. The dashboard's
+    // media block did this inline; the island's blurred capsule needs the
+    // same answer, and a regular expression copied into two files is a
+    // regular expression that will eventually be fixed in one of them.
+    function videoId(player: var): string {
+        const meta = player?.metadata ?? null;
+        const url = meta ? (meta["xesam:url"] ?? "") : "";
+        const m = url.match(/[?&]v=([-\w]{11})/) || url.match(/youtu[.]be\/([-\w]{11})/);
+        return m ? m[1] : "";
+    }
+
+    // The best picture available for a player, for a caller that only wants
+    // ONE answer and cannot retry.
+    //
+    // mqdefault AND NOT maxresdefault, which is the difference between this
+    // and what the dashboard's media block does. maxresdefault is sharper and
+    // DOES NOT EXIST for every video, so using it means being ready to catch
+    // the failure and ask again -- which the dashboard is, because it loads
+    // the cover through an offscreen Image whose only job is to have a
+    // status. mqdefault is 320x180, always present, and bar-free like
+    // maxresdefault (hqdefault is 480x360 and pads a widescreen frame with
+    // black bands). For anything that blurs the picture rather than drawing
+    // it sharp, 320 pixels is more than enough and always working beats
+    // sometimes sharper.
+    function coverFor(player: var): string {
+        const bus = player?.dbusName ?? "";
+        const remembered = root.covers[bus] ?? "";
+        if (remembered)
+            return remembered;
+
+        const id = root.videoId(player);
+        return id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : "";
+    }
+
     // ---- The cover art, remembered for longer than anyone is looking ----
     //
     // ZEN RETRACTS THE ARTWORK AND LEAVES IT RETRACTED. It publishes

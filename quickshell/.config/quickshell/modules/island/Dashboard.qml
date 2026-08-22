@@ -400,12 +400,10 @@ Item {
     // in that URL maps to a public thumbnail. No key, no API, no extra
     // process. Any other site still shows the stand-in, and every non-Firefox
     // player is untouched because the remembered art wins whenever it exists.
-    readonly property string youtubeId: {
-        const meta = root.player?.metadata ?? null;
-        const url = meta ? (meta["xesam:url"] ?? "") : "";
-        const m = url.match(/[?&]v=([-\w]{11})/) || url.match(/youtu[.]be\/([-\w]{11})/);
-        return m ? m[1] : "";
-    }
+    // The regular expression moved to Track when the island started needing
+    // the same answer; the retry below is still this file's, because it needs
+    // an Image with a status to catch a failure and the island has none.
+    readonly property string youtubeId: Track.videoId(root.player)
 
     // maxresdefault first, mqdefault as the retry. Both are 16:9 and BAR-FREE,
     // which is the point: hqdefault is 480x360 and pads a widescreen frame
@@ -511,7 +509,43 @@ Item {
     }
 
     // ---------------- The ground, and how dark it has to be ----------------
-    readonly property string groundSource: root.held !== "" ? root.held : root.wallpaperSource
+    //
+    // `offered` AND NOT `held`, AND THAT ONE WORD WAS A BUG YOU COULD SEE.
+    // Opening the panel flashed the WALLPAPER for a frame or two and then
+    // corrected itself to the cover.
+    //
+    // The cause is the same trap the cover art itself fell into once already.
+    // components/Popout.qml is `Loader { active: root.isOpen }`, so the panel
+    // is DESTROYED on close and rebuilt from nothing on open -- and `held` is
+    // this component's own property, which means it starts empty every single
+    // time. Keyed on `held`, this expression could not tell "there is no
+    // cover" from "the cover has not been decoded yet": both were the empty
+    // string, and both answered the wallpaper. A panel that has just been
+    // constructed has no past, so the fallback was always what frame one got.
+    //
+    // `offered` is the URL this shell KNOWS about, and it survives the close
+    // because it is read out of the Track singleton -- which watches every
+    // player on the bus whether or not anything is on screen, and which was
+    // put there for exactly this reason when the cover kept vanishing. So on
+    // frame one the ground is already pointed at the right picture and never
+    // at the wrong one. The fallback is now only ever the answer to "there is
+    // no cover", which is the question it was written for.
+    //
+    // WHAT THAT COSTS, said rather than hidden: `held` exists so that the
+    // sharp art square is never handed a load in progress or a load that
+    // failed, and the ground gives that protection up. It can afford to --
+    // it is behind a blur and a scrim, so "not decoded yet" is the panel's
+    // own surface colour for a few frames rather than a broken picture, and
+    // an https cover that 404s is corrected by the retry on `offered` itself.
+    // The art square still uses `held` and still has the protection.
+    //
+    // OPENING TWICE ON THE SAME TRACK NOW SHOWS NOTHING AT ALL. The Image
+    // below leaves `cache` at its default of true, so the second open is a
+    // pixmap-cache hit on the same source at the same sourceSize and there is
+    // nothing to decode. The first open after a track change still pays for
+    // one 96-pixel decode; what it does NOT do any more is show the wrong
+    // picture while it waits.
+    readonly property string groundSource: root.offered !== "" ? root.offered : root.wallpaperSource
 
     // ---- WHY THE GROUND IS TWO PICTURES AND NOT ONE ----
     //
@@ -690,10 +724,18 @@ Item {
                 }
 
                 onStatusChanged: {
-                    // Only the WALLPAPER has a second thing to try. A cover
-                    // that fails is handled by `offer` above, which never
-                    // hands a failed load to anything visible.
-                    if (groundImage.status === Image.Error && root.held === "" && !root.wallpaperThumbFailed)
+                    // Only the WALLPAPER has a second thing to try here. A
+                    // cover that fails is handled by the retry on `offered`,
+                    // which drops maxresdefault for mqdefault and hands this
+                    // a new url.
+                    //
+                    // Asked as "is the ground currently the wallpaper" rather
+                    // than "is there no cover held", because the ground stopped
+                    // keying on `held` -- see groundSource. Getting this wrong
+                    // would blame the wallpaper for a cover's 404 and quietly
+                    // stop using the thumbnail cache for the rest of the
+                    // session.
+                    if (groundImage.status === Image.Error && root.offered === "" && !root.wallpaperThumbFailed)
                         root.wallpaperThumbFailed = true;
                 }
             }
