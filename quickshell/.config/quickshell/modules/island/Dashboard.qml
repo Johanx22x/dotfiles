@@ -996,8 +996,6 @@ Item {
                                     }
 
                                     Item {
-                                        id: progressBarContainer
-
                                         Layout.fillWidth: true
 
                                         // 24, which is their handle height and
