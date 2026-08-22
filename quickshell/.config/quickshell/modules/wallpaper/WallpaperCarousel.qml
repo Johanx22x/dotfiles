@@ -160,6 +160,20 @@ PanelWindow {
                 name: folder.get(i, "fileName").replace(/\.[^.]+$/, ""),
                 path: path,
                 video: Config.isWallpaperVideo(path),
+                // WHAT MAKES A REBUILD A CHANGE AT ALL, and the only field
+                // here that says nothing about the wallpaper. Every other one
+                // is a pure function of `path`, so the array this built after
+                // a thumbnail run was byte for byte the array already in
+                // place -- and an array whose contents compare equal is a
+                // no-op on PathView, which is a rebuild that repairs nothing.
+                // Measured offscreen on Qt 6.11.2: an identical rebuild costs
+                // 0 delegate constructions and 0 onModelDataChanged, one that
+                // differs costs one of each per card on the path.
+                //
+                // The bill for that is in the Connections on Config below: a
+                // model PathView accepts as new puts currentIndex and offset
+                // back to 0, and something has to put them back.
+                rev: Config.wallpaperThumbsRevision,
                 // NOT THE WALLPAPER ITSELF but the DIRECTORY of small frames
                 // that wallpaper-switch keeps beside the still ones: 960 px
                 // JPEGs at 15 fps against a 4K original at up to 120.
@@ -217,14 +231,50 @@ PanelWindow {
         }
     }
 
-    // A video listed before its frame has been extracted has nothing to draw.
-    // Rebuilding on the bump replaces the entry objects, which is what gets the
-    // delegates to ask for the file a second time.
+    // THE RUN THAT FINALLY WRITES THE PICTURES HAS TO REACH THE CARDS. An
+    // Image pointed at a file that is not there reports Error and stops
+    // asking, and the delegate latches that -- thumbMissing for a still,
+    // framesMissing for a video's preview -- with nothing clearing either in
+    // place. So the only way back is a model PathView treats as new: it
+    // regenerates every delegate, and a delegate built after ffmpeg has been
+    // past the file simply loads it. That a fresh Image will even try is the
+    // premise of this handler and was measured rather than assumed -- see the
+    // note on `cache` in the delegate.
+    //
+    // THIS USED TO DO NOTHING WHATSOEVER. rebuild() built an array that
+    // compared equal to the one already in place, PathView returned early, and
+    // no delegate heard a thing: a video copied into the folder with the shell
+    // running stayed blank until the next restart, and a still added the same
+    // way spent the session decoding the 4K original. `rev` in rebuild() is
+    // what makes the array differ.
+    //
+    // AND PUTTING THE FAN BACK IS THE BILL FOR IT. A model PathView accepts as
+    // new resets currentIndex and offset to 0, and this bump lands about a
+    // second after every opening -- the open calls refreshWallpaperThumbs()
+    // and the process bumps on the way out whether it had anything to build or
+    // not. Without the reveal below, opening the carousel would snap the fan
+    // to the alphabetically first wallpaper a moment later, and Enter would
+    // apply that one.
+    //
+    // BACK TO THE CARD THAT WAS CENTRED, and not to the applied one the way
+    // folder.onCountChanged goes. Nothing about the collection changed here --
+    // the same wallpapers in the same order, now with the pictures they should
+    // always have had -- so there is nothing to re-orient anybody about, and
+    // anyone who had stepped away from the applied wallpaper inside that first
+    // second would be dragged back to it for no reason they could see.
+    //
+    // Not deferred, unlike the two calls that go through revealCurrent: those
+    // wait because the view has just been made visible and has nothing laid
+    // out to position. Here it has been laid out for as long as the sheet has
+    // been open, and staying in this turn leaves no moment at all where
+    // currentIndex is 0 for anything else to read.
     Connections {
         target: Config
 
         function onWallpaperThumbsRevisionChanged(): void {
+            const centred = root.entries[view.currentIndex]?.path ?? "";
             root.rebuild();
+            root.revealPath(centred);
         }
     }
 
@@ -260,10 +310,23 @@ PanelWindow {
     // whole fan past you at open time, which is a lot of movement to say
     // "nothing has changed yet".
     function revealCurrent(): void {
-        if (root.currentPath === "")
+        root.revealPath(root.currentPath);
+    }
+
+    // The same move aimed at a wallpaper that is not the applied one, which is
+    // what a rebuild needs: the model is replaced, the fan goes back to the
+    // start, and putting it back means naming the card that was centred rather
+    // than the one on the desktop.
+    //
+    // BY PATH AND NOT BY INDEX, because an index means nothing across a
+    // rebuild -- a file added to or taken out of the collection shifts every
+    // index after it, and the carousel would come back pointing at the
+    // wallpaper next door.
+    function revealPath(path: string): void {
+        if (path === "")
             return;
 
-        const i = root.entries.findIndex(e => e.path === root.currentPath);
+        const i = root.entries.findIndex(e => e.path === path);
         if (i >= 0)
             view.positionViewAtIndex(i, PathView.Center);
     }
@@ -409,15 +472,59 @@ PanelWindow {
             onClicked: WallpaperState.close()
         }
 
-        // The wheel walks the fan. PathView has no wheel handling of its own --
-        // it is the flicking, not the scrolling, that it implements.
+        // The wheel walks the fan. PathView has no wheel handling of its own
+        // -- it is the flicking, not the scrolling, that it implements -- and
+        // there is nothing underneath this to catch what it drops either: the
+        // view is `interactive: false` a few lines down, so there is no
+        // Flickable taking the events this handler does not. Whatever goes
+        // wrong here goes wrong in silence and in full.
+        //
+        // EVERY DEVICE, which is the lesson components/ScrollList.qml was
+        // written for and states at length. Naming device types fails by
+        // declining events without saying so, and qtbase types this machine's
+        // mouse as a TouchPad whenever the compositor advertises
+        // zwp_pointer_gestures_v1 -- which niri does. Mouse | TouchPad
+        // happens to cover that particular surprise; the point of AllDevices
+        // is that there is no device this surface wants to refuse, so there
+        // is nothing left to be surprised by.
+        //
+        // A NOTCH WITH NO ANGLE IN IT USED TO STEP BACKWARDS, and that is the
+        // bug this replaces. The test was `angleDelta.y < 0 ||
+        // angleDelta.x > 0` with `else` meaning "go back", so every wheel
+        // event carrying no angle at all took the else: measured with
+        // qmltestrunner, feeding the old handler a zero-delta wheel event
+        // moved the fan one card BACKWARDS. Those events are ordinary rather
+        // than theoretical -- a device that reports a continuous scroll fills
+        // in pixelDelta and leaves angleDelta at zero, and the phase events
+        // that begin and end a touchpad gesture carry no delta on either.
+        //
+        // So the angle is read first and the pixels stand in for it, exactly
+        // as ScrollList does, and a nonzero step is required in one direction
+        // or the other before the fan moves at all. Down or right is forward;
+        // the vertical axis decides when both report, which is the one thing
+        // here that differs from the old test -- it consulted the horizontal
+        // even when the vertical had already answered.
+        //
+        // ONE CARD PER EVENT and not per pixel: the step this drives is
+        // discrete, so what paces it is the stream of events rather than the
+        // size of any one of them. A device that reports a continuous scroll
+        // would therefore step per event, which is untested here because no
+        // device on this machine reports that way. An accumulator is the fix
+        // if it ever turns out to be too fast; it is not invented today for a
+        // device nobody has.
         WheelHandler {
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            acceptedDevices: PointerDevice.AllDevices
 
             onWheel: event => {
-                if (event.angleDelta.y < 0 || event.angleDelta.x > 0)
+                const y = event.angleDelta.y !== 0 ? event.angleDelta.y
+                    : event.pixelDelta.y;
+                const x = event.angleDelta.x !== 0 ? event.angleDelta.x
+                    : event.pixelDelta.x;
+                const step = y !== 0 ? -y : x;
+
+                if (step > 0)
                     view.incrementCurrentIndex();
-                else
+                else if (step < 0)
                     view.decrementCurrentIndex();
             }
         }
@@ -675,25 +782,34 @@ PanelWindow {
 
                     // CACHED FOR A STILL AND NOT FOR A VIDEO, which is the
                     // one place in this shell where that distinction is worth
-                    // making.
+                    // making. It is about DECODING and nothing else, and the
+                    // rest of this note is the correction of what it used to
+                    // say.
                     //
-                    // The trap the rest of the shell avoids with a blanket
-                    // `cache: false` is that Qt remembers a URL that FAILED to
-                    // load and will not go back to disk for it, and the cache
-                    // key -- URL plus size -- does not change when the file
-                    // finally appears. A video dropped into the collection is
-                    // listed before ffmpeg has pulled a frame out of it, and a
-                    // pinned failure there is a card that stays BLANK for the
-                    // rest of the session, with no second picture to fall back
-                    // to. So videos keep asking.
+                    // A FAILED LOAD IS NOT PINNED. This claimed that Qt
+                    // remembers a URL that failed and will not go back to disk
+                    // for it, so that a video listed before ffmpeg had pulled
+                    // a frame out of it would be blank for the rest of the
+                    // session unless the Image kept asking. If that were true
+                    // the retry above would repair nothing, so it was measured
+                    // rather than believed: offscreen on Qt 6.11.2, `cache:
+                    // true` and one sourceSize throughout, an Image asked for
+                    // a file that does not exist reports Error, and once the
+                    // file appears a NEW Image handed the same URL loads it --
+                    // at 360 ms and at 2 s after the failure, with the Image
+                    // that failed still alive beside it. What IS pinned is the
+                    // request, not the answer: an Image re-handed the source
+                    // it already holds emits nothing at all, which is a
+                    // different trap and the one advanceFrame guards below.
                     //
-                    // A still cannot go blank: its thumbnail failing drops it
-                    // to the wallpaper itself, which is slower but is the
-                    // right picture, and the next run of the shell finds the
-                    // thumbnail built. Against that, caching is what keeps the
-                    // fan from decoding the same handful of files over and
+                    // So what is left is the decode. Caching is what keeps the
+                    // fan from decoding the same handful of stills over and
                     // over as it turns -- measured at roughly half the cost of
-                    // the carousel with it on.
+                    // the carousel with it on -- and a video's thumbnail is
+                    // the one picture on this sheet that is not worth a cache
+                    // entry, because the preview sequence covers it within a
+                    // frame or two of the card appearing and it is never asked
+                    // for again.
                     cache: !card.modelData.video
 
                     // NO `layer.enabled`, unlike every other masked image in
@@ -805,9 +921,18 @@ PanelWindow {
                 // Set when 001.jpg itself is not there, which is any video the
                 // script has not been over yet. Stops the clock rather than
                 // letting it ask for a file that does not exist fifteen times a
-                // second; the card stays on its still frame, and the rebuild
-                // that follows Config's thumbnail run replaces the model entry
-                // and clears this.
+                // second, and leaves the card on its still frame.
+                //
+                // NOTHING CLEARS IT IN PLACE, and that is the point to hold on
+                // to. It goes when this delegate does: the bump at the end of
+                // Config's thumbnail run rebuilds the entries carrying the new
+                // revision, PathView is handed a model that genuinely differs,
+                // and every card is built again -- this one by an object that
+                // has never asked for a frame. The version of that rebuild
+                // this replaces produced an identical array, which PathView
+                // discards, so this flag survived the one event that exists to
+                // clear it and the card stayed blank until the shell was
+                // restarted. See the Connections on Config above.
                 property bool framesMissing: false
 
                 // THE ONE FRAME AHEAD OF THE ONE ON SCREEN. Two Images and not
