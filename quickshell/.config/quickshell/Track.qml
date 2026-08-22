@@ -157,6 +157,28 @@ Singleton {
         }
     }
 
+    // A PLAYER THAT HAS LEFT THE BUS KEEPS NOTHING HERE. Browser MPRIS bus
+    // names carry an instance number -- org.mpris.MediaPlayer2.firefox.\
+    // instance_1_45 -- so without this, every browser restart would add a
+    // permanent entry to a singleton that lives from login. The second reason
+    // matters more: a player with a STABLE bus name, like spotify or mpv,
+    // would otherwise inherit its own previous session's identity and cover,
+    // and that cover points at a file which may be long gone.
+    function forget(bus: string) {
+        if (!bus)
+            return;
+        if (root.covers[bus] !== undefined) {
+            const nextCovers = Object.assign({}, root.covers);
+            delete nextCovers[bus];
+            root.covers = nextCovers;
+        }
+        if (root.identities[bus] !== undefined) {
+            const nextIdentities = Object.assign({}, root.identities);
+            delete nextIdentities[bus];
+            root.identities = nextIdentities;
+        }
+    }
+
     // One watcher per player, for as long as the player is on the bus. This
     // is what makes the memory independent of anything being on screen.
     Instantiator {
@@ -173,11 +195,27 @@ Singleton {
             readonly property string album: watcher.modelData?.trackAlbum ?? ""
             readonly property string performer: watcher.modelData?.trackArtist ?? ""
 
+            // CAPTURED, NOT READ AT DESTRUCTION. By the time the delegate is
+            // torn down modelData may already be gone, and the binding below
+            // would hand forget() an empty string.
+            property string ownBus: ""
+
             function sync() {
                 // The track first: a genuine change clears the old cover, and
                 // the new one is then free to arrive in either order.
                 root.noteTrack(watcher.bus, watcher.title, watcher.album, watcher.performer);
-                root.noteArt(watcher.bus, watcher.art);
+
+                // THE LIVE VALUE AND NOT `watcher.art`. trackTitle and
+                // trackArtUrl are four independent bindable properties with
+                // four independent notify signals, so nothing says
+                // trackArtUrlChanged has been delivered by the time
+                // onTitleChanged runs. Reading the cached binding here would,
+                // on a genuine track change, re-insert the PREVIOUS track's
+                // cover immediately after noteTrack had just dropped it --
+                // and Zen opens every track with the artwork retracted, so
+                // that wrong cover would then sit there until the real one
+                // arrived. Reading through modelData cannot be stale.
+                root.noteArt(watcher.bus, watcher.modelData?.trackArtUrl ?? "");
             }
 
             onArtChanged: root.noteArt(watcher.bus, watcher.art)
@@ -185,7 +223,12 @@ Singleton {
             onAlbumChanged: watcher.sync()
             onPerformerChanged: watcher.sync()
 
-            Component.onCompleted: watcher.sync()
+            Component.onCompleted: {
+                watcher.ownBus = watcher.bus;
+                watcher.sync();
+            }
+
+            Component.onDestruction: root.forget(watcher.ownBus)
         }
     }
 }
