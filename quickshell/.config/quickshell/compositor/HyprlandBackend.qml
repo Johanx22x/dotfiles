@@ -351,7 +351,13 @@ CompositorBackend {
                             : colon < 0 ? description : description.slice(colon + 2),
                         described: described,
                         submap: bind.submap ?? "",
-                        nonConsuming: !!bind.non_consuming
+                        nonConsuming: !!bind.non_consuming,
+                        // Reported as a flag of its own since long before this
+                        // read it -- see `release` in hyprctl's binds JSON.
+                        // Push-to-talk is the pair that needs it: desktop-tweak
+                        // writes one bind on the press and one on the release
+                        // of the same key.
+                        release: !!bind.release
                     });
                 }
                 root.binds = out;

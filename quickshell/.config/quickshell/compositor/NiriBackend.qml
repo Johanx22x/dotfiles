@@ -401,7 +401,13 @@ CompositorBackend {
                     described: described,
                     // niri has no submaps, and every bind consumes its chord.
                     submap: "",
-                    nonConsuming: false
+                    nonConsuming: false,
+                    // And it cannot run anything on the way UP of a key, which
+                    // is the same gap that leaves push-to-talk off this flavor
+                    // -- see `pushToTalk` in the capability block above.
+                    // Upstream niri-wm/niri#3621 is the pull request that would
+                    // change this; until it lands there is nothing to read.
+                    release: false
                 });
             }
             root.binds = out;
