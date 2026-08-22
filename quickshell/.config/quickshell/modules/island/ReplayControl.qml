@@ -111,7 +111,13 @@ Item {
             anchors.rightMargin: Theme.itemSpacing
             anchors.verticalCenter: parent.verticalCenter
 
-            text: ReplayState.armed ? "Instant replay" : "Replay off"
+            // THREE ANSWERS AND NOT TWO. "Replay off" is the switch being off;
+            // a shell that stood down for another one in this session has the
+            // switch ON and no buffer, and calling that "off" would send
+            // somebody to a switch that is already where they want it. See
+            // ReplayState.heldElsewhere.
+            text: ReplayState.armed ? "Instant replay"
+                : ReplayState.heldElsewhere ? "Replay elsewhere" : "Replay off"
             elide: Text.ElideRight
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize
