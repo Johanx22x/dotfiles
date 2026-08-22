@@ -1,3 +1,16 @@
+// NOTHING INSTANTIATES THIS FILE ANY MORE, and that is the state it was left
+// in rather than an oversight. It was a row in the dashboard's control card
+// until the dashboard became one view; it came out because
+// modules/settings/pages/NetworkPage.qml does the same job better -- saved
+// networks, forgetting one, the enterprise cases -- and a truncated second
+// copy of a better screen was not worth the panel's tallest card.
+//
+// It is kept, not deleted, for one reason: NetworkPage is written AGAINST it.
+// Three comments there, including the page's own header, explain what that
+// page does by saying what this file deliberately refuses to do, and deleting
+// the file would leave those arguments pointing at nothing. Delete both
+// together, or neither.
+//
 // Wi-Fi: what we are on, and what else is in range.
 //
 // Through Quickshell's NetworkManager backend, so there is no nmcli being
