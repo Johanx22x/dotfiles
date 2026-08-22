@@ -22,6 +22,14 @@
 // than one tab of four: the popout builds its content when it opens and
 // destroys it when it closes, so being constructed here does mean being looked
 // at. The check costs nothing and keeps the file honest about why.
+//
+// THE MUTE IS IN THE HEADER, and this is where it belongs rather than where it
+// was. It spent its life as a row in the island's dashboard, filed with the
+// brightness and the volume because it was a thing you switch; but a panel
+// that lists notifications and cannot silence them is the odd arrangement, and
+// the dashboard is about this DESKTOP while the mute is about this LIST. The
+// header already says what the mute did -- "3 arrived muted" -- so cause and
+// effect are now one line apart instead of one panel apart.
 
 import Quickshell
 import QtQuick
@@ -81,11 +89,21 @@ Item {
         anchors.right: parent.right
         anchors.top: parent.top
 
+        // 30, which is the 26 the buttons are plus two either side. It was
+        // the same before the mute joined them; what changed is that the
+        // number now has two things depending on it.
         height: 30
 
         Text {
             anchors.left: parent.left
+            // Stops at the controls rather than running under them: the mute
+            // added a second button to this row, and "12 notifications · 3
+            // arrived muted" is the longest string the header can hold.
+            anchors.right: controls.left
+            anchors.rightMargin: Theme.itemSpacing
             anchors.verticalCenter: parent.verticalCenter
+
+            elide: Text.ElideRight
 
             // Says what the list IS when there is nothing unusual about it,
             // and what the mute did when there is. The second reading is the
@@ -107,44 +125,139 @@ Item {
             color: Theme.textOnSurfaceVariant
         }
 
-        Rectangle {
-            id: clearButton
+        // TWO CONTROLS ON THE RIGHT, and they are deliberately not the same
+        // shape of thing. Clear is an ACTION -- it happens once and there is
+        // nothing left of it -- so it stays an outline you press. The mute is
+        // a MODE that is either on or off, so it fills with the accent while
+        // it is on and is an outline like Clear while it is not. Filled versus
+        // outlined is the whole of the state, which is why the label never
+        // changes: a toggle whose text flips between "Do not disturb" and
+        // "Notifications on" leaves you working out whether the words are
+        // describing the state or offering the action.
+        Row {
+            id: controls
 
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
 
-            visible: NotificationState.history.length > 0
+            spacing: 8
 
-            implicitWidth: clearLabel.implicitWidth + 24
-            implicitHeight: 26
-            radius: height / 2
-            color: clearMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+            Rectangle {
+                id: dndButton
 
-            border.width: 1
-            border.color: Theme.outlineVariant
+                anchors.verticalCenter: parent.verticalCenter
 
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
+                implicitWidth: dndContent.implicitWidth + 22
+                implicitHeight: 26
+                radius: height / 2
+
+                // Filled while the mute is on. Off, it borrows Clear's
+                // treatment exactly, hover included, so the two read as one
+                // row of controls rather than as a button beside a widget.
+                color: NotificationState.dnd
+                    ? Theme.primary
+                    : dndMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+
+                border.width: NotificationState.dnd ? 0 : 1
+                border.color: Theme.outlineVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
+
+                Row {
+                    id: dndContent
+
+                    anchors.centerIn: parent
+                    spacing: 7
+
+                    // THE SAME PAIR THE BELL DRAWS for the same state -- see
+                    // modules/bar/NotificationButton.qml. The button on the
+                    // bar and the switch in this panel are one setting, so
+                    // they must not need to be read two ways.
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        text: NotificationState.dnd ? Icons.bellOff : Icons.bell
+                        font.family: Theme.fontFamily
+                        font.pointSize: Theme.fontSize
+                        color: NotificationState.dnd ? Theme.textOnPrimary : Theme.textOnSurfaceVariant
+
+                        Behavior on color {
+                            ColorAnimation { duration: Theme.animDuration }
+                        }
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        text: "Do not disturb"
+                        font.family: Theme.fontFamily
+                        font.pointSize: Theme.fontSize - 1
+                        font.weight: Font.Bold
+                        color: NotificationState.dnd ? Theme.textOnPrimary : Theme.textOnSurfaceVariant
+
+                        Behavior on color {
+                            ColorAnimation { duration: Theme.animDuration }
+                        }
+                    }
+                }
+
+                // NO COUNT CHIP, unlike the row this replaces. The dashboard's
+                // switch carried "how many the mute has swallowed", and here
+                // that number is provably always zero: being on screen is what
+                // marks the count read (see the top of this file), so by the
+                // time anyone can look at this button the debt is already
+                // paid. A chip that can only ever say nothing is a chip that
+                // should not be drawn.
+                MouseArea {
+                    id: dndMouse
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: NotificationState.toggle()
+                }
             }
 
-            Text {
-                id: clearLabel
+            Rectangle {
+                id: clearButton
 
-                anchors.centerIn: parent
-                text: "Clear"
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 1
-                font.weight: Theme.fontWeight
-                color: Theme.textOnSurfaceVariant
-            }
+                anchors.verticalCenter: parent.verticalCenter
 
-            MouseArea {
-                id: clearMouse
+                visible: NotificationState.history.length > 0
 
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: NotificationState.clearHistory()
+                implicitWidth: clearLabel.implicitWidth + 24
+                implicitHeight: 26
+                radius: height / 2
+                color: clearMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+
+                border.width: 1
+                border.color: Theme.outlineVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
+
+                Text {
+                    id: clearLabel
+
+                    anchors.centerIn: parent
+                    text: "Clear"
+                    font.family: Theme.fontFamily
+                    font.pointSize: Theme.fontSize - 1
+                    font.weight: Theme.fontWeight
+                    color: Theme.textOnSurfaceVariant
+                }
+
+                MouseArea {
+                    id: clearMouse
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: NotificationState.clearHistory()
+                }
             }
         }
     }

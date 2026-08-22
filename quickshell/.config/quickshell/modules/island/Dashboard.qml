@@ -16,12 +16,14 @@
 // So the three questions are asked at once, in three columns:
 //
 //   left    the time and the month
-//   middle  the things reached for without leaving the panel, and capture
+//   middle  the sliders reached for without leaving the panel, and capture
 //   right   what is playing, and what this machine is doing
 //
-// It fits because five things left, and each of them left for a reason that
+// It fits because six things left, and each of them left for a reason that
 // is written where it used to be:
 //
+//   do not disturb           the panel the bell opens governs the list it
+//                            silences; a dashboard about this desktop did not
 //   Wi-Fi and Bluetooth      full pages in the settings window do this better
 //   the identity card        distribution, compositor and uptime
 //   the replay's own config  length, screen, codecs -- all on the settings
@@ -66,35 +68,69 @@ Item {
 
     // 296, and it was 330 while Wi-Fi and Bluetooth lived here. Those two
     // opened into LISTS -- a network name plus a signal glyph plus a lock --
-    // and the width was theirs. What is left is a switch, two sliders and
-    // three capture buttons; at 296 each of those buttons is 84 across, which
-    // holds "Display" at 9pt with room either side.
+    // and the width was theirs. What is left is two sliders and three capture
+    // buttons; at 296 each of those buttons is 84 across, which holds
+    // "Display" at 9pt with room either side. It is NOT narrowed again now
+    // that the mute has gone too: the buttons are what set this number, and
+    // they have not moved.
     readonly property int midWidth: 296
 
-    // 348: three dials of 100 with 8 between them and the card's own padding
-    // either side. The media card above it inherits the width rather than
-    // asking for one, because a cover, a title and a transport row will use
-    // whatever they are given and the dials will not.
-    readonly property int rightWidth: 348
+    // DERIVED FROM THE DIALS, which is the direction the dependency has to
+    // run: three of them side by side with `gaugeSpacing` between and the
+    // card's own padding either side, and nothing else in this column has an
+    // opinion. It was the literal 348 -- exactly this sum at a dial of 100 --
+    // and a literal is what made the dials un-growable: the number that had to
+    // change was two screens away from the number somebody wanted to change.
+    // The media card above inherits the width rather than asking for one,
+    // because a cover, a title and a transport row will use whatever they are
+    // given and the dials will not.
+    readonly property int rightWidth: root.gaugeSize * 3 + root.gaugeSpacing * 2 + root.cardPad * 2
 
     readonly property int clockHeight: 104
 
-    // The dial, and the card that holds a row of them. A hundred pixels is
-    // what it takes for "100%" at three points over the body size to sit
-    // inside the ring with the label above it and the reading below -- see
-    // the Gauge component at the foot of this file.
-    readonly property int gaugeSize: 100
+    // The dial, and the card that holds a row of them.
+    //
+    // 124, AND IT WAS 100. A hundred was what it took for "100%" to sit inside
+    // the ring with the label above it and the reading below -- which it did,
+    // and only just: the ring's clear area is a circle of radius 42 at that
+    // size, and the reading sits a full 26 pixels off centre, where the chord
+    // across that circle is 60 pixels wide. "3.6G swap" is 52 of them. It fit
+    // and it looked wedged in, which is what was actually asked about.
+    //
+    // At 124 the same chord is 90 wide and the line has room either side. The
+    // type inside is deliberately NOT grown with it -- growing the ring and
+    // the text together would give the reading back exactly the margin it
+    // started with, which is the thing being fixed.
+    //
+    // It costs width, and width is what the panel had none of: the number
+    // above is a sum of these, so the panel is wider than it was. What paid
+    // for it in HEIGHT is the media card above, which lost a row.
+    readonly property int gaugeSize: 124
+    readonly property int gaugeSpacing: 8
     readonly property int gaugeCardHeight: root.gaugeSize + root.cardPad * 2
 
     // The cover art is a square and everything beside it is shorter, so the
-    // square is what sets the height of the top half of the media card.
-    readonly property int coverSize: 110
+    // square is what sets the height of the top half of the media card. 96 and
+    // not the 110 it was: the block beside it is three short lines now rather
+    // than an eyebrow over a two-line title, and a square much taller than the
+    // text it is captioning stops reading as a pair.
+    readonly property int coverSize: 96
 
-    // 2*16 padding + cover + 12 + the progress line + 12 + the transport row.
-    // Stated rather than bound to the children because it is one of the three
-    // candidates for the panel height below, and binding it to items that are
-    // themselves inside a card sized by that height is a loop.
-    readonly property int mediaHeight: root.cardPad * 2 + root.coverSize + 12 + 26 + 12 + 44
+    // The two circular skip buttons, and the play button beside the text.
+    // The ratio between them is what carries the hierarchy -- one control here
+    // is reached for without looking and the other two are not.
+    readonly property int skipSize: 34
+    readonly property int playSize: 56
+
+    // 2*16 padding + cover + 12 + the transport row. Stated rather than bound
+    // to the children because it is one of the three candidates for the panel
+    // height below, and binding it to items that are themselves inside a card
+    // sized by that height is a loop.
+    //
+    // TWO ROWS WHERE THERE WERE THREE. The progress line and the transport
+    // used to be separate rows under the cover; they are one row now, and the
+    // 48 pixels that freed is what the dials below spend on being bigger.
+    readonly property int mediaHeight: root.cardPad * 2 + root.coverSize + 12 + root.skipSize
 
     // THE PANEL IS AS TALL AS ITS TALLEST COLUMN, and which column that is
     // depends on the machine: the calendar grows with the type size, the
@@ -270,8 +306,23 @@ Item {
             height: parent.height
             spacing: root.gap
 
-            // The settings, in the sense of things you set and stop thinking
-            // about.
+            // The two things you set by feel: the backlight and the volume.
+            //
+            // DO NOT DISTURB IS NOT HERE ANY MORE either, and it is the reason
+            // this card has no rule left in it -- the rule existed to separate
+            // the one toggle from the two sliders, and with the toggle gone it
+            // separated nothing from nothing. The mute went to the panel the
+            // bell opens, which is the thing it actually governs: a list of
+            // notifications that cannot silence them was the odd arrangement,
+            // and a dashboard about this DESKTOP was a strange place to keep a
+            // setting about that list. See the header of
+            // modules/notifications/NotificationHistory.qml.
+            //
+            // On a desktop what is left is a single slider in a card of its
+            // own, which is thinner than this card has ever been and is still
+            // the right shape: the capture card below is a different kind of
+            // thing -- two acts that produce a file -- and folding the volume
+            // in beside them to fill the space would be grouping by leftovers.
             //
             // WI-FI AND BLUETOOTH ARE NOT HERE ANY MORE, and their absence is
             // most of why this panel got shorter. Each was a row plus a list
@@ -291,11 +342,11 @@ Item {
                 id: controlsCard
 
                 width: parent.width
-                // FROM ITS CONTENT. This card holds three fixed rows on a
-                // desktop and four on a laptop, and it is also the first term
-                // of the capture card's height below, so a number picked by
-                // hand here would be a number to re-pick every time a row
-                // joins or leaves.
+                // FROM ITS CONTENT. This card holds one slider on a desktop
+                // and two on a laptop, and it is also the first term of the
+                // capture card's height below, so a number picked by hand here
+                // would be a number to re-pick every time a row joins or
+                // leaves -- which it just did.
                 height: controlsColumn.implicitHeight + root.cardPad * 2
 
                 Column {
@@ -304,23 +355,6 @@ Item {
                     anchors.fill: parent
                     anchors.margins: root.cardPad
                     spacing: root.gap
-
-                    // First, because it is the only toggle here and the rule
-                    // below separates it from the two sliders. It used to be
-                    // first for a different reason -- it was the one row that
-                    // never changed height, and below Wi-Fi and Bluetooth it
-                    // would have been shoved down the card every time one of
-                    // their lists opened. Nothing in this card moves any more;
-                    // the order is now just the grouping.
-                    DndControl {
-                        width: parent.width
-                    }
-
-                    Rectangle {
-                        width: parent.width
-                        height: 1
-                        color: Theme.outlineVariant
-                    }
 
                     // ABOVE THE VOLUME AND WITH NO RULE BETWEEN THEM. They are
                     // the same kind of control -- a value you set by feel and
@@ -350,11 +384,23 @@ Item {
                 width: parent.width
                 height: root.bodyHeight - controlsCard.height - root.gap
 
+                // CENTRED AND NOT FILLED, which is the same treatment the
+                // media card's contents get and for the same reason. This card
+                // is given whatever height the controls card above it did not
+                // take, so it has slack in it whenever another column is the
+                // tallest -- and it gained a further sixty-three pixels of it
+                // the day the mute left the card above. Anchored to the top
+                // that slack would all pool at the bottom and read as a hole;
+                // split evenly it reads as padding.
                 Column {
                     id: captureColumn
 
-                    anchors.fill: parent
-                    anchors.margins: root.cardPad
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: root.cardPad
+                    anchors.rightMargin: root.cardPad
+                    anchors.verticalCenter: parent.verticalCenter
+
                     spacing: root.gap
 
                     RecordControl {
@@ -385,16 +431,23 @@ Item {
             spacing: root.gap
 
             // ---------------- Media ----------------
-            // Cover on the left as a square, an eyebrow, the title in bold
-            // and the artist under it in muted text; a waveform for a progress
-            // line with the times at each end, and the transport centred under
-            // that.
+            // Cover on the left as a square; beside it the title in bold, the
+            // artist under it in muted text and one combined time reading
+            // under that; the play button large and round on the right of the
+            // block. Under all of it a single row: skip back, a plain progress
+            // bar, skip forward.
             //
             // WHAT LEFT WITH THE TAB. The album line went: title and artist
             // answer "what is this", and the album is the third fact nobody
             // came for. The volume slider went too -- it is a row in the card
             // to the left of this one, and having it twice in one view was
             // only ever defensible while the two were on different tabs.
+            //
+            // WHAT LEFT IN THE REDRAW. The "NOW PLAYING" eyebrow, the two
+            // times at opposite ends of their own row, and the cava waveform
+            // that was doing duty as a seek bar. Each is argued where it used
+            // to be. What it bought is height: two rows instead of three, and
+            // the dials below are that much bigger for it.
             Card {
                 id: mediaCard
 
@@ -491,7 +544,7 @@ Item {
                     spacing: 12
                     visible: !!mediaCard.player
 
-                    // ---- Cover, and what it is playing ----
+                    // ---- Cover, what is playing, and the play button ----
                     Item {
                         width: parent.width
                         height: root.coverSize
@@ -593,52 +646,61 @@ Item {
                                 visible: !art.visible
                                 text: Icons.music
                                 font.family: Theme.fontFamily
-                                font.pointSize: 34
+                                font.pointSize: 30
                                 color: Theme.outline
                             }
+                        }
+
+                        // OUT OF THE TRANSPORT ROW AND BESIDE THE TEXT. It is
+                        // the one control on this card anybody reaches for
+                        // without looking, and in a row of three it was
+                        // distinguished only by being a few pixels wider than
+                        // its neighbours. Alone on the right of the block it
+                        // is the largest round thing in the column and cannot
+                        // be mistaken for either skip.
+                        //
+                        // Centred on the COVER and not on the card: the card
+                        // has slack in it (see the note on `media` above) and
+                        // a button centred on the card would drift away from
+                        // the block it belongs to as that slack changed.
+                        RoundButton {
+                            id: playButton
+
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            diameter: root.playSize
+                            filled: true
+                            glyph: mediaCard.player?.isPlaying ? Icons.pause : Icons.play
+                            enabled: mediaCard.player?.canTogglePlaying ?? false
+                            onActivated: mediaCard.player?.togglePlaying()
                         }
 
                         Column {
                             anchors.left: cover.right
                             anchors.leftMargin: 14
-                            anchors.right: parent.right
+                            anchors.right: playButton.left
+                            anchors.rightMargin: 14
                             anchors.verticalCenter: parent.verticalCenter
 
                             spacing: 3
 
-                            // The eyebrow, and it says which of the two states
-                            // this is. A label that read "NOW PLAYING" over a
-                            // paused track would be the one piece of text on
-                            // the card that is not true, and the transport
-                            // glyph is the only other thing saying otherwise.
-                            Text {
-                                width: parent.width
-                                text: mediaCard.player?.isPlaying ? "NOW PLAYING" : "PAUSED"
-                                elide: Text.ElideRight
-                                font.family: Theme.fontFamily
-                                font.pointSize: Theme.fontSize - 4
-                                font.weight: Font.Bold
-                                // Letter-spaced, which is what makes four
-                                // small bold words read as a label rather than
-                                // as a very short first line of the title.
-                                font.letterSpacing: 1.4
-                                color: Theme.primary
-
-                                Behavior on color {
-                                    ColorAnimation { duration: Theme.recolorDuration }
-                                }
-                            }
-
+                            // NO EYEBROW. "NOW PLAYING" over a paused track was
+                            // the one string on this card that could be false,
+                            // and it was solved by making it say "PAUSED"
+                            // instead -- a label whose entire job was to
+                            // correct itself. The transport glyph says which of
+                            // the two states this is, in one mark, and it is
+                            // the mark you would look at anyway.
                             Text {
                                 width: parent.width
                                 text: mediaCard.player?.trackTitle ?? ""
-                                // Two lines and then an ellipsis. A track
-                                // title is the one string here worth the
-                                // second line -- everything else on the card
-                                // is short by nature -- and a fixed two keeps
-                                // the block the same height whichever it gets.
-                                maximumLineCount: 2
-                                wrapMode: Text.Wrap
+                                // ONE LINE. It was two, from when the title
+                                // was the only thing under a label; three
+                                // lines of text beside a square that is now
+                                // shorter have to be three lines, and a title
+                                // that reflows the two readings under it is a
+                                // block that changes height with the track.
                                 elide: Text.ElideRight
                                 font.family: Theme.fontFamily
                                 font.pointSize: Theme.fontSize + 2
@@ -659,43 +721,60 @@ Item {
                                 font.pointSize: Theme.fontSize - 1
                                 color: Theme.textOnSurfaceVariant
                             }
+
+                            // ONE READING AND NOT TWO AT OPPOSITE ENDS. The
+                            // elapsed time and the length used to sit at the
+                            // two ends of the progress row, which put the only
+                            // pair of numbers on the card as far apart as the
+                            // card allowed -- "how far in am I" is a question
+                            // about the two of them together, and reading it
+                            // meant crossing the whole width. Together they are
+                            // one glance, and the row they left is what let the
+                            // progress line join the transport.
+                            Text {
+                                width: parent.width
+                                visible: transport.seekable
+                                text: `${root.clockFormat(root.livePosition)} / ${root.clockFormat(mediaCard.player?.length ?? 0)}`
+                                elide: Text.ElideRight
+                                font.family: Theme.fontFamily
+                                font.pointSize: Theme.fontSize - 3
+                                color: Theme.outline
+                            }
                         }
                     }
 
-                    // ---- The progress line ----
+                    // ---- Transport, with the progress line running through it
                     //
-                    // A WAVEFORM THAT IS ALSO THE SEEK BAR, which is one row
-                    // where the old tab had two: a spectrum above a rule, each
-                    // spanning the same width and reading as a short row of
-                    // bars floating over a long line.
+                    // ONE ROW: skip back, the line, skip forward. The line used
+                    // to be a row of its own with the transport centred under
+                    // it, which spent two rows and a gap on three marks and a
+                    // rule -- and the skips, being the two controls that move
+                    // ALONG the track, are exactly the two that belong at its
+                    // ends. The play button is not among them; see the note on
+                    // it above.
                     //
-                    // THE HEIGHTS ARE REAL AUDIO. They come from the same cava
-                    // feed the island's capsule draws, through the same
-                    // component -- one instrument at two sizes, not a second
-                    // visualiser, and not a decorative squiggle that would be
-                    // a picture of audio that is not this audio.
-                    //
-                    // THE PROGRESS IS THE CLIP, NOT THE BAR COUNT. The obvious
-                    // implementation is to light each bar whose turn has come,
-                    // and it does not work: cava gives fourteen bands, so the
-                    // fill would move once every seventeen seconds on a
-                    // four-minute track and sit dead still in between. So the
-                    // waveform is drawn TWICE in two colours, and the played
-                    // copy sits inside an Item that is `fraction` of the width
-                    // with `clip: true`. The edge is vertical and straight, so
-                    // clipping costs it nothing -- this is not the curved
-                    // boundary CornerWedge.qml had to solve.
-                    //
-                    // AT REST it is a row of dots on the centre line, which is
-                    // Waveform's own resting shape and the same vocabulary the
-                    // workspace dots use. cava is not running then: Spectrum
-                    // binds the process to MPRIS playback, so a paused track
-                    // costs nothing to draw.
+                    // A PLAIN BAR AND NOT THE WAVEFORM. This drew the same cava
+                    // spectrum the island's capsule draws, twice, with the
+                    // played part clipped out of a copy in a brighter colour --
+                    // real audio rather than a decorative squiggle, which was
+                    // the argument for it. What it was not was legible AS A
+                    // POSITION: the thing a progress line has to answer is "how
+                    // far through am I", and a fourteen-band spectrum answers it
+                    // with an edge that lands in a different place on the bar
+                    // depending on how loud the track happens to be there.
+                    // The waveform is not gone -- it is still what the island
+                    // draws beside the title, where being audio IS the job.
                     Item {
-                        id: progress
+                        id: transport
 
                         width: parent.width
-                        height: 26
+                        height: root.skipSize
+
+                        // Only when the player actually reports a position. A
+                        // progress line frozen at zero is worse than none, and
+                        // the reading above it would be a lie.
+                        readonly property bool seekable: (mediaCard.player?.lengthSupported ?? false)
+                            && (mediaCard.player?.length ?? 0) > 0
 
                         readonly property real fraction: {
                             const len = mediaCard.player?.length ?? 0;
@@ -704,112 +783,81 @@ Item {
                             return Math.max(0, Math.min(1, root.livePosition / len));
                         }
 
-                        // Only when the player actually reports a position. A
-                        // progress line frozen at zero is worse than none, and
-                        // the times either side of it would both be lies.
-                        readonly property bool seekable: (mediaCard.player?.lengthSupported ?? false)
-                            && (mediaCard.player?.length ?? 0) > 0
-
-                        Text {
-                            id: elapsed
+                        RoundButton {
+                            id: previous
 
                             anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
 
-                            visible: progress.seekable
-                            text: root.clockFormat(root.livePosition)
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize - 3
-                            color: Theme.textOnSurfaceVariant
+                            diameter: root.skipSize
+                            glyph: Icons.skipPrevious
+                            enabled: mediaCard.player?.canGoPrevious ?? false
+                            onActivated: mediaCard.player?.previous()
                         }
 
-                        Text {
-                            id: total
+                        RoundButton {
+                            id: next
 
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
 
-                            visible: progress.seekable
-                            text: root.clockFormat(mediaCard.player?.length ?? 0)
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize - 3
-                            color: Theme.textOnSurfaceVariant
+                            diameter: root.skipSize
+                            glyph: Icons.skipNext
+                            enabled: mediaCard.player?.canGoNext ?? false
+                            onActivated: mediaCard.player?.next()
                         }
 
+                        // Between the two, and measured off them rather than
+                        // given a share of the width.
                         Item {
                             id: line
 
-                            // Between the two times, and measured off them
-                            // rather than given a share of the width: the
-                            // strings are as wide as the track is long, and a
-                            // fixed reservation would either crowd "1:04" or
-                            // clip "112:30".
-                            anchors.left: elapsed.visible ? elapsed.right : parent.left
-                            anchors.right: total.visible ? total.left : parent.right
-                            anchors.leftMargin: elapsed.visible ? 10 : 0
-                            anchors.rightMargin: total.visible ? 10 : 0
+                            anchors.left: previous.right
+                            anchors.right: next.left
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
                             anchors.verticalCenter: parent.verticalCenter
 
                             height: parent.height
+                            visible: transport.seekable
 
-                            // Solve for the GAP and not for the bar width.
-                            // Filling the width by fattening the bars was
-                            // tried on the old Media tab and looked wrong:
-                            // fourteen bands spread over the full width made
-                            // each one a lozenge rather than a spectrum. The
-                            // bars keep a fixed slim width and the space
-                            // between them absorbs the rest. Floored, so
-                            // rounding never pushes the last bar past the edge.
-                            readonly property real barGap: Math.max(2,
-                                (line.width - Spectrum.bars * 7) / (Spectrum.bars - 1))
+                            Rectangle {
+                                id: track
 
-                            Waveform {
-                                id: ghost
-
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: line.width
-
-                                maxHeight: 22
-                                barWidth: 7
-                                spacing: line.barGap
-
-                                // Flat and muted: this is the part of the track
-                                // that has not played. Both ends of Waveform's
-                                // gradient are set to the same colour, which is
-                                // how a two-colour component draws one colour.
-                                barColor: Theme.outlineVariant
-                                barColorEnd: Theme.outlineVariant
-                            }
-
-                            Item {
                                 anchors.left: parent.left
-                                anchors.top: parent.top
-                                anchors.bottom: parent.bottom
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
 
-                                width: line.width * progress.fraction
-                                clip: true
+                                height: 4
+                                radius: height / 2
+                                color: Theme.outlineVariant
 
-                                // Smoothed, or the fill jumps twice a second
-                                // instead of creeping. Same 480 the old seek
-                                // bar used, which is just under the poll.
-                                Behavior on width {
-                                    NumberAnimation { duration: 480 }
-                                }
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
 
-                                Waveform {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: line.width
+                                    width: parent.width * transport.fraction
+                                    radius: parent.radius
+                                    color: Theme.primary
 
-                                    maxHeight: ghost.maxHeight
-                                    barWidth: ghost.barWidth
-                                    spacing: line.barGap
+                                    // Smoothed, or the fill jumps twice a
+                                    // second instead of creeping. Same 480 the
+                                    // old seek bar used, which is just under
+                                    // the poll.
+                                    Behavior on width {
+                                        NumberAnimation { duration: 480 }
+                                    }
                                 }
                             }
 
+                            // The target is the whole row height, not the four
+                            // pixels the bar is drawn at -- the same trade the
+                            // notification panel's scrollbar makes, and for the
+                            // same reason: the right thickness to look at is an
+                            // unfair thing to ask anyone to hit.
                             MouseArea {
                                 anchors.fill: parent
-                                anchors.topMargin: -4
-                                anchors.bottomMargin: -4
                                 cursorShape: Qt.PointingHandCursor
                                 enabled: mediaCard.player?.canSeek ?? false
                                 onClicked: mouse => {
@@ -819,37 +867,6 @@ Item {
                                     p.position = (mouse.x / line.width) * p.length;
                                 }
                             }
-                        }
-                    }
-
-                    // ---- Transport ----
-                    // Round buttons rather than bare glyphs. Three marks
-                    // floating on a card have no target to aim at and no hover
-                    // to speak of; the play button is also the one control here
-                    // anyone reaches for without looking, so it is the only
-                    // filled one and the larger of the three. That size
-                    // difference IS the hierarchy.
-                    Row {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        spacing: 8
-
-                        RoundButton {
-                            glyph: Icons.skipPrevious
-                            enabled: mediaCard.player?.canGoPrevious ?? false
-                            onActivated: mediaCard.player?.previous()
-                        }
-
-                        RoundButton {
-                            glyph: mediaCard.player?.isPlaying ? Icons.pause : Icons.play
-                            filled: true
-                            enabled: mediaCard.player?.canTogglePlaying ?? false
-                            onActivated: mediaCard.player?.togglePlaying()
-                        }
-
-                        RoundButton {
-                            glyph: Icons.skipNext
-                            enabled: mediaCard.player?.canGoNext ?? false
-                            onActivated: mediaCard.player?.next()
                         }
                     }
                 }
@@ -881,12 +898,18 @@ Item {
 
                 Row {
                     anchors.centerIn: parent
-                    spacing: 8
+                    spacing: root.gaugeSpacing
 
                     Gauge {
                         title: "CPU"
                         percent: SystemStats.cpuPercent
                         reading: `${Math.round(SystemStats.cpuTemp)} °C`
+
+                        // Coloured by the temperature under it, not by the
+                        // percentage in it. See the note on `level`.
+                        level: SystemStats.cpuTemp
+                        warmAt: SystemStats.cpuCoolAt
+                        hotAt: SystemStats.cpuHotAt
                     }
 
                     // WHICH READING FOR RAM, since memory has no temperature.
@@ -916,6 +939,14 @@ Item {
                         reading: SystemStats.swapTotal > 0
                             ? `${SystemStats.swapUsed.toFixed(1)}G swap`
                             : "no swap"
+
+                        // The one dial still coloured by its own percentage,
+                        // because memory has no temperature to be coloured by.
+                        // It takes the island's memory thresholds all the same,
+                        // so "amber" means the same thing on all three rings.
+                        level: SystemStats.ramPercent
+                        warmAt: SystemStats.ramCoolAt
+                        hotAt: SystemStats.ramHotAt
                     }
 
                     // ONLY ONCE A CARD HAS ANSWERED. On a machine with neither
@@ -942,6 +973,16 @@ Item {
                         visible: SystemStats.gpuAvailable
                         percent: SystemStats.gpuPercent
                         reading: `${Math.round(SystemStats.gpuTemp)} °C`
+
+                        // Its own numbers and not the CPU's, and the gap
+                        // between them is the hardware's rather than a taste:
+                        // coretemp puts this chip's throttle at 100 °C, and
+                        // Blackwell starts losing clocks around 85. Both are
+                        // read out in SystemStats.qml with the measurement
+                        // each came from.
+                        level: SystemStats.gpuTemp
+                        warmAt: SystemStats.gpuCoolAt
+                        hotAt: SystemStats.gpuHotAt
                     }
                 }
             }
@@ -959,33 +1000,39 @@ Item {
         precision: SystemClock.Minutes
     }
 
-    // A transport button. Filled and larger for the primary action, a ghost
-    // circle for the others.
+    // A transport button: one circle with a glyph in it.
     //
-    // Smaller than it was -- 44 where the old Media tab used 58 -- because the
-    // tab had a card to itself and this has a third of a column. The ratio
-    // between the two sizes is what carries the hierarchy, and that is kept.
+    // THE BOX IS THE CIRCLE, which it did not used to be. All three used to be
+    // 44-pixel boxes drawing 42- and 34-pixel discs inside them, because they
+    // sat in a Row -- and a Row leaves its children at y = 0, so boxes of
+    // different heights would have lined the small buttons up by their tops
+    // against the large one. There is no such Row any more: the play button is
+    // beside the text and the two skips are anchored to the ends of the
+    // transport row, each on its own vertical centre. With nothing left to
+    // align by, the box may as well be the thing it draws, and every instance
+    // says the one number it is.
     component RoundButton: Rectangle {
         id: button
 
         property string glyph: ""
         property bool filled: false
+        property int diameter: root.skipSize
 
         signal activated
 
-        // The BOX is the same for all three; only the drawn circle differs.
-        // That is what keeps them square with each other: a Row lays its
-        // children out on the x axis and leaves them at y = 0, so three boxes
-        // of different heights line up by their TOPS -- which is exactly how
-        // the small buttons ended up sitting high against the play button.
-        // Equal boxes make the alignment structural instead of something each
-        // instance has to remember to anchor.
-        implicitWidth: 44
-        implicitHeight: 44
+        implicitWidth: button.diameter
+        implicitHeight: button.diameter
         radius: width / 2
 
-        // The box itself draws nothing; `disc` below is the circle.
-        color: "transparent"
+        color: {
+            if (button.filled)
+                return buttonMouse.containsMouse ? Qt.lighter(Theme.primary, 1.15) : Theme.primary;
+            return buttonMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent";
+        }
+
+        Behavior on color {
+            ColorAnimation { duration: Theme.animDuration }
+        }
 
         // Dimmed rather than hidden when the player cannot do it: a control
         // that disappears moves the two beside it.
@@ -995,37 +1042,15 @@ Item {
             NumberAnimation { duration: Theme.animDuration }
         }
 
-        Rectangle {
-            id: disc
-
-            anchors.centerIn: parent
-
-            // Drawn smaller than the box for the secondary buttons, so the
-            // play button still reads as the larger of the three without the
-            // boxes having to differ.
-            width: button.filled ? 42 : 34
-            height: width
-            radius: width / 2
-
-            color: {
-                if (button.filled)
-                    return buttonMouse.containsMouse ? Qt.lighter(Theme.primary, 1.15) : Theme.primary;
-                return buttonMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent";
-            }
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-        }
-
         Text {
             anchors.centerIn: parent
             text: button.glyph
             font.family: Theme.fontFamily
             // Material Design glyphs sit well inside their em box, so a size
-            // that looks right as text looks lost inside a circle. These are
-            // set against the disc, not against the body text.
-            font.pointSize: button.filled ? Theme.fontSize + 8 : Theme.fontSize + 5
+            // that looks right as text looks lost inside a circle. Set against
+            // the disc it is drawn in and not against the body text, which is
+            // why it follows the diameter rather than being two constants.
+            font.pointSize: Math.round(button.diameter * 0.42)
             color: button.filled ? Theme.textOnPrimary : Theme.textOnSurface
 
             Behavior on color {
@@ -1083,6 +1108,37 @@ Item {
         // the RAM dial for what stands in where there is not.
         property string reading: ""
 
+        // WHAT THE COLOUR FOLLOWS, and it is not the sweep.
+        //
+        // The ring used to turn amber and then red on its own percentage, at
+        // 66 and 90, and the argument for it was that a dial should be
+        // readable from across the room without the number. The argument
+        // survives; what did not is that the percentage is the wrong VALUE for
+        // two of the three. A CPU pinned at 100% is a CPU doing its job -- it
+        // is what compiling looks like, and a red ring every time is a red
+        // ring that stops being read. A CPU at 92 °C is a CPU in trouble
+        // whatever the load says, and the temperature was already printed
+        // under the ring, so the dial was showing the wrong one of the two
+        // numbers it had.
+        //
+        // THE THRESHOLDS ARE THE ISLAND'S, not new ones. SystemStats already
+        // decides when to interrupt with a heat warning, and a dashboard that
+        // called something hot at a different number would give this shell two
+        // opinions about the same word. Each dial is handed that subsystem's
+        // own pair: `hotAt` is the point the island starts shouting at, and
+        // `warmAt` is the point it will stop shouting at once it has started
+        // -- which is exactly the band where the thing is still warmer than it
+        // should be, and so is exactly the amber step this needed and had
+        // nowhere to get. Nothing here is invented; see the block of
+        // measurements at "Thermal alert" in SystemStats.qml.
+        //
+        // The defaults are the sweep itself against the memory thresholds, so
+        // a dial that says nothing about any of this still colours the way a
+        // dial should rather than coming up red on a zero.
+        property real level: dial.percent
+        property int warmAt: 85
+        property int hotAt: 90
+
         readonly property int ticks: 37
         readonly property real sweep: 270
 
@@ -1091,14 +1147,14 @@ Item {
         // has is worse than one that saturates.
         readonly property real fraction: Math.max(0, Math.min(1, dial.percent / 100))
 
-        // The whole dial turns as the load does, so it can be read from across
-        // the room without the number -- the same thresholds and the same
-        // argument as the bar it replaces. Not LevelMeter's rule, where only
-        // the top few ticks go warm: that is right for a signal that is about
-        // to clip and wrong for a load, where 95% is not "nearly at the top of
-        // the scale", it is "this machine is busy".
-        readonly property color lit: dial.percent > 90 ? Theme.critical
-            : dial.percent > 66 ? Theme.warning
+        // The WHOLE dial changes colour, not the top few ticks. LevelMeter
+        // lights only its last ones because a signal that is about to clip is
+        // in trouble at the top of its own scale; this is not that. The ring
+        // is a load and the colour is a verdict about something else entirely,
+        // so lighting part of the sweep in it would say that the trouble
+        // starts partway along the load, which is the thing that is not true.
+        readonly property color lit: dial.level >= dial.hotAt ? Theme.critical
+            : dial.level >= dial.warmAt ? Theme.warning
             : Theme.primary
 
         implicitWidth: root.gaugeSize

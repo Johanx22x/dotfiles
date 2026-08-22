@@ -21,14 +21,13 @@
 // matugen derives them from the same image, so they always agree -- picking a
 // second colour by hand would be a new thing to get wrong on every wallpaper.
 //
-// BOTH ENDS ARE PROPERTIES, and the defaults are the gradient above, so the
-// island passes nothing and looks exactly as it did. The dashboard draws this
-// waveform TWICE for its progress line -- once muted for the part of the track
-// that has not played, once in the gradient behind a clip -- and setting both
-// ends to one colour is how a two-colour component is asked for one. The
-// alternative was a second bar-drawing component in Dashboard.qml, which is
-// the thing the comment beside that progress line argues against: this is one
-// instrument at two sizes, not two visualisers that have to agree.
+// BOTH ENDS WERE PROPERTIES for a while, so the dashboard's media card could
+// draw this twice for its progress line -- once flat and muted for the part of
+// the track that had not played, once in the gradient behind a clip. That
+// progress line is a plain bar now, for reasons written where it is drawn, and
+// the properties went with their only caller: a knob nothing turns is a knob
+// to keep working. The island is the one thing left drawing this, and it never
+// passed anything.
 //
 // MOTION
 // Every bar animates its own height over a few frames. cava already smooths
@@ -54,10 +53,6 @@ Row {
     // nothing, so the waveform holds its shape between tracks.
     readonly property int minHeight: barWidth
 
-    // The two ends of the gradient. See COLOUR above.
-    property color barColor: Theme.primary
-    property color barColorEnd: Theme.tertiary
-
     spacing: 3
     height: maxHeight
 
@@ -79,7 +74,7 @@ Row {
             // middle instead of standing it on the bottom edge.
             anchors.verticalCenter: parent.verticalCenter
 
-            color: Qt.tint(root.barColor, Qt.alpha(root.barColorEnd, bar.index / (Spectrum.bars - 1)))
+            color: Qt.tint(Theme.primary, Qt.alpha(Theme.tertiary, bar.index / (Spectrum.bars - 1)))
 
             // Quiet bars fade as well as shrink. Height alone leaves a hard
             // row of dots at rest; opacity makes the tail of the spectrum
