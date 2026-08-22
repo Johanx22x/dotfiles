@@ -217,6 +217,8 @@ FloatingWindow {
             // Index 0 is the user page, so the Repeater starts at 1 -- see
             // the page host at the bottom of this file for the order.
             Flickable {
+                id: railScroll
+
                 anchors.top: search.bottom
                 anchors.topMargin: rail.padding
                 anchors.left: parent.left
@@ -253,6 +255,30 @@ FloatingWindow {
                         }
                     }
                 }
+            }
+
+            // The rail scrolls on a short window -- fourteen subjects do not
+            // fit under the search field at 700px tall -- and until this was
+            // drawn nothing said so: the list simply ended, and the entries
+            // below the cut were as good as absent.
+            //
+            // IN THE RAIL'S OWN PADDING, not over the entries. The panel
+            // already insets its contents by `padding` on every side, so the
+            // strip down the right of it is empty by construction, and putting
+            // the bar there costs no width and covers no label. Four pixels
+            // centred in ten leaves three on each side.
+            //
+            // Anchored to the panel rather than to the list it describes,
+            // because that padding belongs to the panel; the top and bottom
+            // still come off the list, so the track is exactly as long as the
+            // thing it is a picture of.
+            ScrollBar {
+                view: railScroll
+
+                anchors.right: parent.right
+                anchors.rightMargin: 3
+                anchors.top: railScroll.top
+                anchors.bottom: railScroll.bottom
             }
         }
 
@@ -345,6 +371,8 @@ FloatingWindow {
         // the Wi-Fi scanner, Bluetooth discovery -- must gate on
         // `onScreen` instead, which is that flag AND the window being open.
         Flickable {
+            id: pages
+
             anchors.top: header.bottom
             anchors.left: rail.right
             anchors.right: parent.right
@@ -487,7 +515,28 @@ FloatingWindow {
         }
 
         // ---------------- Search results ----------------
+        // The pane's own bar, and the reason the pages Flickable above says it
+        // does not scroll while everything fits: now that it can be seen to
+        // scroll, it can also be seen not to. Most pages fit on a window of
+        // any size, and on those nothing is drawn here.
+        //
+        // IN THE MARGIN THE WINDOW ALREADY LEAVES, in the gap between the
+        // right edge of the pages and the edge of the window, which is empty
+        // on every page by construction. So it takes no width from the cards,
+        // covers nothing on them, and lands where a window's scrollbar is
+        // expected to be -- at the frame, rather than a card's width inside it.
+        ScrollBar {
+            view: pages
+
+            anchors.left: pages.right
+            anchors.leftMargin: 4
+            anchors.top: pages.top
+            anchors.bottom: pages.bottom
+        }
+
         SettingsSearch {
+            id: searchResults
+
             anchors.top: header.bottom
             anchors.left: rail.right
             anchors.right: parent.right
@@ -503,6 +552,21 @@ FloatingWindow {
                 SettingsState.currentPage = page;
                 search.clear();
             }
+        }
+
+        // And the same bar over the results, in the same margin, for the same
+        // reason. It hides itself along with the pane: `visible` in QML is
+        // effective visibility, so the moment the search results are put away
+        // the list reads as invisible and this stops being drawn -- without
+        // this file having to repeat the condition that decides which of the
+        // two panes is up.
+        ScrollBar {
+            view: searchResults.view
+
+            anchors.left: searchResults.right
+            anchors.leftMargin: 4
+            anchors.top: searchResults.top
+            anchors.bottom: searchResults.bottom
         }
     }
 

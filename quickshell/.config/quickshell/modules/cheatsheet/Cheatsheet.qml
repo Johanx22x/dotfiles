@@ -453,116 +453,33 @@ PanelWindow {
             // says how far down you are, which a list of similar-looking rows
             // otherwise does not.
             //
-            // IT IS NOT THERE WHEN EVERYTHING FITS, which is every landscape
-            // screen here -- a bar that is always full height is a control that
-            // says nothing and takes room saying it.
+            // components/ScrollBar.qml now. This file drew the second copy of
+            // it and said a third caller was what should lift it into
+            // components/; the third was every capped list in the settings
+            // window, so the drawing left and the placement stayed.
             //
             // IN THE CARD'S OWN PADDING, so it costs no width: the card keeps
             // thirty pixels of padding on each side and four pixels of bar
-            // centred in the right-hand thirty overlaps nothing.
+            // centred in the right-hand thirty overlaps nothing. Which is also
+            // why the list is told not to draw its own -- ScrollList's sits
+            // just inside the right edge of the list, and the columns in here
+            // are of a fixed width rather than bound to it, so those four
+            // pixels would land on the last column's key names instead of on
+            // padding.
             //
-            // Hand-drawn, and it is the second one of these in the shell --
-            // modules/notifications/NotificationHistory.qml has the other, and
-            // its comments carry the reasoning for the thumb's floor and for
-            // the travel mapping below. A THIRD caller is what should lift this
-            // into components/; two is where that starts being worth doing and
-            // this is not the commit to do it in.
-            Rectangle {
-                id: scrollTrack
+            // POSITIONED AND NOT ANCHORED TO THE LIST, because the list is a
+            // grandchild of this card and anchors only reach a parent or a
+            // sibling -- QML says so at runtime, as a warning, and leaves the
+            // bar at the top of the card. `layout` IS a child here, so the
+            // list's own y inside it is the offset that is missing.
+            ScrollBar {
+                view: list
 
                 anchors.right: parent.right
                 anchors.rightMargin: (root.cardPadding - width) / 2
 
-                // POSITIONED AND NOT ANCHORED TO THE LIST, because the list is
-                // a grandchild of this card and anchors only reach a parent or
-                // a sibling -- QML says so at runtime, as a warning, and leaves
-                // the bar at the top of the card. `layout` IS a child here, so
-                // the list's own y inside it is the offset that is missing.
                 y: layout.y + list.y
                 height: list.height
-
-                width: 4
-                radius: width / 2
-
-                visible: list.visible && list.scrollable
-
-                color: Qt.alpha(Theme.outlineVariant, 0.5)
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-
-                Rectangle {
-                    id: thumb
-
-                    // As tall a share of the track as the visible part is of
-                    // the whole, with a floor -- proportional alone leaves a
-                    // few pixels to hunt for on a long list.
-                    height: Math.max(30, scrollTrack.height * list.visibleArea.heightRatio)
-
-                    // The floor is also why this is not simply
-                    // `yPosition * track.height`: once the thumb is taller than
-                    // its share it has less room to travel than the content
-                    // does, so the position is mapped onto the travel that is
-                    // actually left. Without it the bar reaches the bottom
-                    // before the sheet does.
-                    y: {
-                        const travel = scrollTrack.height - thumb.height;
-                        const range = 1 - list.visibleArea.heightRatio;
-                        if (travel <= 0 || range <= 0)
-                            return 0;
-                        return Math.max(0, Math.min(1, list.visibleArea.yPosition / range)) * travel;
-                    }
-
-                    width: parent.width
-                    radius: parent.radius
-
-                    // Brighter while it is being used and quiet the rest of the
-                    // time: at rest this is a hint about the shape of the list,
-                    // in the hand it is a control. Both `moving` and the
-                    // velocity are asked because a wheel notch is neither a
-                    // drag nor a flick and does not set `moving`.
-                    color: list.moving || list.verticalVelocity !== 0
-                            || scrollMouse.pressed || scrollMouse.containsMouse
-                        ? Theme.primary
-                        : Theme.outline
-
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.animDuration }
-                    }
-                }
-
-                // Four pixels is the right width to look at and an unfair thing
-                // to ask anyone to hit, so the pointer gets eighteen. Wider
-                // only, never taller: growing it vertically would move this
-                // item's origin off the track that `mouse.y` is measured from.
-                MouseArea {
-                    id: scrollMouse
-
-                    anchors.fill: parent
-                    anchors.leftMargin: -7
-                    anchors.rightMargin: -7
-
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-
-                    // Press jumps and drag follows, one gesture and no dead
-                    // zone. The pointer is the MIDDLE of the thumb, so what you
-                    // pressed on ends up under your finger.
-                    function scrollTo(y: real): void {
-                        const travel = scrollTrack.height - thumb.height;
-                        if (travel <= 0)
-                            return;
-                        const progress = Math.max(0, Math.min(1, (y - thumb.height / 2) / travel));
-                        list.contentY = progress * (list.contentHeight - list.height);
-                    }
-
-                    onPressed: mouse => scrollMouse.scrollTo(mouse.y)
-                    onPositionChanged: mouse => {
-                        if (pressed)
-                            scrollMouse.scrollTo(mouse.y);
-                    }
-                }
             }
 
             Column {
@@ -678,6 +595,11 @@ PanelWindow {
                     visible: Compositor.can("bindsIntrospection")
                     width: root.contentWidth
                     contentHeight: columnsRow.implicitHeight
+
+                    // The bar for this one is up in the card, in padding that
+                    // is empty anyway -- see the note beside it for why here is
+                    // the wrong place for it.
+                    showScrollBar: false
 
                     // AS TALL AS THE COLUMNS WANT, UP TO WHAT IS LEFT. What is
                     // left is the screen, less the margin around the sheet,
