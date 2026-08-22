@@ -114,6 +114,21 @@ SettingsPage {
             onToggled: value => ReplayState.setEnabled(value)
         }
 
+        // THE SWITCH IS ON AND THERE IS NO BUFFER, which without a sentence
+        // reads as the switch doing nothing. It is not a failure: another
+        // shell in this session got there first, and one buffer per session is
+        // the point -- see ReplayState.lockFile. It is said here because the
+        // only other way to find out is to press Save and get nothing.
+        SectionNote {
+            visible: ReplayState.heldElsewhere
+
+            text: `Another shell on this session is keeping the buffer, so this `
+                + `one is not: two of them would be two encoders on the same `
+                + `screen. This one takes over on its own within a few seconds `
+                + `of the other closing.`
+            font.pointSize: Theme.fontSize - 2
+        }
+
         // Four lengths and not a stepper: they are the four anybody picks, the
         // island offers exactly these, and the same list feeds both -- see
         // ReplayState.options. A free number here would also be a free memory

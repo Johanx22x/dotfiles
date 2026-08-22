@@ -54,6 +54,32 @@
 // gpu-screen-recorder on the machine, including one started by hand from a
 // terminal to record something else; this ends the one that is this shell's
 // and leaves everything else alone.
+//
+// AND THERE IS MORE THAN ONE SHELL. That pid file lives in the state
+// directory, which quickshell keys on the path of the shell.qml being run and
+// on nothing else -- so every instance of this config shares it, and "the
+// recorder this shell left behind" was in fact "whatever recorder was last
+// written down, including the one the shell next door is using right now".
+// The second instance to start killed the first one's buffer, and after that
+// each one killed the other's every time it armed. Two instances is not an
+// exotic case: `qs -d` twice is two, and every agent that works on this config
+// runs a second one.
+//
+// So two facts had to be told apart, and neither of them was being asked for:
+//
+//   WHOSE RECORDER IS THIS?  The kernel knows -- /proc/<pid>/status says PPid,
+//   and a recorder whose parent is a live quickshell belongs to that shell.
+//   The reap now leaves those alone and takes only the orphan it was written
+//   for, whose parent is no longer any qs.
+//
+//   IS ONE ALREADY RUNNING?  A recorder holds an advisory lock in the runtime
+//   directory for exactly as long as it lives, so a second shell's recorder
+//   finds it taken and stands down instead of arming a second encoder on the
+//   same screen. See lockFile and heldElsewhere.
+//
+// What that buys is the thing the buffer is for: a probe shell opening does
+// not cost the session its last thirty seconds, and a probe shell closing does
+// not either.
 
 pragma Singleton
 
@@ -82,6 +108,45 @@ Singleton {
     // Where clips land. Empty means the directory this has always written to.
     readonly property string directory: Config.replayDirectory
         || `${Quickshell.env("HOME")}/Videos/Replays`
+
+    // ---------------- One buffer per login session ----------------
+    //
+    // THE FILE NOBODY READS, held open by the recorder and never written to.
+    // Two shells on one desktop are not the exception here -- every agent
+    // working on this config runs a second one, and `qs -d` twice is two --
+    // and until this existed the second one armed a buffer of its own: two
+    // gpu-screen-recorders on the same screen, two encoder sessions, two
+    // copies of the buffer in RAM, and both writing clips into the same
+    // folder.
+    //
+    // AN ADVISORY LOCK AND NOT A PID FILE, which is the difference between a
+    // fact and a claim. The lock is taken by the recorder process itself, on
+    // an fd that survives the exec, so it is dropped by the kernel the instant
+    // that process dies -- crash, SIGINT, its shell being killed, all the
+    // same. A pid written down for the same purpose can outlive what it
+    // names, and the one this file already keeps had to grow a /proc check for
+    // exactly that reason.
+    //
+    // IN THE RUNTIME DIRECTORY, so the scope is the login session: the thing
+    // being protected is one GPU encoder and one set of audio devices, and
+    // that is what a login session has one of. The state directory would have
+    // been the wrong scope -- it is keyed on the path of the shell.qml being
+    // run, so a shell started from a checkout elsewhere would have missed the
+    // lock and armed a second recorder anyway.
+    //
+    // A shell with no XDG_RUNTIME_DIR falls back to the state directory, which
+    // is the narrower scope and still better than none.
+    readonly property string lockFile: {
+        const runtime = Quickshell.env("XDG_RUNTIME_DIR");
+        return runtime ? `${runtime}/quickshell-replay.lock`
+            : Quickshell.statePath("replay.lock");
+    }
+
+    // Another shell in this session has the buffer, so this one does not. NOT
+    // a failure and not the switch being off: `wanted` is still true, the
+    // recorder simply found the lock taken and stood down. The retry timer
+    // below is what makes it take over when the other shell goes away.
+    property bool heldElsewhere: false
 
     // The buffer, in seconds. 0 in the config means nobody has chosen, and 30
     // is what the buffer has always been.
@@ -416,10 +481,17 @@ Singleton {
     }
 
     onWantedChanged: {
-        if (root.wanted)
+        if (root.wanted) {
             root.arm();
-        else
-            root.stop();
+            return;
+        }
+
+        // Switched off on purpose, so stop waiting for the other shell to
+        // release the buffer as well: `heldElsewhere` is a reason this shell
+        // has none, and the switch being off is a better one.
+        retry.stop();
+        root.heldElsewhere = false;
+        root.stop();
     }
 
     function arm(): void {
@@ -578,8 +650,21 @@ Singleton {
         if (root.audioSources !== "")
             args.push("-a", root.audioSources, "-ac", Config.recordingAudioCodec);
 
-        return ["sh", "-c", `mkdir -p "$1" || exit 1; shift; exec "$@"`,
-            "replay", root.directory, ...args];
+        // AND IT TAKES THE LOCK BEFORE IT EXECS. See lockFile: one armed
+        // buffer per login session, held by the recorder itself for exactly as
+        // long as it lives. flock -n is what makes a second shell's arm a
+        // no-op instead of a second encoder on the same screen, and exit 3 is
+        // what tells this file which of the two happened -- see
+        // heldElsewhere. The fd survives the exec, so the lock is the
+        // recorder's and is dropped by the kernel when it dies, however it
+        // dies. There is no lock file to go stale and none to clean up.
+        return ["sh", "-c",
+            `mkdir -p "$1" || exit 1; ` +
+            `exec 9>"$2" || exit 1; ` +
+            `flock -n 9 || exit 3; ` +
+            `printf 'replay-armed %d\\n' $$; ` +
+            `shift 2; exec "$@"`,
+            "replay", root.directory, root.lockFile, ...args];
     }
 
     // ANY OF IT CHANGING IS THE SAME EVENT, and it is debounced because
@@ -667,12 +752,45 @@ Singleton {
         // A shell and not a bare `kill`, because the check and the signal have
         // to happen together; there is no way to read /proc from QML without
         // asking a FileView for a path that only exists sometimes.
+        //
+        // AND NOT IF SOMEBODY IS STILL USING IT, which is the bug this reap
+        // was, measured rather than reasoned about: two shells on one desktop
+        // share a state directory -- it is keyed on the path of the shell.qml
+        // both are running and on nothing else -- so they share this pid file,
+        // and the second one to start read the first one's recorder out of it
+        // and killed it. In a probe with a fake recorder and two instances of
+        // this config: instance A armed pid 997839, instance B started nine
+        // seconds later, its reap read that pid, confirmed the name and
+        // SIGINTed it, and A's buffer -- thirty seconds of it -- was gone. A
+        // revived two seconds later, wrote its new pid over B's, and from then
+        // on each arm by either shell killed the other's recorder.
+        //
+        // The kernel already records who a process belongs to, so the answer
+        // does not have to be stored: /proc/<pid>/status says PPid, and a
+        // recorder whose parent is a live quickshell is a recorder that shell
+        // is still using. The one this reap exists for -- the orphan a killed
+        // shell left behind -- has been reparented away from any qs, and is
+        // reaped exactly as before.
+        //
+        // Like the comm check above, the parent's name is read to decide NOT
+        // to kill. The kill is still only ever by the pid this file wrote
+        // down.
+        //
+        // THE PID COMES OFF DISK HERE AND NOT OUT OF QML, because the copy in
+        // QML is only as fresh as this shell's startup. A shell that stood
+        // down for another one holds the pid that other shell had HOURS ago;
+        // by the time it retries, the recorder to reap is a different one.
+        // The file is the only current answer, so the reap reads it at the
+        // moment it runs. It holds one number and nothing else.
         command: ["sh", "-c",
-            `pid=$1; ` +
-            `[ "$pid" -gt 0 ] 2>/dev/null || exit 0; ` +
+            `pid=$(cat "$1" 2>/dev/null | tr -cd 0-9); ` +
+            `[ "\${pid:-0}" -gt 0 ] 2>/dev/null || exit 0; ` +
             `[ "$(cat /proc/$pid/comm 2>/dev/null)" = "gpu-screen-reco" ] || exit 0; ` +
+            `owner=$(sed -n 's/^PPid:[^0-9]*//p' /proc/$pid/status 2>/dev/null); ` +
+            `case "$(cat /proc/\${owner:-0}/comm 2>/dev/null)" in ` +
+            `qs|quickshell) exit 0 ;; esac; ` +
             `kill -INT "$pid"`,
-            "reap", `${lastProcess.pid}`]
+            "reap", processFile.path]
 
         // Whether it signalled anything or found nothing is equally fine;
         // either way the field is clear.
@@ -687,22 +805,46 @@ Singleton {
 
         property real startedAt: 0
 
+        // The pid of the recorder that got the lock, and 0 while there is
+        // none. It is what decides whether this shell is allowed to clear the
+        // pid file on the way out: the file is shared with every other shell
+        // running this config, and a shell that stood down never had a
+        // recorder to name in it.
+        property int armedPid: 0
+
         onRunningChanged: {
             if (replay.running)
                 replay.startedAt = Date.now();
         }
 
-        // The pid goes down as soon as there is one, not when the shell is on
-        // its way out: a shell that is killed does not get to run anything, and
-        // that is the case the file exists for.
-        onStarted: lastProcess.pid = replay.processId ?? 0
-
-        onExited: {
+        onExited: (exitCode, exitStatus) => {
             // This recorder is gone, whatever ended it, so the number stops
             // naming it. Left standing it would name whichever process the
             // kernel handed the pid to next -- and the /proc check in the
             // reaper is the second line of defence, not the first.
-            lastProcess.pid = 0;
+            //
+            // ONLY IF IT WAS OURS TO CLEAR. See armedPid: writing a 0 over
+            // another shell's recorder pid would leave that recorder with
+            // nothing able to reap it, which is the same shared-file mistake
+            // in the other direction.
+            if (replay.armedPid !== 0) {
+                lastProcess.pid = 0;
+                replay.armedPid = 0;
+            }
+
+            // THE LOCK WAS TAKEN, so another shell in this session is keeping
+            // the buffer and this one is not. Not a failure -- nothing is
+            // wrong, and the machine is doing exactly what was asked, once --
+            // so it does not count towards `failures`, does not notify, and
+            // does not come back in two seconds. It waits for the other shell
+            // to go away. See lockFile and the retry timer.
+            if (exitCode === 3) {
+                root.heldElsewhere = true;
+                root.rearm = false;
+                root.stopping = false;
+                retry.restart();
+                return;
+            }
 
             // Asked for by setSeconds or by the monitor changing: straight back
             // up with the new flag.
@@ -779,6 +921,25 @@ Singleton {
 
         stdout: SplitParser {
             onRead: line => {
+                // THE ONE LINE THE WRAPPER PRINTS, and it is printed after the
+                // lock is taken and before the exec, so it is the moment this
+                // shell can say the buffer is ITS buffer. The pid goes down
+                // then rather than at onStarted, because the process that
+                // starts is a shell that may yet find the lock taken and exit
+                // -- and writing its pid into a file every shell shares would
+                // wipe the pid of the recorder that is actually running.
+                //
+                // It is still written the instant there is something to write:
+                // this arrives within a turn or two of the process starting,
+                // and the case the file exists for is a shell that is killed
+                // and gets to run nothing.
+                if (line.startsWith("replay-armed ")) {
+                    replay.armedPid = parseInt(line.slice(13), 10) || 0;
+                    lastProcess.pid = replay.armedPid;
+                    root.heldElsewhere = false;
+                    return;
+                }
+
                 // gsr narrates its frame rate on this stream as well, so the
                 // path is picked out by shape rather than by position.
                 const clip = line.trim();
@@ -797,6 +958,24 @@ Singleton {
         id: revive
 
         interval: 2000
+        onTriggered: root.arm()
+    }
+
+    // The way back in for the shell that stood down. Ten seconds because
+    // nothing is wrong and nothing is waiting on it: the other shell has the
+    // buffer, and this only has to notice within a few seconds of that
+    // stopping being true. It costs one `sh` and two reads of /proc a time,
+    // and it runs only in a shell that is NOT keeping a buffer.
+    //
+    // WITHOUT IT the second shell would be disarmed for the rest of its life,
+    // which is the wrong half of the trade: the shell that started first is
+    // usually the session's own and the one that stood down is a probe -- but
+    // when it is the other way round, a probe holding the buffer would leave
+    // the real shell with nothing until it was restarted by hand.
+    Timer {
+        id: retry
+
+        interval: 10000
         onTriggered: root.arm()
     }
 
