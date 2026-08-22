@@ -35,6 +35,8 @@
 import QtQuick
 import qs
 import qs.components
+// The sheet's singleton, for the button on the Binds heading.
+import qs.modules.cheatsheet
 // SettingsPage lives one directory UP, and QML's implicit import covers a
 // file's own directory only.
 import qs.modules.settings
@@ -778,6 +780,32 @@ SettingsPage {
         width: parent.width
         title: "Binds"
         glyph: Icons.keyboard
+
+        // THE OTHER HALF OF THE ANSWER, one click away. This list says what is
+        // bound; the cheatsheet says what those binds are FOR, laid out by
+        // category and readable at a glance. Somebody scrolling this page is
+        // already asking the question the sheet answers better.
+        //
+        // AND IT IS THE ONLY DOOR THAT IS NOT A KEY. Until this button the
+        // cheatsheet could be reached one way only -- a chord -- which is a
+        // poor arrangement for the one surface whose job is to tell you what
+        // the chords are: lose the key and you have lost the way to look it
+        // up. That is not hypothetical, it is what happened to the bind on a
+        // Spanish layout.
+        //
+        // CheatsheetState.toggle() and not `qs ipc call`, which is the rule
+        // everywhere in this shell: the compositor shells out because it is
+        // outside, and everything inside calls the singleton. The exact call
+        // the keybind makes, so the button and the key cannot drift.
+        //
+        // What it costs, written down because it looks like a bug otherwise:
+        // the sheet is an overlay layer with exclusive keyboard focus, so it
+        // covers this window and takes the keyboard until Escape. The settings
+        // window is left open underneath -- it is not one of the surfaces that
+        // close each other -- and comes back exactly as it was.
+        actionText: "Cheatsheet"
+        actionGlyph: Icons.cheatsheet
+        onActionTriggered: CheatsheetState.toggle()
 
         SectionNote {
             visible: root.query !== "" && root.groups.length === 0
