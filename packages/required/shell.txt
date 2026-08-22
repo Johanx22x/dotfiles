@@ -17,6 +17,15 @@
 # yay is in this list rather than being bootstrapped by hand: a good half of
 # what is above comes from the AUR, and the installer builds yay from source
 # only when the name cannot be resolved any other way.
+#
+# THE BROWSER USED TO BE HERE AND IT WAS WRONG TWICE OVER. zen-browser-bin
+# sat in this file, which is the Quickshell session and the fonts it assumes
+# -- a browser is not part of that under any reading -- and it was required,
+# which it is not. What this repository has for Zen is a theme and nothing
+# else: the matugen template that writes ~/.zen/rice/chrome/colors.css, the
+# userChrome.css that zen/ links into the profile, and desktop-opacity's Zen
+# block. All three write files that Zen reads; none of them is something Zen
+# makes work. It is in optional/apps.txt now, next to brave-bin.
 
 adw-gtk-theme
 adwaita-icon-theme
@@ -44,5 +53,4 @@ ttf-liberation
 ttf-nerd-fonts-symbols-mono
 wl-gammarelay-rs
 yay
-zen-browser-bin
 zenity
