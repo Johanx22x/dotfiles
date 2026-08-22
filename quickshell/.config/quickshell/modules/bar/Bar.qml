@@ -339,6 +339,8 @@ PanelWindow {
             // This was `showCount` and gated only the number, back when the
             // badge drew the glyph on every bar regardless.
             active: !bar.widget("notifications")
+
+            barScreen: bar.modelData
         }
 
         // The screen-capture badge, anchored to the island's right edge and

@@ -135,35 +135,60 @@ Item {
         return root.popout.screen?.width ?? 0;
     }
 
-    // THE KEYBIND AND THE BADGE, both arriving through NotificationState.
+    // THE KEYBIND AND THE BADGE both arrive through NotificationState, and so
+    // does the click on this button. They used to be SIGNALS on that singleton,
+    // with a note saying whether the panel is up is the popout's business and a
+    // flag there would be a second source of truth -- the same note IslandState
+    // carried about the dashboard, and the same reason it no longer does. A
+    // panel that has to move between monitors needs somebody who can see all
+    // the bars at once, and a popout can only see itself.
     //
-    // They are signals rather than a flag on that singleton for the reason
-    // IslandState's header gives about the dashboard: whether the panel is up
-    // is the popout's business, and mirroring it into a singleton would be a
-    // second source of truth for one surface. So the singleton asks and this
-    // file -- the only one that can see both the popout and the list --
-    // answers.
+    // WHETHER THIS BAR IS THE ONE SHOWING THE LIST, and it is the dashboard's
+    // rule with a different string -- see the block over showsDashboard in
+    // modules/island/Island.qml, which carries the long version.
     //
-    // TOGGLE FOR THE KEY, OPEN FOR THE BADGE, and the difference is deliberate.
-    // A second press of a key pressed by mistake should put the panel away; a
-    // click on a badge that has just sent you somewhere should not close the
-    // thing it opened. The same split the dashboard's two entry points had.
-    //
-    // AND ONE BAR ANSWERS, not all of them. "Every bar answers" was the note
-    // that used to stand over the signals in NotificationState, and it was
-    // exactly the bug the dashboard had: this list is ONE panel, and every bar
-    // opening its own copy through toggleAt put it on every monitor carrying a
-    // bar. The request doors take the same two behaviours to the single bar
-    // Screens.panelScreen names -- see the note there.
+    // The short one: NotificationState.historyScreen names the bar the list is
+    // drawn on, every bell compares it against its own bar, at most one
+    // matches. SUPER + SHIFT + N reaches every bar and used to make each of
+    // them open its own copy; now it names one, and when the focus settles on
+    // another monitor the string is retargeted and the panel moves.
+    readonly property bool showsHistory: NotificationState.historyScreen !== ""
+        && NotificationState.historyScreen === (root.popout.screen?.name ?? "")
+
+    // The move REBUILDS the list -- a layer surface belongs to one output. The
+    // rows come back off NotificationState.history unchanged; the one thing
+    // that would not is where the list was scrolled to, which is why that
+    // offset lives on the singleton rather than in the ListView.
+    function syncHistory(): void {
+        // Waiting for the Component further down to exist. Completion calls
+        // this again, so nothing is lost by returning here.
+        if (!historyComponent)
+            return;
+
+        if (root.showsHistory)
+            root.popout.openAt(root.anchorX(), historyComponent);
+        else if (root.popout.contentComponent === historyComponent)
+            root.popout.close();
+    }
+
+    onShowsHistoryChanged: root.syncHistory()
+
+    Component.onCompleted: root.syncHistory()
+
+    // Clearing the string when the popout stops showing the list for any reason
+    // nobody told the singleton about -- a click outside, a click on the bar,
+    // the tray taking the window over. Guarded on showsHistory so it is the bar
+    // that HAS the panel doing it: on a move the string changes first, so the
+    // bar losing the list is already not the one showing it when its popout
+    // closes, which is what tells a move apart from a dismissal.
     Connections {
-        target: NotificationState
+        target: root.popout
 
-        function onHistoryToggleRequested(): void {
-            root.popout.requestToggleAt(root.anchorX(), historyComponent);
-        }
+        function onContentComponentChanged(): void {
+            const mine = root.popout.contentComponent === historyComponent;
 
-        function onHistoryOpenRequested(): void {
-            root.popout.requestOpenAt(root.anchorX(), historyComponent);
+            if (root.showsHistory && !mine)
+                NotificationState.historyScreen = "";
         }
     }
 
@@ -260,11 +285,11 @@ Item {
 
             // Toggle and not open, the same as the two buttons beside it:
             // clicking the button that opened the panel should put it away
-            // again. The popout's toggleAt compares what it is currently
-            // holding against the component it is handed, so a second click
-            // here closes it while a click on the tray next door swaps the
-            // contents instead.
-            root.popout.toggleAt(root.anchorX(), historyComponent);
+            // again. Named with THIS bar, because a click lands on one and
+            // says so -- and through the singleton rather than straight at the
+            // popout, so what it opens is the one list that can be moved and
+            // closed from anywhere rather than a copy nobody owns.
+            NotificationState.toggleHistoryOn(root.popout.screen?.name ?? "");
         }
     }
 

@@ -75,6 +75,12 @@ Item {
     // uncluttered. See the note at the DndIndicator in Bar.qml.
     property bool active: false
 
+    // The bar this badge is on, handed down by Bar.qml the same way Workspaces
+    // and ActiveWindow get it. It is here so a click can say WHICH bar it
+    // landed on: the list is one panel with one place it is drawn, and the
+    // click doors name their own bar rather than making the singleton guess.
+    required property var barScreen
+
     // Both conditions in one place, because four things below read them and
     // the width and the opacity in particular have to agree on every frame.
     readonly property bool shown: root.active && NotificationState.dnd
@@ -227,7 +233,7 @@ Item {
                     // bell's panel now, so it comes out at the right end of
                     // the bar rather than under this badge -- one panel, one
                     // place, whichever door was used.
-                    NotificationState.openHistory();
+                    NotificationState.openHistoryOn(root.barScreen?.name ?? "");
             }
         }
     }

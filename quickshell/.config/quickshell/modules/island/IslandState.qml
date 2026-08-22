@@ -112,18 +112,94 @@ Singleton {
     property bool ackMuted: false
 
     // ---------------- The dashboard ----------------
-    // A signal and not a flag. Whether the dashboard is up is not state this
-    // singleton owns: the dashboard is CONTENT inside the bar's shared
-    // popout, and the popout already knows whether it is open and with what.
-    // Mirroring that here would be a second source of truth for one surface,
-    // which is the thing the header of this file argues against.
     //
-    // So the keybind asks, and Island.qml -- the only place that can see both
-    // the popout and the dashboard component -- answers.
-    signal dashboardRequested
+    // WHERE THE DASHBOARD IS, or "" when it is not up: the connector name of
+    // the bar drawing it. One string, so it cannot be up in two places, and it
+    // is a name rather than an object so that comparing it costs nothing and a
+    // monitor being unplugged simply stops matching.
+    //
+    // THIS USED TO BE A SIGNAL, and the note that stood here said whether the
+    // dashboard is up is not this singleton's state -- the popout knows, and a
+    // copy here would be a second source of truth. That was right while the
+    // panel could only ever appear where it was asked for. It stopped being
+    // right when the panel had to FOLLOW THE FOCUS: there is one popout per
+    // bar, each of them can see only itself, and none of them can answer "the
+    // dashboard is up over there, bring it here" -- which is the whole of the
+    // move. The fact outgrew the surface that was holding it.
+    //
+    // It is not a new pattern either, it is the launcher's. Its isOpen is a
+    // bool in a singleton and its window is built by Variants on whichever
+    // screen has the focus, so the flag outlives the window and the window
+    // moves with it. The dashboard now works the same way, which is also what
+    // makes the two behave alike -- they are alternatives hanging off the same
+    // place.
+    //
+    // NOTHING WRITES THIS BY HAND except the doors below and Island.qml, which
+    // clears it when its popout stops showing the dashboard for any other
+    // reason: a click outside, a click on the bar, the tray taking the popout
+    // over. That one rule is what keeps the string from outliving the panel.
+    property string dashboardScreen: ""
 
+    // SUPER + D, and the IPC call under it. It asks Screens where the panel
+    // belongs, which is the bar with the focus and, failing that, a bar that
+    // exists -- see panelScreen there.
     function toggleDashboard(): void {
-        root.dashboardRequested();
+        root.toggleDashboardOn(Screens.panelScreen?.name ?? "");
+    }
+
+    // THE SAME TOGGLE WITH THE BAR NAMED, for the click on the island. A click
+    // lands on one bar and says so, and it is the one entry point that does not
+    // have to ask where the panel belongs -- it is where the pointer already
+    // is. From that moment on the panel follows the focus like any other,
+    // because the singleton cannot tell how it came to be up and should not.
+    //
+    // An empty name closes, which is what a bar with no screen would mean, and
+    // is also what makes this safe to call with `screen?.name ?? ""`.
+    function toggleDashboardOn(name: string): void {
+        root.dashboardScreen = root.dashboardScreen === name ? "" : name;
+    }
+
+    // AND IT MOVES. Following panelScreen at every moment rather than only at
+    // the moment of opening is the whole point of keeping the screen here: the
+    // panel is where the focus is, not where the focus happened to be when the
+    // key was pressed.
+    //
+    // IT USED TO CLOSE INSTEAD, and the argument for that is worth keeping so
+    // nobody rediscovers it as an improvement. The launcher can afford to
+    // follow the focus because it holds an exclusive keyboard grab: while it is
+    // up nothing else can be reached, so the focus cannot wander by accident.
+    // This panel holds no grab, and the focus here follows the mouse, so
+    // following means the dashboard moving between monitors whenever a pointer
+    // crosses -- and closing is what the next click outside it would have done
+    // anyway. That reasoning is sound and it is not what is wanted: a panel
+    // that vanishes because the pointer went somewhere is worse than a panel
+    // that goes with it, and the two doors onto the same place should not
+    // behave differently. It lost to that, not to a better argument.
+    //
+    // What the argument bought is the DEBOUNCE. Following the settled answer
+    // rather than the live one -- see the note over settledPanelScreen in
+    // Screens.qml -- is what keeps a pointer merely travelling past from
+    // dragging the panel along, which was the real cost hiding inside it. Each
+    // move destroys the panel on one bar and builds it again on the other.
+    //
+    // A panel that is DOWN is left alone: this never opens anything, it only
+    // moves what is already up.
+    Connections {
+        target: Screens
+
+        function onSettledPanelScreenChanged(): void {
+            if (root.dashboardScreen === "")
+                return;
+
+            const moved = Screens.settledPanelScreen?.name ?? "";
+
+            // No bar to move to at all -- every monitor gone, the state a
+            // laptop lid closing produces -- leaves the panel where it is
+            // rather than dropping it. There is nothing on screen to be wrong
+            // about, and the next screen to arrive brings it back.
+            if (moved !== "")
+                root.dashboardScreen = moved;
+        }
     }
 
     // A `dashboardTabs` list and a `dashboardTab` index lived here, and both
@@ -150,18 +226,16 @@ Singleton {
     // once its destination was a bar widget there was nowhere specific left to
     // be sent. Everything that opens this panel now opens the whole of it.
 
-    // Asking for the dashboard to go away, for the same reason as above: the
-    // popout that holds it is not this singleton's to close.
+    // Putting the dashboard away, from anywhere and whichever bar is showing
+    // it: one string set to "" is every copy there can be.
     //
     // It exists because of slurp. The dashboard is open behind a Hyprland
     // FOCUS GRAB, and while that grab is held nothing else can take a click --
     // so a selection tool launched from a button inside it appears and then
     // cannot be used. Whatever starts a screen selection has to get the panel
     // out of the way first.
-    signal dashboardCloseRequested
-
     function closeDashboard(): void {
-        root.dashboardCloseRequested();
+        root.dashboardScreen = "";
     }
 
     IpcHandler {

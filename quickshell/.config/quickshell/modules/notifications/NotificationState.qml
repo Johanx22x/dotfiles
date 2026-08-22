@@ -19,6 +19,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Notifications
 import QtQuick
+import "root:/"
 
 Singleton {
     id: root
@@ -152,33 +153,76 @@ Singleton {
         }
     }
 
-    // ---------------- Asking for the list ----------------
+    // ---------------- Where the list is ----------------
     //
-    // SIGNALS AND NOT A FLAG, for the reason IslandState's header gives about
-    // the dashboard: the history is CONTENT inside the bar's shared popout,
-    // and the popout already knows whether it is open and with what. A bool
-    // here would be a second source of truth for one surface, kept in step by
-    // hand. So this singleton asks, and modules/bar/NotificationButton.qml --
-    // the only file that can see both the popout and the list -- answers.
+    // THE SAME SHAPE AS IslandState.dashboardScreen, and the long version of
+    // why is over there: the connector name of the bar drawing the history, or
+    // "" when it is down. These two are the same kind of thing -- one panel,
+    // summoned by a key, drawn inside a popout there is one of per bar -- and
+    // they were the same bug. They must not now be two different mechanisms.
     //
-    // IT REACHES EVERY BAR AND ONE OF THEM OPENS. The signal has to go to all
-    // of them -- a singleton cannot know which bar is which -- and every bar
-    // used to act on it, which put this one list on every monitor carrying a
-    // bar at once. The popout's request doors settle it between the bars: see
-    // Screens.panelScreen for which one answers, and NotificationButton.anchorX
-    // for where the panel comes out when that bar does not draw a bell.
-    signal historyToggleRequested
-    signal historyOpenRequested
+    // This was a pair of signals, with a note saying whether the list is up is
+    // the popout's business and a flag here would be a second source of truth.
+    // True while the panel could only appear where it was asked for; false once
+    // it had to FOLLOW THE FOCUS, which needs somebody who can see all the bars
+    // at once, and no popout can.
+    property string historyScreen: ""
 
-    // TWO ENTRY POINTS AND TWO BEHAVIOURS. A key pressed by mistake should put
-    // the panel away when it is pressed again; a badge that has already sent
-    // you to the list should not close the thing it just opened.
+    // THE PLACE IN THE LIST, carried across a MOVE and dropped by a close.
+    //
+    // Moving rebuilds the panel on the other monitor -- a layer surface belongs
+    // to one output -- and a rebuilt ListView starts at the top, which would
+    // throw away a long scroll because the pointer crossed a monitor edge. So
+    // the offset lives out here, where it outlives the list that displays it,
+    // which is the same argument the dashboard's tab index was moved out on;
+    // see the note in IslandState.
+    //
+    // CLEARED ON A CLOSE and not on a move, which is the whole distinction:
+    // "what did I miss" starts at the top every time you open it, and only a
+    // panel that never went away keeps its place.
+    property real historyScroll: 0
+
+    onHistoryScreenChanged: if (root.historyScreen === "")
+        root.historyScroll = 0
+
+    // TWO BEHAVIOURS, NOT TWO DOORS. A key pressed by mistake should put the
+    // panel away when it is pressed again; a badge that has already sent you to
+    // the list should not close the thing it just opened. What tells them apart
+    // is toggle against open, and every caller names the bar it means -- the
+    // key by asking Screens, a click by knowing which bar it landed on.
     function toggleHistory(): void {
-        root.historyToggleRequested();
+        root.toggleHistoryOn(Screens.panelScreen?.name ?? "");
     }
 
-    function openHistory(): void {
-        root.historyOpenRequested();
+    // The same two with the bar named, for the bell and the badge: a click
+    // lands on one bar and does not have to ask where the panel belongs. From
+    // then on it follows the focus like any other, because this singleton
+    // cannot tell how the panel came to be up and should not.
+    function openHistoryOn(name: string): void {
+        root.historyScreen = name;
+    }
+
+    function toggleHistoryOn(name: string): void {
+        root.historyScreen = root.historyScreen === name ? "" : name;
+    }
+
+    // AND IT MOVES, off the settled answer rather than the live one -- see the
+    // note over settledPanelScreen in Screens.qml for why a focus that follows
+    // the mouse must not drag a panel across on its way past. Identical to the
+    // dashboard's rule in IslandState, deliberately: two panels behaving
+    // differently on the same monitor is the thing this is meant to stop.
+    Connections {
+        target: Screens
+
+        function onSettledPanelScreenChanged(): void {
+            if (root.historyScreen === "")
+                return;
+
+            const moved = Screens.settledPanelScreen?.name ?? "";
+
+            if (moved !== "")
+                root.historyScreen = moved;
+        }
     }
 
     // The keyboard's way in, SUPER + SHIFT + N. Without it the only doors are

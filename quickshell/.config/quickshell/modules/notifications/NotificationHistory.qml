@@ -302,6 +302,35 @@ Item {
 
         model: NotificationState.history
 
+        // WHERE THIS LIST WAS SCROLLED TO SURVIVES A MOVE BETWEEN MONITORS.
+        //
+        // The panel follows the focus, and following it means being destroyed
+        // on one bar and built again on the other -- a layer surface belongs to
+        // one output. A new ListView starts at the top, so a long scroll would
+        // be thrown away because the pointer crossed a screen edge. The offset
+        // is kept on NotificationState, which outlives the window; it is
+        // cleared there when the panel actually closes, so opening the list
+        // still starts at the top every time.
+        //
+        // forceLayout FIRST, because contentY on a list that has not laid out
+        // its delegates is clamped against a contentHeight that is still zero
+        // and comes back as 0. If it is clamped anyway -- a list that has grown
+        // shorter since, entries cleared while it was on the other screen --
+        // what the user gets is the top of the list, which is where they would
+        // have been without any of this.
+        property bool restored: false
+
+        Component.onCompleted: {
+            list.forceLayout();
+            list.contentY = NotificationState.historyScroll;
+            list.restored = true;
+        }
+
+        // Only after the restore, or the restore's own assignment would be
+        // written straight back over the value it is reading.
+        onContentYChanged: if (list.restored)
+            NotificationState.historyScroll = list.contentY
+
         delegate: Rectangle {
             id: entry
 
