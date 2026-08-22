@@ -19,6 +19,7 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import "root:/"
+import "root:/components"
 
 Item {
     id: root
@@ -129,6 +130,8 @@ Item {
     }
 
     ListView {
+        id: history
+
         anchors.fill: parent
 
         model: root.entries
@@ -142,6 +145,23 @@ Item {
         preferredHighlightBegin: 0
         preferredHighlightEnd: height
         highlightRangeMode: ListView.ApplyRange
+
+        // Seven rows of up to sixty, and the selection WRAPS: arrow up from the
+        // first entry lands on the sixtieth with nothing on screen saying the
+        // list went anywhere. This is the only thing here that says how much of
+        // the history is off the top and the bottom.
+        //
+        // Placed and not anchored -- a child of a Flickable rides its contents,
+        // so `y` gives back exactly what the scroll took -- and hard against
+        // the right edge, in the groupPadding the row labels already keep clear
+        // before they elide.
+        ScrollBar {
+            view: history
+
+            x: history.width - width
+            y: history.contentY
+            height: history.height
+        }
 
         delegate: Rectangle {
             id: row
