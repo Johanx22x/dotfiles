@@ -19,9 +19,38 @@
 //  linked at once, and install.sh offers exactly that.
 //
 //  Config format: https://yalter.github.io/niri/  (the project moved to
-//  niri-wm/niri; the docs redirect). It is KDL, and it live-reloads on save --
-//  there is no `hyprctl reload` equivalent and none is needed. Check a change
-//  before trusting it with:  niri validate
+//  niri-wm/niri; the docs redirect). It is KDL, and it re-reads this file
+//  itself. Check a change before trusting it with:  niri validate
+//
+//  THERE IS AN EQUIVALENT OF `hyprctl reload` and this file used to say there
+//  was not: `niri msg action load-config-file`, documented as being there "for
+//  scripts changing the config file, to avoid waiting the small duration for
+//  niri's config file watcher to notice the changes". Nothing in this
+//  repository calls it, and that is a separate decision from whether it
+//  exists -- niri needs no telling. Measured in a nested instance: it holds no
+//  inotify watch at all and POLLS, every 500 ms off a timerfd, which is why it
+//  survives everything a pull can do to this file. An in-place edit landed in
+//  406-505 ms over six trials, an `mv` over the file in 174-506 ms, an
+//  `ln -sfn` retarget in 175 ms, and removing the file and putting it back
+//  four seconds later -- the case that permanently blinds Hyprland's inotify
+//  watch -- in 93 ms. On a config it cannot parse it keeps the last good one,
+//  stays up, warns once rather than every tick, and applied the fix 205 ms
+//  after it was saved with nobody asking.
+//
+//  So Hyprland is the one that gets told, and only when a pull moved hypr/.
+//  Not because it fails to see a renamed file -- it re-arms its watch on every
+//  event and saw an `mv`, a retargeted symlink and a `git checkout` unaided --
+//  but because an unlink with a GAP before the file comes back leaves it
+//  holding zero inotify watches for the rest of the session, silently and
+//  permanently, and nothing in this repository can promise that never happens.
+//  niri has nothing of the sort to lose. See the update chain in
+//  quickshell/.config/quickshell/modules/installer/InstallerState.qml.
+//
+//  ONE THING NIRI DOES SHARE with Hyprland: a config that stops SETTING an
+//  option resets it to the compiled-in default rather than keeping what was
+//  there. Emptying this file drops the layout list back to a bare `us`. That
+//  is not a bug in either of them, but it is the reason `niri validate` is
+//  worth running on a file you have been cutting things out of.
 // =============================================================================
 
 

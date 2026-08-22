@@ -274,23 +274,52 @@ symlinks_move_aside() {
 # linked, so `systemctl --user is-enabled` answered not-found and the wallpaper
 # stopped rotating with nothing anywhere to say so.
 #
-# NOTHING ELSE IS RESTARTED, and that is a decision rather than an omission.
-# Restarting Quickshell takes down the bar, the island and the notification
-# daemon of the session the person is sitting in, and reloading the compositor
-# re-reads a config they may be halfway through editing. Both are one command,
-# both are in the README, and neither belongs to a step whose job was to make
-# symlinks.
+# NOTHING ELSE IS RELOADED, and that is a decision rather than an omission.
+# Reloading the compositor re-reads a config the person may be halfway through
+# editing, and throws away everything desktop-tweak has pushed into it since
+# login. Both lines below are one command, both are in the README, and neither
+# belongs to a step whose job was to make symlinks.
+#
+# WHAT THESE LINES USED TO SAY, and why they no longer say it. Quickshell was
+# printed here as `qs kill && qs -d -p ...`, a restart, and a restart is the
+# wrong shape: measured in a nested compositor, a reload that cannot parse the
+# new tree leaves the shell up and running the code it already had, while a
+# COLD START on that same tree exits -- "Failed to load configuration",
+# "PROCESS EXITED" -- and leaves no bar, no island and no launcher at all. So
+# what is printed is the nudge instead. It creates a file in the config
+# directory and removes it again, which is what Quickshell notices when a pull
+# has replaced every inode its file watches were holding: the directory watch
+# is on an inode nothing replaced. The full reasoning, and the reload chain
+# the settings window drives, are in
+# quickshell/.config/quickshell/modules/installer/InstallerState.qml.
+#
+# niri is not printed at all any more. It holds no inotify watch and polls its
+# config every 500 ms instead, so it survives every shape of relink this unit
+# can leave behind -- measured, including the remove-and-recreate that leaves
+# Hyprland holding zero watches for the rest of the session. There is nothing
+# for a person to run.
+#
+# Hyprland is printed for that last case and not because it cannot see a
+# renamed file: it re-arms its watch on every event and picked up an `mv` over
+# the config, a retargeted symlink and a `git checkout` unaided. What it does
+# not survive is an unlink with a GAP before the file comes back -- after that
+# its inotify fds hold zero watches for the rest of the session, silently, and
+# only `hyprctl reload` brings them back. This unit is not the one that does
+# that: measured, stow leaves a link that is already right completely alone,
+# same inode and same ctime across re-runs, and nothing here passes -R or -D.
+# It is printed because it is cheap and the failure is permanent, not because
+# it is known to be needed. `hyprctl reload` answers "ok" and exits 0 whatever
+# it just read, and so does `hyprctl configerrors` -- the errors are the
+# output, never the status.
 symlinks_post() {
   run systemctl --user daemon-reload 2>/dev/null || true
 
-  ui_dim "   Nothing running picks new configuration up on its own:"
+  ui_dim "   Nothing running picks new configuration up on its own, except niri:"
   if want_hyprland; then
-    ui_dim "     hyprctl reload                                      # Hyprland"
+    ui_dim "     hyprctl reload && hyprctl configerrors   # Hyprland, if hypr/ moved"
   fi
-  if want_niri; then
-    ui_dim "     niri reloads on save                                # niri"
-  fi
-  ui_dim "     qs kill && qs -d -p ~/.config/quickshell/shell.qml  # Quickshell"
+  ui_dim "     : > ~/.config/quickshell/.reload-nudge \\"
+  ui_dim "       && rm -f ~/.config/quickshell/.reload-nudge   # Quickshell"
   return 0
 }
 
