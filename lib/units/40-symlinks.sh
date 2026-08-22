@@ -274,23 +274,37 @@ symlinks_move_aside() {
 # linked, so `systemctl --user is-enabled` answered not-found and the wallpaper
 # stopped rotating with nothing anywhere to say so.
 #
-# NOTHING ELSE IS RESTARTED, and that is a decision rather than an omission.
-# Restarting Quickshell takes down the bar, the island and the notification
-# daemon of the session the person is sitting in, and reloading the compositor
-# re-reads a config they may be halfway through editing. Both are one command,
-# both are in the README, and neither belongs to a step whose job was to make
-# symlinks.
+# NOTHING ELSE IS RELOADED, and that is a decision rather than an omission.
+# Reloading the compositor re-reads a config the person may be halfway through
+# editing, and throws away everything desktop-tweak has pushed into it since
+# login. Both lines below are one command, both are in the README, and neither
+# belongs to a step whose job was to make symlinks.
+#
+# WHAT THESE LINES USED TO SAY, and why they no longer say it. Quickshell was
+# printed here as `qs kill && qs -d -p ...`, a restart, and a restart is the
+# wrong shape: measured in a nested compositor, a reload that cannot parse the
+# new tree leaves the shell up and running the code it already had, while a
+# COLD START on that same tree exits -- "Failed to load configuration",
+# "PROCESS EXITED" -- and leaves no bar, no island and no launcher at all. So
+# what is printed is the nudge instead. It creates a file in the config
+# directory and removes it again, which is what Quickshell notices when a pull
+# has replaced every inode its file watches were holding: the directory watch
+# is on an inode nothing replaced. The full reasoning, and the reload chain
+# the settings window drives, are in
+# quickshell/.config/quickshell/modules/installer/InstallerState.qml.
+#
+# niri is not printed at all any more. It polls its config rather than watching
+# it, so it survives the inode replacement and the retargeted symlink stow
+# leaves behind, and there is nothing for a person to run.
 symlinks_post() {
   run systemctl --user daemon-reload 2>/dev/null || true
 
-  ui_dim "   Nothing running picks new configuration up on its own:"
+  ui_dim "   Nothing running picks new configuration up on its own, except niri:"
   if want_hyprland; then
-    ui_dim "     hyprctl reload                                      # Hyprland"
+    ui_dim "     hyprctl reload && hyprctl configerrors   # Hyprland, if hypr/ moved"
   fi
-  if want_niri; then
-    ui_dim "     niri reloads on save                                # niri"
-  fi
-  ui_dim "     qs kill && qs -d -p ~/.config/quickshell/shell.qml  # Quickshell"
+  ui_dim "     : > ~/.config/quickshell/.reload-nudge \\"
+  ui_dim "       && rm -f ~/.config/quickshell/.reload-nudge   # Quickshell"
   return 0
 }
 

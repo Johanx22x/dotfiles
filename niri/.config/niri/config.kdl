@@ -19,9 +19,22 @@
 //  linked at once, and install.sh offers exactly that.
 //
 //  Config format: https://yalter.github.io/niri/  (the project moved to
-//  niri-wm/niri; the docs redirect). It is KDL, and it live-reloads on save --
-//  there is no `hyprctl reload` equivalent and none is needed. Check a change
-//  before trusting it with:  niri validate
+//  niri-wm/niri; the docs redirect). It is KDL, and it re-reads this file
+//  itself. Check a change before trusting it with:  niri validate
+//
+//  THERE IS AN EQUIVALENT OF `hyprctl reload` and this file used to say there
+//  was not: `niri msg action load-config-file`, documented as being there "for
+//  scripts changing the config file, to avoid waiting the small duration for
+//  niri's config file watcher to notice the changes". Nothing in this
+//  repository calls it, and that is a separate decision from whether it
+//  exists -- niri needs no telling. Measured in a nested instance: it holds no
+//  inotify watch at all and polls instead, so it survives both the inode
+//  replacement a `git pull` does to this file and the symlink retargeting
+//  stow does on top of that, where Hyprland survives neither. On a config it
+//  cannot parse it keeps the last good one, warns, and picks the fixed file up
+//  unaided. Hyprland is the one that has to be told, and only when the pull
+//  moved hypr/ -- see the update chain in
+//  quickshell/.config/quickshell/modules/installer/InstallerState.qml.
 // =============================================================================
 
 
