@@ -98,9 +98,16 @@ jobs:
           # names install them on the desktop this repository is for -- which
           # is the difference between a check anybody can run before pushing
           # and one that only CI can answer.
+          #
+          # quickshell, labwc and mesa are what tests/shell-load.sh needs, and
+          # the three of them are one question: can the shell be started. qs is
+          # the thing under test; labwc is a compositor that will run without a
+          # seat or a GPU, which Hyprland will not (the header there says why);
+          # mesa is llvmpipe, because Qt Quick still wants a GL context on a
+          # runner that has no card in it. All three are in [extra].
           pacman -Syu --needed --noconfirm \
             git python python-yaml lua shellcheck actionlint stow hyprland \
-            niri curl
+            niri curl quickshell labwc mesa
 
       - uses: actions/checkout@v7
 
@@ -131,6 +138,28 @@ jobs:
       - name: Both compositors accept their configuration
         if: ${{ !cancelled() }}
         run: tests/config-syntax.sh
+
+      # THE FIRST TWO CHECKS THAT READ quickshell/ AT ALL. Before these, 125
+      # files and 40,592 lines of QML -- half the repository, and three
+      # quarters of its commits -- were parsed, linted, loaded and run by
+      # nothing here: the whole tree could be emptied without turning a single
+      # check red. The first starts a headless compositor and asks whether the
+      # real shell comes up; the second reads the source for the handful of
+      # mistakes that come up perfectly and then do nothing.
+      #
+      # NEITHER OF THEM WOULD HAVE CAUGHT THE LAST TWO BREAKAGES, and that is
+      # worth saying here rather than leaving to be discovered. A rail that
+      # scrolled behind its own scrollbar and a dashboard that opened on the
+      # wrong screen both loaded cleanly, resolved every name and logged
+      # nothing. These are a floor under the tree, not a statement that it
+      # works.
+      - name: The shell loads in a headless compositor
+        if: ${{ !cancelled() }}
+        run: tests/shell-load.sh
+
+      - name: The QML tree keeps to its rules
+        if: ${{ !cancelled() }}
+        run: tests/qml-rules.sh
 
       - name: Shell scripts pass shellcheck
         if: ${{ !cancelled() }}
@@ -196,6 +225,14 @@ jobs:
       # qmllint where Quickshell's imports live, which is work in quickshell/
       # and not work in CI. Until then this is left out rather than shipped
       # permanently red, or permanently meaningless.
+      #
+      # tests/shell-load.sh above is what stands in for it, and it answers a
+      # different question rather than a smaller one. qmllint reads files;
+      # that check runs them, in a compositor, as the shell -- so it sees the
+      # import resolve for real, the singleton get constructed for real and the
+      # binding get evaluated for real, with no import path to teach it. What
+      # it cannot do is point at a line in a file nothing reaches yet, which is
+      # the one thing a linter is better at.
 
   # ---------------------------------------------------------------------------
   # THE ONE CHECK THAT RUNS install.sh.
