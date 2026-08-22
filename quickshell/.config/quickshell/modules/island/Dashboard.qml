@@ -4,58 +4,101 @@
 // it inherits the welding to the bar, the outside-click dismissal and the
 // blur for free. See components/Popout.qml.
 //
-// ONE VIEW, AND IT USED TO BE THREE TABS. Dashboard, Media and Performance
-// each had a strip entry, a panel of its own and a size of its own, and the
-// panel was as wide as the widest of them. The split was argued by QUESTION
-// -- this desktop, what is playing, this machine -- and the argument was
-// sound; what was not sound was the price. Two of the three answers were
-// always one click away, the size changed under the pointer every time the
-// answer changed, and the tab strip cost a row of the panel to say which of
-// three things you were looking at.
+// ---------------------------------------------------------------------------
+// THE WALL
+// ---------------------------------------------------------------------------
 //
-// So the three questions are asked at once, in three columns:
+// THE COVER ART IS THE GROUND. Not a card in a grid of cards: the picture of
+// whatever is playing fills the whole panel, blurred until it is a field of
+// colour rather than a photograph, darkened by a scrim, and everything else
+// floats on it as frosted glass. The panel's colour and mood change with the
+// music. With nothing playing it falls back to the WALLPAPER, which is where
+// the shell's palette comes from anyway, so the panel is never a grey box.
 //
-//   left    the time and the month
-//   middle  the sliders reached for without leaving the panel, and capture
-//   right   what is playing, and what this machine is doing
+// This replaces the three-column grid of opaque cards that stood here. What
+// left with it, and why, is written where each thing now is:
 //
-// WHERE THE MEDIA CARD COMES FROM. It is a port of end-4/dots-hyprland's
-// PlayerControl, taken from that repository's source rather than drawn from a
-// screenshot -- it is Quickshell/QML too, so the sizes, insets, radii and the
-// arrangement of the controls are theirs by copy. The note above that card
-// lists their numbers and the pull request lists what could not be taken
-// as-is.
+//   the media card       there is no card. The art is the ground; a small
+//                        sharp copy of it, the title, the artist, the time,
+//                        the seek wave and the transport sit on top of it
+//   the three dials      a label, a big percentage and a short bar, three
+//                        across one strip. See `Reading`
+//   the volume slider    a hairline along the very bottom edge of the panel.
+//                        A control that needs one dimension gets one
+//   the brightness       the same hairline, above it, on a machine that has
+//                        a backlight
+//   the capture buttons  labels in the actions strip rather than 56px tiles
 //
-// EVERY CARD IS AS TALL AS ITS COLUMN AND CENTRES WHAT IS IN IT. The panel is
-// as tall as its tallest column, so two of the three always have height to
-// spare; the question is only where it goes. It goes into the cards, evenly
-// above and below their content, rather than into gaps between them -- which
-// is why the middle column is one card rather than two and why the media card
-// does NOT stretch (it is the one card here whose proportions are somebody
-// else's, so the slack in that column goes to the dials' card instead).
+// NOTHING WAS DROPPED. Time, date, month, what is playing, the three machine
+// readings, volume, the three capture targets and the instant replay are all
+// still here, and so is the brightness on a laptop and the connector name the
+// replay is pointed at. The mute button is the one control that changed shape
+// rather than place: the hairline has no room for a button, so muting is a
+// right-click on it and the whole line goes dim to say so.
 //
-// It fits because six things left, and each of them left for a reason that
-// is written where it used to be:
+// ---------------------------------------------------------------------------
+// THE TWO THINGS THIS DESIGN CAN GET WRONG
+// ---------------------------------------------------------------------------
 //
-//   do not disturb           the panel the bell opens governs the list it
-//                            silences; a dashboard about this desktop did not
-//   Wi-Fi and Bluetooth      full pages in the settings window do this better
-//   the identity card        distribution, compositor and uptime
-//   the replay's own config  length, screen, codecs -- all on the settings
-//                            page now, so what is left here is the act
-//   nine detail rows         three per subsystem, replaced by three dials
-//   the tab strip            with nothing left to switch between
+// LEGIBILITY IS CONDITIONAL ON SOMEBODY ELSE'S ARTWORK. White type over a
+// pale cover is the failure mode, and a fixed scrim cannot cover both a black
+// album sleeve and a white one. So the scrim is MEASURED: ColorQuantizer
+// reduces the ground to a single colour, that colour's luminance picks the
+// scrim's opacity, and the range is wide enough that a white cover ends up as
+// dark behind the type as a black one does. See `scrimOpacity`.
 //
-// WHAT DID NOT CHANGE. The panel is still a fixed size, and still snaps
-// rather than animating: this Item's implicit size drives the popout's, which
-// drives the LAYER SURFACE, and animating that asks the compositor to
-// reconfigure and re-centre the surface on every frame. Sixty resizes in a
-// fifth of a second is what tore. With one view there is nothing left to
-// resize BETWEEN, which is the other half of the reason the tabs are gone.
+// WHERE THAT CANNOT WORK, said plainly: ColorQuantizer reads LOCAL FILES ONLY
+// -- `QImage(this->source.toLocalFile())` in Quickshell's
+// src/core/colorquantizer.cpp, with no network code anywhere near it. Zen's
+// covers are file:// paths under ~/.zen/firefox-mpris/ and quantize fine; the
+// YouTube thumbnail fallback is an https URL and does not. With no
+// measurement the scrim goes to a fixed value near the dark end of the range,
+// because the safe guess about an unknown picture is that it is bright.
+//
+// THE SECOND HALF OF THE ANSWER IS THE BLUR ITSELF. The ground is decoded at
+// 96 pixels wide and then blurred, so it is a field of colour with no detail
+// left in it -- which means the ONE colour the quantizer measured really does
+// describe what is behind every label, rather than describing an average with
+// a bright patch hiding in it.
+//
+// COST, AND IT IS THE HONEST NUMBER RATHER THAN A REASSURING ONE. A blur over
+// the whole panel is the expensive part of this design and it is not free.
+// What it replaces is the media card's own blurred backdrop, which did the
+// same thing over 420 x 140; this does it over roughly 1014 x 470, about
+// seven times the area. Three things hold it down: the source image is
+// decoded at 96px rather than 1024, so the texture being blurred is tiny; the
+// glass panels are NOT separately blurred -- a 10% white film over a ground
+// that is already a blur reads as frosted without a second pass; and the
+// crossfade between two covers happens INSIDE the one source item rather than
+// between two finished blurs, so a track change costs a second small decode
+// and not a second blur. I did not measure the frame cost; there is no way to
+// do that here without putting a window on screen, which this work was told
+// not to do.
+//
+// NOT COMPOSITOR BLUR. This is a picture we draw ourselves, inside our own
+// surface. ext-background-effect-v1 and per-surface blur regions under niri
+// are a different thing, they were tried and reverted, and nothing here goes
+// near them.
+//
+// ---------------------------------------------------------------------------
+// WHAT DID NOT CHANGE
+// ---------------------------------------------------------------------------
+//
+// The panel is still a fixed size and still snaps rather than animating: this
+// Item's implicit size drives the popout's, which drives the LAYER SURFACE,
+// and animating that asks the compositor to reconfigure and re-centre the
+// surface on every frame. Sixty resizes in a fifth of a second is what tore.
+//
+// AND IT IS NOT FULL-BLEED TO THE POPOUT'S EDGE, on purpose. components/
+// Popout.qml insets its content by Theme.groupPadding and draws two fillets
+// that weld the panel to the bar in `panel.color`. A ground that ran to the
+// window's edge would meet two fillets in the wallpaper's surface colour at
+// the one join that is meant to be invisible. So the wall is a sheet mounted
+// in the popout with the shell's own glass showing as a border: the weld
+// keeps the bar's colour, and the photograph keeps its edges.
 
 import Quickshell
 import Quickshell.Io
-import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import QtQuick.Effects
 import QtQuick.Layouts
@@ -69,112 +112,110 @@ Item {
 
     // ---------------- Geometry ----------------
     //
-    // MEASURED, NOT PICKED. Every number below is either derived from the
-    // content it holds or is a size somebody chose on purpose; the three
-    // column widths and the panel height are the only literals, and each one
-    // says what it is made of.
-    //
-    // The old file carried three of these sets, one per tab, because a
-    // resizing panel had to know where it was going. There is one now.
+    // The panel is 1014 wide, which is what it already was: the old note here
+    // derived that from three dials at 124 and recorded that it lands on the
+    // main monitor at about 40% of its width. The dials are gone; the width
+    // is kept because that judgement about the screen has not changed and
+    // because the composition below was drawn against it.
 
-    readonly property int gap: 14
-    readonly property int cardPad: 16
+    // From the panel's edge to anything in it. The popout adds
+    // Theme.groupPadding of its own outside this, so the visible margin from
+    // the window's edge is about forty pixels.
+    readonly property int edge: 30
 
-    // As wide as the month, which is a fixed seven columns and cannot be
-    // negotiated with. Everything else in this column is narrower.
-    readonly property int leftWidth: month.implicitWidth + root.cardPad * 2
+    // Between two glass panels.
+    readonly property int gap: 18
 
-    // 296, and it was 330 while Wi-Fi and Bluetooth lived here. Those two
-    // opened into LISTS -- a network name plus a signal glyph plus a lock --
-    // and the width was theirs. What is left is two sliders and three capture
-    // buttons; at 296 each of those buttons is 84 across, which holds
-    // "Display" at 9pt with room either side. It is NOT narrowed again now
-    // that the mute has gone too: the buttons are what set this number, and
-    // they have not moved.
-    readonly property int midWidth: 296
+    // Inside one. Chosen so the calendar's own width plus two of these comes
+    // to the 274 the right-hand column is drawn at.
+    readonly property int glassPad: 18
 
-    // DERIVED FROM THE DIALS, which is the direction the dependency has to
-    // run: three of them side by side with `gaugeSpacing` between and the
-    // card's own padding either side, and nothing else in this column has an
-    // opinion. It was the literal 348 -- exactly this sum at a dial of 100 --
-    // and a literal is what made the dials un-growable: the number that had to
-    // change was two screens away from the number somebody wanted to change.
-    // The media card above inherits the width rather than asking for one,
-    // because a cover, a title and a transport row will use whatever they are
-    // given and the dials will not.
-    readonly property int rightWidth: root.gaugeSize * 3 + root.gaugeSpacing * 2 + root.cardPad * 2
+    readonly property int glassRadius: 16
 
-    readonly property int clockHeight: 104
+    // The left column holds three things, and the widest of them decides it:
+    // three capture targets, a rule, and the replay's button and switch, all
+    // on one row. 522 is what that row needs at 9pt with the labels intact;
+    // below it the record targets start eliding, which is the first thing
+    // anyone would notice. The readings strip and the media block above are
+    // both comfortable at this width and neither asks for it.
+    readonly property int leftWidth: 522
 
-    // The dial, and the card that holds a row of them.
-    //
-    // 124, AND IT WAS 100, and the number was CHOSEN BY MEASURING rather than
-    // by taste. Three variants were rendered in a nested compositor and the
-    // clear span of the ring was measured against the width of the line
-    // sitting in it -- "3.6G swap", which is 59px and does not change size,
-    // because the type inside is deliberately not grown with the ring. Growing
-    // both would hand the reading back exactly the margin being taken away.
-    //
-    //   dial   panel   clear span   margin per side
-    //    100     942       56px        -2   the string OVERLAPS the ring
-    //    110     972       71px         6   clears it by under a character
-    //    124    1014       89px        15   sits inside it
-    //
-    // So a hundred was never "tight": at a hundred the line and the ticks are
-    // drawn on top of each other, which is what was actually being complained
-    // about. And there is no free middle -- at the spacing below, the largest
-    // dial that keeps the panel at its old 942 is exactly 100, so the choice
-    // was never "free versus expensive", it was 30 pixels versus 72.
-    //
-    // WHY NOT 110, at less than half the cost. Six pixels is under one
-    // character, and the string is not fixed: "12.4G swap" is one character
-    // longer and lands back at two pixels a side, while 124 still has eleven.
-    // `Theme.fontSize` is a setting, too, and it grows the string without
-    // growing the ring. A fix that the next plausible reading undoes is not a
-    // fix.
-    //
-    // WHAT IT COSTS. Width, and width is what the panel had none of: the
-    // number above is a sum of these, so the panel is 1014 where it was 942.
-    // That lands on the main monitor, which is the only screen with a bar
-    // unless the Bar page says otherwise, and there it is 40% of the width.
-    // On a 1080-wide portrait monitor asked to carry a bar it would be 94%,
-    // and Popout's own clamp is what keeps it on screen. That is the trade.
-    // What paid for it in HEIGHT is the media card above, which lost a row.
-    readonly property int gaugeSize: 124
-    readonly property int gaugeSpacing: 8
-    readonly property int gaugeCardHeight: root.gaugeSize + root.cardPad * 2
+    // The right column is the month, which is a fixed seven columns and
+    // cannot be negotiated with.
+    readonly property int rightWidth: month.implicitWidth + root.glassPad * 2
 
-    // THE MEDIA CARD'S NATURAL SIZE, AND IT IS end-4's. Their
-    // Appearance.sizes has mediaControlsWidth 440 and mediaControlsHeight 160,
-    // and the card they draw inside that is inset by elevationMargin (10) on
-    // every side for a drop shadow. So the card itself is 420 x 140.
-    //
-    // The width is not asserted here: the right column is a sum of the dials
-    // above, and at 124 it comes to 420 -- their width exactly, which is why
-    // that number is left alone. The height IS asserted, as the term this
-    // column contributes to the panel height below, and the card grows past it
-    // when the column has room: their layout is built to stretch, with the art
-    // square on Layout.fillHeight and a Layout.fillHeight spacer between the
-    // artist and the controls.
-    readonly property int mediaHeight: 140
+    // THE GROUND SHOWING THROUGH. This is not a gutter between two columns of
+    // a grid, it is the part of the picture with nothing on it -- the whole
+    // point of the design is that there IS a picture, and a panel packed edge
+    // to edge with glass would only have a tinted border. It is the widest
+    // single number here and it is deliberate.
+    // Floored at one gap, so a large enough Theme.fontSize takes the ground
+    // away rather than folding the calendar back over the readings strip.
+    readonly property int columnGap: Math.max(root.gap,
+        root.implicitWidth - root.edge * 2 - root.leftWidth - root.rightWidth)
 
-    // THE PANEL IS AS TALL AS ITS TALLEST COLUMN, and which column that is
-    // depends on the machine: the calendar grows with the type size, the
-    // controls column loses its brightness row on a desktop, and the capture
-    // column does not move at all. Asking rather than asserting is what stops
-    // a larger font from pushing the month out through the bottom edge, which
-    // is what a stated height would have done.
-    //
-    // None of the three terms reads a card's height, so there is no loop:
-    // `month` and the two Columns report what their CONTENT needs, and the
-    // cards are sized from the answer.
-    readonly property int bodyHeight: Math.max(
-        root.clockHeight + root.gap + month.implicitHeight + root.cardPad * 2,
-        midColumn.implicitHeight + root.cardPad * 2,
-        root.mediaHeight + root.gap + root.gaugeCardHeight)
+    implicitWidth: 1014
 
-    implicitWidth: root.leftWidth + root.midWidth + root.rightWidth + root.gap * 2
+    // The art square, top left, and the height of the whole media block.
+    readonly property int artSize: 132
+
+    // ASKED, NOT ASSERTED, exactly as the old grid did it: the calendar grows
+    // with the type size and the readings row grows with it too, so a stated
+    // height is a height that pushes something out through the bottom edge on
+    // the first person who changes Theme.fontSize.
+    readonly property int actionsHeight: actionsRow.implicitHeight + root.glassPad * 2
+    readonly property int readingsHeight: readingsRow.implicitHeight + root.glassPad * 2
+    readonly property int clockHeight: clockLines.implicitHeight + root.glassPad * 2
+    readonly property int calendarHeight: month.implicitHeight + root.glassPad * 2
+
+    readonly property int leftHeight: root.artSize + root.gap + root.readingsHeight + root.gap + root.actionsHeight
+    readonly property int rightHeight: root.clockHeight + root.gap + root.calendarHeight
+
+    // THE RIGHT COLUMN IS THE TALL ONE and that is why the panel is taller
+    // than the drawing this came from. The drawing sketched the month as a
+    // block of 11px monospace; the real one is a steppable grid at body size
+    // with a today marker, and it is 250-odd pixels rather than 182. Shrinking
+    // it to match a sketch would have been shrinking the one thing in the
+    // panel people actually read a date off. The left column's spare height
+    // goes into the ground between the media block and the readings strip,
+    // which is the gap the picture shows through.
+    readonly property int bodyHeight: Math.max(root.leftHeight, root.rightHeight) + root.edge * 2
+
     implicitHeight: root.bodyHeight
+
+    // ---------------- Ink ----------------
+    //
+    // DELIBERATELY NOT Theme ROLES. Every other surface in this shell is
+    // painted from matugen's palette, which is derived from the wallpaper --
+    // and on this panel the wallpaper is not what is behind the type. The
+    // ground can be any album cover ever made, so the type is white and the
+    // panels are white films, which is the one pair that works over all of
+    // them. The colour in this panel comes from the photograph.
+    readonly property color ink: "#ffffff"
+
+    // The one inverted surface: the play button, which is a white disc with a
+    // dark mark on it. Fixed rather than derived for the same reason the ink
+    // is -- it has to read on white whatever the album is.
+    readonly property color inkInverse: "#12161f"
+
+    // ---------------- Type ----------------
+    //
+    // THE DRAWING'S RATIOS, EXPRESSED AGAINST Theme.fontSize. The drawing was
+    // made at a 17px body with a 56px clock; these are its sizes divided
+    // through by that, so the whole panel still answers the font setting
+    // rather than freezing at whatever size it happened to be drawn at. The
+    // clock lands within a point of the 40 it has always been.
+    //
+    // The two smallest are rounded UP from the drawing: its 9.5px labels come
+    // out at 6.7pt against an 11pt body, which is smaller than anything else
+    // in this shell and smaller than I am willing to ask anyone to read.
+    readonly property real clockSize: Theme.fontSize * 3.6
+    readonly property real titleSize: Theme.fontSize * 2.1
+    readonly property real artistSize: Theme.fontSize * 0.9
+    readonly property real timeSize: Theme.fontSize * 0.8
+    readonly property real labelSize: Theme.fontSize * 0.78
+    readonly property real readingSize: Theme.fontSize * 1.55
+    readonly property real actionSize: Theme.fontSize * 0.85
 
     // Seconds to m:ss. MPRIS reports seconds as a double.
     function clockFormat(seconds: real): string {
@@ -188,16 +229,35 @@ Item {
 
     // ---------------- Live playback position ----------------
     //
-    // MPRIS position is NOT pushed. The player only volunteers it when it
-    // seeks, so a binding straight to `player.position` paints the value that
-    // happened to be there when the panel was opened and then sits frozen --
-    // which is exactly what the seek bar was doing.
+    // WHAT `MprisPlayer.position` ACTUALLY IS, because the comment that used
+    // to be here had it wrong and the wrong model produced a wrong fix.
+    // Quickshell computes it on every read, in
+    // src/services/mpris/player.cpp:
     //
-    // So it is polled, and the poll does two things: it pokes the notify
-    // signal, which is what makes Quickshell re-read the property off D-Bus,
-    // and then it copies the result somewhere the bindings can see change.
-    // Reading `player.position` on its own is not enough; nothing would have
-    // told QML the value moved.
+    //   positionMs() = lastValueTheSenderPublished + wallClockSinceItArrived
+    //
+    // So it is an EXTRAPOLATION from an anchor, not a value fetched from the
+    // bus. Nothing in QML can ask for the anchor to be refreshed: Quickshell
+    // re-requests it by itself on a track change and on a playback-state
+    // change, and at no other time.
+    //
+    // Reading it on a timer is still necessary and is all this does. The
+    // property's notify signal only fires when the anchor moves, so a plain
+    // binding would sit still while the extrapolation ran on underneath it.
+    // What is NOT here any more is the `positionChanged()` poke that used to
+    // sit above this line in the belief that it forced a re-read off D-Bus:
+    // the only thing connected to that signal inside Quickshell is
+    // `onExportedPositionChanged`, which emits `lengthChanged` when the track
+    // has no length -- so the poke did nothing for the position and made a
+    // fabricated length look alive. See `hasLength`.
+    //
+    // WHAT THIS COSTS US, stated because it is not fixable from here: a
+    // player that publishes Position once and never again -- Zen, on a plain
+    // youtube.com video, publishes a constant 0 -- gives an anchor that is
+    // only re-taken when the track or the playback state changes. Between
+    // those events the elapsed time shown is "time since that event", which
+    // is right for a track played from its start and wrong for one joined in
+    // the middle.
     //
     // Twice a second: a seek bar that steps once a second visibly ticks.
     property real livePosition: 0
@@ -205,1120 +265,1149 @@ Item {
     Timer {
         interval: 500
         repeat: true
-        // The gate used to be "the Media tab is on screen". There is no tab
-        // to ask about now, so it is the panel's own visibility -- and the
-        // popout destroys its content when it closes, so this stops on its
-        // own the rest of the time rather than polling D-Bus all day.
-        running: root.visible && (root.mediaPlayer?.isPlaying ?? false)
+        // The popout destroys its content when it closes, so this stops on
+        // its own the rest of the time rather than polling all day.
+        running: root.visible && (root.player?.isPlaying ?? false)
         triggeredOnStart: true
 
         onTriggered: {
-            const p = root.mediaPlayer;
-            if (!p)
-                return;
-            if (typeof p.positionChanged === "function")
-                p.positionChanged();
-            root.livePosition = p.position ?? 0;
+            const p = root.player;
+            root.livePosition = p ? (p.position ?? 0) : 0;
         }
     }
 
-    // One definition of "the player", so the Timer above and the media card
-    // below cannot disagree about which one they are talking to.
-    readonly property var mediaPlayer: {
-        const players = Mpris.players.values;
-        if (players.length === 0)
-            return null;
-        return players.find(p => p.isPlaying) ?? players[0];
+    // One definition of "the player", and it is the SHELL's rather than this
+    // file's. The rule moved to Track.qml because there were three copies of
+    // it and none of them knew that playerctld puts a mirror of the real
+    // player on the bus under a name of its own; see the long note there.
+    readonly property var player: Track.active
+
+    // ---- IS THERE A LENGTH AT ALL, AND THE BUG THAT ASKING REPLACES ----
+    //
+    // The card showed "4:18 / 5:17" for a track YouTube Music was showing as
+    // "0:22 / 4:06". Both numbers wrong, and the total was not a total.
+    //
+    // `MprisPlayer.length` DOES NOT RETURN A LENGTH WHEN THE PLAYER DID NOT
+    // PUBLISH ONE. From src/services/mpris/player.cpp:
+    //
+    //   qreal MprisPlayer::length() const {
+    //       if (!this->bLengthSupported) {
+    //           return this->position();   // unsupported
+    //       ...
+    //
+    // -- so with `mpris:length` absent from the metadata it hands back the
+    // current POSITION, which is itself extrapolated from wall clock. The
+    // card was drawing a clock over a second clock and calling one of them
+    // the duration.
+    //
+    // AND THE PLAYER HERE REALLY DOES OMIT IT. Read off the live bus while
+    // Zen played a youtube.com video: the metadata carried mpris:trackid,
+    // xesam:title, xesam:album, xesam:artist and xesam:url and no
+    // mpris:length at all, and Position read 0 three times over four seconds.
+    //
+    // Quickshell publishes `lengthSupported` for exactly this, so the panel
+    // asks instead of assuming. With no length there is no total to print and
+    // no fraction to seek to, and both say so rather than inventing one.
+    readonly property bool hasLength: root.player?.lengthSupported ?? false
+
+    // Clamped at the total, because the position is extrapolated and can
+    // otherwise run past a length the player did publish -- and a panel
+    // reading "4:20 / 4:05" is a panel nobody believes again.
+    readonly property real elapsed: root.hasLength
+        ? Math.min(root.livePosition, root.player?.length ?? 0)
+        : root.livePosition
+
+    readonly property string timeText: root.hasLength
+        ? root.clockFormat(root.elapsed) + " / " + root.clockFormat(root.player?.length ?? 0)
+        : root.clockFormat(root.elapsed)
+
+    readonly property real fraction: {
+        if (!root.hasLength)
+            return 0;
+        const len = root.player?.length ?? 0;
+        if (len <= 0)
+            return 0;
+        return Math.max(0, Math.min(1, root.elapsed / len));
     }
+
+    // ---------------- The cover, and what is drawn from it ----------------
+    //
+    // ALL OF THIS USED TO LIVE INSIDE THE MEDIA CARD and had to come up here,
+    // because two different things now read the picture: the small sharp
+    // square at the top left and the ground behind the entire panel.
+    //
+    // ---- Zen's YouTube fallback ----
+    // Zen publishes title, album and artist over MPRIS but not mpris:artUrl
+    // for every track, so the panel came up blank. What is worked around here
+    // is the symptom, using the one thing it does publish: xesam:url. For
+    // anything YouTube -- which is what music.youtube.com is -- the video id
+    // in that URL maps to a public thumbnail. No key, no API, no extra
+    // process. Any other site still shows the stand-in, and every non-Firefox
+    // player is untouched because the remembered art wins whenever it exists.
+    readonly property string youtubeId: {
+        const meta = root.player?.metadata ?? null;
+        const url = meta ? (meta["xesam:url"] ?? "") : "";
+        const m = url.match(/[?&]v=([-\w]{11})/) || url.match(/youtu[.]be\/([-\w]{11})/);
+        return m ? m[1] : "";
+    }
+
+    // maxresdefault first, mqdefault as the retry. Both are 16:9 and BAR-FREE,
+    // which is the point: hqdefault is 480x360 and pads a widescreen frame
+    // with black bands.
+    property bool maxResFailed: false
+    onYoutubeIdChanged: root.maxResFailed = false
+
+    // THE COVER THIS PLAYER IS KNOWN TO HAVE, which is not the same thing as
+    // the one it is admitting to right now. Track remembers the last art URL
+    // each player published and drops it only on a genuine track change, so
+    // this survives the retraction described there -- and, because it lives
+    // in a singleton rather than in this panel, it survives the panel being
+    // closed and rebuilt too. The ground depends on that: without the memory
+    // the whole background would go grey two milliseconds after a track
+    // started.
+    readonly property string remembered: Track.covers[root.player?.dbusName ?? ""] ?? ""
+
+    readonly property string offered: {
+        if (root.remembered)
+            return root.remembered;
+        if (!root.youtubeId)
+            return "";
+        const size = root.maxResFailed ? "mqdefault" : "maxresdefault";
+        return "https://i.ytimg.com/vi/" + root.youtubeId + "/" + size + ".jpg";
+    }
+
+    // ---- The cover that is actually on screen ----
+    //
+    // `offer` below loads whatever is worth loading and is never drawn; only
+    // when it reaches Ready does its source become `held`, which is what the
+    // visible images are bound to. So the picture is never replaced by a load
+    // in progress and never by a load that failed -- if Zen has already
+    // unlinked the file it named, the old one simply stays up. The images
+    // share a decode where their sourceSize agrees; the ground asks for a far
+    // smaller one on purpose and is a second decode of the same file.
+    property string held: ""
+
+    // WHAT CLEARS IT: there being nothing left to show. Keyed on `offered`
+    // and not on `remembered`, because a player that never publishes artwork
+    // leaves `remembered` permanently empty -- and a property that is always
+    // "" never emits a change, so a track change on such a player would clear
+    // nothing and the previous track's thumbnail would stay up.
+    onOfferedChanged: {
+        if (root.offered === "")
+            root.held = "";
+    }
+
+    Image {
+        id: offer
+
+        visible: false
+        source: root.offered
+        asynchronous: true
+        sourceSize.width: 1024
+
+        onStatusChanged: {
+            if (offer.status === Image.Ready) {
+                // offer.source and not root.offered -- the resolved url is
+                // what the cache is keyed on.
+                root.held = offer.source;
+                return;
+            }
+
+            if (offer.status === Image.Error && root.youtubeId && !root.maxResFailed)
+                root.maxResFailed = true;
+        }
+    }
+
+    // ---------------- The wallpaper, for when nothing is playing ----------
+    //
+    // The same file `wallpaper-switch` writes and the carousel reads, so the
+    // panel and the desktop can never disagree about which picture is up.
+    //
+    // THE THUMBNAIL AND NOT THE WALLPAPER. The collection is 4K and about
+    // half of it is PNG, which has no scaled decoding -- asking an Image for
+    // a small version of one costs a full 8.3-megapixel decode. wallpaper-
+    // switch keeps a 960px JPEG of each, and for a video wallpaper it keeps
+    // an extracted frame, which is the only thing an Image can show at all.
+    // The full file is the fallback for a collection the script has not been
+    // over yet; for a video that fallback cannot load and the ground falls
+    // back to the panel's own colour.
+    FileView {
+        id: wallpaperFile
+
+        path: `${Config.cacheDir}/wallpaper-current`
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: reload()
+    }
+
+    readonly property string wallpaperPath: (wallpaperFile.text() || "").trim()
+
+    property bool wallpaperThumbFailed: false
+    onWallpaperPathChanged: root.wallpaperThumbFailed = false
+
+    readonly property string wallpaperSource: {
+        if (root.wallpaperPath === "")
+            return "";
+        return root.wallpaperThumbFailed
+            ? Config.wallpaperFullUrl(root.wallpaperPath)
+            : Config.wallpaperThumbUrl(root.wallpaperPath);
+    }
+
+    // ---------------- The ground, and how dark it has to be ----------------
+    readonly property string groundSource: root.held !== "" ? root.held : root.wallpaperSource
+
+    // ---- WHY THE GROUND IS TWO PICTURES AND NOT ONE ----
+    //
+    // A track change swaps the background of the ENTIRE panel. Cut, it reads
+    // as something breaking rather than as something changing -- the whole
+    // surface everything else is standing on jumps colour in one frame.
+    //
+    // So there are two slots. `groundShown` is what is being faded IN and
+    // `groundBehind` is what was there before it, still at full opacity
+    // underneath, and the two are crossfaded inside ONE source item. That
+    // last part is the point: they are two Images in a hidden, layered Item
+    // handed to a single MultiEffect, so the crossfade costs one more textured
+    // quad and one more 96-pixel decode -- and NOT a second full-panel blur,
+    // which is the one thing this design cannot afford to do twice. The
+    // hidden-Item-as-effect-source pair is components/CornerWedge.qml's, which
+    // hands a composed subtree to a MultiEffect the same way.
+    //
+    // Assigned in a handler rather than by two bindings, because what is
+    // wanted is the PREVIOUS value of a property and a binding cannot see one.
+    property string groundShown: ""
+    property string groundBehind: ""
+
+    onGroundSourceChanged: {
+        // Nothing left to show: drop BOTH, or the picture underneath would
+        // stay up forever behind a front slot that never loads again.
+        if (root.groundSource === "") {
+            root.groundBehind = "";
+            root.groundShown = "";
+            return;
+        }
+
+        root.groundBehind = root.groundShown;
+        root.groundShown = root.groundSource;
+    }
+
+    // A binding's first evaluation is lazy, so the handler above may or may
+    // not have fired by now. Setting it again here is harmless either way and
+    // is what guarantees the panel opens with a ground.
+    Component.onCompleted: root.groundShown = root.groundSource
+
+    ColorQuantizer {
+        id: groundQuantizer
+
+        // LOCAL FILES ONLY, and this guard is not defensive programming -- it
+        // is the documented limit of the type. Quickshell's
+        // src/core/colorquantizer.cpp loads with
+        // `QImage(this->source.toLocalFile())` and contains no network code
+        // at all, so an https cover yields an empty path and a warning on
+        // stderr once per track.
+        source: root.groundShown.startsWith("file:") ? root.groundShown : ""
+
+        // One colour off a 1x1 rescale. The whole job is "what colour is this
+        // picture", and doing it on one pixel is why it costs nothing.
+        depth: 0
+        rescaleSize: 1
+    }
+
+    readonly property bool groundMeasured: groundQuantizer.colors.length > 0
+    readonly property color groundColor: root.groundMeasured ? groundQuantizer.colors[0] : Theme.surface
+
+    // RELATIVE LUMINANCE AND NOT `hslLightness`, because the question being
+    // asked is "will white type read on this", and lightness answers a
+    // different one: a saturated blue and a saturated yellow at the same HSL
+    // lightness are nowhere near equally bright to look at. These are the
+    // sRGB coefficients, without the gamma linearisation -- an approximation,
+    // and an approximation is enough to choose between 0.30 and 0.74.
+    readonly property real groundLuminance: 0.2126 * root.groundColor.r
+        + 0.7152 * root.groundColor.g
+        + 0.0722 * root.groundColor.b
+
+    // THE SCRIM, MEASURED. A fixed opacity cannot serve a black sleeve and a
+    // white one, and that is the named risk of this whole design. The range
+    // is wide on purpose: at the pale end a cover is knocked back to about a
+    // quarter of its own brightness, which is what puts white type back on
+    // solid ground.
+    //
+    // WITH NO MEASUREMENT -- an https cover, which the quantizer cannot read
+    // -- it goes to 0.62 rather than to the middle. The safe assumption about
+    // a picture you cannot see is that it is bright, and the cost of being
+    // wrong that way is a dark panel, while the cost of being wrong the other
+    // way is a panel you cannot read.
+    readonly property real scrimOpacity: root.groundMeasured
+        ? Math.max(0.30, Math.min(0.74, 0.30 + 0.45 * root.groundLuminance))
+        : 0.62
 
     // ---------------- What replaced the sampling gate ----------------
     //
-    // This was `root.tab === "Performance"`, and it was the one binding in
-    // the old file that could be wrong without anything looking wrong: get it
-    // pointed at the wrong tab and the shell goes on reading /proc and
-    // holding nvidia-smi at two-second intervals from a panel nobody is
-    // looking at.
-    //
-    // With one view there is no tab left to name, and the honest replacement
-    // is the panel itself. The popout loads this component when it opens and
-    // DESTROYS it when it closes -- `Loader { active: root.isOpen }` in
-    // components/Popout.qml -- so "this exists" and "somebody is looking at
-    // it" are the same statement here. `visible` rather than a literal `true`
-    // because it costs nothing and covers the case where the panel is alive
-    // but not on screen.
-    //
-    // What that gate actually buys is smaller than it sounds and worth
-    // knowing before anyone tightens it further: SystemStats never stops. It
-    // drops to a 5 s GPU poll and a 2 s read of two small files, because the
-    // island has to be able to warn about a hot card with this panel shut.
-    // `active` only decides whether /proc/stat and /proc/cpuinfo are parsed
-    // as well, and whether the GPU loop runs at 2 s instead of 5.
+    // The popout loads this component when it opens and DESTROYS it when it
+    // closes, so "this exists" and "somebody is looking at it" are the same
+    // statement here. SystemStats never stops entirely -- it drops to a 5s GPU
+    // poll and a 2s read of two small files, because the island has to warn
+    // about a hot card with this panel shut.
     Binding {
         target: SystemStats
         property: "active"
         value: root.visible
     }
 
-    Row {
-        anchors.fill: parent
-        spacing: root.gap
-
-        // ================ Left: the time and the month ================
-        Column {
-            width: root.leftWidth
-            height: parent.height
-            spacing: root.gap
-
-            Card {
-                width: parent.width
-                height: root.clockHeight
-
-                Column {
-                    anchors.centerIn: parent
-
-                    // Centring the Column centres its LINE BOXES, not its
-                    // ink. At 40pt the digits reserve descender space they
-                    // never use, so the visible block sat low: measured 15px
-                    // of gap above and 2 below. The offset is that
-                    // difference, halved, and it is measured rather than
-                    // guessed -- same as the icon overflow the old waybar
-                    // stylesheet documented.
-                    anchors.verticalCenterOffset: -6
-
-                    spacing: 0
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: Qt.formatDateTime(dashClock.date, "HH:mm")
-                        font.family: Theme.fontFamily
-                        font.pointSize: 40
-                        font.weight: Font.Bold
-                        color: Theme.textOnSurface
-                    }
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: Qt.formatDate(dashClock.date, "dddd, d MMMM")
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize
-                        color: Theme.primary
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.recolorDuration }
-                        }
-                    }
-                }
-            }
-
-            // The month, reused verbatim from what the clock's popout used to
-            // open. Moving it here is the whole reason that popout went away:
-            // a calendar is something you go to, not something that springs
-            // out when you meant to read the time.
-            Card {
-                width: parent.width
-                height: root.bodyHeight - root.clockHeight - root.gap
-
-                CalendarView {
-                    id: month
-
-                    anchors.centerIn: parent
-                }
-            }
-        }
-
-        // ================ Middle: what you reach for ================
-        //
-        // ONE CARD, AND IT WAS TWO. The top one held "the things you set" and
-        // the bottom one "the things that produce a file", which was a real
-        // distinction and a card each was a reasonable way to draw it -- while
-        // the top one had four rows in it. Do not disturb leaving took it to
-        // one slider on a desktop, and a card whose entire content is a single
-        // row is not a group, it is a row with a border round it. The two are
-        // one card now with a rule where the boundary was, so the grouping
-        // survives and the fourteen pixels between the cards do not.
-        Column {
-            width: root.midWidth
-            height: parent.height
-
-            Card {
-                width: parent.width
-                height: parent.height
-
-                // CENTRED AND NOT FILLED, the same treatment the calendar
-                // beside it gets: this card is as tall as the panel, the panel
-                // is as tall as its tallest column, and whatever is left over
-                // belongs evenly above and below rather than all at the bottom.
-                Column {
-                    id: midColumn
-
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.leftMargin: root.cardPad
-                    anchors.rightMargin: root.cardPad
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    spacing: root.gap
-
-                    // ABOVE THE VOLUME AND WITH NO RULE BETWEEN THEM. They are
-                    // the same kind of control -- a value you set by feel and
-                    // stop thinking about -- so they read as one block.
-                    //
-                    // `visible` and not merely a zero implicit height: on a
-                    // desktop this component measures zero, but a Column still
-                    // spends its spacing in front of an invisible-but-present
-                    // child, so the old layout kept fourteen pixels of gap for
-                    // a control that was not there. A Column skips an
-                    // invisible child AND the spacing before it.
-                    BrightnessControl {
-                        id: brightness
-
-                        width: parent.width
-                        visible: brightness.present
-                    }
-
-                    VolumeControl {
-                        width: parent.width
-                    }
-
-                    // Where the second card used to start.
-                    Rectangle {
-                        width: parent.width
-                        height: 1
-                        color: Theme.outlineVariant
-                    }
-
-                    RecordControl {
-                        width: parent.width
-                    }
-
-                    Rectangle {
-                        width: parent.width
-                        height: 1
-                        color: Theme.outlineVariant
-                    }
-
-                    // The instant replay, cut down to the act. What it keeps
-                    // and what it keeps it from are settings now, and they
-                    // live on the settings window's Recording page; the file
-                    // itself says which rows went and why.
-                    ReplayControl {
-                        width: parent.width
-                    }
-                }
-            }
-        }
-
-        // ================ Right: what is playing, what it is doing ========
-        Column {
-            width: root.rightWidth
-            height: parent.height
-            spacing: root.gap
-
-            // ---------------- Media ----------------
-            //
-            // A PORT OF end-4/dots-hyprland, and a deliberate one: three
-            // attempts at this card from screenshots produced three different
-            // cards and none of them was what was asked for, so the design is
-            // now taken from source rather than inferred from pixels. The
-            // original is Quickshell/QML like ours --
-            //
-            //   dots/.config/quickshell/ii/modules/ii/mediaControls/PlayerControl.qml
-            //
-            // -- so the numbers below are THEIRS, copied rather than chosen:
-            //
-            //   card                 440 x 160, less a 10px elevation margin
-            //                        on every side, so 420 x 140 drawn
-            //   card radius          19  (their popupRounding: rounding.large
-            //                        23, less hyprlandGapsOut 5, plus 1)
-            //   content inset        13, with 15 between the art and the text
-            //   art square           as tall as the content, radius 8
-            //                        (rounding.verysmall)
-            //   info column          2 between the lines
-            //   skip buttons         24 x 24
-            //   play button          44 x 44, radius 17 (rounding.normal)
-            //                        while playing and a circle while paused
-            //   time and play        5 above the row of controls
-            //
-            // The layout, top to bottom on the right of the art: the title,
-            // the artist, all the slack, then a block whose bottom row is
-            // skip-back / progress / skip-forward and whose line above it
-            // carries the elapsed-over-total time on the left and the play
-            // button on the right. Behind all of it the cover art again,
-            // blurred and dimmed, with the cava spectrum drawn across it.
-            //
-            // THREE THINGS WERE DECLARED UNPORTABLE HERE AND WERE NOT. The
-            // first version of this card kept our bar spectrum instead of
-            // their wave, drew the progress as a plain bar instead of their
-            // wavy slider, and left the whole palette on the wallpaper's
-            // colours on the grounds that ColorQuantizer was "a ColorQuantizer
-            // we do not have". All three are now ported, and the last of those
-            // claims was simply false: ColorQuantizer ships in Quickshell
-            // 0.3.0, which is what is installed --
-            // /usr/lib/qt6/qml/Quickshell/quickshell-core.qmltypes declares it
-            // as Quickshell/ColorQuantizer with source, depth, rescaleSize and
-            // colors.
-            //
-            // WHAT GENUINELY DOES NOT PORT is one thing and it has a specific
-            // blocker. ColorQuantizer reads LOCAL FILES ONLY -- its source is
-            // `QImage(this->source.toLocalFile())` in Quickshell's
-            // src/core/colorquantizer.cpp, with no network code anywhere near
-            // it -- so it can quantize Zen's covers, which are file:// paths
-            // in ~/.zen/firefox-mpris/, and cannot quantize the YouTube
-            // thumbnail fallback or any player that publishes an https cover.
-            // THAT is what their curl-to-disk step buys them, and it is the
-            // one respect in which not porting it costs something. Where the
-            // cover is not a local file the card falls back to the wallpaper's
-            // accent; see artDominantColor below.
-            //
-            // NOT IMPROVED. Where their design looks odd to me it is
-            // implemented anyway; the instruction on this card is fidelity.
-            // A ClippingRectangle AND NOT THE Card COMPONENT, because this is
-            // the one card with something drawn to its own edges. `clip: true`
-            // on a plain Item clips to the BOUNDING BOX, so the blurred cover
-            // would be painted straight over the rounded corners and square
-            // them off -- the same trap the cover art itself fell into once
-            // before. This clips to the radius. end-4 solve it with an
-            // OpacityMask layer effect; this is what this shell already has.
-            ClippingRectangle {
-                id: mediaCard
-
-                width: parent.width
-
-                // THEIR HEIGHT, NOT THE COLUMN'S. This card used to take
-                // whatever the dials below did not, which is what every other
-                // stretching card in this panel does -- and doing it here
-                // would defeat the point of the port: their layout puts the
-                // art square on Layout.fillHeight, so a card 88 pixels taller
-                // than theirs draws an art square 88 pixels bigger and an
-                // info column that much narrower. The card is 420 x 140
-                // because that is what 440 x 160 less their elevation margin
-                // is, and the whole instruction on this card is fidelity.
-                //
-                // The height the column has spare goes to the dials' card
-                // instead; see there.
-                height: root.mediaHeight
-
-                // 19, and theirs -- not this shell's cardRadius. The point of
-                // the port is that this card looks like that card.
-                radius: 19
-
-                // Theirs: applyAlpha(colLayer0, 1). The alpha is forced back
-                // to 1 because mix() lerps alpha along with the channels, so
-                // a blend against a translucent role comes out translucent.
-                color: ColorUtils.applyAlpha(mediaCard.blendedColors.colLayer0, 1)
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-
-                // Same rule the island uses: prefer what is actually playing,
-                // fall back to the first player that exists so a paused track
-                // still fills the card.
-                readonly property var player: root.mediaPlayer
-
-                // THEIR TYPE SCALE, EXPRESSED IN OURS. Theirs is in pixels
-                // against a body size of 16 -- large 17, small 15, smaller 12,
-                // huge 22 -- and everything in this shell is in points against
-                // Theme.fontSize, which is a setting. Kept as ratios rather
-                // than as their literals so the card still answers to that
-                // setting; a card that ignored it would be the only one.
-                readonly property real titleSize: Theme.fontSize * 17 / 16
-                readonly property real artistSize: Theme.fontSize * 12 / 16
-                readonly property real timeSize: Theme.fontSize * 15 / 16
-                readonly property real glyphSize: Theme.fontSize * 22 / 16
-
-                // ---- THE CARD'S OWN PALETTE, TAKEN FROM THE COVER ART ----
-                //
-                // Theirs, and the thing that makes their card look like their
-                // card rather than like a card in our colours. Every colour
-                // below this point comes from `blendedColors` and not from
-                // Theme, so while a cover is on screen this card is in the
-                // ALBUM's colours and the panel around it is in the
-                // WALLPAPER's. That divergence is deliberate and is what was
-                // asked for; see components/AdaptedMaterialScheme.qml.
-                ColorQuantizer {
-                    id: coverQuantizer
-
-                    // LOCAL FILES ONLY, and this guard is not defensive
-                    // programming -- it is the documented limit of the type.
-                    // Quickshell's src/core/colorquantizer.cpp loads with
-                    // `QImage(this->source.toLocalFile())` and contains no
-                    // network code at all, so an https cover yields an empty
-                    // path and a warning on stderr once per track. Zen's
-                    // covers are file:// paths and quantize fine; the YouTube
-                    // thumbnail fallback is remote and does not, which is
-                    // exactly what end-4's curl-to-disk step exists to solve.
-                    source: media.held.startsWith("file:") ? media.held : ""
-
-                    // Theirs: 2^0 = one colour, off a 1x1 rescale. The whole
-                    // job is "what colour is this picture, roughly", and doing
-                    // it on one pixel is why it costs nothing.
-                    depth: 0
-                    rescaleSize: 1
-                }
-
-                // THE QUANTIZER'S COLOUR IS NOT USED RAW, and theirs is not
-                // either. It is pulled 20% of the way toward the shell's own
-                // primary container first, which is what stops a saturated
-                // cover from producing a card that glows. Their line is
-                // mix(colors[0] ?? colPrimary, colPrimaryContainer, 0.8) and
-                // this is the same one.
-                //
-                // With no quantized colour -- no cover, or a remote one -- the
-                // base is Theme.primary, so the card falls back to the
-                // wallpaper's accent rather than to grey.
-                readonly property color artDominantColor: {
-                    const quantized = coverQuantizer.colors.length > 0
-                        ? coverQuantizer.colors[0]
-                        : Theme.primary;
-                    return ColorUtils.mix(quantized, Theme.primaryContainer, 0.8);
-                }
-
-                property QtObject blendedColors: AdaptedMaterialScheme {
-                    color: mediaCard.artDominantColor
-                }
-
-                // ---- The wave's own cava ----
-                //
-                // A SECOND cava, not the island's. Spectrum.qml runs 14 bars
-                // for a row of bars in a capsule; a wave wants 50. See
-                // cava-wave.conf for the settings, which are theirs.
-                //
-                // Gated on playback rather than merely on the panel being
-                // open: this whole component is destroyed when the panel
-                // closes, so `running` already means "somebody is looking",
-                // and Spectrum.qml's argument about cava running a full FFT
-                // against silence still applies to the other half.
-                property var visualizerPoints: []
-
-                Process {
-                    id: waveCava
-
-                    running: mediaCard.player?.isPlaying ?? false
-                    command: ["cava", "-p", Quickshell.shellPath("cava-wave.conf")]
-
-                    onRunningChanged: {
-                        if (!waveCava.running)
-                            mediaCard.visualizerPoints = [];
-                    }
-
-                    stdout: SplitParser {
-                        splitMarker: "\n"
-
-                        onRead: line => {
-                            // "0;12;40;...;3;" -- a trailing separator, hence
-                            // the filter. Raw values, NOT normalised: the
-                            // visualiser divides by maxVisualizerValue itself,
-                            // which is how theirs is wired.
-                            const points = line.split(";")
-                                .map(v => parseFloat(v.trim()))
-                                .filter(v => !isNaN(v));
-                            if (points.length > 0)
-                                mediaCard.visualizerPoints = points;
-                        }
-                    }
-                }
-
-                // WHEN NOTHING IS PLAYING the card is one line of text and the
-                // rest of the view is untouched. Their build puts a separate
-                // "No active player" card in the same place; ours keeps the
-                // sentence it already had, because this card is one of two in
-                // a column and a card that changed shape would drag the dials
-                // up into the gap.
-                Text {
-                    anchors.centerIn: parent
-                    visible: !mediaCard.player
-                    text: "Nothing is playing"
-                    font.family: Theme.fontFamily
-                    font.pointSize: Theme.fontSize
-                    color: Theme.textOnSurfaceVariant
-                }
-
-                Item {
-                    id: media
-
-                    anchors.fill: parent
-                    visible: !!mediaCard.player
-
-                    // ---- Cover art, and the fallback for Firefox players ----
-                    // Zen publishes title, album and artist over MPRIS but not
-                    // mpris:artUrl for every track, so the card came up blank.
-                    // What is worked around here is the symptom, using the one
-                    // thing it does publish: xesam:url. For anything YouTube --
-                    // which is what music.youtube.com is -- the video id in
-                    // that URL maps to a public thumbnail. No key, no API, no
-                    // extra process.
-                    //
-                    // Scope, so nobody expects more than it does: this covers
-                    // YouTube URLs only. Any other site still shows the
-                    // stand-in. Every non-Firefox player is untouched --
-                    // trackArtUrl wins whenever it has a value.
-                    readonly property string youtubeId: {
-                        const meta = mediaCard.player?.metadata ?? null;
-                        const url = meta ? (meta["xesam:url"] ?? "") : "";
-                        const m = url.match(/[?&]v=([-\w]{11})/) || url.match(/youtu[.]be\/([-\w]{11})/);
-                        return m ? m[1] : "";
-                    }
-
-                    // maxresdefault first, mqdefault as the retry. Both are
-                    // 16:9 and BAR-FREE, which is the point: hqdefault is
-                    // 480x360 and pads a widescreen frame with black bands.
-                    // maxresdefault does not exist for every video, hence the
-                    // retry rather than picking one.
-                    property bool maxResFailed: false
-                    onYoutubeIdChanged: media.maxResFailed = false
-
-                    // THE COVER THIS PLAYER IS KNOWN TO HAVE, which is not
-                    // the same thing as the one it is admitting to right now.
-                    // Track remembers the last art URL each player published
-                    // and drops it only on a genuine track change, so this
-                    // survives the retraction described there -- and, because
-                    // it lives in a singleton rather than in this card, it
-                    // survives the panel being closed and rebuilt too.
-                    readonly property string remembered: Track.covers[mediaCard.player?.dbusName ?? ""] ?? ""
-
-                    // WHAT IS WORTH LOADING RIGHT NOW. See `held` below for
-                    // why this and what is actually drawn had to be separated.
-                    readonly property string offered: {
-                        if (media.remembered)
-                            return media.remembered;
-                        if (!media.youtubeId)
-                            return "";
-                        const size = media.maxResFailed ? "mqdefault" : "maxresdefault";
-                        return "https://i.ytimg.com/vi/" + media.youtubeId + "/" + size + ".jpg";
-                    }
-
-                    readonly property real fraction: {
-                        const len = mediaCard.player?.length ?? 0;
-                        if (len <= 0)
-                            return 0;
-                        return Math.max(0, Math.min(1, root.livePosition / len));
-                    }
-
-                    // ---- The cover that is actually on screen ----
-                    //
-                    // THE COVER USED TO APPEAR AS A TRACK STARTED AND VANISH A
-                    // FRAME LATER, and why was measured on the bus rather than
-                    // guessed at. Watching every PropertiesChanged on
-                    // org.mpris.MediaPlayer2.Player while a track started in
-                    // Zen:
-                    //
-                    //   19:38:53.286  Metadata, no mpris:artUrl    (new track)
-                    //   19:38:53.730  Metadata WITH mpris:artUrl    -> art
-                    //   19:38:53.732  Metadata, key ABSENT again    -> gone
-                    //   19:38:54.097  Metadata WITH a DIFFERENT file -> art
-                    //   19:38:55.854  Metadata, key ABSENT again    -> gone
-                    //
-                    // Two milliseconds between having a cover and not. MPRIS
-                    // Metadata is one whole map, so a sender that rebuilds it
-                    // without the artwork key has effectively retracted the
-                    // artwork -- and this one does that repeatedly, on a track
-                    // it has already published art for. Bound straight to that,
-                    // the Image's source went empty, its status left Ready, and
-                    // a card that draws the stand-in whenever the image is not
-                    // Ready dropped the cover on the floor.
-                    //
-                    // FIXING ONLY THAT WAS NOT ENOUGH, and the reason is the
-                    // last line of the trace rather than the fast pair in the
-                    // middle. The retraction is not a blip the track recovers
-                    // from -- it is where the track SETTLES. A player left
-                    // paused reports no artwork at all, indefinitely, while
-                    // the file sits on disk. So a card that starts from
-                    // nothing and waits to be offered a cover is never offered
-                    // one, and the first attempt at this kept its memory in
-                    // this item -- which `Loader { active: root.isOpen }`
-                    // DESTROYS on every close. Reopening the panel started
-                    // from nothing every time. The memory therefore had to
-                    // move somewhere that outlives the panel, and it has: see
-                    // Track.qml, which is armed from shell.qml so that it is
-                    // watching before anyone opens anything.
-                    //
-                    // WHAT IS LEFT HERE is the part that is genuinely about
-                    // drawing. `offer` below loads whatever is worth loading
-                    // and is never drawn; only when it actually reaches Ready
-                    // does its source become `held`, which is what the two
-                    // visible Images are bound to. So the visible cover is
-                    // never replaced by a load in progress, and never by a
-                    // load that failed -- if Zen has already unlinked the file
-                    // it named, the old picture simply stays up.
-                    //
-                    // The Images share one decode: same URL and the same
-                    // sourceSize, so the rest are the pixmap cache answering.
-                    //
-                    // end-4's own card does NOT survive any of this. It copies
-                    // every cover into a cache directory with curl and shows
-                    // the copy, and the copy's path is derived from the art
-                    // URL -- so the same retraction empties the path and blanks
-                    // their card too, and nothing in their build remembers a
-                    // cover for longer than the player admits to it. This is
-                    // the one piece of behaviour here that is deliberately
-                    // ours rather than theirs.
-                    property string held: ""
-
-                    // WHAT CLEARS IT: there being nothing left to show.
-                    // Holding a cover across a track change would be worse
-                    // than holding none, because it would confidently show the
-                    // wrong album -- the failure being fixed is only ever "the
-                    // same track, source retracted".
-                    //
-                    // KEYED ON `offered` AND NOT ON `remembered`, and the
-                    // difference is not cosmetic. `remembered` only ever comes
-                    // from mpris:artUrl, so for a player that never publishes
-                    // one it is permanently empty -- and a property that is
-                    // always "" never emits a change. A track change on such a
-                    // player would therefore clear nothing, and if the new
-                    // track had no YouTube id either, the PREVIOUS track's
-                    // thumbnail would simply stay on screen. `offered` is
-                    // empty only when the remembered cover and the fallback
-                    // are BOTH empty, which is the real "nothing to show".
-                    //
-                    // Note this still does not decide "is this a new track" on
-                    // its own. Deciding that twice, in two files, with two
-                    // slightly different rules, is how the two end up
-                    // disagreeing; Track decides, and this follows.
-                    onOfferedChanged: {
-                        if (media.offered === "")
-                            media.held = "";
-                    }
-
-                    // THE ONE THAT LOADS, AND IT IS NEVER DRAWN.
-                    //
-                    // No geometry: it exists to have a `status`, and an Image
-                    // loads whether or not it is visible. The sourceSize
-                    // matches the visible ones so that all of them resolve to
-                    // the same cache entry and the picture is decoded once.
-                    Image {
-                        id: offer
-
-                        visible: false
-                        source: media.offered
-                        asynchronous: true
-                        sourceSize.width: 1024
-
-                        onStatusChanged: {
-                            if (offer.status === Image.Ready) {
-                                // offer.source and not media.offered -- the
-                                // resolved url is what the cache is keyed on,
-                                // and handing the visible Images anything else
-                                // would make them read the file again, which by
-                                // then may be gone.
-                                media.held = offer.source;
-                                return;
-                            }
-
-                            // The retry described on media.offered. It lives
-                            // HERE, on the loader, because the loader is the
-                            // only thing that ever sees a failure now.
-                            if (offer.status === Image.Error && media.youtubeId && !media.maxResFailed)
-                                media.maxResFailed = true;
-                        }
-                    }
-
-                    // ---- The card's own background: the cover, blurred ----
-                    //
-                    // THEIRS, and the thing that makes their card look the way
-                    // it does. The art is drawn again at card size, cropped,
-                    // blurred, and then covered by the card's own colour at
-                    // 0.7 -- their ColorUtils.transparentize(colLayer0, 0.3).
-                    //
-                    // It is a MultiEffect and not their layer effect because
-                    // that is what this shell already uses for blur; the
-                    // result is the same treatment.
-                    Image {
-                        id: artBackdrop
-
-                        anchors.fill: parent
-                        source: media.held
-                        visible: false
-                        fillMode: Image.PreserveAspectCrop
-                        sourceSize.width: 1024
-                        asynchronous: true
-                    }
-
-                    MultiEffect {
-                        anchors.fill: parent
-                        source: artBackdrop
-                        visible: media.held !== ""
-                        blurEnabled: true
-                        blur: 1.0
-                        blurMax: 48
-                        saturation: 0.2
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent
-                        visible: media.held !== ""
-                        color: ColorUtils.transparentize(mediaCard.blendedColors.colLayer0, 0.3)
-                    }
-
-                    // ---- The spectrum, across the whole card ----
-                    //
-                    // THEIR WaveVisualizer, which is cava drawn as one
-                    // continuous filled wave over the whole card, behind the
-                    // text. This used to be modules/island/Waveform.qml -- the
-                    // row of bars the island draws -- and reusing it was the
-                    // single thing most obviously not-theirs about the card.
-                    //
-                    // No opacity here: theirs fills at 0.15 alpha inside the
-                    // canvas and blurs the result, and stacking an item
-                    // opacity on top of that would be a second dimming they
-                    // do not have.
-                    WaveVisualizer {
-                        anchors.fill: parent
-
-                        live: mediaCard.player?.isPlaying ?? false
-                        points: mediaCard.visualizerPoints
-                        maxVisualizerValue: 1000
-                        smoothing: 2
-                        color: mediaCard.blendedColors.colPrimary
-                    }
-
-                    // ---- Their RowLayout ----
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: 13
-                        spacing: 15
-
-                        // Art background: a square as tall as the content,
-                        // exactly as theirs -- Layout.fillHeight with the
-                        // width following the height.
-                        // A ClippingRectangle for the same reason the card
-                        // itself is one: the art is cropped to fill this square
-                        // and `clip` would cut it to the bounding box, leaving
-                        // a square photo inside a rounded frame. end-4 mask it
-                        // with an OpacityMask layer; this clips to the radius.
-                        ClippingRectangle {
-                            id: artBackground
-
-                            Layout.fillHeight: true
-                            implicitWidth: height
-
-                            radius: 8
-                            color: ColorUtils.transparentize(mediaCard.blendedColors.colLayer1, 0.5)
-
-                            Image {
-                                id: art
-
-                                anchors.fill: parent
-
-                                // `held` and not `offered`: this is the cover
-                                // that has already loaded, so it changes only
-                                // when there is a new picture to change to.
-                                source: media.held
-
-                                // PreserveAspectCrop, theirs. The square is
-                                // filled and the overflow is cut, which is why
-                                // there is no letterboxing to hide.
-                                fillMode: Image.PreserveAspectCrop
-                                visible: status === Image.Ready
-                                sourceSize.width: 1024
-                                asynchronous: true
-                                mipmap: true
-                                smooth: true
-                            }
-
-                            // The stand-in. A blank square reads as a load that
-                            // failed; a glyph reads as "this track has no
-                            // cover". Not in their build, which leaves the
-                            // square empty.
-                            Text {
-                                anchors.centerIn: parent
-                                visible: !art.visible
-                                text: Icons.music
-                                font.family: Theme.fontFamily
-                                font.pointSize: Math.max(12, Math.round(artBackground.height * 0.28))
-                                color: mediaCard.blendedColors.colSubtext
-                            }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillHeight: true
-                            Layout.fillWidth: true
-
-                            spacing: 2
-
-                            Text {
-                                Layout.fillWidth: true
-
-                                text: mediaCard.player?.trackTitle ?? "Untitled"
-                                elide: Text.ElideRight
-                                font.family: Theme.fontFamily
-                                font.pointSize: mediaCard.titleSize
-                                font.weight: Font.Bold
-                                color: mediaCard.blendedColors.colOnLayer0
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-
-                                // Through Track, not raw: it strips the
-                                // " - Topic" suffix YouTube's auto-generated
-                                // channels carry. Shared with the island so the
-                                // same track never reads two different ways in
-                                // two places. Their StringUtils does the same
-                                // job with a different list of suffixes.
-                                text: Track.artist(mediaCard.player?.trackArtist ?? "")
-                                elide: Text.ElideRight
-                                font.family: Theme.fontFamily
-                                font.pointSize: mediaCard.artistSize
-                                color: mediaCard.blendedColors.colSubtext
-                            }
-
-                            // Their spacer: everything above sits at the top,
-                            // everything below at the bottom.
-                            Item {
-                                Layout.fillHeight: true
-                            }
-
-                            Item {
-                                Layout.fillWidth: true
-                                implicitHeight: trackTime.implicitHeight + sliderRow.implicitHeight
-
-                                Text {
-                                    id: trackTime
-
-                                    anchors.bottom: sliderRow.top
-                                    anchors.bottomMargin: 5
-                                    anchors.left: parent.left
-
-                                    text: root.clockFormat(root.livePosition) + " / " + root.clockFormat(mediaCard.player?.length ?? 0)
-                                    elide: Text.ElideRight
-                                    font.family: Theme.fontFamily
-                                    font.pointSize: mediaCard.timeSize
-                                    color: mediaCard.blendedColors.colSubtext
-                                }
-
-                                RowLayout {
-                                    id: sliderRow
-
-                                    anchors.bottom: parent.bottom
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-
-                                    TrackChangeButton {
-                                        glyph: Icons.skipPrevious
-                                        enabled: mediaCard.player?.canGoPrevious ?? false
-                                        onActivated: mediaCard.player?.previous()
-
-                                        colBackgroundHover: mediaCard.blendedColors.colSecondaryContainerHover
-                                        colGlyph: mediaCard.blendedColors.colOnSecondaryContainer
-                                    }
-
-                                    Item {
-                                        Layout.fillWidth: true
-
-                                        // 24, which is their handle height and
-                                        // therefore the height of the control.
-                                        // The row is 24 tall either way -- the
-                                        // skip buttons set that -- so this
-                                        // does not move the layout.
-                                        implicitHeight: 24
-
-                                        // THEIRS IS A WAVY SLIDER AND SO IS
-                                        // THIS NOW. It was a plain filled
-                                        // rectangle, which was the second of
-                                        // the three things the first port
-                                        // decided not to take. See
-                                        // components/WavySlider.qml.
-                                        WavySlider {
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
-                                            anchors.verticalCenter: parent.verticalCenter
-
-                                            value: media.fraction
-                                            seekable: mediaCard.player?.canSeek ?? false
-
-                                            // The wave travels while the track
-                                            // does. Paused, the curve stays
-                                            // where it is rather than
-                                            // flattening -- theirs.
-                                            animateWave: mediaCard.player?.isPlaying ?? false
-
-                                            highlightColor: mediaCard.blendedColors.colPrimary
-                                            trackColor: mediaCard.blendedColors.colSecondaryContainer
-                                            handleColor: mediaCard.blendedColors.colPrimary
-                                            dotColor: mediaCard.blendedColors.colOnSecondaryContainer
-                                            dotColorHighlighted: mediaCard.blendedColors.colOnPrimary
-
-                                            onMoved: at => {
-                                                const p = mediaCard.player;
-                                                if (!p || !p.length)
-                                                    return;
-                                                p.position = at * p.length;
-
-                                                // AND MOVE THE BAR NOW. The
-                                                // position is read back off
-                                                // MPRIS twice a second, so
-                                                // without this the handle
-                                                // snaps back to where the
-                                                // track was and animates
-                                                // forward again when the next
-                                                // poll lands -- a visible
-                                                // rubber-band after every
-                                                // seek.
-                                                root.livePosition = at * p.length;
-                                            }
-
-                                            // Smoothed, or the fill jumps
-                                            // twice a second instead of
-                                            // creeping. Same 480 the old seek
-                                            // bar used, just under the poll.
-                                            Behavior on value {
-                                                NumberAnimation { duration: 480 }
-                                            }
-                                        }
-                                    }
-
-                                    TrackChangeButton {
-                                        glyph: Icons.skipNext
-                                        enabled: mediaCard.player?.canGoNext ?? false
-                                        onActivated: mediaCard.player?.next()
-
-                                        colBackgroundHover: mediaCard.blendedColors.colSecondaryContainerHover
-                                        colGlyph: mediaCard.blendedColors.colOnSecondaryContainer
-                                    }
-                                }
-
-                                // 44 across, on the same line as the time and
-                                // hard against the right edge; a rounded
-                                // SQUARE while it is playing and a circle when
-                                // it is not, which is theirs and is the one
-                                // detail that makes the button read as a state
-                                // rather than as a button.
-                                Rectangle {
-                                    id: playPause
-
-                                    anchors.right: parent.right
-                                    anchors.bottom: sliderRow.top
-                                    anchors.bottomMargin: 5
-
-                                    readonly property bool playing: mediaCard.player?.isPlaying ?? false
-
-                                    width: 44
-                                    height: 44
-                                    radius: playPause.playing ? 17 : width / 2
-
-                                    color: playPause.playing
-                                        ? (playMouse.containsMouse
-                                            ? mediaCard.blendedColors.colPrimaryHover
-                                            : mediaCard.blendedColors.colPrimary)
-                                        : (playMouse.containsMouse
-                                            ? mediaCard.blendedColors.colSecondaryContainerHover
-                                            : mediaCard.blendedColors.colSecondaryContainer)
-
-                                    opacity: (mediaCard.player?.canTogglePlaying ?? false) ? 1 : 0.3
-
-                                    Behavior on radius {
-                                        NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
-                                    }
-
-                                    Behavior on color {
-                                        ColorAnimation { duration: Theme.animDuration }
-                                    }
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: playPause.playing ? Icons.pause : Icons.play
-                                        font.family: Theme.fontFamily
-                                        font.pointSize: mediaCard.glyphSize
-                                        color: playPause.playing
-                                            ? mediaCard.blendedColors.colOnPrimary
-                                            : mediaCard.blendedColors.colOnSecondaryContainer
-                                    }
-
-                                    MouseArea {
-                                        id: playMouse
-
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        enabled: mediaCard.player?.canTogglePlaying ?? false
-                                        onClicked: mediaCard.player?.togglePlaying()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ---------------- What this machine is doing ----------------
-            //
-            // THREE DIALS AND NOT THREE CARDS OF ROWS. Each subsystem used to
-            // carry a headline percentage, a bar under it and three lines of
-            // detail -- Used / Free / Swap, Temp / Clock / Threads, Temp /
-            // VRAM / Power -- plus the hardware's name at the foot. Nine
-            // readings, of which the ones anybody opened the panel for were
-            // the three percentages and, when something sounded wrong, the two
-            // temperatures.
-            //
-            // The rest were either the percentage said again in another unit
-            // (Free is Used subtracted from Total; Used-of-Total is the
-            // percentage with a GiB on it) or facts about the machine that do
-            // not change between two openings of a popout: the thread count,
-            // the card's name, the model string. Those belong with the
-            // identity card, and the identity card is what left.
-            //
-            // So each subsystem gets a dial: the load large in the middle,
-            // and under it in small type the one reading that says whether it
-            // is in trouble.
-            Card {
-                width: parent.width
-
-                // WHATEVER THE MEDIA CARD ABOVE DID NOT TAKE, which is the
-                // other half of the note there. `gaugeCardHeight` is still
-                // this card's NATURAL height and is still what the column
-                // contributes to the panel height; when another column is
-                // taller, the difference lands here rather than stretching the
-                // ported card out of proportion. The dials are centred in it,
-                // exactly as the calendar and the controls are centred in
-                // theirs.
-                height: root.bodyHeight - root.mediaHeight - root.gap
-
-                Row {
-                    anchors.centerIn: parent
-                    spacing: root.gaugeSpacing
-
-                    Gauge {
-                        title: "CPU"
-                        percent: SystemStats.cpuPercent
-                        reading: `${Math.round(SystemStats.cpuTemp)} °C`
-
-                        // Coloured by the temperature under it, not by the
-                        // percentage in it. See the note on `level`.
-                        level: SystemStats.cpuTemp
-                        warmAt: SystemStats.cpuCoolAt
-                        hotAt: SystemStats.cpuHotAt
-                    }
-
-                    // WHICH READING FOR RAM, since memory has no temperature.
-                    //
-                    // The line under a dial answers a different question from
-                    // the dial itself: the percentage says how hard the thing
-                    // is working, the line says whether that is a problem.
-                    // Used-of-total fails that test -- it is the same fact in
-                    // GiB, and it moves in lockstep with the ring above it.
-                    //
-                    // Swap does not. A machine at 85% memory with an empty
-                    // swap is a machine using its memory, which is what it is
-                    // for; the same machine with two gigabytes in swap is
-                    // paging, and paging is the thing you actually get up and
-                    // do something about. It is also the one memory reading
-                    // that is invisible everywhere else in this shell -- the
-                    // island's alert watches ramPercent, not swap.
-                    //
-                    // Short-form GiB, because it has to fit inside the ring
-                    // next to "100%": "2.1G swap" is nine characters where
-                    // "2.1 / 8.0 GiB" is thirteen. "no swap" when there is no
-                    // swap device at all, which is a fact worth stating rather
-                    // than a zero to be misread as "none in use".
-                    Gauge {
-                        title: "RAM"
-                        percent: SystemStats.ramPercent
-                        reading: SystemStats.swapTotal > 0
-                            ? `${SystemStats.swapUsed.toFixed(1)}G swap`
-                            : "no swap"
-
-                        // The one dial still coloured by its own percentage,
-                        // because memory has no temperature to be coloured by.
-                        // It takes the island's memory thresholds all the same,
-                        // so "amber" means the same thing on all three rings.
-                        //
-                        // ITS AMBER STEP MOVED FROM 66% TO 85% ON PURPOSE, and
-                        // that was asked about and kept rather than slipping
-                        // through. 66 was this component's own number from
-                        // when every ring meant "how busy"; 85 is
-                        // SystemStats.ramCoolAt, which is where the island
-                        // stops warning about memory. Do not put 66 back as a
-                        // tidy-up: it would leave this ring calling something
-                        // a problem at a point where nothing else in the shell
-                        // does, which is the second opinion the note on
-                        // `level` exists to prevent.
-                        level: SystemStats.ramPercent
-                        warmAt: SystemStats.ramCoolAt
-                        hotAt: SystemStats.ramHotAt
-                    }
-
-                    // ONLY ONCE A CARD HAS ANSWERED. On a machine with neither
-                    // vendor bound SystemStats spawns nothing and leaves every
-                    // figure at its initial zero, and a dial reading 0% and
-                    // 0 °C looks like a panel that broke rather than a machine
-                    // without the part. No dial says the second.
-                    //
-                    // `visible` and not a zero width, because a Row skips an
-                    // invisible child AND the spacing in front of it: the two
-                    // that remain simply close up and stay centred, with no
-                    // gap where this one would have been. The panel does not
-                    // change size -- the dials are centred in a card whose
-                    // width is the column's.
-                    //
-                    // It only ever turns on, and it turns on early: the GPU
-                    // reader runs whether or not this panel is open, because
-                    // the island has to be able to warn about a hot card with
-                    // the dashboard shut. By the first time anyone opens this
-                    // the dial is either already here or was never coming, so
-                    // there is nothing appearing to animate.
-                    Gauge {
-                        title: "GPU"
-                        visible: SystemStats.gpuAvailable
-                        percent: SystemStats.gpuPercent
-                        reading: `${Math.round(SystemStats.gpuTemp)} °C`
-
-                        // Its own numbers and not the CPU's, and the gap
-                        // between them is the hardware's rather than a taste:
-                        // coretemp puts this chip's throttle at 100 °C, and
-                        // Blackwell starts losing clocks around 85. Both are
-                        // read out in SystemStats.qml with the measurement
-                        // each came from.
-                        level: SystemStats.gpuTemp
-                        warmAt: SystemStats.gpuCoolAt
-                        hotAt: SystemStats.gpuHotAt
-                    }
-                }
-            }
-        }
-    }
-
-    // MINUTES, and the same choice the bar's clock already made: the two
-    // things reading this are a "HH:mm" and a date, so a per-second tick is
-    // fifty-nine wake-ups an hour that redraw the same two strings. A
-    // SystemClock only fires at the precision it is given, so the precision
-    // is the whole of the cost.
+    // MINUTES, the same choice the bar's clock made: the two things reading
+    // this are a "HH:mm" and a date, so a per-second tick is fifty-nine
+    // wake-ups an hour that redraw the same two strings.
     SystemClock {
         id: dashClock
 
         precision: SystemClock.Minutes
     }
 
-    // A skip button, and it is end-4's TrackChangeButton.
+    // ---- The wave's own cava ----
     //
-    // 24 x 24 with a glyph drawn at their `huge` size, which is 22 against a
-    // body of 16 -- so the mark very nearly fills the target and slightly
-    // overhangs it. That is theirs, and it is why these read as glyphs with a
-    // hit area rather than as buttons.
+    // A SECOND cava, not the island's. Spectrum.qml runs 14 bars for a row of
+    // bars in a capsule; this one draws a continuous wave across the panel.
+    // See cava-wave.conf, and see the note there about what the number became
+    // when the card it was chosen for turned into a panel two and a half
+    // times as wide.
+    property var visualizerPoints: []
+
+    Process {
+        id: waveCava
+
+        running: root.player?.isPlaying ?? false
+        command: ["cava", "-p", Quickshell.shellPath("cava-wave.conf")]
+
+        onRunningChanged: {
+            if (!waveCava.running)
+                root.visualizerPoints = [];
+        }
+
+        stdout: SplitParser {
+            splitMarker: "\n"
+
+            onRead: line => {
+                // "0;12;40;...;3;" -- a trailing separator, hence the filter.
+                // Raw values, NOT normalised: the visualiser divides by
+                // maxVisualizerValue itself.
+                const points = line.split(";")
+                    .map(v => parseFloat(v.trim()))
+                    .filter(v => !isNaN(v));
+                if (points.length > 0)
+                    root.visualizerPoints = points;
+            }
+        }
+    }
+
+    // ---------------- The wall itself ----------------
     //
-    // No fill at rest; the secondary container on hover, which is the only
-    // part of their RippleButton that ports (we have no ripple, and adding one
-    // for two buttons would be a component nothing else in this shell uses).
+    // A ClippingRectangle and not a plain Item with `clip: true`, for the
+    // reason the ported media card was one: `clip` on a plain Item clips to
+    // the BOUNDING BOX, so a blurred photograph would be painted straight
+    // over the rounded corners and square them off. This clips to the radius.
+    ClippingRectangle {
+        id: wall
+
+        anchors.fill: parent
+
+        // The shell's own card radius, so the sheet reads as one more surface
+        // in this shell rather than as a foreign object dropped into it.
+        radius: Theme.cardRadius - 6
+
+        // What is under the picture, and what is left when there is no
+        // picture at all -- no cover, and a wallpaper the shell cannot draw.
+        color: Theme.surfaceContainer
+
+        Behavior on color {
+            ColorAnimation { duration: Theme.recolorDuration }
+        }
+
+        // NINETY-SIX PIXELS WIDE. This is the input to a blur that erases
+        // every detail anyway, so decoding a 4K wallpaper or a 1024px cover
+        // at full size to throw all of it away is the one cost here that
+        // would be pure waste. It also does half the blurring for free: at
+        // this size the upscale to panel width is already a soft field, and
+        // the effect below only has to take the interpolation seams out.
+        // BIGGER THAN THE PANEL BY A BLUR RADIUS ON EVERY SIDE, and that is
+        // not a flourish. MultiEffect blurs whatever is in its source, and
+        // outside the source there is nothing -- so a ground that stopped
+        // exactly at the panel's edge would have sixty-four pixels of
+        // transparency dragged inwards all the way round, and the wall's own
+        // colour would show through as a vignette. Grown past the edges, the
+        // fringe lands outside the clip and never gets drawn.
+        Item {
+            id: groundStack
+
+            anchors.fill: parent
+            anchors.margins: -70
+
+            // Rendered into a texture for the effect below and never drawn
+            // directly. Both halves are needed and they are the pair
+            // components/CornerWedge.qml already uses for this: `visible`
+            // keeps it off the screen, `layer.enabled` is what gives the
+            // MultiEffect a texture of the composed subtree rather than of
+            // one item.
+            visible: false
+            layer.enabled: true
+
+            // What was on the wall before the last change. No opacity of its
+            // own: it is simply what shows through while the picture in front
+            // of it is still loading or still arriving.
+            Image {
+                anchors.fill: parent
+
+                source: root.groundBehind
+                fillMode: Image.PreserveAspectCrop
+                sourceSize.width: 96
+                asynchronous: true
+            }
+
+            Image {
+                id: groundImage
+
+                anchors.fill: parent
+
+                source: root.groundShown
+                fillMode: Image.PreserveAspectCrop
+                sourceSize.width: 96
+                asynchronous: true
+
+                // NOT READY MEANS NOT SHOWN, which is what makes this a
+                // crossfade rather than a flash: the moment the source
+                // changes this falls away and the old picture behind it is
+                // what is on screen, and the new one comes up only once there
+                // is something to come up.
+                opacity: groundImage.status === Image.Ready ? 1 : 0
+
+                Behavior on opacity {
+                    // Nothing to fade FROM on the first load -- the panel is
+                    // built when it opens, so every open would otherwise fade
+                    // its own background in from nothing.
+                    enabled: root.groundBehind !== ""
+
+                    // Slower than the shell's own animations on purpose: this
+                    // is a whole wall changing colour, and at 220ms that
+                    // still reads as a cut.
+                    NumberAnimation { duration: 400 }
+                }
+
+                onStatusChanged: {
+                    // Only the WALLPAPER has a second thing to try. A cover
+                    // that fails is handled by `offer` above, which never
+                    // hands a failed load to anything visible.
+                    if (groundImage.status === Image.Error && root.held === "" && !root.wallpaperThumbFailed)
+                        root.wallpaperThumbFailed = true;
+                }
+            }
+        }
+
+        MultiEffect {
+            anchors.fill: groundStack
+            source: groundStack
+            visible: root.groundShown !== ""
+
+            blurEnabled: true
+            blur: 1.0
+            blurMax: 64
+
+            // A touch off the top, because a heavily blurred photograph
+            // reads more saturated than the photograph does -- the blur
+            // averages away the detail that was breaking the colour up.
+            // MultiEffect's saturation is an ADJUSTMENT with 0 for no change,
+            // so this is a small reduction and not a multiplier.
+            saturation: -0.1
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: "#000000"
+            opacity: root.scrimOpacity
+
+            // The scrim moves when the album does, and a cut between two
+            // opacities is more noticeable than the picture changing under
+            // it.
+            Behavior on opacity {
+                NumberAnimation { duration: Theme.animDuration }
+            }
+        }
+
+        // ---- The spectrum, rising off the bottom of the ground ----
+        //
+        // end-4's WaveVisualizer, which is cava drawn as one continuous
+        // filled wave. It used to span the media card; here it spans the
+        // panel, behind everything, because there is no card left for it to
+        // belong to and the whole ground is the media's now.
+        //
+        // BOTTOM-ANCHORED AND NOT FILLING THE PANEL. The wave is drawn on a
+        // Canvas, which is rasterised on the CPU and uploaded, so its cost is
+        // its area -- filling a 1014 x 470 panel is seven times the card it
+        // came off. At 190 it is under three times, and a wave whose peaks
+        // could reach the clock would be fighting the type rather than
+        // sitting under it.
+        //
+        // No opacity here: it fills at 0.15 alpha inside the canvas and blurs
+        // the result, and stacking an item opacity on top would be a second
+        // dimming.
+        WaveVisualizer {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: Math.min(root.bodyHeight, 190)
+
+            live: root.player?.isPlaying ?? false
+            points: root.visualizerPoints
+            maxVisualizerValue: 1000
+            smoothing: 2
+            color: root.ink
+        }
+
+        // ================ The media block ================
+        Item {
+            id: mediaBlock
+
+            x: root.edge
+            y: root.edge
+            width: root.leftWidth
+            height: root.artSize
+
+            // ---- The sharp copy of the ground ----
+            ClippingRectangle {
+                id: artFrame
+
+                anchors.left: parent.left
+                anchors.top: parent.top
+
+                width: root.artSize
+                height: root.artSize
+                radius: 10
+
+                // A tint of the ground rather than a grey hole, so a track
+                // with no artwork still belongs to the panel it is on.
+                color: Qt.alpha(root.ink, 0.08)
+
+                Image {
+                    id: art
+
+                    anchors.fill: parent
+
+                    // `held` and not `offered`: this is the cover that has
+                    // already loaded, so it changes only when there is a new
+                    // picture to change to.
+                    source: root.held
+
+                    fillMode: Image.PreserveAspectCrop
+                    visible: status === Image.Ready
+                    sourceSize.width: 1024
+                    asynchronous: true
+                    mipmap: true
+                    smooth: true
+                }
+
+                // A blank square reads as a load that failed; a glyph reads
+                // as "this track has no cover".
+                Text {
+                    anchors.centerIn: parent
+                    visible: !art.visible
+                    text: Icons.music
+                    font.family: Theme.fontFamily
+                    font.pointSize: Math.round(root.artSize * 0.26)
+                    color: Qt.alpha(root.ink, 0.5)
+                }
+            }
+
+            // The hairline, drawn OVER the square rather than as its border:
+            // a ClippingRectangle's border would be clipped along with
+            // everything else in it, which leaves a half-width line.
+            Rectangle {
+                anchors.fill: artFrame
+
+                color: "transparent"
+                radius: artFrame.radius
+                border.width: 1
+                border.color: Qt.alpha(root.ink, 0.18)
+                antialiasing: true
+            }
+
+            // ---- Everything beside it ----
+            Item {
+                id: info
+
+                anchors.left: artFrame.right
+                anchors.leftMargin: 24
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+
+                Text {
+                    id: trackTitle
+
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.topMargin: 6
+
+                    text: root.player ? (root.player.trackTitle ?? "Untitled") : "Nothing is playing"
+                    elide: Text.ElideRight
+                    font.family: Theme.fontFamily
+                    font.pointSize: root.titleSize
+                    font.weight: Font.Bold
+                    color: root.player ? root.ink : Qt.alpha(root.ink, 0.55)
+                }
+
+                Text {
+                    id: trackArtist
+
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: trackTitle.bottom
+                    anchors.topMargin: 2
+
+                    visible: !!root.player
+
+                    // Through Track, not raw: it strips the " - Topic" suffix
+                    // YouTube's auto-generated channels carry. Shared with the
+                    // island so the same track never reads two different ways
+                    // in two places.
+                    text: Track.artist(root.player?.trackArtist ?? "")
+                    elide: Text.ElideRight
+                    font.family: Theme.fontFamily
+                    font.pointSize: root.artistSize
+                    color: Qt.alpha(root.ink, 0.7)
+                }
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.top: trackArtist.bottom
+                    anchors.topMargin: 6
+
+                    visible: !!root.player
+                    text: root.timeText
+                    font.family: Theme.fontFamily
+                    font.pointSize: root.timeSize
+                    color: Qt.alpha(root.ink, 0.55)
+                }
+
+                // ---- The seek wave and the transport, on one row ----
+                RowLayout {
+                    id: transport
+
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+
+                    visible: !!root.player
+                    spacing: 14
+
+                    // end-4's wavy slider, and the reason the panel's one
+                    // curve is a curve: the played part is a travelling sine,
+                    // the rest a flat rail. See components/WavySlider.qml.
+                    WavySlider {
+                        Layout.fillWidth: true
+
+                        value: root.fraction
+
+                        // A fraction of a length that does not exist is a
+                        // seek to nowhere: the handler below multiplies by
+                        // `length`, which without a real one is the current
+                        // position, so dragging to the middle would ask the
+                        // player to jump to half of now.
+                        seekable: root.hasLength && (root.player?.canSeek ?? false)
+
+                        // The wave travels while the track does. Paused, the
+                        // curve stays where it is rather than flattening.
+                        animateWave: root.player?.isPlaying ?? false
+
+                        highlightColor: Qt.alpha(root.ink, 0.85)
+                        trackColor: Qt.alpha(root.ink, 0.22)
+                        handleColor: root.ink
+                        dotColor: Qt.alpha(root.ink, 0.5)
+                        dotColorHighlighted: root.ink
+
+                        onMoved: at => {
+                            const p = root.player;
+                            if (!p || !root.hasLength || !p.length)
+                                return;
+                            p.position = at * p.length;
+
+                            // AND MOVE THE BAR NOW. The position is read back
+                            // twice a second, so without this the handle
+                            // snaps back and animates forward again on the
+                            // next poll -- a visible rubber-band after every
+                            // seek.
+                            root.livePosition = at * p.length;
+                        }
+
+                        // Smoothed, or the fill jumps twice a second instead
+                        // of creeping.
+                        Behavior on value {
+                            NumberAnimation { duration: 480 }
+                        }
+                    }
+
+                    TrackChangeButton {
+                        glyph: Icons.skipPrevious
+                        enabled: root.player?.canGoPrevious ?? false
+                        onActivated: root.player?.previous()
+                    }
+
+                    // 44 across and end-4's, which is the size the ported
+                    // card used: a rounded SQUARE while it is playing and a
+                    // circle when it is not, so the button reads as a state
+                    // rather than as a button. White rather than an accent,
+                    // because it is the one thing on this panel that has to
+                    // be found instantly on any ground.
+                    Rectangle {
+                        id: playPause
+
+                        readonly property bool playing: root.player?.isPlaying ?? false
+
+                        Layout.preferredWidth: 44
+                        Layout.preferredHeight: 44
+
+                        radius: playPause.playing ? 17 : width / 2
+
+                        color: playMouse.containsMouse ? root.ink : Qt.alpha(root.ink, 0.92)
+
+                        opacity: (root.player?.canTogglePlaying ?? false) ? 1 : 0.3
+
+                        Behavior on radius {
+                            NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
+                        }
+
+                        Behavior on color {
+                            ColorAnimation { duration: Theme.animDuration }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: playPause.playing ? Icons.pause : Icons.play
+                            font.family: Theme.fontFamily
+                            font.pointSize: Theme.fontSize * 22 / 16
+                            color: root.inkInverse
+                        }
+
+                        MouseArea {
+                            id: playMouse
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: root.player?.canTogglePlaying ?? false
+                            onClicked: root.player?.togglePlaying()
+                        }
+                    }
+
+                    TrackChangeButton {
+                        glyph: Icons.skipNext
+                        enabled: root.player?.canGoNext ?? false
+                        onActivated: root.player?.next()
+                    }
+                }
+            }
+        }
+
+        // ================ What this machine is doing ================
+        //
+        // THREE READINGS AND NOT THREE DIALS. The rings that stood here were
+        // 124 pixels each and were the reason the panel was as wide as it is;
+        // on a photograph they were three heavy pieces of furniture competing
+        // with the picture for the same corner. A label, a number and a short
+        // bar say the same thing in a quarter of the height, and the bar is
+        // the part that is read at a glance.
+        //
+        // WHAT DID NOT GO WITH THEM is the second line each dial carried --
+        // the temperature, or the swap. It moved up beside the label, where
+        // it costs no height at all, and it keeps the colour: the reading and
+        // the bar turn amber and then red together, on the island's own
+        // thresholds, so "hot" means the same thing everywhere in this shell.
+        Glass {
+            id: readingsGlass
+
+            x: root.edge
+            width: root.leftWidth
+            height: root.readingsHeight
+
+            anchors.bottom: actionsGlass.top
+            anchors.bottomMargin: root.gap
+
+            RowLayout {
+                id: readingsRow
+
+                anchors.fill: parent
+                anchors.margins: root.glassPad
+                spacing: 0
+
+                Reading {
+                    Layout.fillWidth: true
+
+                    title: "CPU"
+                    percent: SystemStats.cpuPercent
+                    reading: `${Math.round(SystemStats.cpuTemp)} °C`
+
+                    // Coloured by the temperature beside it, not by the
+                    // percentage: a CPU pinned at 100% is a CPU compiling,
+                    // and a red bar every time is a red bar that stops being
+                    // read. The thresholds are the island's own, so nothing
+                    // in this shell has a second opinion about "hot".
+                    level: SystemStats.cpuTemp
+                    warmAt: SystemStats.cpuCoolAt
+                    hotAt: SystemStats.cpuHotAt
+                }
+
+                // WHICH READING FOR RAM, since memory has no temperature.
+                // Used-of-total is the percentage again in GiB and moves in
+                // lockstep with the bar; swap does not. A machine at 85%
+                // memory with an empty swap is a machine using its memory,
+                // which is what it is for. The same machine with two
+                // gigabytes in swap is paging, and paging is the thing you
+                // get up and do something about.
+                Reading {
+                    Layout.fillWidth: true
+
+                    title: "RAM"
+                    percent: SystemStats.ramPercent
+                    reading: SystemStats.swapTotal > 0
+                        ? `${SystemStats.swapUsed.toFixed(1)}G swap`
+                        : "no swap"
+
+                    // The one reading still coloured by its own percentage,
+                    // on the island's memory thresholds rather than on a
+                    // number of this file's own.
+                    level: SystemStats.ramPercent
+                    warmAt: SystemStats.ramCoolAt
+                    hotAt: SystemStats.ramHotAt
+                }
+
+                // ONLY ONCE A CARD HAS ANSWERED. On a machine with neither
+                // vendor bound SystemStats spawns nothing and leaves every
+                // figure at zero, and a reading of 0% and 0 °C looks like a
+                // panel that broke rather than a machine without the part.
+                // A RowLayout skips an invisible child outright, so the two
+                // that remain simply take the width.
+                Reading {
+                    Layout.fillWidth: true
+
+                    title: "GPU"
+                    visible: SystemStats.gpuAvailable
+                    percent: SystemStats.gpuPercent
+                    reading: `${Math.round(SystemStats.gpuTemp)} °C`
+
+                    // Its own numbers and not the CPU's: coretemp puts this
+                    // chip's throttle at 100 °C and Blackwell starts losing
+                    // clocks around 85.
+                    level: SystemStats.gpuTemp
+                    warmAt: SystemStats.gpuCoolAt
+                    hotAt: SystemStats.gpuHotAt
+                }
+            }
+        }
+
+        // ================ What produces a file ================
+        Glass {
+            id: actionsGlass
+
+            x: root.edge
+            width: root.leftWidth
+            height: root.actionsHeight
+
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: root.edge
+
+            RowLayout {
+                id: actionsRow
+
+                anchors.fill: parent
+                anchors.margins: root.glassPad
+                spacing: 14
+
+                RecordControl {
+                    ink: root.ink
+                    inkMuted: Qt.alpha(root.ink, 0.65)
+                    wash: Qt.alpha(root.ink, 0.14)
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 26
+                    Layout.alignment: Qt.AlignVCenter
+
+                    color: Qt.alpha(root.ink, 0.2)
+                }
+
+                ReplayControl {
+                    ink: root.ink
+                    inkMuted: Qt.alpha(root.ink, 0.65)
+                    wash: Qt.alpha(root.ink, 0.14)
+                    inkInverse: root.inkInverse
+                }
+            }
+        }
+
+        // ================ The time ================
+        Glass {
+            id: clockGlass
+
+            x: root.edge + root.leftWidth + root.columnGap
+            y: root.edge
+            width: root.rightWidth
+            height: root.clockHeight
+
+            Column {
+                id: clockLines
+
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: root.glassPad
+                anchors.rightMargin: root.glassPad
+                anchors.verticalCenter: parent.verticalCenter
+
+                spacing: 2
+
+                Text {
+                    text: Qt.formatDateTime(dashClock.date, "HH:mm")
+                    font.family: Theme.fontFamily
+                    font.pointSize: root.clockSize
+                    font.weight: Font.Bold
+                    color: root.ink
+                }
+
+                Text {
+                    // Upper case and tracked out, which is the drawing's, and
+                    // it is doing a job: a date set in the same case as the
+                    // title across the panel would read as a second heading
+                    // rather than as a caption under the time.
+                    text: Qt.formatDate(dashClock.date, "dddd, d MMMM").toUpperCase()
+                    font.family: Theme.fontFamily
+                    font.pointSize: root.labelSize
+                    font.letterSpacing: 1.4
+                    color: Qt.alpha(root.ink, 0.65)
+                }
+            }
+        }
+
+        // ================ The month ================
+        Glass {
+            id: calendarGlass
+
+            x: clockGlass.x
+            width: root.rightWidth
+            height: root.calendarHeight
+
+            anchors.top: clockGlass.bottom
+            anchors.topMargin: root.gap
+
+            CalendarView {
+                id: month
+
+                anchors.centerIn: parent
+
+                // The one card in this panel that had to be taught a palette:
+                // every colour in it was a Theme role, and Theme is the
+                // WALLPAPER's palette, which has nothing to do with the album
+                // behind the glass.
+                ink: root.ink
+                inkMuted: Qt.alpha(root.ink, 0.6)
+                hoverWash: Qt.alpha(root.ink, 0.12)
+
+                // Today is the panel's one inverted mark, matching the play
+                // button rather than taking an accent that could land on a
+                // ground of its own colour.
+                todayFill: Qt.alpha(root.ink, 0.92)
+                todayInk: root.inkInverse
+            }
+        }
+
+        // ================ The two hairlines ================
+        //
+        // A CONTROL THAT NEEDS ONE DIMENSION GETS ONE DIMENSION. The volume
+        // was a card with a glyph, a percentage and a slider in it, and the
+        // whole card said one number. Along the bottom edge it says the same
+        // number, takes no height from anything else, and is a wider target
+        // than the slider ever was because it spans the panel.
+        //
+        // THE BRIGHTNESS IS ABOVE IT AND IS NOT IN THE DRAWING. The drawing
+        // was made against this desktop, which has no backlight; a laptop
+        // does, and dropping the control on a machine that has one would be
+        // dropping content to make a layout work. It only exists where
+        // Brightness.present is true, which is the same gate the island's
+        // acknowledgement uses.
+        BrightnessControl {
+            id: brightnessLine
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: volumeLine.top
+            anchors.bottomMargin: 2
+
+            ink: root.ink
+        }
+
+        VolumeControl {
+            id: volumeLine
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+
+            ink: root.ink
+        }
+    }
+
+    // ---------------- The pieces ----------------
+
+    // A panel floating on the ground.
+    //
+    // NOT SEPARATELY BLURRED, and that is the whole reason this design is
+    // affordable. "Frosted glass" normally means a blur of what is behind the
+    // panel, which here would be a second, third and fourth full-size blur
+    // pass over an image that has ALREADY been blurred past recognition. A
+    // white film at a tenth and a hairline at a sixth is what is left of the
+    // effect once the blur underneath is doing the work, and it is
+    // indistinguishable at this radius.
+    component Glass: Rectangle {
+        radius: root.glassRadius
+        color: Qt.alpha(root.ink, 0.1)
+        border.width: 1
+        border.color: Qt.alpha(root.ink, 0.16)
+        antialiasing: true
+    }
+
+    // One subsystem: a label and its detail on the top line, the load large
+    // underneath, and a short bar beside the number.
+    //
+    // THE BAR IS 70 LONG AND DOES NOT STRETCH. The cell does -- three of them
+    // share the strip -- but a bar that grew with the panel would be the
+    // longest graphic in the design and would out-shout the wave behind it.
+    // Seventy is the drawing's, and at that length the eye reads the FILL
+    // rather than measuring the length.
+    component Reading: Item {
+        id: cell
+
+        property string title: ""
+        property real percent: 0
+
+        // The line that says whether this is in trouble: a temperature where
+        // there is one, and the swap where there is not.
+        property string reading: ""
+
+        // WHAT THE COLOUR FOLLOWS, and it is not the load. See the note where
+        // each of the three is built.
+        property real level: cell.percent
+        property int warmAt: 85
+        property int hotAt: 90
+
+        readonly property real fraction: Math.max(0, Math.min(1, cell.percent / 100))
+
+        readonly property color lit: cell.level >= cell.hotAt ? Theme.critical
+            : cell.level >= cell.warmAt ? Theme.warning
+            : Qt.alpha(root.ink, 0.9)
+
+        implicitHeight: label.implicitHeight + 6 + value.implicitHeight
+
+        Text {
+            id: label
+
+            anchors.left: parent.left
+            anchors.top: parent.top
+
+            text: cell.title
+            font.family: Theme.fontFamily
+            font.pointSize: root.labelSize
+            font.weight: Font.Bold
+            font.letterSpacing: 1.2
+            color: Qt.alpha(root.ink, 0.55)
+        }
+
+        Text {
+            anchors.left: label.right
+            anchors.leftMargin: 10
+            anchors.baseline: label.baseline
+
+            text: cell.reading
+            font.family: Theme.fontFamily
+            font.pointSize: root.labelSize
+            color: cell.level >= cell.warmAt ? cell.lit : Qt.alpha(root.ink, 0.45)
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.animDuration }
+            }
+        }
+
+        Text {
+            id: value
+
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+
+            text: `${Math.round(cell.percent)}%`
+            font.family: Theme.fontFamily
+            font.pointSize: root.readingSize
+            font.weight: Font.Bold
+            color: root.ink
+        }
+
+        // Anchored to the number and not to a fixed offset: "100%" is wider
+        // than "7%", and a bar at a fixed x is a bar the number eventually
+        // runs into.
+        Rectangle {
+            id: bar
+
+            anchors.left: value.right
+            anchors.leftMargin: 12
+            anchors.verticalCenter: value.verticalCenter
+
+            width: 70
+            height: 5
+            radius: height / 2
+            color: Qt.alpha(root.ink, 0.2)
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+
+                width: parent.width * cell.fraction
+                radius: parent.radius
+                color: cell.lit
+
+                Behavior on width {
+                    NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
+                }
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
+            }
+        }
+    }
+
+    // A skip button, and it is still end-4's TrackChangeButton: 24 x 24 with
+    // a glyph drawn at their `huge` size, so the mark very nearly fills the
+    // target and slightly overhangs it. That is why these read as glyphs with
+    // a hit area rather than as buttons.
     component TrackChangeButton: Rectangle {
         id: button
 
         property string glyph: ""
 
-        // The card derives these from the cover art; the defaults are the
-        // shell's, so the component still works anywhere else.
-        property color colBackgroundHover: Qt.tint(Theme.secondaryContainer, Qt.alpha(Theme.textOnSecondaryContainer, 0.1))
-        property color colGlyph: Theme.textOnSecondaryContainer
-
         signal activated
+
+        // CENTRED AND NOT STRETCHED. A RowLayout gives a child the whole
+        // cross axis unless it is told otherwise, and the row this sits in is
+        // 44 tall because of the play button beside it -- so without this the
+        // 24-pixel circle comes out as a 24-by-44 vertical pill the moment
+        // the pointer touches it.
+        Layout.alignment: Qt.AlignVCenter
 
         implicitWidth: 24
         implicitHeight: 24
         radius: width / 2
 
-        // Theirs: transparentize(colSecondaryContainer, 1) at rest, which is
-        // the container colour at zero alpha, and the hover colour on hover.
-        color: buttonMouse.containsMouse ? button.colBackgroundHover : "transparent"
+        color: buttonMouse.containsMouse ? Qt.alpha(root.ink, 0.16) : "transparent"
 
         Behavior on color {
             ColorAnimation { duration: Theme.animDuration }
@@ -1337,11 +1426,7 @@ Item {
             text: button.glyph
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize * 22 / 16
-            color: button.colGlyph
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
+            color: root.ink
         }
 
         MouseArea {
@@ -1352,186 +1437,6 @@ Item {
             enabled: button.enabled
             cursorShape: Qt.PointingHandCursor
             onClicked: button.activated()
-        }
-    }
-
-    // One subsystem, drawn as a dial.
-    //
-    // WHY IT IS A RING OF TICKS AND NOT AN ARC. The obvious implementation is
-    // QtQuick.Shapes: one PathAngleArc for the track and a second for the
-    // sweep. This shell has already paid for that lesson once. The header of
-    // components/CornerWedge.qml records it with the measurement -- a Shape's
-    // curved edge averaged 0.94 intermediate pixels per row against 5.25 for a
-    // Rectangle's rounded corner, five times worse, and neither 4x
-    // multisampling nor a 4x supersampled layer texture fixed it. The house
-    // answer is to build curves out of `Rectangle { radius: width / 2 }`,
-    // which is the one case Qt's documentation says is antialiased without
-    // multisampling.
-    //
-    // A ring can be built that way -- CornerWedge punches a circle out of a
-    // square with an inverted MultiEffect mask, and UserBlock.qml rounds an
-    // avatar the same way. A PARTIAL ring cannot: a mask has no way to say
-    // "up to this angle", and the sweep is the entire point of a gauge.
-    //
-    // So it is not a curve at all. It is thirty-seven rounded rectangles
-    // standing on a circle, lit up to the value, which is what a meter has
-    // looked like since long before there were screens -- and it is exactly
-    // what components/LevelMeter.qml already does in a straight line, for the
-    // reasons written in its header. Each tick is a plain Rectangle with a
-    // radius, so each one is antialiased by the case Qt is good at, and the
-    // rotation is applied to the tick's parent rather than to the geometry.
-    //
-    // 37 ticks over 270 degrees is a step of exactly 7.5, and 270 is the
-    // sweep a car's dial uses: it leaves a gap at the bottom, which is what
-    // tells you at a glance which end is empty.
-    component Gauge: Item {
-        id: dial
-
-        property string title: ""
-        property real percent: 0
-        // The small line under the number: what says whether this is in
-        // trouble. A temperature where there is one, and see the note beside
-        // the RAM dial for what stands in where there is not.
-        property string reading: ""
-
-        // WHAT THE COLOUR FOLLOWS, and it is not the sweep.
-        //
-        // The ring used to turn amber and then red on its own percentage, at
-        // 66 and 90, and the argument for it was that a dial should be
-        // readable from across the room without the number. The argument
-        // survives; what did not is that the percentage is the wrong VALUE for
-        // two of the three. A CPU pinned at 100% is a CPU doing its job -- it
-        // is what compiling looks like, and a red ring every time is a red
-        // ring that stops being read. A CPU at 92 °C is a CPU in trouble
-        // whatever the load says, and the temperature was already printed
-        // under the ring, so the dial was showing the wrong one of the two
-        // numbers it had.
-        //
-        // THE THRESHOLDS ARE THE ISLAND'S, not new ones. SystemStats already
-        // decides when to interrupt with a heat warning, and a dashboard that
-        // called something hot at a different number would give this shell two
-        // opinions about the same word. Each dial is handed that subsystem's
-        // own pair: `hotAt` is the point the island starts shouting at, and
-        // `warmAt` is the point it will stop shouting at once it has started
-        // -- which is exactly the band where the thing is still warmer than it
-        // should be, and so is exactly the amber step this needed and had
-        // nowhere to get. Nothing here is invented; see the block of
-        // measurements at "Thermal alert" in SystemStats.qml.
-        //
-        // The defaults are the sweep itself against the memory thresholds, so
-        // a dial that says nothing about any of this still colours the way a
-        // dial should rather than coming up red on a zero.
-        property real level: dial.percent
-        property int warmAt: 85
-        property int hotAt: 90
-
-        readonly property int ticks: 37
-        readonly property real sweep: 270
-
-        // Clamped here rather than at each reader: nvidia-smi has been seen to
-        // report over 100 for a moment, and a dial with more ticks lit than it
-        // has is worse than one that saturates.
-        readonly property real fraction: Math.max(0, Math.min(1, dial.percent / 100))
-
-        // The WHOLE dial changes colour, not the top few ticks. LevelMeter
-        // lights only its last ones because a signal that is about to clip is
-        // in trouble at the top of its own scale; this is not that. The ring
-        // is a load and the colour is a verdict about something else entirely,
-        // so lighting part of the sweep in it would say that the trouble
-        // starts partway along the load, which is the thing that is not true.
-        readonly property color lit: dial.level >= dial.hotAt ? Theme.critical
-            : dial.level >= dial.warmAt ? Theme.warning
-            : Theme.primary
-
-        implicitWidth: root.gaugeSize
-        implicitHeight: root.gaugeSize
-
-        Repeater {
-            model: dial.ticks
-
-            // A full-size Item rotated about its own centre, with the tick
-            // drawn at the top of it. Rotating the PARENT and not the
-            // rectangle is what keeps the tick's own geometry axis-aligned in
-            // its item coordinates, which is the form Qt's antialiased
-            // rectangle path expects; the transform is then applied to the
-            // finished, feathered edge.
-            Item {
-                id: spoke
-
-                required property int index
-
-                // Through the id and not through `parent`: a Repeater's
-                // delegate is reparented on the way in, so a binding that
-                // reads parent.ticks evaluates once against nothing.
-                readonly property real position: (spoke.index + 1) / dial.ticks
-                readonly property bool on: dial.fraction >= spoke.position
-
-                anchors.fill: parent
-
-                // Zero is twelve o'clock, so half the sweep either side of it
-                // puts the gap at the bottom.
-                rotation: -dial.sweep / 2 + spoke.index * (dial.sweep / (dial.ticks - 1))
-
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.top: parent.top
-                    anchors.topMargin: 1
-
-                    width: 3
-                    height: 9
-                    radius: width / 2
-                    antialiasing: true
-
-                    color: spoke.on ? dial.lit : Theme.surfaceContainerHighest
-
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.animDuration }
-                    }
-                }
-            }
-        }
-
-        Column {
-            anchors.centerIn: parent
-            spacing: 0
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: dial.title
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 3
-                font.weight: Font.Bold
-                font.letterSpacing: 1.2
-                color: Theme.textOnSurfaceVariant
-            }
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: `${Math.round(dial.percent)}%`
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize + 7
-                font.weight: Font.Bold
-                color: Theme.textOnSurface
-            }
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: dial.reading
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 3
-                color: Theme.outline
-            }
-        }
-    }
-
-    // A panel inside the dashboard. One rounded surface, one step lighter than
-    // the popout it sits in, so the grid reads as cards on a sheet.
-    component Card: Rectangle {
-        radius: Theme.cardRadius - 6
-        color: Theme.surfaceContainerHigh
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
         }
     }
 }
