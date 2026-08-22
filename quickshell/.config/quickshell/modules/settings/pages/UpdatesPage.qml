@@ -67,8 +67,10 @@ SettingsPage {
     // note in SettingsPage.qml -- three pages recorded from the microphone for
     // hours because of that distinction.
     onOnScreenChanged: {
-        if (root.onScreen)
+        if (root.onScreen) {
             InstallerState.checkIfStale();
+            InstallerState.measureOriginIfStale();
+        }
     }
 
     // ---------------- Vocabulary ----------------
@@ -457,6 +459,69 @@ SettingsPage {
                 }
             }
 
+            // THE SECOND DISTANCE, AND THE REASON THIS HEADER HAS A THIRD
+            // LINE AFTER ALL. "Up to date" above means this machine matches
+            // the checkout on disk. It says nothing about whether the checkout
+            // still matches origin, and that gap is a real one somebody walked
+            // into: merge two pull requests, press Check again, watch nothing
+            // happen -- correctly, because nothing on this machine had
+            // changed. A page called Updates that can only answer one of the
+            // two questions people mean by the word has to say which one.
+            Text {
+                width: parent.width
+
+                visible: text !== ""
+                text: {
+                    switch (InstallerState.originState) {
+                    case "synced":
+                        return "Up to date with origin";
+                    case "behind":
+                        return InstallerState.behindOrigin === 1
+                            ? "1 commit behind origin"
+                            : `${InstallerState.behindOrigin} commits behind origin`;
+                    // Ahead is not a problem and is not offered a fix. It is
+                    // this repository's ordinary state between opening a pull
+                    // request and its merge, and a page that nagged about it
+                    // would be nagging about work in progress.
+                    case "ahead":
+                        return InstallerState.aheadOfOrigin === 1
+                            ? "1 commit ahead of origin — nothing to pull"
+                            : `${InstallerState.aheadOfOrigin} commits ahead of origin — nothing to pull`;
+                    case "diverged":
+                        return `${InstallerState.behindOrigin} behind and `
+                            + `${InstallerState.aheadOfOrigin} ahead — a pull will not `
+                            + "fast-forward until that is sorted out";
+                    case "detached":
+                        return "Detached HEAD — no branch here to pull into";
+                    case "no-upstream":
+                        return "This branch tracks nothing, so there is no origin to compare with";
+                    case "unreachable":
+                        return "Could not reach origin, so the distance to it is unknown";
+                    default:
+                        return "";
+                    }
+                }
+                wrapMode: Text.WordWrap
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize - 2
+                // Yellow for the two states a person can do something about,
+                // and `missing`'s yellow rather than a colour of its own:
+                // being behind origin is the same kind of news as a unit not
+                // being installed yet.
+                color: InstallerState.originState === "behind"
+                    || InstallerState.originState === "diverged"
+                    ? Theme.warning : Theme.textOnSurfaceVariant
+                opacity: InstallerState.measuring ? 0.45 : 1
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
+
+                Behavior on opacity {
+                    NumberAnimation { duration: Theme.animDuration }
+                }
+            }
+
             Text {
                 width: parent.width
 
@@ -480,7 +545,8 @@ SettingsPage {
         Rectangle {
             id: checkButton
 
-            readonly property bool armed: InstallerState.repoKnown && !InstallerState.checking
+            readonly property bool armed: InstallerState.repoKnown
+                && !InstallerState.checking && !InstallerState.measuring
 
             anchors.right: parent.right
             anchors.rightMargin: Theme.groupPadding * 1.5
@@ -527,7 +593,7 @@ SettingsPage {
 
                     // "Check again" is a lie the first time, and the first
                     // time is the whole of every session until this runs.
-                    text: InstallerState.checking ? "Checking…"
+                    text: InstallerState.checking || InstallerState.measuring ? "Checking…"
                         : InstallerState.ready ? "Check again"
                         : "Check now"
                     font.family: Theme.fontFamily
@@ -548,7 +614,16 @@ SettingsPage {
                 enabled: checkButton.armed
                 hoverEnabled: checkButton.armed
                 cursorShape: Qt.PointingHandCursor
-                onClicked: InstallerState.check()
+
+                // ONE PRESS ANSWERS BOTH QUESTIONS. Somebody who merges
+                // something and comes here to press this means "is there
+                // anything new", not "re-run one of the two commands that
+                // could tell me". Leaving the fetch on a button of its own
+                // would be handing them the distinction as homework.
+                onClicked: {
+                    InstallerState.check();
+                    InstallerState.measureOrigin();
+                }
             }
         }
     }
@@ -629,6 +704,57 @@ SettingsPage {
         // can carry, and it is not this page's to make either: it falls out
         // of the privilege split in InstallerState, whose own note lists the
         // six units and the grep that found them.
+        // THE ONE SOMEBODY ASKED FOR. The complaint that started all of this
+        // was having to reproduce the whole sequence by hand every time an
+        // update landed -- read the README, remember the pull, remember which
+        // mode of the installer was the right one. This is that sequence,
+        // behind one press.
+        //
+        // IT IS FIRST because it is the outer of the two loops: taking what
+        // origin has can change what the units below are even measured
+        // against, so a person working down this section in order does the
+        // thing that moves the checkout before the things that move the
+        // machine. The whole reasoning for why it must run in a terminal, why
+        // it is `update --pull`, and what waits for what afterwards is in
+        // InstallerState beside the script it builds.
+        ActionRow {
+            glyph: Icons.terminal
+            label: "Take what origin has"
+            description: {
+                switch (InstallerState.originState) {
+                case "synced":
+                    return "Nothing to pull — this checkout matches origin.";
+                case "ahead":
+                    return "Nothing to pull — this checkout is ahead of origin.";
+                case "detached":
+                    return "There is no branch checked out to pull into.";
+                case "no-upstream":
+                    return "This branch tracks no remote branch.";
+                default:
+                    // The command, as it will appear in that terminal, for the
+                    // same reason the two rows below print theirs: somebody
+                    // who would rather type it should not have to guess what
+                    // this window is about to run on their behalf.
+                    return "./install.sh update --pull, then a reload of the "
+                        + "compositor and a restart of this shell.";
+                }
+            }
+
+            actionText: "Open a terminal"
+            actionGlyph: Icons.terminal
+            // Offered in every state except the two where there is provably
+            // nothing to fetch. `diverged` is deliberately still offered: the
+            // pull will refuse, and it will say why in a terminal that stays
+            // open, which is a better answer than a button greyed out for
+            // reasons the page would then have to explain.
+            actionEnabled: InstallerState.repoKnown
+                && InstallerState.originState !== "synced"
+                && InstallerState.originState !== "ahead"
+                && InstallerState.originState !== "detached"
+                && InstallerState.originState !== "no-upstream"
+            onTriggered: InstallerState.takeUpdate()
+        }
+
         ActionRow {
             glyph: Icons.update
             label: "Catch up on what needs no password"
