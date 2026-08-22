@@ -342,20 +342,37 @@ SettingsPage {
             ColorAnimation { duration: Theme.recolorDuration }
         }
 
-        // A band of the verdict's own colour down the leading edge, clipped
-        // to the card's rounded corner by a second rectangle over its inner
-        // side. It is the only thing on the page that is coloured at full
-        // strength, and it is what makes this read as a header at a glance
-        // from across the room rather than as one more card.
+        // A bar of the verdict's own colour on the leading edge. It is the
+        // only thing on the page coloured at full strength, and it is what
+        // makes this read as a header at a glance rather than as one more
+        // card.
+        //
+        // INSET BY THE CARD'S RADIUS, TOP AND BOTTOM, and that is the whole
+        // trick. The first version ran the full height of the card and tried
+        // to round its own outer corners to match. It does not work and the
+        // pixels say why: the card's corner radius is 24, so at the very top
+        // the card's own background has not started yet at the x this bar
+        // occupies, and the bar stood outside the curve with a wedge of page
+        // background showing through beside it -- up to twenty pixels of
+        // notch at each end. Rounding the bar harder cannot fix that; a 4 px
+        // radius on an 88 px bar is invisible, and the notch is between the
+        // bar and the card, not on the bar itself.
+        //
+        // Ending it where the card's edge goes straight sidesteps the corner
+        // entirely, needs no clipping, and survives the card growing when a
+        // second line appears. Rounded at both ends because at 4 px wide it
+        // is read as a marker rather than as a rule.
         Rectangle {
             id: toneBand
 
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
+            anchors.topMargin: verdictCard.radius
+            anchors.bottomMargin: verdictCard.radius
 
             width: 4
-            radius: verdictCard.radius
+            radius: width / 2
             color: verdictCard.tone
             opacity: InstallerState.checking ? 0.35 : 1
 
@@ -365,15 +382,6 @@ SettingsPage {
 
             Behavior on opacity {
                 NumberAnimation { duration: Theme.animDuration }
-            }
-
-            Rectangle {
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-
-                width: parent.width / 2
-                color: parent.color
             }
         }
 
@@ -710,9 +718,18 @@ SettingsPage {
         // machine. The whole reasoning for why it must run in a terminal, why
         // it is `update --pull`, and what waits for what afterwards is in
         // InstallerState beside the script it builds.
+        // ONE GRAMMAR FOR ALL THREE ROWS, and it is load-bearing now that the
+        // paragraph that used to explain them is gone. Every label is
+        // "<verb> <what>, <where>", and the where is never left to the
+        // description: with the prose cut, a reader who only scans the bold
+        // line has to be able to tell which of these runs in this window and
+        // which opens a terminal, because that is the one difference between
+        // them that matters before pressing anything. The two Apply rows are
+        // deliberately identical up to "no": they are the same act on the two
+        // halves of the same list.
         ActionRow {
             glyph: Icons.terminal
-            label: "Take what origin has"
+            label: "Take what origin has, in a terminal"
             description: {
                 switch (InstallerState.originState) {
                 case "synced":
@@ -733,7 +750,11 @@ SettingsPage {
                 }
             }
 
-            actionText: "Open a terminal"
+            // The caption says what the run does rather than repeating the
+            // label's "in a terminal". Two buttons both captioned "Open a
+            // terminal", one live and one greyed, was the page's own way of
+            // making its only two hand-offs look interchangeable.
+            actionText: "Pull and update"
             actionGlyph: Icons.terminal
             // Offered in every state except the two where there is provably
             // nothing to fetch. `diverged` is deliberately still offered: the
@@ -750,7 +771,7 @@ SettingsPage {
 
         ActionRow {
             glyph: Icons.update
-            label: "Catch up on what needs no password"
+            label: "Apply what needs no password, in this window"
             description: InstallerState.runnableNow.length === 0
                 ? "Nothing outstanding on this side."
                 : `./install.sh apply ${InstallerState.runnableNow.join(" ")}`
@@ -762,7 +783,7 @@ SettingsPage {
 
         ActionRow {
             glyph: Icons.terminal
-            label: "Hand what needs a password to a terminal"
+            label: "Apply what needs a password, in a terminal"
             description: InstallerState.runnableInTerminal.length === 0
                 ? "Nothing outstanding needs a password."
                 : `./install.sh apply ${InstallerState.runnableInTerminal.join(" ")}`
