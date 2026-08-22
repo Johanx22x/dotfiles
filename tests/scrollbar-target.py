@@ -75,6 +75,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 # Before QGuiApplication exists and before PyQt6.QtGui is imported -- the
@@ -94,6 +95,58 @@ from PyQt6.QtQuick import QQuickView
 TESTS = Path(__file__).resolve().parent
 SCENE = TESTS / "scrollbar-target.qml"
 THEME = TESTS / "theme-stub.qml"
+
+
+# ---------------------------------------------------------------------------
+# The `qs` module
+# ---------------------------------------------------------------------------
+# components/ScrollBar.qml opens `import QtQuick` / `import qs`, and `qs` is a
+# module Quickshell synthesizes at runtime from the config root. A plain
+# QQmlEngine has never heard of it, so without this the shipping file the bench
+# is here to measure does not load at all -- "module qs is not installed",
+# then "Type ScrollBar unavailable", then a scene that is Status.Error and a
+# bench that asserts nothing. That is what it did between the day the tree
+# moved to module imports and the day this was written.
+#
+# A SANDBOX MODULE AND NOT THE REAL TREE, which is the same decision
+# theme-stub.qml already made and for the same reason: the root module's
+# Theme.qml opens `import Quickshell`, reads the generated palette through a
+# FileView, and pulls in a compositor behind it. What ScrollBar actually asks
+# `qs` for is five design tokens off Theme -- primary, outline, outlineVariant
+# and the two durations -- so the module built here holds exactly one type,
+# and it is the stub whose numbers this bench already trusted. The day
+# ScrollBar.qml reaches for a second one -- Config, Icons -- it has to be added
+# here as well: an unknown name inside an import that DOES resolve is a broken
+# binding at runtime and not a refused load, which is quieter than what this
+# comment is here to prevent.
+#
+# AS A SINGLETON, because that is what the shell registers and therefore what
+# the shipping file expects: `Theme.primary` inside a file that imports qs is a
+# singleton lookup and not the context property below. The context property
+# stays for scrollbar-target.qml itself, which is the bench's own scene and
+# imports nothing.
+#
+# Built into a temporary directory rather than committed, for the reason
+# tests/qml-lint.sh sets out at length next to the same trick: Quickshell
+# disables its own qmldir synthesis for any directory that already has one on
+# disk, so a qmldir in the repository would change what the shell does in order
+# to tell a test something.
+#
+# ONE DIRECTORY FOR THE WHOLE RUN, held open by a name at module scope. Each
+# case builds a fresh engine and every one of them is handed this same path;
+# a per-case directory would be written and swept fifteen times over to say
+# the same thing.
+_imports = tempfile.TemporaryDirectory(prefix="scrollbar-target-qs-")
+IMPORTS = Path(_imports.name)
+
+_qs = IMPORTS / "qs"
+_qs.mkdir()
+(_qs / "Theme.qml").write_text(
+    "pragma Singleton\n" + THEME.read_text(encoding="utf-8"), encoding="utf-8"
+)
+(_qs / "qmldir").write_text(
+    "module qs\nsingleton Theme 1.0 Theme.qml\n", encoding="utf-8"
+)
 
 failed = 0
 
@@ -146,6 +199,11 @@ def build(case: dict, empty_root: Path) -> QQuickView:
     _keep.append(interceptor)
     engine.addUrlInterceptor(interceptor)
 
+    # A fresh engine per case means a fresh set of import paths per case, so
+    # this is added here rather than once at the top. The directory it points
+    # at is built once, above.
+    engine.addImportPath(str(IMPORTS))
+
     component = QQmlComponent(engine, QUrl.fromLocalFile(str(THEME)))
     theme = component.create()
     _keep.append(theme)
@@ -191,7 +249,7 @@ def bands(case: dict) -> dict[str, tuple[int, int] | None]:
     scrolling to it, and a press near the top would land on a contentY of zero
     -- which is how "the bar did nothing" is spelled.
     """
-    with __import__("tempfile").TemporaryDirectory() as empty:
+    with tempfile.TemporaryDirectory() as empty:
         view = build(case, Path(empty))
         hits: dict[str, list[int]] = {}
         for x in range(case["sceneWidth"]):
@@ -390,7 +448,6 @@ for inward, outward in ((3, 11), (7, 7), (0, 30)):
     case = {**BESIDE, "name": "thumb", "listLeft": 10, "listRight": 200,
             "barX": 203, "sceneWidth": 820, "tuned": True, "inward": inward,
             "outward": outward}
-    import tempfile
     with tempfile.TemporaryDirectory() as empty:
         view = build(case, Path(empty))
         press(view, 204.5, 190.0)
@@ -430,7 +487,6 @@ ROW = "#804060"
 case = {**LIST, "name": "opaque row", "rowsClickable": True,
         "rowColour": ROW, "listLeft": 0, "listRight": 600, "sceneWidth": 700}
 
-import tempfile
 with tempfile.TemporaryDirectory() as empty:
     view = build(case, Path(empty))
     app.processEvents()
