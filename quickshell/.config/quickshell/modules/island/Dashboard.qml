@@ -187,6 +187,17 @@ Item {
     // The floor is what the media block needs: the art square, the seek wave
     // and the transport. Nothing above the actions row asks for more than
     // this, so nothing above it appears in the sum.
+    //
+    // DERIVING A WIDTH FROM LIVE CONTENT IS ONLY SAFE WHILE THAT CONTENT
+    // RESERVES ITS OWN WIDEST CASE, and this is the trap to re-read before
+    // adding anything to that row. Toggling the instant replay used to resize
+    // the whole dashboard: the save button's label runs "Save last 30s",
+    // "Replay elsewhere" or "Replay off" depending on the state, the button
+    // reported whichever was showing, and the panel's edge followed it.
+    // Every label in that row measures its widest form now -- see the
+    // TextMetrics at the top of ReplayControl.qml and the Math.max in
+    // RecordControl.qml. A new control with a label that changes with state
+    // has to do the same or it will move the panel again.
     readonly property int leftWidth: Math.max(460, actionsRow.implicitWidth + root.glassPad * 2)
 
     // The right column is the month, which is a fixed seven columns and
