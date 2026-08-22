@@ -21,7 +21,6 @@
 // the same frame the mode changes instead of a frame later.
 
 import Quickshell
-import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
 import QtQuick
 import "root:/"
@@ -84,13 +83,10 @@ Item {
 
     // ---------------- Media ----------------
     // Prefer whatever is actually playing; fall back to the first player that
-    // exists, so a paused track still holds the island.
-    readonly property var player: {
-        const players = Mpris.players.values;
-        if (players.length === 0)
-            return null;
-        return players.find(p => p.isPlaying) ?? players[0];
-    }
+    // exists, so a paused track still holds the island. The rule itself lives
+    // in Track.qml, because this file and Dashboard.qml each had a copy of it
+    // and neither knew about the mirror playerctld puts on the bus.
+    readonly property var player: Track.active
 
     readonly property bool hasPlayer: root.player !== null
 

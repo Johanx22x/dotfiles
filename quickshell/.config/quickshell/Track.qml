@@ -33,6 +33,59 @@ Singleton {
         return raw.replace(/\s*-\s*Topic$/, "");
     }
 
+    // ---- WHICH PLAYER IS "THE" PLAYER ----
+    //
+    // Decided here because it was decided in three places -- the island, the
+    // dashboard and the dashboard's own position poll -- with the same line
+    // copied into each: `players.find(p => p.isPlaying) ?? players[0]`. That
+    // line has no opinion about proxies, and there is one on this bus.
+    //
+    // playerctld IS A MIRROR, NOT A PLAYER. It is the daemon behind the
+    // `playerctl` the media keys call (see hyprland.lua and config.kdl), it
+    // is D-Bus activated, and it republishes whatever the last active player
+    // said under a bus name of its own. Measured on the running session with
+    // one browser playing:
+    //
+    //   org.mpris.MediaPlayer2.firefox.instance_1_45   Identity "Mozilla zen"
+    //   org.mpris.MediaPlayer2.playerctld              Identity "Mozilla zen"
+    //
+    // -- same identity, same mpris:trackid, same metadata. Quickshell's
+    // MprisWatcher registers every name starting with org.mpris.MediaPlayer2
+    // and filters none of them (src/services/mpris/watcher.cpp), so
+    // `Mpris.players.values` holds the SAME player twice and `find` picks
+    // whichever comes first.
+    //
+    // WHY THAT IS NOT MERELY UNTIDY. Quickshell does not read Position off
+    // the bus when asked for it; `MprisPlayer::position()` returns the last
+    // value the player sent plus the wall-clock time since it arrived
+    // (src/services/mpris/player.cpp). The mirror and the original are two
+    // objects with two independent anchors, refreshed at two different
+    // moments, so the elapsed time you get depends on which of the two the
+    // `find` happened to land on -- and it can land differently between one
+    // evaluation and the next.
+    //
+    // MATCHED ON THE BUS NAME AND NOT ON THE IDENTITY, because the identity
+    // is the thing it copies.
+    readonly property string proxyBus: "org.mpris.MediaPlayer2.playerctld"
+
+    // The mirror is dropped only while there is something to mirror. With
+    // nothing else on the bus it is the only account of what was playing, and
+    // a shell that showed nothing there would be hiding a player that exists.
+    readonly property var players: {
+        const all = Mpris.players.values;
+        const real = all.filter(p => (p.dbusName ?? "") !== root.proxyBus);
+        return real.length > 0 ? real : all;
+    }
+
+    // Prefer what is actually playing; fall back to the first player that
+    // exists, so a paused track still holds the island and fills the panel.
+    readonly property var active: {
+        const list = root.players;
+        if (list.length === 0)
+            return null;
+        return list.find(p => p.isPlaying) ?? list[0];
+    }
+
     // ---- The cover art, remembered for longer than anyone is looking ----
     //
     // ZEN RETRACTS THE ARTWORK AND LEAVES IT RETRACTED. It publishes
