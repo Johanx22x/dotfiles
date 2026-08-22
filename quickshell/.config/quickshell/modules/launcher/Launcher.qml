@@ -483,17 +483,34 @@ PanelWindow {
                 // the bar is what says the answer is four hundred long and
                 // typing is the way through it.
                 //
-                // Placed and not anchored, like every other one of these: a
-                // child of a Flickable rides its contents, so `y` gives back
-                // exactly what the scroll took. Hard against the right edge,
-                // where the third column's cell already keeps a groupPadding
-                // clear before its label starts.
+                // ANCHORED TO THE GRID, and it is already the grid's own child
+                // even though it is declared in here. A GridView is not a
+                // Flickable in this one respect: QQuickFlickable's default
+                // property is `flickableData`, which puts declared children on
+                // the contentItem that scrolls, but QQuickListView and
+                // QQuickGridView override it back to plain `data`, so a child
+                // declared inside one of those belongs to the view item, which
+                // does not move. (Checked both ways: `bar.parent === grid` is
+                // true at runtime, and `defaultProperty` in QtQuick's
+                // plugins.qmltypes says `data` for both views and
+                // `flickableData` for Flickable.)
+                //
+                // This used to say `y: grid.contentY`, borrowed from
+                // components/ScrollList.qml where it is right because that one
+                // really is a plain Flickable and its bar really does ride the
+                // contents. Here there was nothing to give back, so the line
+                // was not a cancellation but a shove: the bar slid down the
+                // panel by exactly the scroll and was clipped away before the
+                // first row had finished passing.
+                //
+                // Hard against the right edge, where the third column's cell
+                // already keeps a groupPadding clear before its label starts.
                 ScrollBar {
                     view: grid
 
-                    x: grid.width - width
-                    y: grid.contentY
-                    height: grid.height
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
                 }
 
                 delegate: Item {

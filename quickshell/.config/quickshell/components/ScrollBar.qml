@@ -19,7 +19,7 @@
 //
 // WHERE IT GOES IS THE CALL SITE'S CHOICE, because what is beside a scrolling
 // view differs and the bar must not cover anything that carries information.
-// Two placements are in use, and both are anchored from outside this file:
+// Two placements are in use:
 //
 //   IN A MARGIN THAT IS ALREADY THERE -- the settings window's page pane and
 //   its navigation rail both sit inside a padding that is empty by
@@ -33,6 +33,24 @@
 //   Flickable's own width, not to contentWidth, so narrowing the content means
 //   editing every call site -- and it would take the strip back the moment the
 //   last row was removed, moving every remaining row sideways.
+//
+// WHAT IT MAY ANCHOR TO DEPENDS ON THE VIEW'S TYPE, and this is not a detail:
+// get it wrong and the bar travels with the scroll it is supposed to be
+// reporting.
+//
+// A plain Flickable's default property is `flickableData`, so a bar declared
+// inside one becomes a child of the contentItem -- the item that moves. Such a
+// call site either anchors from outside the view entirely, or stays inside and
+// gives the scroll back with `y: view.contentY`. ScrollList.qml is a Flickable
+// and does the second.
+//
+// ListView and GridView override that default property back to plain `data`,
+// so a bar declared inside one of THOSE is a child of the view item, which
+// does not move: it can anchor to `parent` and be done. Copying the
+// Flickable's `y: view.contentY` into one of them cancels nothing, because
+// nothing moved it -- it shoves the bar down by the whole scroll until the
+// view's own clip eats it. Check which kind of view you are in before copying
+// a placement from another call site.
 import QtQuick
 import "root:/"
 
