@@ -148,12 +148,33 @@ build() {
 # press rerun, which is precisely how a real failure eventually gets rerun into
 # green.
 #
-# TO PUT IT BACK, drop the `--lib`. If you want the coverage without the flake,
-# the thing to try first is `--test-threads=1` on the integration binary: the
-# whole suite finishes in nine seconds with everything running at once, so the
-# contention is self-inflicted and serialising it is cheap. That is a
-# hypothesis and not a measurement, which is why it is written here as the next
-# experiment rather than shipped as the fix.
+# `--test-threads=1` IS NOT THE WAY BACK, AND THAT IS NOW MEASURED RATHER THAN
+# GUESSED AT. Twenty-eight tests each standing up an Xwayland, all at once, on
+# a runner with two cores is the obvious thing to blame, and this comment used
+# to say so and call it the next experiment. It has been run: the integration
+# binary pinned to two cores with `taskset -c 0,1`, fifteen times serially
+# against ten in parallel.
+#
+#   --test-threads=1     11 of 15 clean    4 bad: 2 assertions, and 2 that hung
+#                                          until a 300-second timeout killed
+#                                          them
+#   default (parallel)    1 of 10 clean    9 bad
+#
+# Serialising cuts the failure rate from ninety per cent to twenty-seven and
+# does not fix it, because what these tests fail on are ABSOLUTE DEADLINES --
+# "did not receive any events" is a wait that expired -- and a deadline does
+# not care how much of the machine it had to itself. Worth noting which serial
+# runs were the bad ones, too: the first few of a cold sequence, with the last
+# ten clean in a row once the caches were warm. Every CI job is a cold
+# sequence.
+#
+# That run also failed client_init_move, incr_copy_from_wayland and
+# input_focus, none of which has ever failed in CI. Ten of the twenty-eight
+# tests have now been seen to fail somewhere, which is the same conclusion the
+# CI scatter came to from the other side: the flaky unit is the suite.
+#
+# TO PUT IT BACK, drop the `--lib` -- and expect the ten per cent back with it
+# until upstream's waits stop being fixed deadlines.
 #
 # XDG_RUNTIME_DIR went with the integration suite. Nothing in src/ or tests/
 # reads it -- it was there so the Wayland server those tests stand up had a
