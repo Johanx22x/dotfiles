@@ -87,6 +87,59 @@ MPVPAPER_FLAGS="${MPVPAPER_FLAGS:--p -a FULL}"
 # Every monitor. Named outputs go here if the two ever want different videos.
 MPVPAPER_OUTPUT="${MPVPAPER_OUTPUT:-ALL}"
 
+# ---- Playback copy: the video at the size the screens can show ----
+# A 4K wallpaper on this desk is 8.3 megapixels decoded every frame to draw at
+# most 6.5 of them. NVDEC hands back frames the size the file says whatever the
+# screen is, so the pixels nobody ever sees are paid for in decoder time, in
+# every copy that frame makes afterwards and in VRAM. Measured on 2026-08-22
+# against the two monitors here: 9% decoder, 73 W and 3.45 GB from a 3840x2160
+# source, against 6%, 67 W and 3.30 GB from the same clip cut to fit.
+#
+# WHAT THE SCREENS NEED IS NOT WHAT THEY MEASURE. panscan=1.0 above crops the
+# video to fill each output instead of letterboxing it, so an output asks for
+# the scale that covers its LONGER side. The portrait monitor here draws into
+# 1080x1920 and still wants 1920 of the source's 2160 lines, because what it
+# shows is a tall slice through the middle of a 16:9 frame. Sizing to "the
+# largest monitor is 2560x1440" would have taken a quarter of the height away
+# from that one and upscaled it back. The demand is read per output, widths and
+# heights separately, and the largest of each wins.
+#
+# NEVER UPWARDS, WHICH IS THE WHOLE RULE. A file already at or below what the
+# screens ask for is played exactly as it is: there is no quality hiding in
+# pixels the source never had, and a copy could only be worse than the original.
+# So a 4K clip stays 4K on the day a 4K monitor arrives and shrinks again if it
+# leaves -- the answer is recomputed from the monitors every time a wallpaper is
+# applied, and never written down anywhere that could go stale.
+#
+# ONE THING ELSE MOVES WITH IT: `still` screenshots whatever mpv has open, so a
+# frozen frame is now the size of the copy rather than of the source. That is
+# still thousands of pixels across and the resolution `still` was fighting for
+# in section 4b was 1280.
+PLAYBACK_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-playback"
+
+# x264 and not the card's encoder. This runs once per wallpaper, in the
+# background, at nice 19, and what it makes is decoded for as long as the
+# machine is on -- so the encoder that is slower and smaller at equal quality is
+# the right one, and NVENC's speed buys nothing worth the bitrate. CRF 20 is
+# visually transparent on the footage that ends up as a wallpaper.
+PLAYBACK_CRF="${WALLPAPER_PLAYBACK_CRF:-20}"
+PLAYBACK_PRESET="${WALLPAPER_PLAYBACK_PRESET:-medium}"
+
+# A frame rate ceiling, in frames per second, for someone who would rather spend
+# less than the monitors allow. Empty means the monitors decide, which on a
+# 165 Hz desk means nothing is ever slowed down: the automatic half only fires
+# on a screen that genuinely cannot show every frame, a 120 fps clip on a 60 Hz
+# laptop. Halving a 60 fps wallpaper is a taste decision about how the water
+# moves and not a correctness one, so it is not made here.
+PLAYBACK_FPS="${WALLPAPER_PLAYBACK_FPS:-}"
+
+# How much work a copy has to save before it is worth making, as a fraction of
+# the pixels per second the decoder would otherwise chew through. Under this a
+# transcode spends a minute of CPU and tens of megabytes to save nothing anyone
+# could measure. A tenth, because the saving is permanent and the cost is paid
+# once.
+PLAYBACK_MIN_GAIN="${WALLPAPER_PLAYBACK_MIN_GAIN:-0.10}"
+
 # ---- What counts as a wallpaper ----
 # One list, used by the collection scan, by the folder count and by the
 # backend dispatch. It was two copies of five extensions inside two `find`
@@ -454,10 +507,297 @@ preview_for() {
     printf '%s\n' "$out"
 }
 
+# ---------------------------------------------------------------
+# The playback copy
+# ---------------------------------------------------------------
+
+# The largest frame the monitors can show and the fastest they can show it,
+# printed as "WIDTH HEIGHT FPS". Nothing at all, and a non-zero return, when the
+# question cannot be asked -- and the caller then leaves the video alone,
+# because a wallpaper played at full size is merely wasteful while one shrunk
+# against a guess is wrong.
+#
+# desktop-monitors is asked rather than niri or hyprctl: it already normalises
+# both into one record shape, and teaching this file a second compositor query
+# would make three copies of that knowledge in the repository.
+#
+# A QUARTER TURN SWAPS THE SIDES. A rotated output reports the mode it drives --
+# 1920x1080 -- while the surface a wallpaper draws into is 1080x1920. The odd
+# transforms are the quarter turns. `scale` is deliberately not read: a
+# fractionally scaled output still hands out a buffer the full size of its mode,
+# which is the number wanted here.
+display_demand() {
+    command -v desktop-monitors >/dev/null || return 1
+    command -v jq >/dev/null || return 1
+
+    desktop-monitors list --json 2>/dev/null | jq -er '
+        map(select((.width // 0) > 0 and (.height // 0) > 0))
+        | select(length > 0)
+        | [ (map(if ((.transform // 0) % 2) == 1 then .height else .width  end) | max),
+            (map(if ((.transform // 0) % 2) == 1 then .width  else .height end) | max),
+            (map(.refreshRate // 0) | max) ]
+        | "\(.[0]) \(.[1]) \(.[2])"
+    ' 2>/dev/null
+}
+
+# The size and rate a copy of $1 should be built at, printed as "WIDTH HEIGHT
+# FPS". Nothing, and a non-zero return, when the file already fits inside what
+# the screens can show or when the difference is too small to be worth encoding.
+playback_target() {
+    local src="$1" demand probe
+    command -v ffprobe >/dev/null || return 1
+
+    demand="$(display_demand)" || return 1
+    [[ -n "$demand" ]] || return 1
+
+    # "width height frame_rate", the last as ffprobe's exact fraction: 60/1, or
+    # 30000/1001 for anything that came off American television. avg_frame_rate
+    # and not r_frame_rate, which is the smallest tick the container can express
+    # and on a variable rate video is a number far above anything displayed.
+    probe="$(ffprobe -v error -select_streams v:0 \
+        -show_entries stream=width,height,avg_frame_rate \
+        -of default=nw=1:nk=1 "$src" 2>/dev/null | tr '\n' ' ')" || return 1
+
+    awk -v probe="$probe" -v demand="$demand" \
+        -v forced="$PLAYBACK_FPS" -v minGain="$PLAYBACK_MIN_GAIN" '
+    BEGIN {
+        split(probe, p, /[ \t]+/)
+        split(demand, d, /[ \t]+/)
+        sw = p[1] + 0; sh = p[2] + 0
+        n = split(p[3], f, "/")
+        sfps = (n == 2 && f[2] + 0 > 0) ? (f[1] + 0) / (f[2] + 0) : f[1] + 0
+        dw = d[1] + 0; dh = d[2] + 0; dfps = d[3] + 0
+
+        if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0 || sfps <= 0) exit 1
+
+        # The scale covering the longer side of the hungriest output, and never
+        # more of the source than the source already has.
+        s = dw / sw
+        if (dh / sh > s) s = dh / sh
+        if (s > 1) s = 1
+
+        # Even sides: yuv420p subsamples the chroma by two, so an odd one is an
+        # encoder error rather than a rounded picture.
+        tw = int(sw * s / 2 + 0.5) * 2
+        th = int(sh * s / 2 + 0.5) * 2
+        if (tw < 2) tw = 2
+        if (th < 2) th = 2
+
+        # Whatever was asked for by hand, else the fastest the screens refresh,
+        # and in neither case above the source.
+        tfps = (forced + 0 > 0) ? forced + 0 : dfps
+        if (tfps <= 0 || tfps > sfps) tfps = sfps
+
+        # Pixels per second, which is what the decoder actually spends.
+        if (1 - (tw * th * tfps) / (sw * sh * sfps) < minGain + 0) exit 1
+
+        printf "%d %d %.6g\n", tw, th, tfps
+    }' || return 1
+}
+
+# Where the copy of $1 cut for $2 x $3 at $4 frames per second lives.
+#
+# THE SIZE IS IN THE NAME, and that is what makes plugging a monitor in safe.
+# The other three caches key on the source alone, because a thumbnail is a
+# thumbnail whatever is on the desk; this one is only valid for the screens it
+# was cut for, and a name that could not tell two of them apart would go on
+# serving a copy too small for the new monitor for good.
+playback_path() {
+    local flat="${1#/}"
+    printf '%s/%s.%sx%s@%s.mp4' "$PLAYBACK_CACHE" "${flat//\//_}" "$2" "$3" "$4"
+}
+
+# $1 encoded into $2 at $3 x $4, $5 frames per second.
+playback_build() {
+    local src="$1" out="$2" w="$3" h="$4" fps="$5" part
+
+    command -v ffmpeg >/dev/null || return 1
+    mkdir -p "$PLAYBACK_CACHE" || return 1
+
+    # Written beside itself and moved into place, for the reason thumb_for
+    # gives: a run killed halfway must leave the previous copy standing rather
+    # than a truncated file every later run would accept as finished.
+    #
+    # The pid is in the temporary name because two of these can be in flight at
+    # once -- the rotation timer and a keybind, a second apart, on the same
+    # wallpaper. A fixed name would have them writing over each other and both
+    # producing something broken; with this the loser merely wastes its work,
+    # since the rename is atomic and the two files are identical anyway.
+    part="$out.part.$$.mp4"
+    rm -f -- "$part"
+
+    # lanczos, because the entire claim being made here is that nobody can tell.
+    # -an for the reason no-audio is in MPV_OPTIONS. +faststart so mpv does not
+    # have to reach the end of the file before it can show the first frame,
+    # which on a wallpaper is the difference between appearing and appearing
+    # late.
+    nice -n 19 ffmpeg -y -loglevel error -i "$src" \
+        -vf "fps=$fps,scale=$w:$h:flags=lanczos" \
+        -c:v libx264 -preset "$PLAYBACK_PRESET" -crf "$PLAYBACK_CRF" \
+        -pix_fmt yuv420p -an -sn -movflags +faststart "$part" >/dev/null 2>&1
+
+    if [[ ! -s "$part" ]]; then
+        rm -f -- "$part"
+        return 1
+    fi
+
+    mv -f -- "$part" "$out"
+}
+
+# The cached copy of $1 that covers a frame of $2 x $3 and is no bigger than it
+# has to be, or nothing.
+#
+# WHY A SECOND BEST IS WORTH LOOKING FOR. The demand changes the moment a
+# monitor is plugged in, unplugged or rotated, and the copy on disk was cut for
+# the old desk. If it still covers the new demand it beats the original in every
+# way that matters here, and falling back to the 4K source while a perfectly
+# good smaller copy sits in the cache would be a regression caused by improving
+# the answer. If it does not cover it, it is unusable and the source is the only
+# honest fallback.
+playback_nearest() {
+    local src="$1" want_w="$2" want_h="$3" flat cached dims w h
+    local best="" best_area=0 area
+
+    flat="${src#/}"
+    flat="${flat//\//_}"
+
+    for cached in "$PLAYBACK_CACHE/$flat".*x*@*.mp4; do
+        [[ -f "$cached" ]] || continue
+        [[ "$cached" == *.part.*.mp4 ]] && continue
+        [[ "$cached" -nt "$src" ]] || continue
+
+        dims="${cached%.mp4}"
+        dims="${dims##*.}"
+        w="${dims%%x*}"
+        h="${dims#*x}"; h="${h%%@*}"
+        [[ "$w" =~ ^[0-9]+$ && "$h" =~ ^[0-9]+$ ]] || continue
+        (( w < want_w || h < want_h )) && continue
+
+        area=$(( w * h ))
+        if [[ -z "$best" ]] || (( area < best_area )); then
+            best="$cached"
+            best_area="$area"
+        fi
+    done
+
+    [[ -n "$best" ]] && printf '%s\n' "$best"
+}
+
+# The copy of $1 built out of the way, by the user's systemd manager where there
+# is one.
+#
+# NOT IN THE BACKGROUND OF THIS SHELL, for the reason spawn_daemon exists: the
+# game launcher changes the wallpaper from inside Steam's subreaper, and a
+# minute of ffmpeg left running in there is a minute Steam goes on showing the
+# game as still open.
+spawn_playback_build() {
+    local self
+    self="$(readlink -f "$0")"
+    [[ -x "$self" ]] || return 1
+    spawn_daemon "$self" cache-playback "$1"
+}
+
+# The file mpvpaper should actually be given for the wallpaper $1: a copy cut to
+# the screens where there is a usable one, the original otherwise. This never
+# fails -- every way out of it prints something playable.
+playback_for() {
+    local src="$1" target tw th tfps out near
+
+    target="$(playback_target "$src")" || { printf '%s\n' "$src"; return 0; }
+    read -r tw th tfps <<< "$target"
+
+    out="$(playback_path "$src" "$tw" "$th" "$tfps")"
+    if [[ -f "$out" && "$out" -nt "$src" ]]; then
+        printf '%s\n' "$out"
+        return 0
+    fi
+
+    # Nothing cut for these screens yet. Encoding here would hold the wallpaper
+    # up for a minute on a machine that has just been asked to change it, so the
+    # best thing already on disk goes on now and the copy is built behind it.
+    # cache-playback below swaps it in when it is ready.
+    spawn_playback_build "$src"
+
+    near="$(playback_nearest "$src" "$tw" "$th")"
+    printf '%s\n' "${near:-$src}"
+}
+
+# Replace what mpvpaper is playing with $2, but only while what it is playing is
+# still the wallpaper $1. python3 and not socat, and the read loop, for the
+# reasons capture_live_frame gives above.
+#
+# STILL THE SAME WALLPAPER IS NOT THE SAME AS STILL THE SAME FILE. playback_for
+# may well have started a copy cut for some other desk -- that is the whole
+# point of playback_nearest -- so mpv is often playing neither the source nor
+# the copy being built. Every copy of one wallpaper begins with that
+# wallpaper's flattened name inside the cache, so the prefix is what identifies
+# it, and the source path itself covers the case where no copy existed yet.
+#
+# The first version compared against the source alone. It was correct for the
+# ordinary path and silently did nothing on exactly the path this exists for:
+# a monitor had changed, a usable older copy went up, the right one finished
+# encoding, and it stayed in the cache until the next time the wallpaper was
+# applied.
+mpv_swap() {
+    local expected="$1" replacement="$2" flat prefix
+    [[ -S "$IPC_SOCKET" ]] || return 1
+    command -v python3 >/dev/null 2>&1 || return 1
+
+    flat="${expected#/}"
+    prefix="$PLAYBACK_CACHE/${flat//\//_}."
+
+    python3 - "$IPC_SOCKET" "$expected" "$prefix" "$replacement" <<'PY' >/dev/null 2>&1
+import json, socket, sys
+
+sock_path, expected, prefix, replacement = sys.argv[1:5]
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(5)
+s.connect(sock_path)
+
+buf = b""
+
+
+def ask(command):
+    global buf
+    s.sendall((json.dumps({"command": command}) + "\n").encode())
+    # mpv interleaves unsolicited events with replies, so read until the message
+    # carrying an "error" field turns up -- that one is the answer.
+    while True:
+        chunk = s.recv(4096)
+        if not chunk:
+            sys.exit(1)
+        buf += chunk
+        while b"\n" in buf:
+            line, buf = buf.split(b"\n", 1)
+            if not line.strip():
+                continue
+            msg = json.loads(line)
+            if "error" in msg:
+                if msg["error"] != "success":
+                    sys.exit(1)
+                return msg.get("data")
+
+
+# mpv answers with the path it was handed: the source, or one of this
+# wallpaper's copies. Anything else means the wallpaper moved on while ffmpeg
+# was running -- the rotation timer keeps a schedule of its own -- and the new
+# copy is simply left in the cache for whenever that wallpaper comes back.
+path = ask(["get_property", "path"])
+
+if path == replacement:
+    sys.exit(0)
+
+if not isinstance(path, str) or not (path == expected or path.startswith(prefix)):
+    sys.exit(1)
+
+ask(["loadfile", replacement, "replace"])
+PY
+}
+
 # Delete everything in $1 matching $2 that is not one of the paths given after
-# them, and print how many went. Three caches hold one file each per wallpaper
-# -- a thumbnail for every one of them, a frame and a clip for the videos -- and
-# a rename orphans an entry in all of them.
+# them, and print how many went. Four caches hold one file each per wallpaper --
+# a thumbnail for every one of them, and a frame, a clip and a playback copy for
+# the videos -- and a rename orphans an entry in all of them.
 #
 # ONLY inside the given directory, only that one pattern, and only files the
 # caller did not just vouch for. These directories belong to this script alone
@@ -595,6 +935,45 @@ if [[ "$MODE" == "dir" ]]; then
 fi
 
 # ---------------------------------------------------------------
+# cache-playback -- the copy, cut out of the way
+# ---------------------------------------------------------------
+# NOT A COMMAND ANYONE TYPES, which is why it is missing from the usage at the
+# top and from the list of modes in the error at the bottom. spawn_playback_build
+# re-enters the script here because systemd-run takes a command line and not a
+# shell function, and this is the whole of it: cut the copy, and hand it to mpv
+# if the wallpaper it belongs to is still the one on screen.
+#
+# HANDED OVER RATHER THAN REAPPLIED. `reapply` would also work, and would also
+# stop mpvpaper, start another one and push matugen through a palette that has
+# not changed -- a visible blink to swap a file for the same file at another
+# size. mpv is already listening on a socket and loadfile keeps the options it
+# was started with, so the video is replaced where it stands.
+#
+# Placed above the collection scan because none of this needs the collection,
+# and a background job must not die because the wallpaper folder went missing
+# while it was encoding.
+# ---------------------------------------------------------------
+if [[ "$MODE" == "cache-playback" ]]; then
+    SRC="${2:-}"
+    [[ -f "$SRC" ]] || die "cache-playback needs a file"
+    SRC="$(realpath "$SRC")"
+
+    # No target means the screens cannot use anything smaller than the file
+    # already is. Not an error -- it is the answer.
+    PB_SPEC="$(playback_target "$SRC")" || exit 0
+    read -r PB_W PB_H PB_FPS <<< "$PB_SPEC"
+    PB_OUT="$(playback_path "$SRC" "$PB_W" "$PB_H" "$PB_FPS")"
+
+    if [[ ! -f "$PB_OUT" || ! "$PB_OUT" -nt "$SRC" ]]; then
+        playback_build "$SRC" "$PB_OUT" "$PB_W" "$PB_H" "$PB_FPS" \
+            || die "could not cut $(basename "$SRC") to ${PB_W}x${PB_H}"
+    fi
+
+    mpv_swap "$SRC" "$PB_OUT"
+    exit 0
+fi
+
+# ---------------------------------------------------------------
 # 1. Gather the collection
 # ---------------------------------------------------------------
 mapfile -t WALLPAPERS < <(collect "$WALLPAPER_DIR")
@@ -632,9 +1011,11 @@ if [[ "$MODE" == "thumbs" ]]; then
     THUMBS=0
     MADE=0
     CLIPS=0
+    COPIES=0
     KEEP_THUMBS=()
     KEEP_FRAMES=()
     KEEP_PREVIEWS=()
+    KEEP_PLAYBACK=()
 
     for W in "${WALLPAPERS[@]}"; do
         if ! is_video "$W"; then
@@ -660,6 +1041,28 @@ if [[ "$MODE" == "thumbs" ]]; then
         if [[ ! -d "$PREVIEW" || ! "$PREVIEW" -nt "$W" ]]; then
             preview_for "$W" >/dev/null && CLIPS=$(( CLIPS + 1 ))
         fi
+
+        # AND THE COPY THE SCREENS CAN ACTUALLY USE. Doing it here as well as
+        # on application is what stops a wallpaper being applied at full size
+        # the first time it is ever chosen: the shell already runs this pass
+        # whenever the collection changes, so a video downloaded now is cut
+        # before anybody picks it.
+        #
+        # An empty spec means this one is already small enough, and no entry
+        # goes on the keep list -- so if a monitor left the desk since the last
+        # pass, the copy that was cut for it is swept below rather than kept
+        # for a screen that is no longer there.
+        PB_SPEC="$(playback_target "$W")"
+        if [[ -n "$PB_SPEC" ]]; then
+            read -r PB_W PB_H PB_FPS <<< "$PB_SPEC"
+            PLAYBACK="$(playback_path "$W" "$PB_W" "$PB_H" "$PB_FPS")"
+            KEEP_PLAYBACK+=("$PLAYBACK")
+
+            if [[ ! -f "$PLAYBACK" || ! "$PLAYBACK" -nt "$W" ]]; then
+                playback_build "$W" "$PLAYBACK" "$PB_W" "$PB_H" "$PB_FPS" \
+                    && COPIES=$(( COPIES + 1 ))
+            fi
+        fi
     done
 
     # ---- Sweep ----
@@ -679,6 +1082,7 @@ if [[ "$MODE" == "thumbs" ]]; then
         GONE=$(sweep_cache "$THUMB_CACHE" '*.jpg' ${KEEP_THUMBS[@]+"${KEEP_THUMBS[@]}"})
         GONE=$(( GONE + $(sweep_cache "$FRAME_CACHE" '*.png' ${KEEP_FRAMES[@]+"${KEEP_FRAMES[@]}"}) ))
         GONE=$(( GONE + $(sweep_dirs "$PREVIEW_CACHE" ${KEEP_PREVIEWS[@]+"${KEEP_PREVIEWS[@]}"}) ))
+        GONE=$(( GONE + $(sweep_cache "$PLAYBACK_CACHE" '*.mp4' ${KEEP_PLAYBACK[@]+"${KEEP_PLAYBACK[@]}"}) ))
 
         # AND THE PREVIEWS THIS CACHE USED TO HOLD. Until the carousel stopped
         # decoding video, every entry here was a `<flat>.mp4` clip; they are now
@@ -689,7 +1093,7 @@ if [[ "$MODE" == "thumbs" ]]; then
         GONE=$(( GONE + $(sweep_cache "$PREVIEW_CACHE" '*.mp4') ))
     fi
 
-    echo "wallpaper thumbnails: $THUMBS stills, $MADE frames, $CLIPS preview sequences, $GONE stale removed"
+    echo "wallpaper thumbnails: $THUMBS stills, $MADE frames, $CLIPS preview sequences, $COPIES playback copies, $GONE stale removed"
     exit 0
 fi
 
@@ -1009,6 +1413,15 @@ apply_image() {
 apply_video() {
     command -v mpvpaper >/dev/null || die "mpvpaper is not installed (yay -S mpvpaper)"
 
+    # WHAT PLAYS IS NOT ALWAYS WHAT WAS CHOSEN. $1 is the wallpaper -- the path
+    # the state file records, the palette is drawn from and all four caches key
+    # on -- and playback_for hands back that same footage cut to what the
+    # screens can show, when that is worth doing and there is a copy ready.
+    # Everything outside this function goes on dealing in the original, which is
+    # the only reason substituting here is safe.
+    local file
+    file="$(playback_for "$1")"
+
     # Noted, NOT killed. Going from one video to another, this is the only
     # thing on screen, and stopping it here is what put the compositor's
     # default wallpaper on the screen for half a second.
@@ -1039,7 +1452,7 @@ apply_video() {
     # already wait_for_new_layer's job below: no surface means nothing is torn
     # down and the wallpaper that was up stays up.
     # shellcheck disable=SC2086  # both are lists of flags, deliberately split
-    spawn_daemon mpvpaper $MPVPAPER_FLAGS -o "$MPV_OPTIONS" "$MPVPAPER_OUTPUT" "$1" \
+    spawn_daemon mpvpaper $MPVPAPER_FLAGS -o "$MPV_OPTIONS" "$MPVPAPER_OUTPUT" "$file" \
         || die "mpvpaper could not play the video"
 
     # Nothing is torn down until the new video is genuinely on the layer. If it
