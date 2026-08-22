@@ -188,28 +188,34 @@ Item {
     // whether a white sleeve is readable.
     readonly property real scrim: ColorUtils.scrimFor(coverQuantizer.colors)
 
-    // Per-player glyph, the same table Media.qml carried. Matched against the
-    // D-Bus identity, lowercased.
-    readonly property var playerIcons: ({
-        brave: Icons.chromium,
-        chromium: Icons.chromium,
-        chrome: Icons.chromium,
-        firefox: Icons.firefox,
-        spotify: Icons.spotify,
-        vlc: Icons.vlc
-    })
-
+    // WHERE THIS IS PLAYING FROM.
+    //
+    // THE TABLE THAT USED TO BE HERE NEVER MATCHED ANYTHING THAT PLAYS ON
+    // THIS MACHINE. It tested the D-Bus identity against "brave", "chromium",
+    // "chrome", "firefox", "spotify" and "vlc"; Zen answers "Mozilla zen",
+    // which contains none of them, so every track fell through to the generic
+    // note. It was also asking the wrong question -- identity names the
+    // APPLICATION, and one browser plays YouTube, YouTube Music, Spotify and
+    // Twitch alike, so the application is the least useful true answer
+    // available.
+    //
+    // The rule lives in Icons.sourceGlyph now, service first and application
+    // second, because it is about glyphs and because the dashboard's media
+    // block could want the same answer later.
+    //
+    // STILL PAUSE WHEN IT IS PAUSED. In the collapsed capsule there is no
+    // transport to read the state off, so this glyph is the only thing that
+    // says a track is stopped rather than playing -- which is worth more than
+    // showing the source at the one moment nothing is coming from it.
     readonly property string mediaGlyph: {
         if (!root.hasPlayer)
             return Icons.music;
         if (!root.player.isPlaying)
             return Icons.pause;
-        const identity = (root.player.identity ?? "").toLowerCase();
-        for (const key in root.playerIcons) {
-            if (identity.includes(key))
-                return root.playerIcons[key];
-        }
-        return Icons.music;
+
+        const meta = root.player.metadata ?? null;
+        const url = meta ? (meta["xesam:url"] ?? "") : "";
+        return Icons.sourceGlyph(url, root.player.identity ?? "", root.player.desktopEntry ?? "");
     }
 
     // ---------------- Volume, as an acknowledgement ----------------
