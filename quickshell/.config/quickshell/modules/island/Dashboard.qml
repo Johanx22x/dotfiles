@@ -400,12 +400,10 @@ Item {
     // in that URL maps to a public thumbnail. No key, no API, no extra
     // process. Any other site still shows the stand-in, and every non-Firefox
     // player is untouched because the remembered art wins whenever it exists.
-    readonly property string youtubeId: {
-        const meta = root.player?.metadata ?? null;
-        const url = meta ? (meta["xesam:url"] ?? "") : "";
-        const m = url.match(/[?&]v=([-\w]{11})/) || url.match(/youtu[.]be\/([-\w]{11})/);
-        return m ? m[1] : "";
-    }
+    // The regular expression moved to Track when the island started needing
+    // the same answer; the retry below is still this file's, because it needs
+    // an Image with a status to catch a failure and the island has none.
+    readonly property string youtubeId: Track.videoId(root.player)
 
     // maxresdefault first, mqdefault as the retry. Both are 16:9 and BAR-FREE,
     // which is the point: hqdefault is 480x360 and pads a widescreen frame

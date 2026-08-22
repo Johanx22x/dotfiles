@@ -143,7 +143,12 @@ Item {
     // The cover comes through Track for the same reason the panel's does: the
     // player retracts mpris:artUrl two milliseconds after publishing it, so
     // trackArtUrl is empty most of the time a track is up. See Track.qml.
-    readonly property string coverArt: Track.covers[root.player?.dbusName ?? ""] ?? ""
+    // THROUGH Track, WHICH ALSO KNOWS ABOUT YouTube. This was the player's
+    // remembered artwork and nothing else, which is empty for most of what
+    // actually plays here: Zen publishes no mpris:artUrl for a youtube.com
+    // video, so the capsule would have had its flat tint and no photograph at
+    // exactly the times there is one to be had. See Track.coverFor.
+    readonly property string coverArt: Track.coverFor(root.player)
 
     ColorQuantizer {
         id: coverQuantizer
