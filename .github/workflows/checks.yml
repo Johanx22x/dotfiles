@@ -233,6 +233,21 @@ jobs:
         if: ${{ !cancelled() }}
         run: tests/wheel-and-click.py
 
+      # THE OTHER HALF OF THE SAME PROBLEM, and it is here for the same
+      # reason: the scrollbar's press target is widened past the four pixels
+      # it is drawn as, the widening comes out of whatever is beside the bar,
+      # and twice it came out of something that wanted the press -- a settings
+      # entry that scrolled instead of opening, an application that scrolled
+      # instead of launching. Both were found by hand, on the desktop, after
+      # shipping. One integer in a diff, nothing to see in a screenshot, and
+      # the shell loads perfectly either way; this presses every pixel across
+      # each placement and says which item heard it.
+      #
+      # Offscreen as well, and for the same reason -- see the file.
+      - name: The scrollbar takes its own pixels and no others
+        if: ${{ !cancelled() }}
+        run: tests/scrollbar-target.py
+
       # LAST, BECAUSE IT IS ABOUT THE OTHER CHECKS RATHER THAN ABOUT THE
       # REPOSITORY. It answers whether the workflows in this directory run at
       # all, whether any of them still filters a `pull_request` by base branch
