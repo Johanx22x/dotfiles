@@ -61,7 +61,7 @@ Hyprland. `--compositor=hyprland|niri|both` overrides either way. See
 | | |
 |---|---|
 | `packages` | `packages/required/*.txt` and the chosen compositor's list — repo or AUR, worked out per name |
-| `optional` | `packages/optional/*.txt`: apps, gaming, neovim, hardware. Tick a pack, or open one and tick packages inside it |
+| `optional` | `packages/optional/*.txt`: apps, backup, gaming, hardware, laptop, neovim. Tick a pack, or open one and tick packages inside it |
 | `gpu` | `packages/gpu/<vendor>.txt`, with the card read off the bus and `none` as a real answer |
 | `aur-patched` | builds `packages/xwayland-satellite/`, which carries a fix niri needs for DaVinci Resolve |
 | `symlinks` | `stow` links the config into `$HOME` |
@@ -71,7 +71,7 @@ Hyprland. `--compositor=hyprland|niri|both` overrides either way. See
 | `palette` | a first `wallpaper-switch random` so the generated colour files exist |
 | `shell` | `chsh -s /usr/bin/zsh` |
 | `services-user` | the wallpaper and battery timers, and the polkit agent |
-| `services-system` | SDDM, NetworkManager, bluetooth, and the snapshot, mirror and cache timers |
+| `services-system` | SDDM, NetworkManager, bluetooth, the daemon that puts snapshots in the GRUB menu, and the snapshot, TRIM, mirror and cache timers |
 | `laptop` | battery and brightness widgets — asked, because no detection can answer it |
 | `monitors` | says whether every attached screen is recorded, and prints the command that records one |
 
@@ -94,9 +94,11 @@ Firefox's `lock`, is none of its business and stays where it is.
 recorded. That is a decision about where the screens physically are, and
 nothing here can guess it.
 
-**And everything outside `$HOME`.** The installer does not touch `/etc`, and no
-unit reads it, reports on it or writes to it. What this machine needs out there
-is kept in `system/` as documentation and applied by hand — see
+**And everything outside `$HOME`.** The installer does not touch `/etc`: no unit
+writes there and none reports on what is there. Two of them read it to answer a
+question about this machine — whether zsh is in `/etc/shells`, whether
+`[multilib]` is on — and that is the whole of the traffic. What this machine
+needs out there is kept in `system/` as documentation and applied by hand — see
 [`system/README.md`](system/README.md), which says what each file is for and
 which of them are about **this** machine rather than about a setup.
 
@@ -146,11 +148,21 @@ gone, or enable a unit that did not exist yesterday:
 git pull && ./install.sh update
 ```
 
-`update` asks nothing. It reads what this machine said it wanted, applies
+`update` is for a machine this repository has already been set up on, and there
+it asks nothing: it reads what the profile says this machine wanted, applies
 whatever of that is not already in place, and runs the reload hooks. **It does
 not pull by itself** — this repo is worked on from several sessions at once, and
 a `git pull` hidden inside a command that also installs things is a surprise at
 the wrong moment. `--pull` is there for an unattended run and is `--ff-only`.
+
+**A checkout that has never run the installer is the other case, and the command
+for it is the bare `./install.sh`.** There is no profile on such a machine, and
+both halves of what `update` promises come apart without one. It is not silent:
+nothing has recorded which compositor or which GPU, so it stops and asks, in a
+mode built for nobody being there. And it is not selective: a unit the profile
+has never heard of defaults to *yes*, so it applies the whole set instead of a
+chosen one. `./install.sh` builds the profile first — the menu, the boxes, one
+confirmation — and `update` is the right command from the second time onward.
 
 Only niri picks the changes up reliably on its own — it holds no inotify watch
 and polls its config every 500 ms, so nothing a pull or a relink does to the
@@ -227,6 +239,16 @@ Ticking a pack writes the same `${XDG_STATE_HOME:-~/.local/state}/dotfiles-profi
 that `update` reads, so the window and the terminal are two ways of saying one
 thing rather than two places to say it.
 
+**The page also takes the update itself.** It runs `git fetch` — remote-tracking
+refs only, nothing that touches the working tree — so the first row can say how
+many commits behind origin this checkout is, and **Pull and update** opens a
+terminal running `./install.sh update --pull`, then reloads the compositor if
+the pull moved `hypr/`, then restarts the shell. That last step is not optional
+and is why it is a terminal rather than a button in the window: a shell cannot
+restart itself and then report on how it went. If what was pulled does not load,
+the terminal stays open with the file and the line in it. The whole account is
+in `quickshell/.config/quickshell/modules/installer/InstallerState.qml`.
+
 One thing it will not do: **a first install is still a terminal** — a fresh
 clone has no desktop to draw on.
 
@@ -247,7 +269,6 @@ so next to the line that depends on it.
 | Packages | `packages/compositor/hyprland.txt` | `packages/compositor/niri.txt` |
 | Session | `uwsm` | `niri-session` |
 | Portal | `xdg-desktop-portal-hyprland` | `xdg-desktop-portal-gnome` |
-
 | Workspaces | numbered, permanent | dynamic, renumbered as they empty |
 | Blur | global, behind anything translucent | per window, asked for by a rule |
 | Blue light | `hyprsunset` | `wl-gammarelay-rs` |
@@ -281,14 +302,15 @@ counts, or has no way to grab focus, is a supported case rather than a broken
 one.
 
 ```
-quickshell/Compositor.qml       the facade — the only file that knows there is
+quickshell/.config/quickshell/
+  Compositor.qml                the facade — the only file that knows there is
                                 more than one
   compositor/
     CompositorBackend.qml       the contract: every property has an empty
                                 default, every capability defaults to false
     HyprlandBackend.qml
     NiriBackend.qml
-bin/compositor                  the same idea for shell scripts:
+bin/.local/bin/compositor       the same idea for shell scripts:
                                 `compositor is niri`, `compositor can gamma`
 ```
 
@@ -374,21 +396,36 @@ Six are not, and the difference matters:
 | `system/` | the `/etc` layer, which pacman owns and would leave `.pacnew` files beside. Copies and recipes, **documentation and applied by hand** — the installer has no unit for them, and half of them describe this one machine. See `system/README.md` |
 | `packages/` | the package lists, grouped by what they are for |
 | `lib/` | the installer's own code: the unit registry and one file per unit |
-| `tests/` | the checks CI runs on every pull request |
+| `tests/` | the checks CI runs — every one of them on every pull request, except `xwayland-satellite-watch.sh`, which is a weekly cron asking whether the patched package can be deleted yet |
 | `assets/` | the screenshots at the top of this file |
 
 `bin/` holds the scripts that own everything the shell can change at runtime —
 the wallpaper, the palette, the opacity, the monitors — so any of it can be
-driven from a terminal and the settings window follows. `bin/compositor` is how
-those scripts find out what they are running under.
+driven from a terminal and the settings window follows.
+`bin/.local/bin/compositor` is how those scripts find out what they are running
+under.
 
 ## Wallpapers and color
+
+**This repository ships no wallpapers.** The whole palette is generated from
+the one that is set, so the collection is the one thing a clone cannot bring
+with it: pick your own. The default collection is `~/Pictures/wallpapers` — the
+installer creates it and then fails that step, by name, if nothing is in it —
+and the settings window can point it somewhere else.
 
 `wallpaper-switch` sets the wallpaper and runs matugen, which renders eleven
 untracked files for kitty, GTK 3/4, Hyprland, **niri**, Qt, zathura, ranger,
 fastfetch, Zen and the shell. The base palette is fixed (Tokyo Night) and
 matugen supplies only the accents, so contrast never depends on which image is
 set.
+
+**Zen needs one thing done by hand.** Its theming reads out of a profile with a
+fixed name, `~/.zen/rice`: a stable path is the only thing stow and matugen can
+write into, and the profiles Zen makes for itself are random `xxxxxxxx.Default`
+names. Nothing here creates it — no unit touches `~/.zen/profiles.ini` — so
+until that profile is declared there and made the default, the linked
+`~/.zen/rice/` is an orphan and the browser theming silently does nothing. What
+has to be true, and why, is at the top of `zen/.zen/rice/user.js`.
 
 A wallpaper can also be a video: `mp4` `webm` `mkv` play through mpvpaper with
 hardware decoding, pausing when covered or when anything goes fullscreen, while
@@ -402,7 +439,7 @@ is, how often it rotates by itself, and which wallpaper is on the desktop now.
 
 ```sh
 wallpaper-switch next | prev | random | reapply
-wallpaper-switch set ~/Pictures/Wallpapers/loop.mp4
+wallpaper-switch set ~/Pictures/wallpapers/loop.mp4
 wallpaper-switch dir pick            # move the collection somewhere else
 wallpaper-switch still               # freeze a live wallpaper where it is
 wallpaper-switch thumbs              # rebuild the caches the carousel draws
@@ -410,10 +447,16 @@ wallpaper-switch thumbs              # rebuild the caches the carousel draws
 
 Those caches are three, under `~/.cache`: a 960 px thumbnail of every
 wallpaper, because decoding a 4K PNG to fill a card costs a fifth of a second;
-a still frame of every video, because nothing else can draw one; and a short
-960x540 copy of every video, which is what the carousel actually plays instead
-of a 4K file. They are built in the background, skipped when they are already
-newer than their source, and swept when a wallpaper goes away.
+a still frame of every video, because nothing else can draw one; and, per
+video, a directory of numbered JPEGs — six seconds at 15 fps, 960 px wide —
+which is what the carousel flips through. **It no longer decodes video at
+all.** A short clip and a media player were the previous design and the player
+was the cost: on this hardware it holds a CUDA context and 412 MB of VRAM for
+as long as it exists and takes a quarter of a second to build, which is what
+made stepping through the fan stick. The measurements are in
+`bin/.local/bin/wallpaper-switch`, beside the numbers they justify. All three
+are built in the background, skipped when they are already newer than their
+source, and swept when a wallpaper goes away.
 
 ## Backups
 
@@ -517,8 +560,9 @@ in a value and not in a comment. That second half was a claim before it was a
 fact: `hyprland.lua` opened with two EDID descriptions, serial numbers included,
 on a repository that is public, and five window rules keyed to them matched
 nothing on any other machine without ever saying so. What belongs to one machine
-stays out of git: `hypr/outputs.lua`, hand-written and holding this machine's
-screens; `hypr/monitors.lua`, `niri/monitors.kdl` and `niri/main-monitor.kdl`,
+stays out of git: `hypr/.config/hypr/outputs.lua`, hand-written and holding
+this machine's screens; `hypr/.config/hypr/monitors.lua`,
+`niri/.config/niri/monitors.kdl` and `niri/.config/niri/main-monitor.kdl`,
 written by `desktop-monitors` or the settings window; and the state files under
 `~/.local/state` that the scripts and the shell share — so a value set from a
 terminal moves the switch in the settings window, and back.

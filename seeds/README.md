@@ -47,9 +47,9 @@ They are not decoration — a fresh clone without them comes up wrong:
 ## Adding one
 
 Two steps, and the second is the one to remember: drop the file here, then add
-its destination to `SEED_DEST` in `install.sh`. A seed cannot say where it goes
-— `qt6ct.conf` lands a directory deeper than `mimeapps.list` — so the mapping
-lives there.
+its destination to `SEED_DEST` in `lib/units/50-seeds.sh`. A seed cannot say
+where it goes — `qt6ct.conf` lands a directory deeper than `mimeapps.list` — so
+the mapping lives there, next to the loop that reads it.
 
 Forgetting the second step is loud rather than silent: the installer walks this
 directory, so an unmapped file is reported and skipped by name instead of being
