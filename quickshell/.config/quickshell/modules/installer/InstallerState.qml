@@ -685,11 +685,23 @@ Singleton {
     // holding ZERO watches and never re-arm. The recreated config was ignored,
     // a later in-place write to it was ignored as well, and `rm` with an
     // immediate recreate in the same command missed the change 3 of 3. Nothing
-    // is logged either way. `hyprctl reload` is the only thing that brings the
-    // watch back -- and THAT is why it is still in this chain, because what
-    // runs between the pull and here is `stow`, and an unlink followed by a
-    // link is exactly the shape that costs the session every future reload
-    // without saying so.
+    // is logged either way, and `hyprctl reload` is the only thing that brings
+    // the watch back.
+    //
+    // SO WHY KEEP THE RELOAD, if the pull was picked up unaided every time it
+    // was tried. Because the failure it insures against is silent, permanent
+    // and one command wide, and the thing that could produce it is not fully
+    // pinned down. Two halves of that were measured and one was not. `stow
+    // --no-folding` is NOT the unlinker: a link that is already right came
+    // through three re-runs with the same inode and the same ctime, including
+    // a re-run after the target's own inode had changed underneath it, and the
+    // installer never passes -R or -D. What is not pinned down is git's own
+    // write path, which does not always rename over a file. A `git checkout`
+    // through the stow link was picked up in the probe, so it is not happening
+    // there -- but "not on that path, that time" is not "never", and the cost
+    // of being wrong is a session whose compositor never reloads again and
+    // never says so. One `hyprctl reload`, on the one pull in twenty that
+    // moved hypr/, buys that away.
     //
     // NIRI NEEDS NOTHING AT ALL, for a better reason than "it live-reloads on
     // save": it holds no inotify fd whatsoever and POLLS, every 500 ms, off
