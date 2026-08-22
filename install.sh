@@ -485,9 +485,9 @@ mode_apply() {
 
   # THE STATUS SAYS WHETHER IT DID WHAT IT WAS ASKED, and that is a different
   # audience from the yellow block above. `apply` is the mode a script reaches
-  # for -- `./install.sh apply symlinks && systemctl --user restart quickshell`
-  # is an ordinary line -- and a 0 that means "the symlinks unit failed" is a
-  # lie told to the one reader that cannot read the words. See fail_clean.
+  # for -- `./install.sh apply symlinks && hyprctl reload` is an ordinary line
+  # -- and a 0 that means "the symlinks unit failed" is a lie told to the one
+  # reader that cannot read the words. See fail_clean.
   fail_clean
 }
 

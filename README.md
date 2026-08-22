@@ -120,8 +120,8 @@ underneath, and `--with-requires` chains them if that is what you meant.
 
 Every mode says in its **exit status** whether it did what it was asked: zero
 when everything worked, non-zero when anything at all did not, whether it ended
-the run or only got a line in the summary. So `./install.sh update && systemctl
---user restart quickshell` means what it looks like.
+the run or only got a line in the summary. So `./install.sh update && hyprctl
+reload` means what it looks like.
 
 ## Updating
 
@@ -144,13 +144,32 @@ not pull by itself** — this repo is worked on from several sessions at once, a
 a `git pull` hidden inside a command that also installs things is a surprise at
 the wrong moment. `--pull` is there for an unattended run and is `--ff-only`.
 
-Nothing running picks the changes up on its own:
+Only niri picks the changes up reliably on its own — it holds no inotify watch
+and polls its config every 500 ms, so nothing a pull or a relink does to the
+file gets past it. Hyprland manages too in every case that was tried, but its
+watch dies for good, and silently, if the file is ever unlinked with a gap
+before it comes back, so it is worth telling. The shell has to be asked:
 
 ```sh
-hyprctl reload                                        # Hyprland
-                                                      # niri reloads on save
-qs kill && qs -d -p ~/.config/quickshell/shell.qml    # Quickshell
+hyprctl reload && hyprctl configerrors    # Hyprland, and only if hypr/ moved
+
+: > ~/.config/quickshell/.reload-nudge \
+  && rm -f ~/.config/quickshell/.reload-nudge          # Quickshell
 ```
+
+The shell is **nudged, not restarted**, and the difference is the whole point.
+A reload that cannot parse the new tree leaves the shell up and running the
+code it already had; a cold start on that same tree exits and leaves no bar, no
+island and no launcher at all. The nudge works because Quickshell watches the
+config **directory** as well as the files in it, and a `git pull` replaces file
+inodes but never the directory's — so creating a file in `~/.config/quickshell`
+and deleting it again is heard at the exact moment every file watch is dead.
+Appending a newline to a `.qml` file does the same thing *only* on a file the
+pull did not touch, and nothing at all, silently, on one it did.
+
+`hyprctl reload` always answers `ok` and exits 0 — and so does `hyprctl
+configerrors`, on a syntax error, on an unknown key and on a clean config
+alike. Neither status means anything; the errors are the output.
 
 `~/.config/nvim` is a separate repository and updates on its own.
 
@@ -213,7 +232,7 @@ so next to the line that depends on it.
 | | Hyprland | niri |
 |---|---|---|
 | Model | dynamic tiling (dwindle) | scrollable tiling (columns) |
-| Config | `hypr/` — Lua, `hyprctl reload` | `niri/` — KDL, reloads on save |
+| Config | `hypr/` — Lua, inotify + `hyprctl reload` | `niri/` — KDL, polls every 500 ms |
 | Packages | `packages/compositor/hyprland.txt` | `packages/compositor/niri.txt` |
 | Session | `uwsm` | `niri-session` |
 | Portal | `xdg-desktop-portal-hyprland` | `xdg-desktop-portal-gnome` |

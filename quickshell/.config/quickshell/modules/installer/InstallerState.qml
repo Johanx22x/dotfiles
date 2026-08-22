@@ -561,14 +561,14 @@ Singleton {
     //
     // IT CANNOT RUN IN THIS PROCESS, and this is the one hand-off that is not
     // about passwords. Git takes an update by writing new files and renaming
-    // them over the old ones, which replaces inodes; Quickshell's file watcher
-    // is holding the inodes that were there before, so after a pull it is
+    // them over the old ones, which replaces inodes; Quickshell's file watches
+    // are holding the inodes that were there before, so after a pull it is
     // watching files that no longer exist. The process does not die and
     // nothing is logged -- it goes on running the code it already had, and the
-    // log never says "Reloading configuration" again. A crash would be kinder,
+    // log never says "Configuration Loaded" again. A crash would be kinder,
     // because a crash is visible. The button therefore hands the whole thing
-    // to a terminal that is not this process, and puts the shell back
-    // afterwards.
+    // to a terminal that is not this process, and tells the shell to re-read
+    // the tree afterwards.
     //
     // `./install.sh update --pull` AND NOT `git pull && ./install.sh update`.
     // The flag is already there, it is already --ff-only, and it does one
@@ -588,23 +588,163 @@ Singleton {
     // is the whole handling it needs: the terminal is open, the reason is in
     // it, and a shell cannot resolve a divergence on somebody's behalf.
 
-    // HOW LONG TO WAIT BEFORE TELLING ANYTHING TO RE-READ THE TREE. Reloading
-    // the instant the last git object lands has repeatedly produced errors
-    // from both the compositor and the shell: they are pointed at a tree that
-    // is still settling -- files renamed into place, stow relinking on top of
-    // them -- and they read it half-written.
+    // NUDGE THE SHELL, DO NOT RESTART IT. This is the correction that matters
+    // most, because the two failures are nothing like the same size. A RELOAD
+    // that cannot parse the new tree degrades gracefully: the process stays
+    // up, goes on running the code it already had, and writes the reason into
+    // its log. A COLD START on that same tree EXITS --
     //
-    // THIS IS NOT SUPERSTITION AND IT SHOULD NOT BE DELETED as a stray sleep.
-    // It is one named number precisely so it can be raised or lowered from
-    // measurement instead of being rewritten.
-    readonly property int settleSeconds: 3
+    //   ERROR: Failed to load configuration
+    //   caused by @modules/bar/Bar.qml[410:17]: UpdatesButton is not a type
+    //   PROCESS EXITED
+    //
+    // -- and leaves no bar, no island, no notifications and no launcher, on a
+    // desktop whose only way back is a terminal that may not be open. A stow
+    // link that does not exist yet ends the same way. So `qs kill` is gone
+    // from this chain: the version of it that shipped in #110 turned every
+    // pull that did not parse into a dead session, and the reload it was
+    // standing in for would have survived the same pull untouched.
+    //
+    // HOW A RELOAD IS ASKED FOR, since Quickshell has no `reload` subcommand
+    // and this configuration declares no IpcHandler for one. Creating a file
+    // inside ~/.config/quickshell and deleting it again is what does it:
+    //
+    //   : > ~/.config/quickshell/.reload-nudge && rm -f ~/.config/quickshell/.reload-nudge
+    //
+    // It works for the same reason the pull broke the watches. Quickshell
+    // watches the DIRECTORY as well as the files inside it, and the directory
+    // is an inode git never replaces -- so the directory watch is still alive
+    // at the exact moment every file watch in the tree is dead, which is the
+    // moment this has to work in.
+    //
+    // NOT THE OLDER TRICK of appending a newline to one of the .qml files.
+    // That works on a file the pull did not touch and does nothing at all on
+    // a file it did, silently, because the watch is on the inode git unlinked
+    // -- and the file it did touch is exactly the one somebody reaching for
+    // that trick would pick.
 
-    // WHAT HAS TO BE TOLD, AND WHAT DOES NOT. Hyprland needs `hyprctl reload`;
-    // niri live-reloads its config on save and has no equivalent to ask for --
-    // stated in niri/.config/niri/config.kdl and again by symlinks_post, which
-    // prints these same lines for a person to run by hand. Quickshell has to
-    // be restarted outright, because the watcher problem above is the reason
-    // this button exists.
+    // HOW LONG TO WAIT, AND WHAT THE WAIT IS FOR. Not for a half-written
+    // tree, which is what this used to say and is not what happens: git
+    // renames whole files into place, so there is no instant at which one is
+    // half there. The race is against STOW, and it is a COALESCING race -- a
+    // nudge that lands while a reload is already pending is folded into it,
+    // and what comes out is the one reload that was already scheduled against
+    // the older tree.
+    //
+    // MEASURED, and the numbers are the reason this is one second and not
+    // three. In a lab -- a bare origin, clones off it, this shell's real 121
+    // files running inside a nested Hyprland with its own runtime dir, state
+    // dir, HOME and private bus -- a nudge fired 0-50 ms after the tree moved
+    // was swallowed and left the old code running in 8 of 11 trials. At 100 ms
+    // and above it produced a second, successful reload in 12 of 12. With
+    // this repository's own stow arguments -- --no-folding, which relinks file
+    // by file instead of swinging one directory link -- the whole chain came
+    // out right 13 of 13 with no delay at all.
+    //
+    // So one second is ten times what was needed, costs nothing anybody can
+    // feel, and is a margin rather than a mechanism. Three was never measured.
+    // Raising it would buy nothing, because the safety is not in the number:
+    // it is in reading the log back.
+    readonly property int settleSeconds: 1
+
+    // AND THEN CHECK, because a delay is a guess and a log line is an answer.
+    // `qs log` prints the running instance's own log, and exits 255 when
+    // there is no instance to print -- which makes one command answer both
+    // "is there a shell" and "did it take the update". "Configuration Loaded"
+    // is what a reload that worked writes; "Failed to load configuration" is
+    // what a reload that did not writes; the LAST of the two is the state the
+    // shell is in now. A nudge that produced neither is counted a failure as
+    // well, and costs one more nudge.
+    //
+    // ONE RETRY AND NOT A LOOP. The two things a second nudge can fix are a
+    // swallowed first one and a stow still finishing; a third would only
+    // re-ask a question whose answer is already on the screen. And what
+    // follows a failed retry is deliberately NOT a restart, for the reason at
+    // the top: the shell is still up and still working, so the worst thing
+    // this could do at that point is take it away. It prints the nudge
+    // instead, to be run again once the configuration parses.
+
+    // WHAT ELSE HAS TO BE TOLD, AND WHAT DOES NOT. Both compositors were put
+    // in a nested headless instance of their own -- own runtime dir, own HOME,
+    // own minimal config -- and asked, because what stood here was wrong in
+    // both directions.
+    //
+    // HYPRLAND IS NOT AS FRAGILE AS THIS USED TO SAY. The watch is
+    // IN_CLOSE_WRITE on the config file's inode -- and through a stow symlink
+    // it is TWO watches, one on the link and one on the target -- but it is
+    // RE-ARMED on every event, so a file renamed over the old one is picked up
+    // and the watch follows it onto the new inode. An in-place edit, an `mv`
+    // over the config, an `ln -sfn` retarget and a `git checkout` through the
+    // stow link were every one of them picked up unaided, and nothing was
+    // lost doing it: a value the new config still set stayed set. "A pull
+    // drops Hyprland back to its compiled-in defaults" does not survive being
+    // tried, and this comment should not have said it.
+    //
+    // WHAT DOES KILL THE WATCH is an unlink with a GAP before the file comes
+    // back. Remove the config, wait, put it back: the inotify fds survive
+    // holding ZERO watches and never re-arm. The recreated config was ignored,
+    // a later in-place write to it was ignored as well, and `rm` with an
+    // immediate recreate in the same command missed the change 3 of 3. Nothing
+    // is logged either way, and `hyprctl reload` is the only thing that brings
+    // the watch back.
+    //
+    // SO WHY KEEP THE RELOAD, if the pull was picked up unaided every time it
+    // was tried. Because the failure it insures against is silent, permanent
+    // and one command wide, and the thing that could produce it is not fully
+    // pinned down. Two halves of that were measured and one was not. `stow
+    // --no-folding` is NOT the unlinker: a link that is already right came
+    // through three re-runs with the same inode and the same ctime, including
+    // a re-run after the target's own inode had changed underneath it, and the
+    // installer never passes -R or -D. What is not pinned down is git's own
+    // write path, which does not always rename over a file. A `git checkout`
+    // through the stow link was picked up in the probe, so it is not happening
+    // there -- but "not on that path, that time" is not "never", and the cost
+    // of being wrong is a session whose compositor never reloads again and
+    // never says so. One `hyprctl reload`, on the one pull in twenty that
+    // moved hypr/, buys that away.
+    //
+    // NIRI NEEDS NOTHING AT ALL, for a better reason than "it live-reloads on
+    // save": it holds no inotify fd whatsoever and POLLS, every 500 ms, off
+    // its own timerfd. An in-place edit landed in 406-505 ms over six trials,
+    // an `mv` over the file in 174-506 ms 3 of 3, an `ln -sfn` retarget in
+    // 175 ms, and the remove-wait-recreate that blinds Hyprland for good was
+    // picked up 93 ms after the file came back. On a config it cannot parse it
+    // keeps the last good one, stays up, warns ONCE rather than every tick,
+    // and applied the fix 205 ms after it was saved with nobody asking.
+    //
+    // `niri msg action load-config-file` DOES EXIST -- 5-6 ms against this
+    // repository's own 70 KB config, which is less than `niri --version`
+    // costs, so the figure is the CLI binary starting and the reload itself
+    // does not show up at all. It is not called here because there is nothing
+    // for it to do. The header of niri/.config/niri/config.kdl used to say no
+    // such command existed; it has been corrected.
+    //
+    // ONE THING BOTH DO, and it belongs to neither: a config that stops
+    // SETTING an option resets that option to the compiled-in default,
+    // silently. Emptying hyprland.lua took a gap from 7 back to 20 with
+    // `hyprctl configerrors` reporting nothing at all, and emptying config.kdl
+    // dropped niri's layout list back to a bare `us`. That is what "the config
+    // no longer says it" means in both, and not a weakness of either.
+    //
+    // ONLY WHEN hypr/ ACTUALLY MOVED, which is why the diff is taken across
+    // the pull rather than the reload being unconditional. `hyprctl reload`
+    // re-runs hyprland.lua from the top and throws away everything
+    // desktop-tweak has eval'd into the running compositor since login --
+    // gaps, rounding, borders, the pointer -- which that script documents at
+    // length and is a real cost to pay for nothing. Counted on this history:
+    // 1 of the last 20 merges touched hypr/, so 19 of them would have paid it.
+    // When the pull DID move hypr/ the cost is not avoidable anyway: whichever
+    // of the two re-reads the config, the compositor's own watch or this line,
+    // re-runs the same file from the top.
+    //
+    // AND THEN configerrors, because `hyprctl reload` answers "ok" and exits 0
+    // whether or not what it just read is full of errors -- the same trap
+    // hyprland.lua warns about beside the window-rule opacity field. AND
+    // configerrors EXITS 0 TOO: measured on a Lua syntax error, on an unknown
+    // config key and on a clean config alike, and on a clean one it prints two
+    // blank lines. Neither command's status means anything, so the only signal
+    // there is is whether configerrors has a non-blank line to show, which is
+    // what `grep .` below asks it.
     //
     // `compositor is hyprland` is this repository's own probe and it reads the
     // compositor's socket rather than XDG_CURRENT_DESKTOP, so it is right
@@ -617,21 +757,56 @@ Singleton {
     // is files having moved while a shell holds the old inodes, and that
     // happens whether or not the units that ran afterwards all succeeded -- so
     // a failed unit must not be what leaves the session running stale code
-    // with no sign of it. The cost of the other case is a bar that blinks once
-    // for nothing, which is a fair price at a button somebody pressed on
-    // purpose.
+    // with no sign of it.
     //
-    // symlinks_post says out loud that it restarts none of this, and that
-    // stays true: restarting the session someone is sitting in does not belong
-    // to a step whose job was to make symlinks. It does belong here, where the
-    // whole of what was pressed was "take the update".
+    // symlinks_post prints these same steps for a person to run by hand and
+    // still runs none of them, which is a smaller claim than it used to be:
+    // what it declined to do was restart a session somebody was sitting in,
+    // and nothing here restarts anything any more.
+    //
+    // NO ${} IN THE SHELL BELOW. This is a JavaScript template literal, so
+    // ${...} would be read by QML and not by sh; $name and $(...) are safe and
+    // are all that is used. Backticks are out for the same reason.
     readonly property string takeUpdateScript: `
+        head_before=$(git rev-parse HEAD)
+
         ./install.sh update --pull
+
         sleep ${root.settleSeconds}
-        compositor is hyprland && hyprctl reload
-        qs kill
-        sleep 1
-        qs -d -p ~/.config/quickshell/shell.qml
+
+        if [ -n "$head_before" ] && ! git diff --quiet "$head_before" HEAD -- hypr/ &&
+           compositor is hyprland; then
+            hyprctl reload
+            hyprctl configerrors | grep . &&
+                echo '^ hyprctl said "ok" anyway; it always does'
+        fi
+
+        last_load() {
+            qs log -t 200 2>/dev/null |
+                grep -Eo 'Configuration Loaded|Failed to load configuration' |
+                tail -1
+        }
+
+        nudge_shell() {
+            : > ~/.config/quickshell/.reload-nudge
+            rm -f ~/.config/quickshell/.reload-nudge
+            sleep ${root.settleSeconds}
+            [ "$(last_load)" = 'Configuration Loaded' ]
+        }
+
+        if ! qs log -t 1 >/dev/null 2>&1; then
+            qs -d --no-duplicate
+        elif ! nudge_shell && ! nudge_shell; then
+            echo
+            echo 'The shell did not load the new configuration and is STILL'
+            echo 'RUNNING the code it had, which is why this does not restart'
+            echo 'it: a reload that fails costs nothing, a cold start that'
+            echo 'fails leaves no shell at all. Fix what the log below names,'
+            echo 'then nudge it again with:'
+            echo '  : > ~/.config/quickshell/.reload-nudge && rm -f ~/.config/quickshell/.reload-nudge'
+            echo
+            qs log -t 40
+        fi
     `
 
     function takeUpdate(): void {
