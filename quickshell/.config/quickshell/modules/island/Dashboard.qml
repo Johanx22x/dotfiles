@@ -19,6 +19,21 @@
 //   middle  the sliders reached for without leaving the panel, and capture
 //   right   what is playing, and what this machine is doing
 //
+// WHERE THE MEDIA CARD COMES FROM. It is a port of end-4/dots-hyprland's
+// PlayerControl, taken from that repository's source rather than drawn from a
+// screenshot -- it is Quickshell/QML too, so the sizes, insets, radii and the
+// arrangement of the controls are theirs by copy. The note above that card
+// lists their numbers and the pull request lists what could not be taken
+// as-is.
+//
+// EVERY CARD IS AS TALL AS ITS COLUMN AND CENTRES WHAT IS IN IT. The panel is
+// as tall as its tallest column, so two of the three always have height to
+// spare; the question is only where it goes. It goes into the cards, evenly
+// above and below their content, rather than into gaps between them -- which
+// is why the middle column is one card rather than two and why the media card
+// does NOT stretch (it is the one card here whose proportions are somebody
+// else's, so the slack in that column goes to the dials' card instead).
+//
 // It fits because six things left, and each of them left for a reason that
 // is written where it used to be:
 //
@@ -42,6 +57,7 @@ import Quickshell
 import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import QtQuick.Effects
+import QtQuick.Layouts
 import QtQuick
 import "root:/"
 import "root:/modules/bar"
@@ -126,28 +142,19 @@ Item {
     readonly property int gaugeSpacing: 8
     readonly property int gaugeCardHeight: root.gaugeSize + root.cardPad * 2
 
-    // The cover art is a square and everything beside it is shorter, so the
-    // square is what sets the height of the top half of the media card. 96 and
-    // not the 110 it was: the block beside it is three short lines now rather
-    // than an eyebrow over a two-line title, and a square much taller than the
-    // text it is captioning stops reading as a pair.
-    readonly property int coverSize: 96
-
-    // The two circular skip buttons, and the play button beside the text.
-    // The ratio between them is what carries the hierarchy -- one control here
-    // is reached for without looking and the other two are not.
-    readonly property int skipSize: 34
-    readonly property int playSize: 56
-
-    // 2*16 padding + cover + 12 + the transport row. Stated rather than bound
-    // to the children because it is one of the three candidates for the panel
-    // height below, and binding it to items that are themselves inside a card
-    // sized by that height is a loop.
+    // THE MEDIA CARD'S NATURAL SIZE, AND IT IS end-4's. Their
+    // Appearance.sizes has mediaControlsWidth 440 and mediaControlsHeight 160,
+    // and the card they draw inside that is inset by elevationMargin (10) on
+    // every side for a drop shadow. So the card itself is 420 x 140.
     //
-    // TWO ROWS WHERE THERE WERE THREE. The progress line and the transport
-    // used to be separate rows under the cover; they are one row now, and the
-    // 48 pixels that freed is what the dials below spend on being bigger.
-    readonly property int mediaHeight: root.cardPad * 2 + root.coverSize + 12 + root.skipSize
+    // The width is not asserted here: the right column is a sum of the dials
+    // above, and at 124 it comes to 420 -- their width exactly, which is why
+    // that number is left alone. The height IS asserted, as the term this
+    // column contributes to the panel height below, and the card grows past it
+    // when the column has room: their layout is built to stretch, with the art
+    // square on Layout.fillHeight and a Layout.fillHeight spacer between the
+    // artist and the controls.
+    readonly property int mediaHeight: 140
 
     // THE PANEL IS AS TALL AS ITS TALLEST COLUMN, and which column that is
     // depends on the machine: the calendar grows with the type size, the
@@ -161,7 +168,7 @@ Item {
     // cards are sized from the answer.
     readonly property int bodyHeight: Math.max(
         root.clockHeight + root.gap + month.implicitHeight + root.cardPad * 2,
-        controlsCard.height + root.gap + captureColumn.implicitHeight + root.cardPad * 2,
+        midColumn.implicitHeight + root.cardPad * 2,
         root.mediaHeight + root.gap + root.gaugeCardHeight)
 
     implicitWidth: root.leftWidth + root.midWidth + root.rightWidth + root.gap * 2
@@ -318,59 +325,36 @@ Item {
         }
 
         // ================ Middle: what you reach for ================
+        //
+        // ONE CARD, AND IT WAS TWO. The top one held "the things you set" and
+        // the bottom one "the things that produce a file", which was a real
+        // distinction and a card each was a reasonable way to draw it -- while
+        // the top one had four rows in it. Do not disturb leaving took it to
+        // one slider on a desktop, and a card whose entire content is a single
+        // row is not a group, it is a row with a border round it. The two are
+        // one card now with a rule where the boundary was, so the grouping
+        // survives and the fourteen pixels between the cards do not.
         Column {
             width: root.midWidth
             height: parent.height
-            spacing: root.gap
 
-            // The two things you set by feel: the backlight and the volume.
-            //
-            // DO NOT DISTURB IS NOT HERE ANY MORE either, and it is the reason
-            // this card has no rule left in it -- the rule existed to separate
-            // the one toggle from the two sliders, and with the toggle gone it
-            // separated nothing from nothing. The mute went to the panel the
-            // bell opens, which is the thing it actually governs: a list of
-            // notifications that cannot silence them was the odd arrangement,
-            // and a dashboard about this DESKTOP was a strange place to keep a
-            // setting about that list. See the header of
-            // modules/notifications/NotificationHistory.qml.
-            //
-            // On a desktop what is left is a single slider in a card of its
-            // own, which is thinner than this card has ever been and is still
-            // the right shape: the capture card below is a different kind of
-            // thing -- two acts that produce a file -- and folding the volume
-            // in beside them to fill the space would be grouping by leftovers.
-            //
-            // WI-FI AND BLUETOOTH ARE NOT HERE ANY MORE, and their absence is
-            // most of why this panel got shorter. Each was a row plus a list
-            // that opened underneath it, and between them they owned this
-            // card: the rules either side, the "one list open at a time" rule
-            // that closed the other when one opened, and the third column of
-            // the old layout, which existed only because a list that grows
-            // pushes everything under it off the bottom of a card.
-            //
-            // Both have a full page in the settings window -- see
-            // modules/settings/pages/NetworkPage.qml and BluetoothPage.qml --
-            // and those pages do more than a dashboard row can: saved
-            // networks, forgetting one, pairing, per-device volume. A
-            // truncated second copy of a better screen is not worth the
-            // panel's tallest card.
             Card {
-                id: controlsCard
-
                 width: parent.width
-                // FROM ITS CONTENT. This card holds one slider on a desktop
-                // and two on a laptop, and it is also the first term of the
-                // capture card's height below, so a number picked by hand here
-                // would be a number to re-pick every time a row joins or
-                // leaves -- which it just did.
-                height: controlsColumn.implicitHeight + root.cardPad * 2
+                height: parent.height
 
+                // CENTRED AND NOT FILLED, the same treatment the calendar
+                // beside it gets: this card is as tall as the panel, the panel
+                // is as tall as its tallest column, and whatever is left over
+                // belongs evenly above and below rather than all at the bottom.
                 Column {
-                    id: controlsColumn
+                    id: midColumn
 
-                    anchors.fill: parent
-                    anchors.margins: root.cardPad
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: root.cardPad
+                    anchors.rightMargin: root.cardPad
+                    anchors.verticalCenter: parent.verticalCenter
+
                     spacing: root.gap
 
                     // ABOVE THE VOLUME AND WITH NO RULE BETWEEN THEM. They are
@@ -393,32 +377,13 @@ Item {
                     VolumeControl {
                         width: parent.width
                     }
-                }
-            }
 
-            // Capture: the two things that produce a file.
-            Card {
-                width: parent.width
-                height: root.bodyHeight - controlsCard.height - root.gap
-
-                // CENTRED AND NOT FILLED, which is the same treatment the
-                // media card's contents get and for the same reason. This card
-                // is given whatever height the controls card above it did not
-                // take, so it has slack in it whenever another column is the
-                // tallest -- and it gained a further sixty-three pixels of it
-                // the day the mute left the card above. Anchored to the top
-                // that slack would all pool at the bottom and read as a hole;
-                // split evenly it reads as padding.
-                Column {
-                    id: captureColumn
-
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.leftMargin: root.cardPad
-                    anchors.rightMargin: root.cardPad
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    spacing: root.gap
+                    // Where the second card used to start.
+                    Rectangle {
+                        width: parent.width
+                        height: 1
+                        color: Theme.outlineVariant
+                    }
 
                     RecordControl {
                         width: parent.width
@@ -448,40 +413,94 @@ Item {
             spacing: root.gap
 
             // ---------------- Media ----------------
-            // Cover on the left as a square; beside it the title in bold, the
-            // artist under it in muted text and one combined time reading
-            // under that; the play button large and round on the right of the
-            // block. Under all of it a single row: skip back, a plain progress
-            // bar, skip forward.
             //
-            // WHAT LEFT WITH THE TAB. The album line went: title and artist
-            // answer "what is this", and the album is the third fact nobody
-            // came for. The volume slider went too -- it is a row in the card
-            // to the left of this one, and having it twice in one view was
-            // only ever defensible while the two were on different tabs.
+            // A PORT OF end-4/dots-hyprland, and a deliberate one: three
+            // attempts at this card from screenshots produced three different
+            // cards and none of them was what was asked for, so the design is
+            // now taken from source rather than inferred from pixels. The
+            // original is Quickshell/QML like ours --
             //
-            // WHAT LEFT IN THE REDRAW. The "NOW PLAYING" eyebrow, the two
-            // times at opposite ends of their own row, and the cava waveform
-            // that was doing duty as a seek bar. Each is argued where it used
-            // to be. What it bought is height: two rows instead of three, and
-            // the dials below are that much bigger for it.
+            //   dots/.config/quickshell/ii/modules/ii/mediaControls/PlayerControl.qml
+            //
+            // -- so the numbers below are THEIRS, copied rather than chosen:
+            //
+            //   card                 440 x 160, less a 10px elevation margin
+            //                        on every side, so 420 x 140 drawn
+            //   card radius          19  (their popupRounding: rounding.large
+            //                        23, less hyprlandGapsOut 5, plus 1)
+            //   content inset        13, with 15 between the art and the text
+            //   art square           as tall as the content, radius 8
+            //                        (rounding.verysmall)
+            //   info column          2 between the lines
+            //   skip buttons         24 x 24
+            //   play button          44 x 44, radius 17 (rounding.normal)
+            //                        while playing and a circle while paused
+            //   time and play        5 above the row of controls
+            //
+            // The layout, top to bottom on the right of the art: the title,
+            // the artist, all the slack, then a block whose bottom row is
+            // skip-back / progress / skip-forward and whose line above it
+            // carries the elapsed-over-total time on the left and the play
+            // button on the right. Behind all of it the cover art again,
+            // blurred and dimmed, with the cava spectrum drawn across it.
+            //
+            // WHAT COULD NOT BE TAKEN AS-IS is listed in the pull request; the
+            // short version is that they derive the card's whole palette from
+            // the cover art with a ColorQuantizer we do not have, they draw
+            // their progress as a wavy slider, and they download every cover
+            // to disk with curl before showing it. None of those three port.
+            //
+            // NOT IMPROVED. Where their design looks odd to me it is
+            // implemented anyway; the instruction on this card is fidelity.
             Card {
                 id: mediaCard
 
                 width: parent.width
-                height: root.bodyHeight - root.gaugeCardHeight - root.gap
+
+                // THEIR HEIGHT, NOT THE COLUMN'S. This card used to take
+                // whatever the dials below did not, which is what every other
+                // stretching card in this panel does -- and doing it here
+                // would defeat the point of the port: their layout puts the
+                // art square on Layout.fillHeight, so a card 88 pixels taller
+                // than theirs draws an art square 88 pixels bigger and an
+                // info column that much narrower. The card is 420 x 140
+                // because that is what 440 x 160 less their elevation margin
+                // is, and the whole instruction on this card is fidelity.
+                //
+                // The height the column has spare goes to the dials' card
+                // instead; see there.
+                height: root.mediaHeight
+
+                // 19, and theirs -- not this shell's cardRadius. The point of
+                // the port is that this card looks like that card.
+                radius: 19
+
+                // The blurred cover is drawn to the card's own edges, so the
+                // card has to cut it to its corners.
+                clip: true
 
                 // Same rule the island uses: prefer what is actually playing,
                 // fall back to the first player that exists so a paused track
                 // still fills the card.
                 readonly property var player: root.mediaPlayer
 
+                // THEIR TYPE SCALE, EXPRESSED IN OURS. Theirs is in pixels
+                // against a body size of 16 -- large 17, small 15, smaller 12,
+                // huge 22 -- and everything in this shell is in points against
+                // Theme.fontSize, which is a setting. Kept as ratios rather
+                // than as their literals so the card still answers to that
+                // setting; a card that ignored it would be the only one.
+                readonly property real titleSize: Theme.fontSize * 17 / 16
+                readonly property real artistSize: Theme.fontSize * 12 / 16
+                readonly property real timeSize: Theme.fontSize * 15 / 16
+                readonly property real glyphSize: Theme.fontSize * 22 / 16
+
                 // WHEN NOTHING IS PLAYING the card is one line of text and the
-                // rest of the view is untouched. That is the whole reason this
-                // is a card in a column rather than a section that collapses:
-                // a card that shrank would drag the dials up into the gap and
-                // the panel would be a different shape depending on whether
-                // music happened to be on.
+                // rest of the view is untouched. Their build puts a separate
+                // "No active player" card in the same place; ours keeps the
+                // sentence it already had, because this card is one of two in
+                // a column and a card that changed shape would drag the dials
+                // up into the gap.
                 Text {
                     anchors.centerIn: parent
                     visible: !mediaCard.player
@@ -491,55 +510,44 @@ Item {
                     color: Theme.textOnSurfaceVariant
                 }
 
-                Column {
+                Item {
                     id: media
 
+                    anchors.fill: parent
+                    visible: !!mediaCard.player
+
                     // ---- Cover art, and the fallback for Firefox players ----
-                    // Zen publishes title, album and artist over MPRIS but NOT
-                    // mpris:artUrl, so trackArtUrl is empty and the card came
-                    // up blank. Verified on the bus while a track was playing:
-                    //
-                    //   busctl --user get-property \
-                    //     org.mpris.MediaPlayer2.firefox.instance_1_148 \
-                    //     /org/mpris/MediaPlayer2 \
-                    //     org.mpris.MediaPlayer2.Player Metadata
-                    //
-                    // returns xesam:title / album / artist / url and no art
-                    // key, and nothing is written to any temp directory
-                    // either. Firefox has had this since 81 (bug 1642729:
-                    // fetch the MediaSession image, save it in the profile,
-                    // publish a file:// URL), so the code is there and
-                    // something in Zen is not running it. That is the real
-                    // bug and it is NOT fixed here.
-                    //
-                    // What is fixed here is the symptom, using the one thing
-                    // Zen does publish: xesam:url. For anything YouTube --
+                    // Zen publishes title, album and artist over MPRIS but not
+                    // mpris:artUrl for every track, so the card came up blank.
+                    // What is worked around here is the symptom, using the one
+                    // thing it does publish: xesam:url. For anything YouTube --
                     // which is what music.youtube.com is -- the video id in
                     // that URL maps to a public thumbnail. No key, no API, no
                     // extra process.
                     //
                     // Scope, so nobody expects more than it does: this covers
-                    // YouTube URLs only. Any other site playing in Zen still
-                    // shows the stand-in, exactly as before. Every non-Firefox
-                    // player is untouched -- trackArtUrl wins whenever it has
-                    // a value.
+                    // YouTube URLs only. Any other site still shows the
+                    // stand-in. Every non-Firefox player is untouched --
+                    // trackArtUrl wins whenever it has a value.
                     readonly property string youtubeId: {
                         const meta = mediaCard.player?.metadata ?? null;
                         const url = meta ? (meta["xesam:url"] ?? "") : "";
-                        const m = url.match(/[?&]v=([\w-]{11})/) || url.match(/youtu\.be\/([\w-]{11})/);
+                        const m = url.match(/[?&]v=([-\w]{11})/) || url.match(/youtu[.]be\/([-\w]{11})/);
                         return m ? m[1] : "";
                     }
 
                     // maxresdefault first, mqdefault as the retry. Both are
                     // 16:9 and BAR-FREE, which is the point: hqdefault is
-                    // 480x360 and pads a widescreen frame with black bands,
-                    // and those bands would be part of the image the sharp
-                    // layer draws. maxresdefault does not exist for every
-                    // video, hence the retry rather than picking one.
+                    // 480x360 and pads a widescreen frame with black bands.
+                    // maxresdefault does not exist for every video, hence the
+                    // retry rather than picking one.
                     property bool maxResFailed: false
-                    onYoutubeIdChanged: maxResFailed = false
+                    onYoutubeIdChanged: media.maxResFailed = false
 
-                    readonly property string artSource: {
+                    // WHAT THE PLAYER IS OFFERING RIGHT NOW, which is not the
+                    // same thing as what the card should be drawing. See
+                    // `held` below for why the two had to be separated.
+                    readonly property string offered: {
                         const direct = mediaCard.player?.trackArtUrl ?? "";
                         if (direct)
                             return direct;
@@ -549,339 +557,417 @@ Item {
                         return "https://i.ytimg.com/vi/" + media.youtubeId + "/" + size + ".jpg";
                     }
 
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.margins: root.cardPad
-                    // Centred rather than pinned to the top: this card takes
-                    // whatever height the dials below it did not, so there are
-                    // a few pixels of slack and they belong evenly above and
-                    // below rather than all at the bottom.
-                    anchors.verticalCenter: parent.verticalCenter
+                    readonly property real fraction: {
+                        const len = mediaCard.player?.length ?? 0;
+                        if (len <= 0)
+                            return 0;
+                        return Math.max(0, Math.min(1, root.livePosition / len));
+                    }
 
-                    spacing: 12
-                    visible: !!mediaCard.player
+                    // ---- The cover that is actually on screen ----
+                    //
+                    // THE COVER USED TO APPEAR AS A TRACK STARTED AND VANISH A
+                    // FRAME LATER, and both halves of why were measured on the
+                    // bus rather than guessed at. Watching every
+                    // PropertiesChanged on org.mpris.MediaPlayer2.Player while
+                    // a track started in Zen:
+                    //
+                    //   19:38:53.286  Metadata, no mpris:artUrl    (new track)
+                    //   19:38:53.730  Metadata WITH mpris:artUrl    -> art
+                    //   19:38:53.732  Metadata, key ABSENT again    -> gone
+                    //   19:38:54.097  Metadata WITH a DIFFERENT file -> art
+                    //   19:38:55.854  Metadata, key ABSENT again    -> gone
+                    //
+                    // Two milliseconds between having a cover and not. MPRIS
+                    // Metadata is one whole map, so a sender that rebuilds it
+                    // without the artwork key has effectively retracted the
+                    // artwork -- and this one does that repeatedly, on a track
+                    // it has already published art for. Bound straight to that,
+                    // the Image's source went empty, its status left Ready, and
+                    // a card that draws the stand-in whenever the image is not
+                    // Ready dropped the cover on the floor.
+                    //
+                    // AND THE FILE DOES NOT SURVIVE EITHER. The two URLs above
+                    // are ~/.zen/firefox-mpris/3304_257.png and _258.png --
+                    // numbered temporaries, and that directory holds exactly
+                    // one of them: 257 was already unlinked by the time 258
+                    // existed. So "remember the URL and put it back later" is
+                    // not a fix; the picture has to be held, not the path.
+                    //
+                    // WHICH IS WHAT THIS DOES. `offer` below loads whatever is
+                    // being offered and is never drawn; only when it actually
+                    // reaches Ready does its source become `held`, which is
+                    // what the two visible Images are bound to. An offer of
+                    // nothing is therefore ignored -- `held` does not change,
+                    // their source does not change, so Qt neither reloads nor
+                    // releases anything and the cover stays put.
+                    //
+                    // The Images share one decode: same URL and the same
+                    // sourceSize, so the rest are the pixmap cache answering.
+                    // That sharing is also what makes the deleted file safe --
+                    // the visible Images take their reference while the loader
+                    // still holds it, so the picture outlives the file it came
+                    // from and is never read off disk twice.
+                    //
+                    // end-4's own card does NOT survive this. It copies every
+                    // cover into a cache directory with curl and shows the
+                    // copy, and the copy's path is derived from the art URL --
+                    // so the same retraction empties the path and blanks their
+                    // card too. This is the one piece of behaviour here that
+                    // is ours rather than theirs.
+                    property string held: ""
 
-                    // ---- Cover, what is playing, and the play button ----
-                    Item {
-                        width: parent.width
-                        height: root.coverSize
+                    // WHAT MUST CLEAR IT: the track changing, and nothing else.
+                    // Holding a cover across a track change would be worse than
+                    // holding none, because it would confidently show the wrong
+                    // album -- the failure this is fixing is only ever "the
+                    // same track, source retracted".
+                    //
+                    // Built from what the track IS rather than from
+                    // mpris:trackid, which this player publishes as one
+                    // constant string for every track it plays. The player's
+                    // own bus name is in there so that a card handed a
+                    // DIFFERENT player starts from nothing: a sender that
+                    // publishes no art at all must reach the stand-in, not
+                    // inherit whatever the last one was showing.
+                    readonly property string trackKey: [
+                        mediaCard.player?.dbusName ?? "",
+                        mediaCard.player?.trackTitle ?? "",
+                        mediaCard.player?.trackAlbum ?? "",
+                        mediaCard.player?.trackArtist ?? ""
+                    ].join(" - ")
 
-                        // ClippingRectangle and NOT a Rectangle with clip:
-                        // true. A plain Item clips to its BOUNDING BOX, so the
-                        // rounded corners were painted on the rectangle and the
-                        // artwork carried straight on over them -- a square
-                        // photo sitting in a rounded frame, which is what
-                        // looked out of place against every other card here.
-                        // This one clips to the radius itself.
-                        ClippingRectangle {
-                            id: cover
+                    onTrackKeyChanged: media.held = ""
 
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
+                    // THE ONE THAT LOADS, AND IT IS NEVER DRAWN.
+                    //
+                    // No geometry: it exists to have a `status`, and an Image
+                    // loads whether or not it is visible. The sourceSize
+                    // matches the visible ones so that all of them resolve to
+                    // the same cache entry and the picture is decoded once.
+                    Image {
+                        id: offer
 
-                            width: root.coverSize
-                            height: root.coverSize
-                            radius: Theme.cardRadius - 10
-                            color: Theme.surfaceContainerHighest
+                        visible: false
+                        source: media.offered
+                        asynchronous: true
+                        sourceSize.width: 1024
 
-                            // A BLURRED COPY BEHIND, and the sharp one fitted
-                            // in front. This is damage control, not a fix:
-                            // what the player publishes is all there is.
-                            //
-                            // Measured, on the track that prompted this:
-                            // Chromium writes the MediaSession thumbnail to a
-                            // temp file and that file is 150x83. Drawn into a
-                            // square with PreserveAspectCrop it was being
-                            // magnified and cropped to its middle third, which
-                            // is most of why it looked so rough.
-                            //
-                            // Fit instead of Crop halves the magnification and
-                            // shows the whole thumbnail; the blurred fill is
-                            // what stops that leaving two empty bands. Blur is
-                            // the one treatment that costs nothing here --
-                            // there is no detail left to protect.
-                            Image {
-                                id: artBackdrop
-
-                                anchors.fill: parent
-                                source: art.source
-                                visible: false
-                                fillMode: Image.PreserveAspectCrop
-                                sourceSize.width: 1024
-                                asynchronous: true
+                        onStatusChanged: {
+                            if (offer.status === Image.Ready) {
+                                // offer.source and not media.offered -- the
+                                // resolved url is what the cache is keyed on,
+                                // and handing the visible Images anything else
+                                // would make them read the file again, which by
+                                // then may be gone.
+                                media.held = offer.source;
+                                return;
                             }
 
-                            MultiEffect {
-                                anchors.fill: parent
-                                source: artBackdrop
-                                visible: art.visible
-                                blurEnabled: true
-                                blur: 1.0
-                                blurMax: 48
-                                brightness: -0.35
-                                saturation: 0.2
-                            }
+                            // The retry described on media.offered. It lives
+                            // HERE, on the loader, because the loader is the
+                            // only thing that ever sees a failure now.
+                            if (offer.status === Image.Error && media.youtubeId && !media.maxResFailed)
+                                media.maxResFailed = true;
+                        }
+                    }
+
+                    // ---- The card's own background: the cover, blurred ----
+                    //
+                    // THEIRS, and the thing that makes their card look the way
+                    // it does. The art is drawn again at card size, cropped,
+                    // blurred, and then covered by the card's own colour at
+                    // 0.7 -- their ColorUtils.transparentize(colLayer0, 0.3).
+                    //
+                    // It is a MultiEffect and not their layer effect because
+                    // that is what this shell already uses for blur; the
+                    // result is the same treatment.
+                    Image {
+                        id: artBackdrop
+
+                        anchors.fill: parent
+                        source: media.held
+                        visible: false
+                        fillMode: Image.PreserveAspectCrop
+                        sourceSize.width: 1024
+                        asynchronous: true
+                    }
+
+                    MultiEffect {
+                        anchors.fill: parent
+                        source: artBackdrop
+                        visible: media.held !== ""
+                        blurEnabled: true
+                        blur: 1.0
+                        blurMax: 48
+                        saturation: 0.2
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        visible: media.held !== ""
+                        color: Qt.alpha(Theme.surfaceContainerHigh, 0.7)
+                    }
+
+                    // ---- The spectrum, across the whole card ----
+                    //
+                    // Their WaveVisualizer, which is cava drawn as one
+                    // continuous wave over the card. Ours is the same cava
+                    // feed through the component this shell already has, so it
+                    // is a row of bars rather than a wave -- see the pull
+                    // request. Behind the text, as theirs is.
+                    Waveform {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        maxHeight: Math.round(mediaCard.height * 0.5)
+                        barWidth: 6
+                        spacing: Math.max(2, (mediaCard.width - Spectrum.bars * 6) / (Spectrum.bars - 1))
+                        opacity: 0.25
+                    }
+
+                    // ---- Their RowLayout ----
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 13
+                        spacing: 15
+
+                        // Art background: a square as tall as the content,
+                        // exactly as theirs -- Layout.fillHeight with the
+                        // width following the height.
+                        Rectangle {
+                            id: artBackground
+
+                            Layout.fillHeight: true
+                            implicitWidth: height
+
+                            radius: 8
+                            color: Qt.alpha(Theme.surfaceContainerHighest, 0.5)
+                            clip: true
 
                             Image {
                                 id: art
 
                                 anchors.fill: parent
-                                source: media.artSource
-                                // Ready and not just "source is set": a player
-                                // that publishes no art would otherwise leave
-                                // the broken-image chequerboard in the card.
+
+                                // `held` and not `offered`: this is the cover
+                                // that has already loaded, so it changes only
+                                // when there is a new picture to change to.
+                                source: media.held
+
+                                // PreserveAspectCrop, theirs. The square is
+                                // filled and the overflow is cut, which is why
+                                // there is no letterboxing to hide.
+                                fillMode: Image.PreserveAspectCrop
                                 visible: status === Image.Ready
-
-                                // The retry described on media.artSource. An
-                                // Error on the maxres URL means that video has
-                                // no maxres thumbnail, so drop to mqdefault;
-                                // the flag resets by itself on the next track.
-                                onStatusChanged: {
-                                    if (status === Image.Error && media.youtubeId && !media.maxResFailed)
-                                        media.maxResFailed = true;
-                                }
-                                fillMode: Image.PreserveAspectFit
-                                asynchronous: true
-
-                                // Decoded at up to 1024 rather than at the size
-                                // it is drawn. sourceSize never ENLARGES -- Qt
-                                // only uses it to scale down -- so a 150px
-                                // thumbnail costs nothing here and a real 600px
-                                // cover, which is what other players send,
-                                // keeps its detail.
                                 sourceSize.width: 1024
-
+                                asynchronous: true
                                 mipmap: true
                                 smooth: true
                             }
 
                             // The stand-in. A blank square reads as a load that
                             // failed; a glyph reads as "this track has no
-                            // cover".
+                            // cover". Not in their build, which leaves the
+                            // square empty.
                             Text {
                                 anchors.centerIn: parent
                                 visible: !art.visible
                                 text: Icons.music
                                 font.family: Theme.fontFamily
-                                font.pointSize: 30
+                                font.pointSize: Math.max(12, Math.round(artBackground.height * 0.28))
                                 color: Theme.outline
                             }
                         }
 
-                        // OUT OF THE TRANSPORT ROW AND BESIDE THE TEXT. It is
-                        // the one control on this card anybody reaches for
-                        // without looking, and in a row of three it was
-                        // distinguished only by being a few pixels wider than
-                        // its neighbours. Alone on the right of the block it
-                        // is the largest round thing in the column and cannot
-                        // be mistaken for either skip.
-                        //
-                        // Centred on the COVER and not on the card: the card
-                        // has slack in it (see the note on `media` above) and
-                        // a button centred on the card would drift away from
-                        // the block it belongs to as that slack changed.
-                        RoundButton {
-                            id: playButton
+                        ColumnLayout {
+                            Layout.fillHeight: true
+                            Layout.fillWidth: true
 
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
 
-                            diameter: root.playSize
-                            filled: true
-                            glyph: mediaCard.player?.isPlaying ? Icons.pause : Icons.play
-                            enabled: mediaCard.player?.canTogglePlaying ?? false
-                            onActivated: mediaCard.player?.togglePlaying()
-                        }
-
-                        Column {
-                            anchors.left: cover.right
-                            anchors.leftMargin: 14
-                            anchors.right: playButton.left
-                            anchors.rightMargin: 14
-                            anchors.verticalCenter: parent.verticalCenter
-
-                            spacing: 3
-
-                            // NO EYEBROW. "NOW PLAYING" over a paused track was
-                            // the one string on this card that could be false,
-                            // and it was solved by making it say "PAUSED"
-                            // instead -- a label whose entire job was to
-                            // correct itself. The transport glyph says which of
-                            // the two states this is, in one mark, and it is
-                            // the mark you would look at anyway.
                             Text {
-                                width: parent.width
-                                text: mediaCard.player?.trackTitle ?? ""
-                                // ONE LINE. It was two, from when the title
-                                // was the only thing under a label; three
-                                // lines of text beside a square that is now
-                                // shorter have to be three lines, and a title
-                                // that reflows the two readings under it is a
-                                // block that changes height with the track.
+                                Layout.fillWidth: true
+
+                                text: mediaCard.player?.trackTitle ?? "Untitled"
                                 elide: Text.ElideRight
                                 font.family: Theme.fontFamily
-                                font.pointSize: Theme.fontSize + 2
+                                font.pointSize: mediaCard.titleSize
                                 font.weight: Font.Bold
                                 color: Theme.textOnSurface
                             }
 
                             Text {
-                                width: parent.width
+                                Layout.fillWidth: true
+
                                 // Through Track, not raw: it strips the
                                 // " - Topic" suffix YouTube's auto-generated
                                 // channels carry. Shared with the island so the
                                 // same track never reads two different ways in
-                                // two places.
+                                // two places. Their StringUtils does the same
+                                // job with a different list of suffixes.
                                 text: Track.artist(mediaCard.player?.trackArtist ?? "")
                                 elide: Text.ElideRight
                                 font.family: Theme.fontFamily
-                                font.pointSize: Theme.fontSize - 1
-                                color: Theme.textOnSurfaceVariant
-                            }
-
-                            // ONE READING AND NOT TWO AT OPPOSITE ENDS. The
-                            // elapsed time and the length used to sit at the
-                            // two ends of the progress row, which put the only
-                            // pair of numbers on the card as far apart as the
-                            // card allowed -- "how far in am I" is a question
-                            // about the two of them together, and reading it
-                            // meant crossing the whole width. Together they are
-                            // one glance, and the row they left is what let the
-                            // progress line join the transport.
-                            Text {
-                                width: parent.width
-                                visible: transport.seekable
-                                text: `${root.clockFormat(root.livePosition)} / ${root.clockFormat(mediaCard.player?.length ?? 0)}`
-                                elide: Text.ElideRight
-                                font.family: Theme.fontFamily
-                                font.pointSize: Theme.fontSize - 3
+                                font.pointSize: mediaCard.artistSize
                                 color: Theme.outline
                             }
-                        }
-                    }
 
-                    // ---- Transport, with the progress line running through it
-                    //
-                    // ONE ROW: skip back, the line, skip forward. The line used
-                    // to be a row of its own with the transport centred under
-                    // it, which spent two rows and a gap on three marks and a
-                    // rule -- and the skips, being the two controls that move
-                    // ALONG the track, are exactly the two that belong at its
-                    // ends. The play button is not among them; see the note on
-                    // it above.
-                    //
-                    // A PLAIN BAR AND NOT THE WAVEFORM. This drew the same cava
-                    // spectrum the island's capsule draws, twice, with the
-                    // played part clipped out of a copy in a brighter colour --
-                    // real audio rather than a decorative squiggle, which was
-                    // the argument for it. What it was not was legible AS A
-                    // POSITION: the thing a progress line has to answer is "how
-                    // far through am I", and a fourteen-band spectrum answers it
-                    // with an edge that lands in a different place on the bar
-                    // depending on how loud the track happens to be there.
-                    // The waveform is not gone -- it is still what the island
-                    // draws beside the title, where being audio IS the job.
-                    Item {
-                        id: transport
-
-                        width: parent.width
-                        height: root.skipSize
-
-                        // Only when the player actually reports a position. A
-                        // progress line frozen at zero is worse than none, and
-                        // the reading above it would be a lie.
-                        readonly property bool seekable: (mediaCard.player?.lengthSupported ?? false)
-                            && (mediaCard.player?.length ?? 0) > 0
-
-                        readonly property real fraction: {
-                            const len = mediaCard.player?.length ?? 0;
-                            if (len <= 0)
-                                return 0;
-                            return Math.max(0, Math.min(1, root.livePosition / len));
-                        }
-
-                        RoundButton {
-                            id: previous
-
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-
-                            diameter: root.skipSize
-                            glyph: Icons.skipPrevious
-                            enabled: mediaCard.player?.canGoPrevious ?? false
-                            onActivated: mediaCard.player?.previous()
-                        }
-
-                        RoundButton {
-                            id: next
-
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-
-                            diameter: root.skipSize
-                            glyph: Icons.skipNext
-                            enabled: mediaCard.player?.canGoNext ?? false
-                            onActivated: mediaCard.player?.next()
-                        }
-
-                        // Between the two, and measured off them rather than
-                        // given a share of the width.
-                        Item {
-                            id: line
-
-                            anchors.left: previous.right
-                            anchors.right: next.left
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 12
-                            anchors.verticalCenter: parent.verticalCenter
-
-                            height: parent.height
-                            visible: transport.seekable
-
-                            Rectangle {
-                                id: track
-
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-
-                                height: 4
-                                radius: height / 2
-                                color: Theme.outlineVariant
-
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.top: parent.top
-                                    anchors.bottom: parent.bottom
-
-                                    width: parent.width * transport.fraction
-                                    radius: parent.radius
-                                    color: Theme.primary
-
-                                    // Smoothed, or the fill jumps twice a
-                                    // second instead of creeping. Same 480 the
-                                    // old seek bar used, which is just under
-                                    // the poll.
-                                    Behavior on width {
-                                        NumberAnimation { duration: 480 }
-                                    }
-                                }
+                            // Their spacer: everything above sits at the top,
+                            // everything below at the bottom.
+                            Item {
+                                Layout.fillHeight: true
                             }
 
-                            // The target is the whole row height, not the four
-                            // pixels the bar is drawn at -- the same trade the
-                            // notification panel's scrollbar makes, and for the
-                            // same reason: the right thickness to look at is an
-                            // unfair thing to ask anyone to hit.
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                enabled: mediaCard.player?.canSeek ?? false
-                                onClicked: mouse => {
-                                    const p = mediaCard.player;
-                                    if (!p)
-                                        return;
-                                    p.position = (mouse.x / line.width) * p.length;
+                            Item {
+                                Layout.fillWidth: true
+                                implicitHeight: trackTime.implicitHeight + sliderRow.implicitHeight
+
+                                Text {
+                                    id: trackTime
+
+                                    anchors.bottom: sliderRow.top
+                                    anchors.bottomMargin: 5
+                                    anchors.left: parent.left
+
+                                    text: root.clockFormat(root.livePosition) + " / " + root.clockFormat(mediaCard.player?.length ?? 0)
+                                    elide: Text.ElideRight
+                                    font.family: Theme.fontFamily
+                                    font.pointSize: mediaCard.timeSize
+                                    color: Theme.outline
+                                }
+
+                                RowLayout {
+                                    id: sliderRow
+
+                                    anchors.bottom: parent.bottom
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+
+                                    TrackChangeButton {
+                                        glyph: Icons.skipPrevious
+                                        enabled: mediaCard.player?.canGoPrevious ?? false
+                                        onActivated: mediaCard.player?.previous()
+                                    }
+
+                                    Item {
+                                        id: progressBarContainer
+
+                                        Layout.fillWidth: true
+                                        implicitHeight: 4
+
+                                        // THEIRS IS A WAVY SLIDER, and this is
+                                        // a plain bar -- see the pull request.
+                                        Rectangle {
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+
+                                            height: 4
+                                            radius: height / 2
+                                            color: Theme.secondaryContainer
+
+                                            Rectangle {
+                                                anchors.left: parent.left
+                                                anchors.top: parent.top
+                                                anchors.bottom: parent.bottom
+
+                                                width: parent.width * media.fraction
+                                                radius: parent.radius
+                                                color: Theme.primary
+
+                                                // Smoothed, or the fill jumps
+                                                // twice a second instead of
+                                                // creeping. Same 480 the old
+                                                // seek bar used, just under
+                                                // the poll.
+                                                Behavior on width {
+                                                    NumberAnimation { duration: 480 }
+                                                }
+                                            }
+                                        }
+
+                                        // The target is taller than the bar it
+                                        // drives -- four pixels is the right
+                                        // thickness to look at and an unfair
+                                        // thing to ask anyone to hit.
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            anchors.topMargin: -10
+                                            anchors.bottomMargin: -10
+
+                                            cursorShape: Qt.PointingHandCursor
+                                            enabled: mediaCard.player?.canSeek ?? false
+
+                                            onClicked: mouse => {
+                                                const p = mediaCard.player;
+                                                if (!p || !p.length)
+                                                    return;
+                                                p.position = (mouse.x / progressBarContainer.width) * p.length;
+                                            }
+                                        }
+                                    }
+
+                                    TrackChangeButton {
+                                        glyph: Icons.skipNext
+                                        enabled: mediaCard.player?.canGoNext ?? false
+                                        onActivated: mediaCard.player?.next()
+                                    }
+                                }
+
+                                // 44 across, on the same line as the time and
+                                // hard against the right edge; a rounded
+                                // SQUARE while it is playing and a circle when
+                                // it is not, which is theirs and is the one
+                                // detail that makes the button read as a state
+                                // rather than as a button.
+                                Rectangle {
+                                    id: playPause
+
+                                    anchors.right: parent.right
+                                    anchors.bottom: sliderRow.top
+                                    anchors.bottomMargin: 5
+
+                                    readonly property bool playing: mediaCard.player?.isPlaying ?? false
+
+                                    width: 44
+                                    height: 44
+                                    radius: playPause.playing ? 17 : width / 2
+
+                                    color: playPause.playing
+                                        ? (playMouse.containsMouse ? Qt.lighter(Theme.primary, 1.15) : Theme.primary)
+                                        : (playMouse.containsMouse
+                                            ? Qt.tint(Theme.secondaryContainer, Qt.alpha(Theme.textOnSecondaryContainer, 0.1))
+                                            : Theme.secondaryContainer)
+
+                                    opacity: (mediaCard.player?.canTogglePlaying ?? false) ? 1 : 0.3
+
+                                    Behavior on radius {
+                                        NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
+                                    }
+
+                                    Behavior on color {
+                                        ColorAnimation { duration: Theme.animDuration }
+                                    }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: playPause.playing ? Icons.pause : Icons.play
+                                        font.family: Theme.fontFamily
+                                        font.pointSize: mediaCard.glyphSize
+                                        color: playPause.playing ? Theme.textOnPrimary : Theme.textOnSecondaryContainer
+                                    }
+
+                                    MouseArea {
+                                        id: playMouse
+
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        enabled: mediaCard.player?.canTogglePlaying ?? false
+                                        onClicked: mediaCard.player?.togglePlaying()
+                                    }
                                 }
                             }
                         }
@@ -911,7 +997,16 @@ Item {
             // is in trouble.
             Card {
                 width: parent.width
-                height: root.gaugeCardHeight
+
+                // WHATEVER THE MEDIA CARD ABOVE DID NOT TAKE, which is the
+                // other half of the note there. `gaugeCardHeight` is still
+                // this card's NATURAL height and is still what the column
+                // contributes to the panel height; when another column is
+                // taller, the difference lands here rather than stretching the
+                // ported card out of proportion. The dials are centred in it,
+                // exactly as the calendar and the controls are centred in
+                // theirs.
+                height: root.bodyHeight - root.mediaHeight - root.gap
 
                 Row {
                     anchors.centerIn: parent
@@ -1028,35 +1123,30 @@ Item {
         precision: SystemClock.Minutes
     }
 
-    // A transport button: one circle with a glyph in it.
+    // A skip button, and it is end-4's TrackChangeButton.
     //
-    // THE BOX IS THE CIRCLE, which it did not used to be. All three used to be
-    // 44-pixel boxes drawing 42- and 34-pixel discs inside them, because they
-    // sat in a Row -- and a Row leaves its children at y = 0, so boxes of
-    // different heights would have lined the small buttons up by their tops
-    // against the large one. There is no such Row any more: the play button is
-    // beside the text and the two skips are anchored to the ends of the
-    // transport row, each on its own vertical centre. With nothing left to
-    // align by, the box may as well be the thing it draws, and every instance
-    // says the one number it is.
-    component RoundButton: Rectangle {
+    // 24 x 24 with a glyph drawn at their `huge` size, which is 22 against a
+    // body of 16 -- so the mark very nearly fills the target and slightly
+    // overhangs it. That is theirs, and it is why these read as glyphs with a
+    // hit area rather than as buttons.
+    //
+    // No fill at rest; the secondary container on hover, which is the only
+    // part of their RippleButton that ports (we have no ripple, and adding one
+    // for two buttons would be a component nothing else in this shell uses).
+    component TrackChangeButton: Rectangle {
         id: button
 
         property string glyph: ""
-        property bool filled: false
-        property int diameter: root.skipSize
 
         signal activated
 
-        implicitWidth: button.diameter
-        implicitHeight: button.diameter
+        implicitWidth: 24
+        implicitHeight: 24
         radius: width / 2
 
-        color: {
-            if (button.filled)
-                return buttonMouse.containsMouse ? Qt.lighter(Theme.primary, 1.15) : Theme.primary;
-            return buttonMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent";
-        }
+        color: buttonMouse.containsMouse
+            ? Qt.tint(Theme.secondaryContainer, Qt.alpha(Theme.textOnSecondaryContainer, 0.1))
+            : "transparent"
 
         Behavior on color {
             ColorAnimation { duration: Theme.animDuration }
@@ -1074,12 +1164,8 @@ Item {
             anchors.centerIn: parent
             text: button.glyph
             font.family: Theme.fontFamily
-            // Material Design glyphs sit well inside their em box, so a size
-            // that looks right as text looks lost inside a circle. Set against
-            // the disc it is drawn in and not against the body text, which is
-            // why it follows the diameter rather than being two constants.
-            font.pointSize: Math.round(button.diameter * 0.42)
-            color: button.filled ? Theme.textOnPrimary : Theme.textOnSurface
+            font.pointSize: Theme.fontSize * 22 / 16
+            color: Theme.textOnSecondaryContainer
 
             Behavior on color {
                 ColorAnimation { duration: Theme.animDuration }
