@@ -90,21 +90,38 @@ Item {
 
     // The dial, and the card that holds a row of them.
     //
-    // 124, AND IT WAS 100. A hundred was what it took for "100%" to sit inside
-    // the ring with the label above it and the reading below -- which it did,
-    // and only just: the ring's clear area is a circle of radius 42 at that
-    // size, and the reading sits a full 26 pixels off centre, where the chord
-    // across that circle is 60 pixels wide. "3.6G swap" is 52 of them. It fit
-    // and it looked wedged in, which is what was actually asked about.
+    // 124, AND IT WAS 100, and the number was CHOSEN BY MEASURING rather than
+    // by taste. Three variants were rendered in a nested compositor and the
+    // clear span of the ring was measured against the width of the line
+    // sitting in it -- "3.6G swap", which is 59px and does not change size,
+    // because the type inside is deliberately not grown with the ring. Growing
+    // both would hand the reading back exactly the margin being taken away.
     //
-    // At 124 the same chord is 90 wide and the line has room either side. The
-    // type inside is deliberately NOT grown with it -- growing the ring and
-    // the text together would give the reading back exactly the margin it
-    // started with, which is the thing being fixed.
+    //   dial   panel   clear span   margin per side
+    //    100     942       56px        -2   the string OVERLAPS the ring
+    //    110     972       71px         6   clears it by under a character
+    //    124    1014       89px        15   sits inside it
     //
-    // It costs width, and width is what the panel had none of: the number
-    // above is a sum of these, so the panel is wider than it was. What paid
-    // for it in HEIGHT is the media card above, which lost a row.
+    // So a hundred was never "tight": at a hundred the line and the ticks are
+    // drawn on top of each other, which is what was actually being complained
+    // about. And there is no free middle -- at the spacing below, the largest
+    // dial that keeps the panel at its old 942 is exactly 100, so the choice
+    // was never "free versus expensive", it was 30 pixels versus 72.
+    //
+    // WHY NOT 110, at less than half the cost. Six pixels is under one
+    // character, and the string is not fixed: "12.4G swap" is one character
+    // longer and lands back at two pixels a side, while 124 still has eleven.
+    // `Theme.fontSize` is a setting, too, and it grows the string without
+    // growing the ring. A fix that the next plausible reading undoes is not a
+    // fix.
+    //
+    // WHAT IT COSTS. Width, and width is what the panel had none of: the
+    // number above is a sum of these, so the panel is 1014 where it was 942.
+    // That lands on the main monitor, which is the only screen with a bar
+    // unless the Bar page says otherwise, and there it is 40% of the width.
+    // On a 1080-wide portrait monitor asked to carry a bar it would be 94%,
+    // and Popout's own clamp is what keeps it on screen. That is the trade.
+    // What paid for it in HEIGHT is the media card above, which lost a row.
     readonly property int gaugeSize: 124
     readonly property int gaugeSpacing: 8
     readonly property int gaugeCardHeight: root.gaugeSize + root.cardPad * 2
@@ -944,6 +961,17 @@ Item {
                         // because memory has no temperature to be coloured by.
                         // It takes the island's memory thresholds all the same,
                         // so "amber" means the same thing on all three rings.
+                        //
+                        // ITS AMBER STEP MOVED FROM 66% TO 85% ON PURPOSE, and
+                        // that was asked about and kept rather than slipping
+                        // through. 66 was this component's own number from
+                        // when every ring meant "how busy"; 85 is
+                        // SystemStats.ramCoolAt, which is where the island
+                        // stops warning about memory. Do not put 66 back as a
+                        // tidy-up: it would leave this ring calling something
+                        // a problem at a point where nothing else in the shell
+                        // does, which is the second opinion the note on
+                        // `level` exists to prevent.
                         level: SystemStats.ramPercent
                         warmAt: SystemStats.ramCoolAt
                         hotAt: SystemStats.ramHotAt
