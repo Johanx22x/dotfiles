@@ -10,8 +10,20 @@
 //   qs                      foreground, logs on the terminal
 //   qs -d                   detached
 //
-// Quickshell reloads the whole config as soon as a .qml file is saved. The
-// wallpaper palette does NOT go through that path: it is read live from
+// Quickshell reloads the whole config as soon as a .qml file is saved IN
+// PLACE. It does not when the file is REPLACED -- `git pull`, `git checkout`,
+// an editor that writes a temp file and renames it -- because the watch was on
+// the inode that got unlinked, and nothing is logged when that happens. What
+// still works then is the directory watch, so:
+//
+//   : > ~/.config/quickshell/.reload-nudge && rm -f ~/.config/quickshell/.reload-nudge
+//
+// Nudge it rather than restarting it. A reload that cannot parse the tree
+// leaves this process up on the code it already had; a cold start on the same
+// tree exits and leaves no shell at all. The whole measurement is beside the
+// update chain in modules/installer/InstallerState.qml.
+//
+// The wallpaper palette does NOT go through that path: it is read live from
 // colors.json, see Theme.qml.
 
 import Quickshell
