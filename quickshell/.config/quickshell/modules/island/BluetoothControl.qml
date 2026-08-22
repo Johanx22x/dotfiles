@@ -20,6 +20,7 @@ import Quickshell
 import Quickshell.Bluetooth
 import QtQuick
 import "root:/"
+import "root:/components"
 
 Item {
     id: root
@@ -178,6 +179,19 @@ Item {
         }
 
         model: root.enabled ? root.devices : []
+
+        // The same bar as WifiControl's, placed the same way and for the same
+        // reason -- these two cards are deliberately the same shape. It shows
+        // up less often here, because only paired devices are listed and there
+        // are rarely four of those; a bar that is not drawn on the machines
+        // where everything fits is the whole design of it.
+        ScrollBar {
+            view: list
+
+            x: list.width - width
+            y: list.contentY
+            height: list.height
+        }
 
         delegate: Rectangle {
                 id: entry

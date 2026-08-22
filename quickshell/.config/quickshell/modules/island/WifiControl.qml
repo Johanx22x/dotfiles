@@ -27,6 +27,7 @@ import Quickshell
 import Quickshell.Networking
 import QtQuick
 import "root:/"
+import "root:/components"
 
 Item {
     id: root
@@ -209,6 +210,24 @@ Item {
         }
 
         model: Networking.wifiEnabled ? root.networks : []
+
+        // Three and a half rows of however many are in the air, and until this
+        // was drawn the card said nothing about the difference: the sort puts
+        // the connected and the known ones at the top, which is what let a list
+        // that ends mid-row pass for the whole list.
+        //
+        // PLACED AND NOT ANCHORED, and against the right edge rather than a few
+        // pixels in. A child of a Flickable rides its contents, so `y` gives
+        // back exactly what the scroll took; and the rows already keep ten
+        // pixels between the state word and the edge, which is the clear space
+        // this borrows four of rather than spending it twice.
+        ScrollBar {
+            view: list
+
+            x: list.width - width
+            y: list.contentY
+            height: list.height
+        }
 
         delegate: Item {
 
