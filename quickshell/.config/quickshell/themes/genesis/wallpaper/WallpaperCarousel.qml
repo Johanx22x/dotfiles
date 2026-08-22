@@ -108,6 +108,7 @@ import QtQuick
 import Qt.labs.folderlistmodel
 import QtQuick.Effects
 import qs
+import qs.modules.wallpaper
 
 PanelWindow {
     id: root

@@ -230,7 +230,7 @@ SettingsPage {
 
     // ---------------- Turning a bind into something readable ----------------
     //
-    // COPIED FROM modules/cheatsheet/Cheatsheet.qml, not shared with it, and
+    // COPIED FROM themes/genesis/cheatsheet/Cheatsheet.qml, not shared with it, and
     // that is now two files that have to agree about what "SUPER" and "Esc"
     // are. The right home is a singleton next to Theme and Icons -- the pair
     // below plus the keyNames table -- and the second caller is what makes
@@ -911,7 +911,7 @@ SettingsPage {
                         Repeater {
                             model: group.modelData.binds
 
-                            // Not modules/cheatsheet/BindRow.qml, though it is
+                            // Not themes/genesis/cheatsheet/BindRow.qml, though it is
                             // the same shape: its label is always body text in
                             // textOnSurface, and half the rows here are
                             // undescribed and have to say so in a quieter

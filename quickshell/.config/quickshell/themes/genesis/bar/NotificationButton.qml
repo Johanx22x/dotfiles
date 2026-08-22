@@ -69,14 +69,19 @@
 //
 // The island says it instead, on the acknowledgement rung it already keeps for
 // exactly this -- something you just did, confirmed, and gone in two seconds.
-// It is wired in modules/island/Island.qml, watching the value rather than
+// It is wired in themes/genesis/island/Island.qml, watching the value rather than
 // being told by this file, so EVERY door announces itself: this button, the
 // switch in the panel, SUPER + N, and `qs ipc call dnd enable`. See the note
 // there for why the flash lives in that file and not in the singleton.
 
 import QtQuick
 import qs
+// BOTH HALVES OF THE NOTIFICATIONS MODULE, which is the clearest place in
+// the tree to see the seam. NotificationState is the host's -- the daemon's
+// store, the mute, the IpcHandler -- and NotificationHistory is this theme's
+// drawing of it. The two names are one module apart on purpose.
 import qs.modules.notifications
+import qs.themes.genesis.notifications
 
 Item {
     id: root
@@ -145,7 +150,7 @@ Item {
     //
     // WHETHER THIS BAR IS THE ONE SHOWING THE LIST, and it is the dashboard's
     // rule with a different string -- see the block over showsDashboard in
-    // modules/island/Island.qml, which carries the long version.
+    // themes/genesis/island/Island.qml, which carries the long version.
     //
     // The short one: NotificationState.historyScreen names the bar the list is
     // drawn on, every bell compares it against its own bar, at most one

@@ -4,7 +4,7 @@
 // WHAT THIS PAGE IS NOT IS A PICKER. It carried a grid of thumbnails once,
 // and choosing from it meant judging a 4K photograph at a hundred pixels
 // across in a pane the width of a sidebar. Picking happens in the carousel
-// now -- SUPER + SHIFT + W, modules/wallpaper -- and what is left here is
+// now -- SUPER + SHIFT + W, themes/genesis/wallpaper -- and what is left here is
 // everything AROUND the collection: where it lives, how often it changes by
 // itself, and the name of the one currently on the desktop.
 //

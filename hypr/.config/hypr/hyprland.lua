@@ -221,7 +221,7 @@ hl.on("hyprland.start", function ()
     -- No notification daemon is started here any more. Quickshell IS the
     -- daemon: it takes org.freedesktop.Notifications itself, and two processes
     -- cannot own one bus name -- whichever asks second simply does not get it.
-    -- dunst is gone; see modules/notifications in the quickshell config.
+    -- dunst is gone; see themes/genesis/notifications in the quickshell config.
     --
     -- mpris-notify went with it. It sent its track notifications with
     -- `dunstify`, a binary the dunst package owns, so it could not survive the
@@ -941,7 +941,7 @@ hl.window_rule({
 -- HOW the Quickshell surfaces are blurred. WHERE is not decided here any more.
 --
 -- The shell names its own blur region through ext-background-effect -- see
--- BackgroundEffect.blurRegion in ~/.config/quickshell/modules/bar/Bar.qml and
+-- BackgroundEffect.blurRegion in ~/.config/quickshell/themes/genesis/bar/Bar.qml and
 -- its six siblings -- and Hyprland has implemented that protocol since 0.56.0
 -- (0.56.2 installed; `strings /usr/bin/Hyprland` has
 -- ext_background_effect_manager_v1). A client region takes priority over what

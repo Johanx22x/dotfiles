@@ -37,14 +37,22 @@
 import Quickshell
 import QtQml
 import qs.modules
-import qs.modules.bar
-import qs.modules.cheatsheet
-import qs.modules.notifications
-import qs.modules.launcher
-import qs.modules.powermenu
 import qs.modules.recorder
 import qs.modules.settings
-import qs.modules.wallpaper
+// THE SURFACES ARE DRAWN BY A THEME, and the two blocks of imports are the
+// seam. Above the line is the HOST: the arbiter, the state singletons, the
+// services and the settings window -- everything that decides what exists.
+// Below it is themes/genesis, which is the look this desktop has always had,
+// under a name it can now be swapped out from. It draws and nothing else, and
+// this file is the only place in the tree that names a theme by name.
+// themes/genesis/README.md is the whole account of what that means.
+import qs.themes.genesis
+import qs.themes.genesis.bar
+import qs.themes.genesis.cheatsheet
+import qs.themes.genesis.launcher
+import qs.themes.genesis.notifications
+import qs.themes.genesis.powermenu
+import qs.themes.genesis.wallpaper
 
 ShellRoot {
     // THE INSTANT REPLAY ARMS ITSELF, and this line is what lets it.

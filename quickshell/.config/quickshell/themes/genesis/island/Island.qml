@@ -66,6 +66,7 @@ import QtQuick.Effects
 import QtQuick
 import qs
 import qs.components
+import qs.modules.island
 import qs.modules.notifications
 import qs.modules.recorder
 
@@ -341,7 +342,7 @@ Item {
     // click the pointer is on the bell, hover has already turned its glyph
     // accent, and so the only thing that changes there is bell to bellOff --
     // a thin diagonal on a small glyph. The full argument is in the header of
-    // modules/bar/NotificationButton.qml.
+    // themes/genesis/bar/NotificationButton.qml.
     //
     // IT FIRES FROM EVERY DOOR, the panel's own switch included, and that is
     // the trade taken rather than an oversight. The dashboard's volume slider

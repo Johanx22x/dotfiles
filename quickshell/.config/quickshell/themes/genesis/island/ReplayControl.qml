@@ -50,6 +50,7 @@
 
 import QtQuick
 import qs
+import qs.modules.island
 import qs.modules.recorder
 
 Item {

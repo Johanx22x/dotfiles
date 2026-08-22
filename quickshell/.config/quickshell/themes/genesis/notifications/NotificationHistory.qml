@@ -35,6 +35,7 @@ import Quickshell
 import QtQuick
 import qs
 import qs.components
+import qs.modules.notifications
 
 Item {
     id: root
@@ -172,7 +173,7 @@ Item {
                     spacing: 7
 
                     // THE SAME PAIR THE BELL DRAWS for the same state -- see
-                    // modules/bar/NotificationButton.qml. The button on the
+                    // themes/genesis/bar/NotificationButton.qml. The button on the
                     // bar and the switch in this panel are one setting, so
                     // they must not need to be read two ways.
                     Text {

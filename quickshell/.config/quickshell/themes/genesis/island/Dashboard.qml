@@ -134,7 +134,8 @@ import QtQuick.Layouts
 import QtQuick
 import qs
 import qs.components
-import qs.modules.bar
+import qs.modules.island
+import qs.themes.genesis.bar
 
 Item {
     id: root
@@ -299,7 +300,7 @@ Item {
     // be wrong.
     //
     // The dates are one number away if they should be bigger: cellWidth and
-    // cellHeight in modules/bar/CalendarView.qml. That is a deliberate change
+    // cellHeight in themes/genesis/bar/CalendarView.qml. That is a deliberate change
     // to how the calendar looks rather than something that should fall out of
     // how tall the column beside it happens to be.
     //

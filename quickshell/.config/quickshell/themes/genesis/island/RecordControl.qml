@@ -37,6 +37,7 @@
 import QtQuick
 import QtQuick.Layouts
 import qs
+import qs.modules.island
 import qs.modules.recorder
 
 Item {

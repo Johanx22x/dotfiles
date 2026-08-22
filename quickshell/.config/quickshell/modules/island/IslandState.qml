@@ -218,7 +218,7 @@ Singleton {
     // eventually would not. It ended at four entries: Workspaces went because
     // the bar's dots are on screen at all times, Notifications became the bell
     // at the right end of the bar, and the last three were folded into one
-    // view. See the header of modules/island/Dashboard.qml.
+    // view. See the header of themes/genesis/island/Dashboard.qml.
     //
     // An `openDashboard(tab)` went before them, for the same reason in
     // miniature: it had exactly one caller -- the do-not-disturb badge, which

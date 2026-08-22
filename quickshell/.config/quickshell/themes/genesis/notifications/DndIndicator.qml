@@ -49,6 +49,7 @@
 
 import QtQuick
 import qs
+import qs.modules.notifications
 
 Item {
     id: root

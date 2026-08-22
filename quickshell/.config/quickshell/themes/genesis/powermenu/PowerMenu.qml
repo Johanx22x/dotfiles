@@ -36,6 +36,7 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import qs
+import qs.modules.powermenu
 
 PanelWindow {
     id: root
@@ -131,7 +132,7 @@ PanelWindow {
     // Pinned to the top left and sized to the whole screen. Anchors say
     // WHERE, implicitWidth/implicitHeight say HOW BIG -- the split every
     // other PanelWindow in this shell uses (components/ScreenCorner.qml,
-    // modules/notifications). Anchoring all four edges stretches the layer
+    // themes/genesis/notifications). Anchoring all four edges stretches the layer
     // surface instead, and then the size the compositor picked is not a size
     // QML ever sees.
     anchors {

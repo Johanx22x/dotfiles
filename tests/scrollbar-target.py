@@ -320,14 +320,14 @@ check({**BESIDE, "name": "settings search results", "listLeft": 222,
        "listRight": 808, "barX": 812, "sceneWidth": 820},
       bar=(809, 819), content=(222, 807))
 
-# modules/notifications/NotificationHistory.qml:514. The list gives up
+# themes/genesis/notifications/NotificationHistory.qml:514. The list gives up
 # `scrollBar.width + 8`, so there are eight clear pixels inward, and the
 # Popout's own groupPadding is what lies outward.
 check({**BESIDE, "name": "notification history", "listLeft": 12,
        "listRight": 588, "barX": 596, "sceneWidth": 612},
       bar=(593, 610), content=(12, 587))
 
-# modules/cheatsheet/Cheatsheet.qml:475. Centred in thirty pixels of card
+# themes/genesis/cheatsheet/Cheatsheet.qml:475. Centred in thirty pixels of card
 # padding: thirteen clear on each side, and nothing in the file clips.
 check({**BESIDE, "name": "cheatsheet", "listLeft": 30, "listRight": 830,
        "barX": 843, "sceneWidth": 1000},
@@ -339,8 +339,8 @@ check({**BESIDE, "name": "cheatsheet", "listLeft": 30, "listRight": 830,
 
 note("--- the bar inside the view ---")
 
-# modules/launcher/Launcher.qml:508 -- three columns of 260, bar hard against
-# the right edge -- and modules/launcher/ClipboardPicker.qml:165, which is the
+# themes/genesis/launcher/Launcher.qml:508 -- three columns of 260, bar hard against
+# the right edge -- and themes/genesis/launcher/ClipboardPicker.qml:165, which is the
 # same 780 with the same placement. The outward eleven is discarded whole.
 check({**VIEW, "name": "launcher grid", "listLeft": 0, "listRight": 780,
        "sceneWidth": 820},

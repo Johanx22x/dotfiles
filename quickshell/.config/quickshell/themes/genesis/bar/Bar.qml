@@ -24,8 +24,8 @@ import QtQuick
 import qs
 import qs.components
 import qs.modules
-import qs.modules.island
-import qs.modules.notifications
+import qs.themes.genesis.island
+import qs.themes.genesis.notifications
 
 PanelWindow {
     id: bar
@@ -256,7 +256,7 @@ PanelWindow {
         // ================= CENTRE =================
         // The island. It replaces the Media widget that used to sit here and
         // subsumes it: media is one of the things the island can be about, not
-        // a widget of its own. See modules/island.
+        // a widget of its own. See themes/genesis/island.
         Row {
             id: centre
 
@@ -421,7 +421,7 @@ PanelWindow {
 
             // Volume used to sit here. It moved into the island in the
             // centre, which is where a value that changes for two seconds and
-            // then stops mattering belongs -- see modules/island.
+            // then stops mattering belongs -- see themes/genesis/island.
             Group {
                 anchors.verticalCenter: parent.verticalCenter
 

@@ -22,6 +22,7 @@
 import Quickshell.Services.UPower
 import QtQuick
 import qs
+import qs.modules.bar
 
 Rectangle {
     id: root

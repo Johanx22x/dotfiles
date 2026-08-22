@@ -29,6 +29,7 @@ import Quickshell.Services.Notifications
 import QtQuick
 import qs
 import qs.components
+import qs.modules.notifications
 import qs.modules.powermenu
 
 PanelWindow {

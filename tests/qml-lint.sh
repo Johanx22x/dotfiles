@@ -66,8 +66,9 @@
 # code where nothing has ever looked: names that resolve to nothing, members
 # that do not exist on the type they are read from, imports nothing uses, and
 # duplicated bindings. On its first run it found a second `Behavior on color` on
-# the same ClippingRectangle in modules/island/Island.qml, and fifteen imports
-# no file used. Both are fixed, which is why those two lines read 0 below.
+# the same ClippingRectangle in themes/genesis/island/Island.qml, and fifteen
+# imports no file used. Both are fixed, which is why those two lines read 0
+# below.
 # ---------------------------------------------------------------------------
 #
 # THE BASELINE, AND WHY IT IS NOT ZERO. The tree measured 326 the first time a

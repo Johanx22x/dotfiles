@@ -23,6 +23,7 @@ import Quickshell.Wayland
 import QtQuick
 import qs
 import qs.components
+import qs.modules.launcher
 
 PanelWindow {
     id: root
@@ -701,7 +702,7 @@ PanelWindow {
             // Whichever picker a command opened. STILL A LOADER WITH A
             // COMPONENT BESIDE IT although there is only one picker left: the
             // wallpaper strip that used to be the other one is now a
-            // fullscreen carousel of its own (see modules/wallpaper), and what
+            // fullscreen carousel of its own (see themes/genesis/wallpaper), and what
             // the Loader buys is that the clipboard's decodes do not happen
             // while the application grid is what is on screen.
             Loader {

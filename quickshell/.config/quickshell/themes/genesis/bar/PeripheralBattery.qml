@@ -66,6 +66,7 @@ import Quickshell.Io
 import Quickshell.Services.UPower
 import QtQuick
 import qs
+import qs.modules.bar
 
 Row {
     id: root

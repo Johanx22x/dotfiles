@@ -50,6 +50,7 @@ import QtQuick
 import qs
 // ScrollList, which the columns sit in.
 import qs.components
+import qs.modules.cheatsheet
 
 PanelWindow {
     id: root
