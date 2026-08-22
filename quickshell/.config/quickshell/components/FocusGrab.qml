@@ -34,6 +34,12 @@ Item {
     // Only grabs while this is true.
     property bool active: false
 
+    // Handed to the portable catcher: a rectangle of the screen it leaves
+    // alone, so clicks there reach what is underneath instead of only
+    // dismissing. Ignored where the compositor has a grab of its own, because
+    // a grab covers everything by definition and cannot be given a hole.
+    property rect passthrough: Qt.rect(0, 0, 0, 0)
+
     signal dismissed
 
     // Never draws anything itself; both implementations are windows or grabs.
@@ -78,15 +84,21 @@ Item {
             if (Compositor.can("focusGrab"))
                 setSource("HyprlandGrab.qml", { grabWindows: [root.window] });
             else
-                setSource("ClickCatcher.qml", { targetScreen: root.targetScreen });
+                setSource("ClickCatcher.qml", {
+                    targetScreen: root.targetScreen,
+                    passthrough: root.passthrough
+                });
         }
 
         onLoaded: {
-            // Only the Hyprland side has anything left to wire: its grab
-            // follows `active` for as long as it lives, where the catcher is
-            // simply created and destroyed with it.
+            // What each side has left to wire. The Hyprland grab follows
+            // `active` for as long as it lives; the catcher is created and
+            // destroyed with it instead, but its hole has to keep up with a
+            // bar that can come and go under a fullscreen window.
             if (Compositor.can("focusGrab"))
                 item.grabActive = Qt.binding(() => root.active);
+            else
+                item.passthrough = Qt.binding(() => root.passthrough);
             item.dismissed.connect(root.dismissed);
         }
     }

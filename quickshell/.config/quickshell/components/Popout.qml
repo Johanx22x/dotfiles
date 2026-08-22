@@ -104,10 +104,27 @@ PanelWindow {
     // decided by creation order, which is not something to rely on, so the
     // two are kept in different layers instead.
     WlrLayershell.layer: WlrLayer.Overlay
-    // OnDemand and not Exclusive: the popout accepts a keystroke when it has
-    // something to type into, without stealing the keyboard from the window
-    // underneath the rest of the time.
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+    // NONE, AND THE REASON IS THE POINTER, NOT THE KEYBOARD.
+    //
+    // This asked for OnDemand so that a popout could accept a keystroke when
+    // it had something to type into. Nothing in one ever has: no TextField, no
+    // TextInput, no Keys handler and no activeFocus anywhere in the dashboard,
+    // the tray menus or the notification history.
+    //
+    // What the focus did instead was cost clicks. Holding it means the
+    // compositor takes it away the moment the pointer presses anything else --
+    // and a client that loses keyboard focus mid-click cancels the press it
+    // was holding, so the release never arrives and the widget under the
+    // pointer never sees a click at all. Measured with a virtual pointer: with
+    // OnDemand, one click in six on the power button did nothing whatsoever,
+    // and the widget that owns the popout lost its release on three clicks out
+    // of six. With None there is no focus to lose, no cancelled press, and no
+    // dead click.
+    //
+    // Give this back the day something in here types, and give it back
+    // narrowly -- bound to the content that needs it rather than to every
+    // popout that opens.
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
     anchors {
         top: true
@@ -176,6 +193,25 @@ PanelWindow {
         window: root
         targetScreen: root.screen
         active: root.isOpen
+
+        // THE BAR KEEPS ITS OWN CLICKS.
+        //
+        // This panel hangs off the bar and every widget that opens one lives
+        // up there, so the click that moves from this panel to the next one
+        // always lands on the bar. Left to the catcher, that click was spent
+        // closing this panel and the next one needed a second -- the same two
+        // clicks that opening and closing used to cost, moved somewhere else.
+        //
+        // The strip is the bar's own height, which is what this window is
+        // already positioned against a few lines up, and it is only left out
+        // while there is a bar there to receive it: with none -- no bar on
+        // this screen, or a fullscreen window over it -- the hole would be a
+        // dead patch of screen where clicks stopped dismissing for no visible
+        // reason.
+        passthrough: root.barVisible
+            ? Qt.rect(0, 0, root.screen?.width ?? 0, Theme.barHeight)
+            : Qt.rect(0, 0, 0, 0)
+
         onDismissed: if (root.isOpen)
             root.close()
     }
