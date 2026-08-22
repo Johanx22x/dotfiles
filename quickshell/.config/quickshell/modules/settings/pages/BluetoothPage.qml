@@ -367,6 +367,14 @@ SettingsPage {
 
             width: parent.width
             height: Math.min(pairedEntries.implicitHeight, root.listCeiling)
+
+            // `visible: height > 0`, on the side of ScrollList's rule where
+            // the line is safe: the latch needs the height to come from the
+            // parent being hidden, and this one comes from the Column inside.
+            // Driven with a stand-in model emptied and refilled, page visible
+            // and page not -- the list came back at full height each time. A
+            // stand-in because emptying the real one means toggling the
+            // adapter on a live session.
             visible: height > 0
             contentHeight: pairedEntries.implicitHeight
 
@@ -749,6 +757,10 @@ SettingsPage {
 
             width: parent.width
             height: Math.min(availableEntries.implicitHeight, root.listCeiling)
+
+            // Safe for the same reason as the paired list above, and driven
+            // the same way and with the same stand-in: a list that goes empty
+            // and fills again is not held shut.
             visible: height > 0
             contentHeight: availableEntries.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
