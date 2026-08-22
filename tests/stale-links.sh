@@ -33,6 +33,16 @@ command -v stow >/dev/null || {
     exit 2
 }
 
+# NOT AS ROOT, and said here rather than discovered. install.sh refuses to run
+# as root by design -- everything it does writes into a home directory -- and it
+# does so with `exit`, which from a sourced script ends this one too, before a
+# single assertion has run. As an ordinary user, which is what a desktop is,
+# there is nothing to do about this.
+(( EUID == 0 )) && {
+    echo "stale-links: run this as an ordinary user -- install.sh will not be sourced as root" >&2
+    exit 2
+}
+
 SANDBOX="$(mktemp -d)"
 trap 'rm -rf "$SANDBOX"' EXIT
 
