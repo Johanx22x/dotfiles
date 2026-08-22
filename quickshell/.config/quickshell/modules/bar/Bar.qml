@@ -26,6 +26,7 @@ import "root:/components"
 import "root:/modules/island"
 import "root:/modules/launcher"
 import "root:/modules/notifications"
+import "root:/modules/settings"
 
 PanelWindow {
     id: bar
@@ -119,6 +120,35 @@ PanelWindow {
 
         function onIsOpenChanged(): void {
             if (LauncherState.isOpen)
+                barPopout.close();
+        }
+    }
+
+    // AND THE SETTINGS WINDOW, WHICH IS NOT TIDINESS BUT CLICKS.
+    //
+    // On a compositor with no focus-grab protocol -- niri, and anything that
+    // is not Hyprland -- an open popout is backed by a transparent
+    // full-screen surface on the Top layer that swallows the first click
+    // landing anywhere outside the panel. Top is ABOVE every ordinary
+    // window, so while that catcher is up the settings window is a window
+    // nobody can click: the first press on it is spent putting the popout
+    // away, and the control under the pointer never hears about it at all.
+    //
+    // Nothing used to close the popout on the way there. The gear that opens
+    // the window lives on the bar, and the bar is exactly the strip the
+    // catcher leaves out of its input region so that moving between panels
+    // costs one click -- so the press reached the gear, the window opened,
+    // and the catcher stayed up over it. The keybind never touches the bar
+    // at all and left it up the same way.
+    //
+    // Closed from here and not from the button: SUPER + C goes through this
+    // singleton and through no widget, and this is the file that can see
+    // both it and the popout -- the same argument as the launcher above.
+    Connections {
+        target: SettingsState
+
+        function onIsOpenChanged(): void {
+            if (SettingsState.isOpen)
                 barPopout.close();
         }
     }
