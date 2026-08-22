@@ -55,7 +55,6 @@
 
 import Quickshell
 import Quickshell.Io
-import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import QtQuick.Effects
 import QtQuick.Layouts
@@ -188,16 +187,37 @@ Item {
 
     // ---------------- Live playback position ----------------
     //
-    // MPRIS position is NOT pushed. The player only volunteers it when it
-    // seeks, so a binding straight to `player.position` paints the value that
-    // happened to be there when the panel was opened and then sits frozen --
-    // which is exactly what the seek bar was doing.
+    // WHAT `MprisPlayer.position` ACTUALLY IS, because the comment that used
+    // to be here had it wrong and the wrong model produced a wrong fix.
+    // Quickshell computes it on every read, in
+    // src/services/mpris/player.cpp:
     //
-    // So it is polled, and the poll does two things: it pokes the notify
-    // signal, which is what makes Quickshell re-read the property off D-Bus,
-    // and then it copies the result somewhere the bindings can see change.
-    // Reading `player.position` on its own is not enough; nothing would have
-    // told QML the value moved.
+    //   positionMs() = lastValueTheSenderPublished + wallClockSinceItArrived
+    //
+    // So it is an EXTRAPOLATION from an anchor, not a value fetched from the
+    // bus. Nothing in QML can ask for the anchor to be refreshed: Quickshell
+    // re-requests it by itself on a track change and on a playback-state
+    // change, and at no other time.
+    //
+    // The old poll therefore did one useful thing and one harmful one. The
+    // useful half is this copy -- `position` has a notify signal that only
+    // fires when the anchor moves, so a plain binding would sit still while
+    // the extrapolation ran on underneath it; reading it on a timer is what
+    // makes the number advance. The harmful half was emitting
+    // `positionChanged()` at the player in the belief that it forced a re-read
+    // off D-Bus. It does not: the only thing connected to that signal inside
+    // Quickshell is `onExportedPositionChanged`, which emits `lengthChanged`
+    // when the track has no length -- so the poke did nothing for the
+    // position and made a fabricated length look like it was moving. See the
+    // note on `hasLength` below.
+    //
+    // WHAT THIS COSTS US, stated because it is not fixable from here: a
+    // player that publishes Position once and never again -- Zen, on a plain
+    // youtube.com video, publishes a constant 0 -- gives an anchor that is
+    // only re-taken when the track or the playback state changes. Between
+    // those events the elapsed time this shows is "time since that event",
+    // which is right for a track played from its start and wrong for one
+    // joined in the middle.
     //
     // Twice a second: a seek bar that steps once a second visibly ticks.
     property real livePosition: 0
@@ -214,22 +234,17 @@ Item {
 
         onTriggered: {
             const p = root.mediaPlayer;
-            if (!p)
-                return;
-            if (typeof p.positionChanged === "function")
-                p.positionChanged();
-            root.livePosition = p.position ?? 0;
+            root.livePosition = p ? (p.position ?? 0) : 0;
         }
     }
 
     // One definition of "the player", so the Timer above and the media card
-    // below cannot disagree about which one they are talking to.
-    readonly property var mediaPlayer: {
-        const players = Mpris.players.values;
-        if (players.length === 0)
-            return null;
-        return players.find(p => p.isPlaying) ?? players[0];
-    }
+    // below cannot disagree about which one they are talking to -- and it is
+    // the SHELL's one definition now rather than this file's. The rule moved
+    // to Track.qml because there were three copies of it and none of them
+    // knew that playerctld puts a mirror of the real player on the bus under
+    // a name of its own; see the long note there.
+    readonly property var mediaPlayer: Track.active
 
     // ---------------- What replaced the sampling gate ----------------
     //
@@ -511,10 +526,55 @@ Item {
                     ColorAnimation { duration: Theme.recolorDuration }
                 }
 
-                // Same rule the island uses: prefer what is actually playing,
-                // fall back to the first player that exists so a paused track
-                // still fills the card.
+                // Same rule the island uses -- literally the same one now.
+                // See Track.active.
                 readonly property var player: root.mediaPlayer
+
+                // ---- IS THERE A LENGTH AT ALL, AND THE BUG THAT ASKING
+                //      REPLACES ----
+                //
+                // The card showed "4:18 / 5:17" for a track YouTube Music was
+                // showing as "0:22 / 4:06". Both numbers wrong, and the total
+                // was not a total.
+                //
+                // `MprisPlayer.length` DOES NOT RETURN A LENGTH WHEN THE
+                // PLAYER DID NOT PUBLISH ONE. From
+                // src/services/mpris/player.cpp:
+                //
+                //   qreal MprisPlayer::length() const {
+                //       if (!this->bLengthSupported) {
+                //           return this->position();   // unsupported
+                //       ...
+                //
+                // -- so with `mpris:length` absent from the metadata it hands
+                // back the current POSITION, which is itself extrapolated
+                // from wall clock. The card was drawing a clock over a second
+                // clock and calling one of them the duration, which is why
+                // the two numbers were both wrong and neither was stable.
+                //
+                // AND THE PLAYER HERE REALLY DOES OMIT IT. Read off the live
+                // bus while Zen played a youtube.com video:
+                //
+                //   Metadata: mpris:trackid, xesam:title, xesam:album,
+                //             xesam:artist, xesam:url        -- no mpris:length
+                //   Position: 0, 0, 0                        -- three reads, 1.5s apart
+                //
+                // Quickshell publishes `lengthSupported` for exactly this, so
+                // the card asks instead of assuming. With no length there is
+                // no total to print and no fraction to seek to, and both say
+                // so rather than inventing one.
+                readonly property bool hasLength: mediaCard.player?.lengthSupported ?? false
+
+                // Clamped at the total, because the position is extrapolated
+                // and can run past a length the player did publish -- and a
+                // card reading "4:20 / 4:05" is a card nobody believes again.
+                readonly property real elapsed: mediaCard.hasLength
+                    ? Math.min(root.livePosition, mediaCard.player?.length ?? 0)
+                    : root.livePosition
+
+                readonly property string timeText: mediaCard.hasLength
+                    ? root.clockFormat(mediaCard.elapsed) + " / " + root.clockFormat(mediaCard.player?.length ?? 0)
+                    : root.clockFormat(mediaCard.elapsed)
 
                 // THEIR TYPE SCALE, EXPRESSED IN OURS. Theirs is in pixels
                 // against a body size of 16 -- large 17, small 15, smaller 12,
@@ -689,10 +749,12 @@ Item {
                     }
 
                     readonly property real fraction: {
+                        if (!mediaCard.hasLength)
+                            return 0;
                         const len = mediaCard.player?.length ?? 0;
                         if (len <= 0)
                             return 0;
-                        return Math.max(0, Math.min(1, root.livePosition / len));
+                        return Math.max(0, Math.min(1, mediaCard.elapsed / len));
                     }
 
                     // ---- The cover that is actually on screen ----
@@ -981,7 +1043,7 @@ Item {
                                     anchors.bottomMargin: 5
                                     anchors.left: parent.left
 
-                                    text: root.clockFormat(root.livePosition) + " / " + root.clockFormat(mediaCard.player?.length ?? 0)
+                                    text: mediaCard.timeText
                                     elide: Text.ElideRight
                                     font.family: Theme.fontFamily
                                     font.pointSize: mediaCard.timeSize
@@ -1026,7 +1088,15 @@ Item {
                                             anchors.verticalCenter: parent.verticalCenter
 
                                             value: media.fraction
-                                            seekable: mediaCard.player?.canSeek ?? false
+
+                                            // A fraction of a length that does
+                                            // not exist is a seek to nowhere:
+                                            // the handler below multiplies by
+                                            // `length`, which without a real
+                                            // one is the current position, so
+                                            // dragging to the middle asked the
+                                            // player to jump to half of now.
+                                            seekable: mediaCard.hasLength && (mediaCard.player?.canSeek ?? false)
 
                                             // The wave travels while the track
                                             // does. Paused, the curve stays
@@ -1042,7 +1112,7 @@ Item {
 
                                             onMoved: at => {
                                                 const p = mediaCard.player;
-                                                if (!p || !p.length)
+                                                if (!p || !mediaCard.hasLength || !p.length)
                                                     return;
                                                 p.position = at * p.length;
 
