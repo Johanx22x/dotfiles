@@ -1,9 +1,9 @@
 // "Nothing is going to reach you right now" -- on a bar with no bell.
 //
 // The other half of do-not-disturb, and the half that makes it safe to have
-// at all: a mute you cannot see is a trap. The switch in the dashboard is
-// behind a click and a tab; this is the part that is true on screen for as
-// long as the mute is.
+// at all: a mute you cannot see is a trap. The switch is inside the panel the
+// bell opens, which is behind a click; this is the part that is true on screen
+// for as long as the mute is.
 //
 // IT IS THE STAND-IN NOW AND NOT THE DEFAULT. The bell at the right end of
 // the bar draws bellOff for as long as the mute is on, which puts the state
@@ -35,7 +35,8 @@
 // answered "they are gone now" instead was answering something nobody asked.
 //
 // Unmuting did not need the primary button anyway: it has SUPER + N, which is
-// how it is switched on in the first place, and a switch in the dashboard.
+// how it is switched on in the first place, a switch in the panel this opens,
+// and the bell's own right button.
 //
 // It was the only way to the list for a while, stopped being one when the bell
 // arrived, and is one again wherever it is drawn -- because it is drawn exactly

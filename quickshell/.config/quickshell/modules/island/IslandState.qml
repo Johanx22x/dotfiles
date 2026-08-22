@@ -185,6 +185,24 @@ Singleton {
         expiry.restart();
     }
 
+    // The mute going on or off. It carries NO payload, unlike the two below:
+    // whether do not disturb is on is NotificationState's to say and it says
+    // it on every frame, so a copy taken at the moment of the flash would be a
+    // second answer that could only ever be the same one or wrong. `ack` says
+    // WHICH acknowledgement is up; the row in Island.qml reads the state
+    // itself. That is also why there is no `flashDnd(on)` -- a caller that had
+    // to be told the new value would be a caller that could get it wrong.
+    //
+    // WHY IT EXISTS AT ALL: the mute has four doors -- the bell's right click,
+    // the switch in the notification panel, SUPER + N, and the `dnd` IPC
+    // target -- and two of them change a global mode with nothing on screen
+    // moving where the pointer or the eye happens to be. The bell's own header
+    // has the long version.
+    function flashDnd(): void {
+        root.ack = "dnd";
+        expiry.restart();
+    }
+
     function flashVolume(value: int, muted: bool): void {
         root.ackValue = value;
         root.ackMuted = muted;
