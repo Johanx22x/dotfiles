@@ -804,9 +804,9 @@ Singleton {
 
     // ---------------- The preview frames of a video ----------------
     //
-    // WHAT THE CAROUSEL ACTUALLY SHOWS ON THE CENTRED CARD: a run of numbered
-    // JPEGs that it flips through on a timer, 001.jpg upwards, built by
-    // wallpaper-switch beside the still frames.
+    // WHAT THE CAROUSEL ACTUALLY SHOWS ON EVERY CARD THAT IS ON SCREEN: a run
+    // of numbered JPEGs that it flips through on a timer, 001.jpg upwards,
+    // built by wallpaper-switch beside the still frames.
     //
     // NOT A VIDEO, AND NOT BECAUSE OF THE DECODING. This cache used to hold a
     // 960x540 clip per wallpaper and the carousel played it with a QtMultimedia

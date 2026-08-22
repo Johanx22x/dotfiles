@@ -139,8 +139,9 @@ THUMB_WIDTH="${WALLPAPER_THUMB_WIDTH:-960}"
 # two thirds of a core EACH, before any of them has been scaled down.
 #
 # WHY NOT A SMALL VIDEO EITHER, which is what this cache used to hold: a 960x540
-# clip at 24 fps, played by a QtMultimedia MediaPlayer on the centred card. The
-# clip was not the problem. The PLAYER was, and on this hardware specifically.
+# clip at 24 fps, played by a QtMultimedia MediaPlayer on the centred card --
+# on that one alone, because a second player was unaffordable. The clip was not
+# the problem. The PLAYER was, and on this hardware specifically.
 # Measured on an RTX 5070 (driver 610.57.04) against these very wallpapers:
 #
 #   * A MediaPlayer costs the same whatever you feed it. One playing a 960x540
@@ -163,6 +164,15 @@ THUMB_WIDTH="${WALLPAPER_THUMB_WIDTH:-960}"
 # at rest (9.7% of a core against 9.8%), half the memory (311 MB against 622),
 # no VRAM, no CUDA context, and -- the point of the exercise -- no stall at all
 # when you step through the fan.
+#
+# AND IT DOES THAT ON EVERY CARD ON SCREEN, not just the middle one. That is
+# what makes the frame cache below carry the whole collection rather than one
+# file at a time: five cards flipping costs 29.8% of a core against one card's
+# 9.7%, but 320 MB of RSS against 311 and no late frames either way, so there is
+# no longer any reason to freeze four of the five pictures someone is looking
+# at. It does not change what this script writes -- every video has always had
+# its own preview -- but it does mean five of them are being read at once, which
+# is the argument for keeping the frames small and the loop short.
 #
 # THE NUMBERS, and what each of them is paying for:
 #
@@ -605,7 +615,7 @@ fi
 # 4K PNG to draw a card costs a fifth of a second. A video gets two more: a
 # still frame, because an Image cannot decode an mp4 and every card that is not
 # the centred one shows exactly that, and a run of numbered preview frames,
-# because the centred card moves and the original is 4K at up to 120 fps.
+# because every card on screen moves and the original is 4K at up to 120 fps.
 #
 # All three are named after the file they came from, all three are rebuilt when
 # it is newer, and all three are swept when it goes away, so they are built

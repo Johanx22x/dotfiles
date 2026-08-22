@@ -23,10 +23,12 @@
 // feeding the corner mask, and playing the 4K wallpaper itself. See the
 // thumbnail cache in Config and the shared mask below.
 //
-// THE CENTRED CARD MOVES BY FLIPPING THROUGH JPEGs, and that is the one design
-// decision here that was settled by measurement rather than by argument, so the
-// measurements stay. It used to be a QtMultimedia MediaPlayer playing a small
-// h264 copy of the wallpaper, and stepping through the fan was not fluid.
+// EVERY CARD YOU CAN SEE MOVES, by flipping through JPEGs, and that is the one
+// design decision here that was settled by measurement rather than by argument,
+// so the measurements stay. It used to be a QtMultimedia MediaPlayer playing a
+// small h264 copy of the wallpaper -- on the centred card alone, because a
+// second player was unaffordable -- and stepping through the fan was not
+// fluid.
 //
 // Measured on THIS machine -- an RTX 5070 on driver 610.57.04, where
 // qt6-multimedia-ffmpeg decodes through NVDEC -- against the wallpapers in this
@@ -65,6 +67,20 @@
 // settle timer, the warmup delay before a player was allowed to exist, and the
 // crossfade that covered the swap from still to video. A frame flip costs
 // nothing to start or stop, so none of them have anything left to protect.
+//
+// AND THE ONE-CARD RULE WENT WITH THEM, which took a second pass to notice. It
+// was never a statement about what a wallpaper picker should look like -- it
+// was rationing. A player was 9.8% of a core and 300 MB whether it was showing
+// you anything or not, so five of them were unthinkable and the centre got the
+// only one. Frames cost what they draw: five cards flipping is 29.8% of a core
+// against one card's 9.7%, but 320 MB of RSS against 311, and the rows above
+// say plainly that nothing arrives late either way -- five cards flipping WHILE
+// stepping through the fan was 0.26% late frames and a p99 of 19 ms. A picker
+// whose four other pictures are frozen is answering the question worse than it
+// needs to, and it is no longer paying for the privilege.
+//
+// The carousel answers "what will my desktop look like", and for a live
+// wallpaper the answer moves. It should move on every card that is showing one.
 //
 // THE NUMBERS ARE FROM A 60 Hz HEADLESS RIG, not from this desktop's 165 Hz
 // screen, and not from this file -- they come from a harness that reproduced
@@ -250,6 +266,39 @@ PanelWindow {
         const i = root.entries.findIndex(e => e.path === root.currentPath);
         if (i >= 0)
             view.positionViewAtIndex(i, PathView.Center);
+    }
+
+    // ---------------- The clock every preview flips on ----------------
+    //
+    // ONE TIMER FOR THE WHOLE SHEET, and not one per card, which is the second
+    // way this could have been built and is worth saying why it was not.
+    //
+    // The tick is a RATE LIMIT, not a metronome. A card does not draw the frame
+    // the tick asked for -- it asks the hidden Image to load it and swaps when
+    // that reports Ready, which happens whenever the loader thread gets to it.
+    // So the cards are already out of phase with each other by however long
+    // their JPEGs took, and five timers would not make them any more organic
+    // than they already are. What five timers WOULD buy is five wakeups at
+    // fifteen hertz to do the work of one, on a surface that is trying to spend
+    // its budget on the fan.
+    //
+    // Gated on the window and nothing finer. A tick with no video on screen
+    // walks five delegates and returns, fifteen times a second, which is
+    // nothing next to a 2560x1440 sheet repainting at the refresh rate -- and
+    // the window is destroyed outright when the carousel is closed, so this
+    // does not exist at all for the part of the session that matters.
+    signal frameTick
+
+    Timer {
+        // From Config, which is where the number that has to agree with
+        // wallpaper-switch's WALLPAPER_PREVIEW_FPS lives. A disagreement there
+        // plays the loop fast or slow; it does not break it, which is why that
+        // one constant is allowed to be written down twice and the frame count
+        // is not.
+        interval: Math.round(1000 / Config.wallpaperPreviewFps)
+        repeat: true
+        running: root.visible
+        onTriggered: root.frameTick()
     }
 
     function apply(entry: var): void {
@@ -683,32 +732,42 @@ PanelWindow {
 
                 // ---- A LIVE WALLPAPER ACTUALLY MOVES HERE ----
                 //
-                // On the card in the middle, and nowhere else. Everywhere else
-                // in the shell a video wallpaper is the still frame ffmpeg
-                // pulled out of it, because an Image cannot decode an mp4. On
-                // this surface the still is a lie worth spending something on:
-                // the whole question the carousel answers is "what will my
-                // desktop look like", and for these files the answer moves.
+                // On every card that is showing one. Everywhere else in the
+                // shell a video wallpaper is the still frame ffmpeg pulled out
+                // of it, because an Image cannot decode an mp4. On this surface
+                // the still is a lie worth spending something on: the whole
+                // question the carousel answers is "what will my desktop look
+                // like", and for these files the answer moves.
                 //
                 // AND IT IS NOT THE WALLPAPER THAT MOVES. The collection is 4K
                 // -- one file is 4K at 120 fps -- so wallpaper-switch keeps a
                 // run of numbered 960 px JPEGs beside the still frames and this
-                // flips through them on a timer. See the header for why it is
-                // frames on a timer and not a video, and what that was measured
-                // against.
+                // flips through them on the sheet's shared clock. See the
+                // header for why it is frames on a timer and not a video, and
+                // what that was measured against.
                 //
-                // THE MIDDLE CARD AND NOTHING ELSE, which was measured rather
-                // than assumed even for this cheap version: one card flipping
-                // costs 9.7% of a core and five cost 29.8%, because a moving
-                // picture anywhere in this window makes the whole window
-                // repaint and the window is the screen. Four more moving cards
-                // buy four more repaints of a 2560x1440 surface to animate
-                // pictures nobody is looking at.
+                // ON SCREEN IS NOT THE SAME AS ON THE PATH, and that distinction
+                // is the whole of the condition below. pathItemCount is 7 but
+                // only FIVE cards are ever visible: the two outermost nodes sit
+                // past the edge of the sheet at zero opacity, which is where a
+                // delegate is created and destroyed out of sight. Those two are
+                // `PathView.onPath` and they are drawing nothing, so gating on
+                // onPath alone would quietly hand two invisible cards a JPEG
+                // decode apiece, fifteen times a second, for ever.
+                //
+                // The path already states which cards are visible -- that is
+                // what its itemOpacity ramp to zero IS -- so this reads the
+                // card's own opacity rather than inventing a second geometric
+                // test that could disagree with it. A card sliding in from the
+                // end node starts flipping a little before it has fully cleared
+                // the frame, which is the right way round: it is on screen by
+                // the time anyone can see it move.
                 readonly property bool hasFrames: card.modelData.previewUrl !== ""
-                    && WallpaperState.isOpen
-                    && card.PathView.onPath
 
-                readonly property bool playing: card.hasFrames && card.centred
+                readonly property bool playing: card.hasFrames
+                    && WallpaperState.isOpen
+                    && card.visible
+                    && card.opacity > 0
 
                 // ---- Where the sequence has got to ----
                 //
@@ -760,8 +819,20 @@ PanelWindow {
                 // reports Ready means the visible picture only ever changes
                 // from one finished frame to the next, and a slow decode costs
                 // a late preview frame rather than a blank card.
+                //
+                // THE TICK REACHES EVERY CARD, so the decision about whether
+                // this one should be moving is made HERE and only here. It used
+                // to be the `running` property of a Timer per card; folding it
+                // into the function is what let those five timers become one.
                 function advanceFrame(): void {
-                    if (card.framePending !== 0 || card.framesMissing)
+                    if (!card.playing || card.framesMissing)
+                        return;
+
+                    // One load in flight at a time. A tick that arrives while
+                    // the previous frame is still decoding is dropped rather
+                    // than queued, so a slow disk plays the loop a little slow
+                    // instead of building a backlog it can never work off.
+                    if (card.framePending !== 0)
                         return;
 
                     const next = card.frameCount > 0
@@ -811,19 +882,12 @@ PanelWindow {
                     card.frameCount = card.frameShown;
                 }
 
-                Timer {
-                    // From Config, which is where the number that has to agree
-                    // with wallpaper-switch's WALLPAPER_PREVIEW_FPS lives. A
-                    // disagreement here plays the loop fast or slow; it does
-                    // not break it, which is why this one constant is allowed
-                    // to be shared where the frame count is not.
-                    interval: Math.round(1000 / Config.wallpaperPreviewFps)
-                    repeat: true
-                    running: card.playing && !card.framesMissing
-                    // Or the card sits on its still frame for a first
-                    // sixty-sixth of a second before asking for anything.
-                    triggeredOnStart: true
-                    onTriggered: card.advanceFrame()
+                Connections {
+                    target: root
+
+                    function onFrameTick(): void {
+                        card.advanceFrame();
+                    }
                 }
 
                 // NOTHING IS CREATED OR DESTROYED WHEN YOU STEP, which is the
@@ -912,15 +976,24 @@ PanelWindow {
                     }
                 }
 
-                // A CARD THAT STOPS BEING THE MIDDLE ONE LETS GO OF ITS FRAMES.
-                // The sources are what hold two decoded pictures alive, and a
-                // fan of five cards each keeping the last frame it drew is four
-                // pictures nobody is looking at. Stepping back onto it starts
+                // A CARD THAT LEAVES THE SCREEN LETS GO OF ITS FRAMES. The
+                // sources are what hold two decoded pictures alive, and the
+                // fan is a conveyor -- every step pushes one card off each end
+                // -- so without this the two parked slots would each sit on a
+                // pair of full-size pictures nobody can see. Coming back starts
                 // again from 001, which is also where the still frame is, so
                 // there is nothing to see in the restart.
                 onPlayingChanged: {
-                    if (card.playing)
+                    // ASK FOR THE FIRST FRAME AT ONCE. The shared clock is up
+                    // to a fifteenth of a second away, and a card that slides
+                    // into the fan and then visibly waits before it starts is
+                    // the kind of hitch this whole design exists to remove.
+                    // This is what the per-card Timer's triggeredOnStart used
+                    // to do.
+                    if (card.playing) {
+                        card.advanceFrame();
                         return;
+                    }
 
                     // The pending load is dropped FIRST. Clearing a source
                     // while one is in flight moves that Image to Null rather
