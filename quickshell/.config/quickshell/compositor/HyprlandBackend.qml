@@ -151,6 +151,55 @@ CompositorBackend {
         return "";
     }
 
+    // ---- Is the bar actually covered? ------------------------------------
+    //
+    // The wlr protocol says which toplevels are fullscreen; it does not say
+    // whether the one it found is the window the monitor is showing, so the
+    // inherited answer kept a monitor listed while the fullscreen window sat on
+    // a workspace nobody was looking at, and every panel welded to the bar
+    // stayed detached. The long note over fullscreenOutputs in
+    // CompositorBackend.qml is where that is written down.
+    //
+    // HERE THERE IS NOTHING TO JOIN, which is the one place this flavor is
+    // easier than the other: Quickshell hands the two halves over already tied
+    // together. A HyprlandToplevel carries `.wayland` -- the very Toplevel the
+    // protocol side would have iterated -- alongside the `.workspace` and
+    // `.monitor` Hyprland puts it on, so "is it fullscreen" and "is its
+    // workspace the one on screen" are two properties of one object.
+    //
+    // THE FULLSCREEN FLAG IS STILL THE PROTOCOL'S. `hyprctl clients` has a
+    // `fullscreen` field and HyprlandWorkspace has `hasFullscreen`, either of
+    // which would have been shorter and neither of which is used: reading it
+    // off `.wayland` is what keeps the two backends agreeing on what the word
+    // means, so that the only thing that differs between flavors is the part
+    // the protocol genuinely cannot answer.
+    //
+    // `workspace.active` IS THE SAME TEST windowBoxes() below already applies,
+    // including how it treats the special workspace: false there even while it
+    // is pulled up on screen. A fullscreen window inside a magic workspace
+    // therefore reads as not covering the bar. That is the deliberate side to
+    // be wrong on -- a special workspace that is NOT showing is the far commoner
+    // state, and calling it visible would put the original bug back for anyone
+    // who parks a window there.
+    //
+    // `.wayland` IS BRIEFLY NULL while a window maps, the same instant
+    // activeWindow above falls back for. During it a fullscreen window is not
+    // counted, so a panel opened in that window welds itself to a bar that is
+    // about to be covered. It lasts as long as a map takes and corrects itself.
+    fullscreenOutputs: {
+        const names = [];
+        for (const tl of Hyprland.toplevels.values) {
+            if (tl.wayland?.fullscreen !== true)
+                continue;
+            if (tl.workspace?.active !== true)
+                continue;
+            const output = tl.monitor?.name ?? "";
+            if (output !== "" && !names.includes(output))
+                names.push(output);
+        }
+        return names;
+    }
+
     // ---- Dispatching, and the trap in it ----------------------------------
     //
     // THE CLASSIC DISPATCHER SYNTAX DOES NOT WORK HERE, AND FAILS SILENTLY.
