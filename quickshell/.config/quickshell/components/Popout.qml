@@ -67,9 +67,13 @@ PanelWindow {
     // side, joined to nothing, hanging off the top edge of the screen. Which is
     // exactly what it looked like.
     //
-    // The fullscreen half is answered through wlr-foreign-toplevel rather than
-    // either compositor's IPC, so it reads the same on both -- see
-    // hasFullscreenOn in CompositorBackend.qml.
+    // AND IT HAS TO BE A FULLSCREEN WINDOW YOU CAN ACTUALLY SEE. One left
+    // fullscreen on a workspace that has been scrolled away from covers
+    // nothing, and this panel detached for it anyway -- for as long as that
+    // window lived, on every screen it had been on. What is fullscreen comes
+    // from wlr-foreign-toplevel and reads the same on both flavors; whether it
+    // is on screen cannot come from there at all. See the note over
+    // fullscreenOutputs in CompositorBackend.qml.
     readonly property bool barVisible: Screens.hasBar(root.screen)
         && !Compositor.hasFullscreenOn(root.screen?.name ?? "")
 

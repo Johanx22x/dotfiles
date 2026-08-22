@@ -95,10 +95,13 @@ Singleton {
         return workspaces.filter(ws => ws.output === outputName);
     }
 
-    // Is something fullscreen on this monitor? Answered through
-    // wlr-foreign-toplevel in the base backend, so it works the same on every
-    // compositor -- but forwarded here like everything else, because the shell
-    // talks to this singleton and never to a backend directly.
+    // Is something fullscreen AND ON SCREEN on this monitor? The fullscreen
+    // half is wlr-foreign-toplevel's on every compositor; the on-screen half
+    // each backend answers from its own IPC, because the protocol does not
+    // carry it -- the note over fullscreenOutputs in CompositorBackend.qml says
+    // why, and why that is the one place this facade is allowed to differ.
+    // Forwarded here like everything else, because the shell talks to this
+    // singleton and never to a backend directly.
     readonly property var fullscreenOutputs: backend?.fullscreenOutputs ?? []
 
     function hasFullscreenOn(outputName: string): bool {
