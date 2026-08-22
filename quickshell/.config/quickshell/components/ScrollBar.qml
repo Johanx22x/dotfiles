@@ -51,6 +51,18 @@
 // nothing moved it -- it shoves the bar down by the whole scroll until the
 // view's own clip eats it. Check which kind of view you are in before copying
 // a placement from another call site.
+//
+// THE SAME CHOICE ALSO DECIDES WHO IS ON TOP, and that is what says whether
+// any of the widening below is reachable at all. In a ListView or a GridView
+// the bar is a later sibling of the contentItem, so it is above the rows and
+// takes what it overlaps. In ScrollList the bar is declared in the base
+// document and the call site's Column is appended to the same `flickableData`
+// afterwards, so the ROWS are above the bar: a call site whose rows carry a
+// full-width MouseArea takes every press across the list, this bar included,
+// and it is drawn but cannot be grabbed. Five of ScrollList's seven do
+// exactly that. Measured, not read off the docs, in tests/scrollbar-target.py
+// -- and it is the reason those seven never suffered the fault the rail and
+// the launcher did, rather than any care taken about their margins.
 import QtQuick
 import "root:/"
 
@@ -132,36 +144,67 @@ Rectangle {
         }
     }
 
-    // How far past the bar a press still counts. Four pixels is the right width
-    // to LOOK at and an unfair thing to ask anyone to hit, so the target is
-    // widened -- but ONLY INTO SPACE THE CALL SITE ACTUALLY HAS, which is why
-    // this is a property and not the seven it used to be everywhere.
+    // How far past the bar a press still counts, AND IT IS TWO NUMBERS,
+    // BECAUSE THE TWO SIDES ARE NOT ALIKE. Four pixels is the right width to
+    // LOOK at and an unfair thing to ask anyone to hit, so the target is
+    // widened -- but one side of it faces the view this bar is drawn over,
+    // where every pixel taken is a pixel some row stops hearing, and the
+    // other faces whatever the call site put the bar into, which in this tree
+    // is either padding that is empty by construction or a clip that throws
+    // the pixels away. One number for both is what made the widening a defect
+    // twice, in the settings rail and then in the launcher grid: a single
+    // margin can only be as large as the tighter side allows, so it is either
+    // too small to hit or it eats the rows beside it, and there is no value
+    // that is neither.
     //
-    // SEVEN IS FOR A BAR WITH ROOM ON BOTH SIDES. The page pane and the search
-    // results have it: they sit in the window's own groupPadding, and every
-    // card inside them keeps twelve pixels of its own before any control, so
-    // eighteen pixels of target land on padding either way.
+    // INWARD MEANS LEFTWARD, because every bar in this tree hangs on the
+    // right-hand edge of the thing it describes. A bar down a left-hand edge
+    // would want the two swapped and there is none; if one is ever added,
+    // this is the place to teach about it rather than the call site.
     //
-    // THE RAIL DOES NOT, and passes 3. Its channel is ten pixels wide in
-    // total and its entries run right up to the edge of it, with no padding of
-    // their own to spend -- so seven reached four pixels back over every row.
-    // Measured on the real rail, offscreen, pressing a row at four heights of
-    // the pointer: at x=194 the entry is selected, at x=197 and x=199 the
-    // entry hears nothing and the list jumps to where the bar was pressed.
-    // Which is a settings window where the right-hand edge of every
-    // navigation entry silently scrolls instead of opening anything.
-    property int grabMargin: 7
+    // THREE INWARD, which is what both of the call sites that used to
+    // override the old single margin were asking for, and neither has to ask
+    // any more. Measured offscreen, on the launcher's grid geometry -- three
+    // columns of 260 with the bar hard against the right edge at x=779 --
+    // pressing a third-column row across the last pixels of its width:
+    //
+    //   inward   the app hears the press   the bar takes it
+    //   7        up to x=768               769 to 779
+    //   3        up to x=772               773 to 779
+    //
+    // ELEVEN OUTWARD, which is not a taste: 3 + 4 + 11 is the eighteen pixels
+    // the old seven-on-both-sides gave, moved to the side that can afford it.
+    // Where a clip meets the bar's outer edge -- ScrollList, the launcher
+    // grid, the clipboard list -- all eleven are discarded and the target is
+    // the seven that are left, which is what those sites already had. Where
+    // nothing clips, all eleven are live and land on padding: the cheatsheet
+    // keeps thirteen pixels of card outside the bar, the notification history
+    // twelve of panel, and the rail's bar reaches four pixels short of the
+    // page pane through window padding that holds nothing.
+    //
+    // Measured rather than reasoned, because Qt's rule here is not the
+    // obvious one: a press target is bounded by a CLIPPING ancestor and by
+    // nothing else, so an unclipped parent does NOT stop a child's MouseArea
+    // reaching past it. The launcher's grid answers to x=779 with its clip on
+    // and to x=790 with it off, on the same geometry and the same margins --
+    // tests/scrollbar-target.py holds both, and the first is the only reason
+    // the outward side is free to be this wide.
+    property int grabMarginInward: 3
+    property int grabMarginOutward: 11
 
     // WIDER ONLY, never taller. Growing it vertically as well would move this
     // item's origin above the track, and `mouse.y` is measured from that
     // origin -- so every position below would be off by the overhang and the
-    // thumb would sit seven pixels from where it was grabbed.
+    // thumb would sit seven pixels from where it was grabbed. Widening the
+    // two sides by different amounts is safe for exactly the same reason
+    // read the other way: `mouse.x` is not read at all, so where the left
+    // edge sits changes nothing about where the thumb lands.
     MouseArea {
         id: scrollMouse
 
         anchors.fill: parent
-        anchors.leftMargin: -root.grabMargin
-        anchors.rightMargin: -root.grabMargin
+        anchors.leftMargin: -root.grabMarginInward
+        anchors.rightMargin: -root.grabMarginOutward
 
         // Only while there is something to drive. An invisible bar's mouse
         // area would still take the press, leaving a dead strip down the edge

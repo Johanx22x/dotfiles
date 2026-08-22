@@ -301,16 +301,22 @@ FloatingWindow {
             // because that padding belongs to the panel; the top and bottom
             // still come off the list, so the track is exactly as long as the
             // thing it is a picture of.
+            //
+            // NO MARGIN OVERRIDE, and this file used to carry one. The
+            // component widened its press target by seven on each side, and
+            // seven reached four pixels back over every entry: pressing the
+            // right-hand edge of a navigation row scrolled the rail instead
+            // of opening the page. It asked for three, which stopped the
+            // target at the entries and also stopped it dead at the edge of
+            // this channel; the component now reaches three inward by
+            // default, so the first half is the default and the second half
+            // was never wanted. Nothing lies between this channel and the
+            // page pane but window padding, and the target spends the rest of
+            // its width out there: measured offscreen, an entry is selected
+            // everywhere up to x=199 and the bar answers from 200 to 217,
+            // four pixels short of the pane.
             ScrollBar {
                 view: railScroll
-
-                // THREE AND NOT THE DEFAULT SEVEN, and it is not a nicety.
-                // This channel is ten pixels wide and the entries end at the
-                // edge of it, so the usual target reached back over every row
-                // and pressing the right-hand edge of an entry scrolled the
-                // rail instead of opening the page. Three fills the channel
-                // exactly and stops at the entries. See ScrollBar.qml.
-                grabMargin: 3
 
                 anchors.right: parent.right
                 anchors.rightMargin: 3
