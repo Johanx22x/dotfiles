@@ -1,3 +1,10 @@
+// NOTHING INSTANTIATES THIS FILE ANY MORE. See the note at the top of
+// WifiControl.qml: the two came out of the dashboard together when it became
+// one view, and both are kept because the settings pages that replaced them
+// are written against them. modules/settings/pages/BluetoothPage.qml explains
+// its own scope by contrast with this file's header, and BluetoothPage:190
+// points at an expression in here as the version NOT to copy.
+//
 // Bluetooth: the radio, and the devices worth one click.
 //
 // Through Quickshell's BlueZ backend, so no bluetoothctl being spawned and no

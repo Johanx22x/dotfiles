@@ -4,94 +4,115 @@
 // it inherits the welding to the bar, the outside-click dismissal and the
 // blur for free. See components/Popout.qml.
 //
-// THREE TABS, and the split is by QUESTION rather than by widget:
-//   Dashboard     what time is it, what day, and the things worth reaching
-//                 for without leaving the panel: do not disturb, volume,
-//                 wi-fi, bluetooth and starting a recording
-//   Media         what is playing, and the controls for it
-//   Performance   what is this machine doing right now
+// ONE VIEW, AND IT USED TO BE THREE TABS. Dashboard, Media and Performance
+// each had a strip entry, a panel of its own and a size of its own, and the
+// panel was as wide as the widest of them. The split was argued by QUESTION
+// -- this desktop, what is playing, this machine -- and the argument was
+// sound; what was not sound was the price. Two of the three answers were
+// always one click away, the size changed under the pointer every time the
+// answer changed, and the tab strip cost a row of the panel to say which of
+// three things you were looking at.
 //
-// There were two others, and both left for the same reason: the bar answers
-// their question better than a tab can. Workspaces went because the dots are
-// on screen at all times and switch on a click, while the dashboard's copy
-// needed opening first. Notifications went because "what did I miss" is a
-// question you ask on its own rather than while you are already here for
-// something else -- it is a bell in the pill at the right end of the bar now,
-// opening the same list into the same popout, one press away instead of two.
-// See modules/bar/NotificationButton.qml.
+// So the three questions are asked at once, in three columns:
 //
-// The tab strip stays put and only the panel under it changes. The panel is
-// sized PER TAB -- see tabSizes below for why that is safe here and what it
-// costs elsewhere.
+//   left    the time and the month
+//   middle  the things reached for without leaving the panel, and capture
+//   right   what is playing, and what this machine is doing
+//
+// It fits because five things left, and each of them left for a reason that
+// is written where it used to be:
+//
+//   Wi-Fi and Bluetooth      full pages in the settings window do this better
+//   the identity card        distribution, compositor and uptime
+//   the replay's own config  length, screen, codecs -- all on the settings
+//                            page now, so what is left here is the act
+//   nine detail rows         three per subsystem, replaced by three dials
+//   the tab strip            with nothing left to switch between
+//
+// WHAT DID NOT CHANGE. The panel is still a fixed size, and still snaps
+// rather than animating: this Item's implicit size drives the popout's, which
+// drives the LAYER SURFACE, and animating that asks the compositor to
+// reconfigure and re-centre the surface on every frame. Sixty resizes in a
+// fifth of a second is what tore. With one view there is nothing left to
+// resize BETWEEN, which is the other half of the reason the tabs are gone.
 
 import Quickshell
 import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import QtQuick.Effects
 import QtQuick
-import QtQuick.Layouts
 import "root:/"
 import "root:/modules/bar"
-// SessionInfo, for the identity card on the Performance tab. It lives with
-// the settings window because that is where it was first needed; it is a
-// singleton, so importing the directory brings the name into scope and
-// builds nothing.
-import "root:/modules/settings"
 
 Item {
     id: root
 
-    // Fixed, for the reason in the header. Sized to hold the widest tab
-    // (Dashboard, whose calendar sets the floor) with nothing cramped.
-    // ONE SIZE PER TAB.
+    // ---------------- Geometry ----------------
     //
-    // This used to be a single fixed size for all of them, argued as "a
-    // dashboard that resized itself would move its own tabs out from under
-    // the pointer". Half of that held up and half did not: the panel hangs
-    // from the bar, so its TOP edge and the tab strip on it never move
-    // whatever the height is -- only the bottom edge travels, and nothing is
-    // there to be clicked. Width is the one that shifts the tabs, because the
-    // popout re-centres itself, so the tabs are kept still by animating it
-    // rather than by freezing it.
+    // MEASURED, NOT PICKED. Every number below is either derived from the
+    // content it holds or is a size somebody chose on purpose; the three
+    // column widths and the panel height are the only literals, and each one
+    // says what it is made of.
     //
-    // The cost of the old rule was a dashboard as tall as its tallest tab,
-    // which meant Media and Performance sat in a box with a third of it
-    // empty.
-    readonly property var tabSizes: [
-        {
-            width: 942,
-            height: 480
-        },       // Dashboard: 270 + 14 + 330 + 14 + 314, measured rather than
-                 // guessed -- the slack of a width declared too wide all lands
-                 // on the right, because the row is laid out from the left.
-                 //
-                 // The third column exists because of the two that expand:
-                 // Wi-Fi and Bluetooth open into lists, and while they shared a
-                 // column with the recorder and the replay buffer, opening one
-                 // shoved those off the bottom of the card. Things that grow
-                 // and things that must stay put now have a column each.
-        {
-            width: 700,
-            height: 380
-        },       // Media
-        {
-            width: 760,
-            height: 380
-        }        // Performance
-    ]
+    // The old file carried three of these sets, one per tab, because a
+    // resizing panel had to know where it was going. There is one now.
 
-    readonly property var tabSize: root.tabSizes[root.currentTab] ?? root.tabSizes[0]
+    readonly property int gap: 14
+    readonly property int cardPad: 16
 
-    implicitWidth: root.tabSize.width
-    implicitHeight: root.tabSize.height
+    // As wide as the month, which is a fixed seven columns and cannot be
+    // negotiated with. Everything else in this column is narrower.
+    readonly property int leftWidth: month.implicitWidth + root.cardPad * 2
 
-    // NO Behavior on either. Animating them looks like the obvious thing and
-    // is the wrong thing: this Item's implicit size drives the popout's
-    // implicit size, which drives the LAYER SURFACE. Animating it asks the
-    // compositor to reconfigure and re-centre the surface on every frame --
-    // sixty resizes in a fifth of a second -- and the tearing that produced
-    // is the artefact. The size snaps in one step; what animates is the
-    // content, below.
+    // 296, and it was 330 while Wi-Fi and Bluetooth lived here. Those two
+    // opened into LISTS -- a network name plus a signal glyph plus a lock --
+    // and the width was theirs. What is left is a switch, two sliders and
+    // three capture buttons; at 296 each of those buttons is 84 across, which
+    // holds "Display" at 9pt with room either side.
+    readonly property int midWidth: 296
+
+    // 348: three dials of 100 with 8 between them and the card's own padding
+    // either side. The media card above it inherits the width rather than
+    // asking for one, because a cover, a title and a transport row will use
+    // whatever they are given and the dials will not.
+    readonly property int rightWidth: 348
+
+    readonly property int clockHeight: 104
+
+    // The dial, and the card that holds a row of them. A hundred pixels is
+    // what it takes for "100%" at three points over the body size to sit
+    // inside the ring with the label above it and the reading below -- see
+    // the Gauge component at the foot of this file.
+    readonly property int gaugeSize: 100
+    readonly property int gaugeCardHeight: root.gaugeSize + root.cardPad * 2
+
+    // The cover art is a square and everything beside it is shorter, so the
+    // square is what sets the height of the top half of the media card.
+    readonly property int coverSize: 110
+
+    // 2*16 padding + cover + 12 + the progress line + 12 + the transport row.
+    // Stated rather than bound to the children because it is one of the three
+    // candidates for the panel height below, and binding it to items that are
+    // themselves inside a card sized by that height is a loop.
+    readonly property int mediaHeight: root.cardPad * 2 + root.coverSize + 12 + 26 + 12 + 44
+
+    // THE PANEL IS AS TALL AS ITS TALLEST COLUMN, and which column that is
+    // depends on the machine: the calendar grows with the type size, the
+    // controls column loses its brightness row on a desktop, and the capture
+    // column does not move at all. Asking rather than asserting is what stops
+    // a larger font from pushing the month out through the bottom edge, which
+    // is what a stated height would have done.
+    //
+    // None of the three terms reads a card's height, so there is no loop:
+    // `month` and the two Columns report what their CONTENT needs, and the
+    // cards are sized from the answer.
+    readonly property int bodyHeight: Math.max(
+        root.clockHeight + root.gap + month.implicitHeight + root.cardPad * 2,
+        controlsCard.height + root.gap + captureColumn.implicitHeight + root.cardPad * 2,
+        root.mediaHeight + root.gap + root.gaugeCardHeight)
+
+    implicitWidth: root.leftWidth + root.midWidth + root.rightWidth + root.gap * 2
+    implicitHeight: root.bodyHeight
 
     // Seconds to m:ss. MPRIS reports seconds as a double.
     function clockFormat(seconds: real): string {
@@ -107,7 +128,7 @@ Item {
     //
     // MPRIS position is NOT pushed. The player only volunteers it when it
     // seeks, so a binding straight to `player.position` paints the value that
-    // happened to be there when the tab was opened and then sits frozen --
+    // happened to be there when the panel was opened and then sits frozen --
     // which is exactly what the seek bar was doing.
     //
     // So it is polled, and the poll does two things: it pokes the notify
@@ -122,10 +143,11 @@ Item {
     Timer {
         interval: 500
         repeat: true
-        // Only while the tab is on screen AND something is playing. The
+        // The gate used to be "the Media tab is on screen". There is no tab
+        // to ask about now, so it is the panel's own visibility -- and the
         // popout destroys its content when it closes, so this stops on its
         // own the rest of the time rather than polling D-Bus all day.
-        running: root.tab === "Media" && (root.mediaPlayer?.isPlaying ?? false)
+        running: root.visible && (root.mediaPlayer?.isPlaying ?? false)
         triggeredOnStart: true
 
         onTriggered: {
@@ -138,7 +160,7 @@ Item {
         }
     }
 
-    // One definition of "the player", so the Timer above and the Media tab
+    // One definition of "the player", so the Timer above and the media card
     // below cannot disagree about which one they are talking to.
     readonly property var mediaPlayer: {
         const players = Mpris.players.values;
@@ -147,364 +169,260 @@ Item {
         return players.find(p => p.isPlaying) ?? players[0];
     }
 
-    // Nothing is sampled unless the Performance tab is actually being looked
-    // at. The popout destroys its content when it closes, so this goes false
-    // on its own -- /proc is left alone and nvidia-smi is not held open.
+    // ---------------- What replaced the sampling gate ----------------
+    //
+    // This was `root.tab === "Performance"`, and it was the one binding in
+    // the old file that could be wrong without anything looking wrong: get it
+    // pointed at the wrong tab and the shell goes on reading /proc and
+    // holding nvidia-smi at two-second intervals from a panel nobody is
+    // looking at.
+    //
+    // With one view there is no tab left to name, and the honest replacement
+    // is the panel itself. The popout loads this component when it opens and
+    // DESTROYS it when it closes -- `Loader { active: root.isOpen }` in
+    // components/Popout.qml -- so "this exists" and "somebody is looking at
+    // it" are the same statement here. `visible` rather than a literal `true`
+    // because it costs nothing and covers the case where the panel is alive
+    // but not on screen.
+    //
+    // What that gate actually buys is smaller than it sounds and worth
+    // knowing before anyone tightens it further: SystemStats never stops. It
+    // drops to a 5 s GPU poll and a 2 s read of two small files, because the
+    // island has to be able to warn about a hot card with this panel shut.
+    // `active` only decides whether /proc/stat and /proc/cpuinfo are parsed
+    // as well, and whether the GPU loop runs at 2 s instead of 5.
     Binding {
         target: SystemStats
         property: "active"
-        value: root.tab === "Performance"
+        value: root.visible
     }
 
-    // Both the names and the current one come from the singleton: see
-    // IslandState.dashboardTabs for why the order is not written down here.
-    readonly property var tabs: IslandState.dashboardTabs
-    // Read-only: the tab is IslandState's to own, so that it is still there
-    // the next time this component is built. Clicking a tab writes to the
-    // singleton, which flows straight back here.
-    readonly property int currentTab: IslandState.dashboardTab
-
-    // WHAT IS SHOWING, BY NAME. Everything below asks this rather than
-    // comparing currentTab to a number.
-    //
-    // The numbers were fine while the order was fixed and became a trap the
-    // moment it was not: adding Notifications in second place moved Media and
-    // Performance along by one, and every `currentTab === 2` in the file was
-    // silently about a different tab than it used to be. Three of those were
-    // `visible` bindings, which fail loudly, and one was the binding that
-    // decides whether SystemStats samples the machine -- which would have gone
-    // on polling /proc and nvidia-smi from the wrong tab without anything
-    // looking wrong.
-    //
-    // Taking Notifications back OUT moved the same two tabs back again, and
-    // this file did not have to be read for it. That is the whole return on
-    // asking by name, and it is why the numbers are not coming back.
-    readonly property string tab: root.tabs[root.currentTab] ?? root.tabs[0]
-
-    Column {
+    Row {
         anchors.fill: parent
-        spacing: 16
+        spacing: root.gap
 
-        // ---------------- Tab strip ----------------
-        Row {
-            id: strip
+        // ================ Left: the time and the month ================
+        Column {
+            width: root.leftWidth
+            height: parent.height
+            spacing: root.gap
 
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 28
+            Card {
+                width: parent.width
+                height: root.clockHeight
 
-            Repeater {
-                model: root.tabs
+                Column {
+                    anchors.centerIn: parent
 
-                Item {
-                    id: tab
+                    // Centring the Column centres its LINE BOXES, not its
+                    // ink. At 40pt the digits reserve descender space they
+                    // never use, so the visible block sat low: measured 15px
+                    // of gap above and 2 below. The offset is that
+                    // difference, halved, and it is measured rather than
+                    // guessed -- same as the icon overflow the old waybar
+                    // stylesheet documented.
+                    anchors.verticalCenterOffset: -6
 
-                    required property int index
-                    required property string modelData
-
-                    readonly property bool active: root.currentTab === tab.index
-
-                    implicitWidth: label.implicitWidth
-                    implicitHeight: label.implicitHeight + 10
+                    spacing: 0
 
                     Text {
-                        id: label
-
-                        anchors.top: parent.top
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: tab.modelData
+                        text: Qt.formatDateTime(dashClock.date, "HH:mm")
+                        font.family: Theme.fontFamily
+                        font.pointSize: 40
+                        font.weight: Font.Bold
+                        color: Theme.textOnSurface
+                    }
+
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: Qt.formatDate(dashClock.date, "dddd, d MMMM")
                         font.family: Theme.fontFamily
                         font.pointSize: Theme.fontSize
-                        font.weight: tab.active ? Font.Bold : Theme.fontWeight
-                        color: tab.active ? Theme.textOnSurface : Theme.textOnSurfaceVariant
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.animDuration }
-                        }
-                    }
-
-                    // The underline is one rectangle per tab rather than one
-                    // that slides: a slider would have to know where every tab
-                    // is, and the tabs are laid out by the Row.
-                    Rectangle {
-                        anchors.bottom: parent.bottom
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        width: tab.active ? label.implicitWidth : 0
-                        height: 2
-                        radius: 1
                         color: Theme.primary
 
-                        Behavior on width {
-                            NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
+                        Behavior on color {
+                            ColorAnimation { duration: Theme.recolorDuration }
                         }
                     }
+                }
+            }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: IslandState.dashboardTab = tab.index
+            // The month, reused verbatim from what the clock's popout used to
+            // open. Moving it here is the whole reason that popout went away:
+            // a calendar is something you go to, not something that springs
+            // out when you meant to read the time.
+            Card {
+                width: parent.width
+                height: root.bodyHeight - root.clockHeight - root.gap
+
+                CalendarView {
+                    id: month
+
+                    anchors.centerIn: parent
+                }
+            }
+        }
+
+        // ================ Middle: what you reach for ================
+        Column {
+            width: root.midWidth
+            height: parent.height
+            spacing: root.gap
+
+            // The settings, in the sense of things you set and stop thinking
+            // about.
+            //
+            // WI-FI AND BLUETOOTH ARE NOT HERE ANY MORE, and their absence is
+            // most of why this panel got shorter. Each was a row plus a list
+            // that opened underneath it, and between them they owned this
+            // card: the rules either side, the "one list open at a time" rule
+            // that closed the other when one opened, and the third column of
+            // the old layout, which existed only because a list that grows
+            // pushes everything under it off the bottom of a card.
+            //
+            // Both have a full page in the settings window -- see
+            // modules/settings/pages/NetworkPage.qml and BluetoothPage.qml --
+            // and those pages do more than a dashboard row can: saved
+            // networks, forgetting one, pairing, per-device volume. A
+            // truncated second copy of a better screen is not worth the
+            // panel's tallest card.
+            Card {
+                id: controlsCard
+
+                width: parent.width
+                // FROM ITS CONTENT. This card holds three fixed rows on a
+                // desktop and four on a laptop, and it is also the first term
+                // of the capture card's height below, so a number picked by
+                // hand here would be a number to re-pick every time a row
+                // joins or leaves.
+                height: controlsColumn.implicitHeight + root.cardPad * 2
+
+                Column {
+                    id: controlsColumn
+
+                    anchors.fill: parent
+                    anchors.margins: root.cardPad
+                    spacing: root.gap
+
+                    // First, because it is the only toggle here and the rule
+                    // below separates it from the two sliders. It used to be
+                    // first for a different reason -- it was the one row that
+                    // never changed height, and below Wi-Fi and Bluetooth it
+                    // would have been shoved down the card every time one of
+                    // their lists opened. Nothing in this card moves any more;
+                    // the order is now just the grouping.
+                    DndControl {
+                        width: parent.width
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: 1
+                        color: Theme.outlineVariant
+                    }
+
+                    // ABOVE THE VOLUME AND WITH NO RULE BETWEEN THEM. They are
+                    // the same kind of control -- a value you set by feel and
+                    // stop thinking about -- so they read as one block.
+                    //
+                    // `visible` and not merely a zero implicit height: on a
+                    // desktop this component measures zero, but a Column still
+                    // spends its spacing in front of an invisible-but-present
+                    // child, so the old layout kept fourteen pixels of gap for
+                    // a control that was not there. A Column skips an
+                    // invisible child AND the spacing before it.
+                    BrightnessControl {
+                        id: brightness
+
+                        width: parent.width
+                        visible: brightness.present
+                    }
+
+                    VolumeControl {
+                        width: parent.width
+                    }
+                }
+            }
+
+            // Capture: the two things that produce a file.
+            Card {
+                width: parent.width
+                height: root.bodyHeight - controlsCard.height - root.gap
+
+                Column {
+                    id: captureColumn
+
+                    anchors.fill: parent
+                    anchors.margins: root.cardPad
+                    spacing: root.gap
+
+                    RecordControl {
+                        width: parent.width
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: 1
+                        color: Theme.outlineVariant
+                    }
+
+                    // The instant replay, cut down to the act. What it keeps
+                    // and what it keeps it from are settings now, and they
+                    // live on the settings window's Recording page; the file
+                    // itself says which rows went and why.
+                    ReplayControl {
+                        width: parent.width
                     }
                 }
             }
         }
 
-        // ---------------- Panel ----------------
-        Item {
-            id: panelArea
+        // ================ Right: what is playing, what it is doing ========
+        Column {
+            width: root.rightWidth
+            height: parent.height
+            spacing: root.gap
 
-            width: parent.width
-            height: parent.height - strip.height - 16
-
-            // The transition between tabs, now that the size itself cannot be
-            // animated (see the note on tabSizes). The panel snaps to its new
-            // size and the content fades in over it, which reads as one
-            // deliberate change rather than as a box jumping.
+            // ---------------- Media ----------------
+            // Cover on the left as a square, an eyebrow, the title in bold
+            // and the artist under it in muted text; a waveform for a progress
+            // line with the times at each end, and the transport centred under
+            // that.
             //
-            // Fading IN only, not out and in: the old tab is gone the instant
-            // the size changes, and fading something that is already replaced
-            // would just be a flash.
-            NumberAnimation {
-                id: tabFade
-
-                target: panelArea
-                property: "opacity"
-                from: 0
-                to: 1
-                duration: 160
-                easing.type: Easing.OutCubic
-            }
-
-            Connections {
-                target: root
-
-                function onCurrentTabChanged(): void {
-                    tabFade.restart();
-                }
-            }
-
-            // ============ Dashboard ============
-            Row {
-                anchors.fill: parent
-                spacing: 14
-                visible: root.tab === "Dashboard"
-
-                // Clock and calendar in ONE column, not two cards side by
-                // side.
-                //
-                // Vertically they were both wasteful in the same way: the
-                // clock stacked HH over mm down a 150px card and the calendar
-                // sat centred in whatever height the controls column happened
-                // to need. Laying the time out horizontally lets it sit ON TOP
-                // of the month at the same width, and the two together end up
-                // shorter than either card was on its own.
-                Column {
-                    // One number for the clock's height, used by both cards:
-                    // raising it and leaving the calendar subtracting the old
-                    // value is what pushed the month past the bottom edge.
-                    readonly property int clockHeight: 104
-
-                    width: month.implicitWidth + 32
-                    height: parent.height
-                    spacing: 14
-
-                    Card {
-                        width: parent.width
-                        height: parent.clockHeight
-
-                        Column {
-                            anchors.centerIn: parent
-
-                            // Centring the Column centres its LINE BOXES, not
-                            // its ink. At 40pt the digits reserve descender
-                            // space they never use, so the visible block sat
-                            // low: measured 15px of gap above and 2 below.
-                            // The offset is that difference, halved, and it is
-                            // measured rather than guessed -- same as the icon
-                            // overflow the old waybar stylesheet documented.
-                            anchors.verticalCenterOffset: -6
-
-                            spacing: 0
-
-                            Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: Qt.formatDateTime(dashClock.date, "HH:mm")
-                                font.family: Theme.fontFamily
-                                font.pointSize: 40
-                                font.weight: Font.Bold
-                                color: Theme.textOnSurface
-                            }
-
-                            Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: Qt.formatDate(dashClock.date, "dddd, d MMMM")
-                                font.family: Theme.fontFamily
-                                font.pointSize: Theme.fontSize
-                                color: Theme.primary
-
-                                Behavior on color {
-                                    ColorAnimation { duration: Theme.recolorDuration }
-                                }
-                            }
-                        }
-                    }
-
-                // The month, reused verbatim from what the clock's popout used
-                // to open. Moving it here is the whole reason that popout went
-                // away: a calendar is something you go to, not something that
-                // springs out when you meant to read the time.
-                // Widened: the system card that used to sit to its right moved
-                // to the Performance tab, where it belongs next to the other
-                // readings about this machine.
-                    Card {
-                        // Sized to the month it holds, not to whatever is
-                        // left over: a calendar is a fixed 7 columns wide.
-                        width: parent.width
-                        height: parent.height - parent.clockHeight - parent.spacing
-
-                        CalendarView {
-                            id: month
-
-                            anchors.centerIn: parent
-                        }
-                    }
-                }
-
-
-                // Controls. The things most often reached for without leaving
-                // the panel.
-                //
-                // A column of its own rather than four more cards in the row:
-                // they are all small, they are all actions, and side by side
-                // they would each be too narrow to hold a slider or a list.
-                Card {
-                    width: 330
-                    height: parent.height
-
-                    Column {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 14
-
-                        // First, and not last, because it is the only one of
-                        // the four that never changes height: below Wi-Fi and
-                        // Bluetooth it would be shoved down the card every
-                        // time one of their lists opened.
-                        DndControl {
-                            width: parent.width
-                        }
-
-                        Rectangle {
-                            width: parent.width
-                            height: 1
-                            color: Theme.outlineVariant
-                        }
-
-                        // ABOVE THE VOLUME AND WITH NO RULE BETWEEN THEM.
-                        // They are the same kind of control -- a value you set
-                        // by feel and stop thinking about -- so they read as
-                        // one block, and the rule below separates that block
-                        // from the toggles. On a desktop this collapses to
-                        // nothing and the pair is just the volume again.
-                        BrightnessControl {
-                            width: parent.width
-                        }
-
-                        VolumeControl {
-                            width: parent.width
-                        }
-
-                        Rectangle {
-                            width: parent.width
-                            height: 1
-                            color: Theme.outlineVariant
-                        }
-
-                        WifiControl {
-                            id: wifi
-
-                            width: parent.width
-
-                            // One list open at a time. With both, the column
-                            // would need room for two ceilings and the card
-                            // would have to be as tall as the worst case
-                            // rather than as tall as it ever looks.
-                            onExpandedChanged: if (expanded)
-                                bluetooth.expanded = false
-                        }
-
-                        Rectangle {
-                            width: parent.width
-                            height: 1
-                            color: Theme.outlineVariant
-                        }
-
-                        BluetoothControl {
-                            id: bluetooth
-
-                            width: parent.width
-
-                            onExpandedChanged: if (expanded)
-                                wifi.expanded = false
-                        }
-
-                    }
-                }
-
-                // ...and capture gets its own, where nothing above it can move
-                // it. Both of these are things you aim at knowing where they
-                // are, which is exactly what a column shared with an expanding
-                // list cannot promise.
-                Card {
-                    width: 314
-                    height: parent.height
-
-                    Column {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 14
-
-                        RecordControl {
-                            width: parent.width
-                        }
-
-                        Rectangle {
-                            width: parent.width
-                            height: 1
-                            color: Theme.outlineVariant
-                        }
-
-                        ReplayControl {
-                            width: parent.width
-                        }
-                    }
-                }
-            }
-
-            // ============ Media ============
-            // A real player rather than a readout: cover, transport, seek and
-            // volume, with the waveform the island already uses so the two
-            // read as the same instrument at two sizes.
+            // WHAT LEFT WITH THE TAB. The album line went: title and artist
+            // answer "what is this", and the album is the third fact nobody
+            // came for. The volume slider went too -- it is a row in the card
+            // to the left of this one, and having it twice in one view was
+            // only ever defensible while the two were on different tabs.
             Card {
-                anchors.fill: parent
-                visible: root.tab === "Media"
+                id: mediaCard
+
+                width: parent.width
+                height: root.bodyHeight - root.gaugeCardHeight - root.gap
 
                 // Same rule the island uses: prefer what is actually playing,
                 // fall back to the first player that exists so a paused track
-                // still fills the tab.
+                // still fills the card.
                 readonly property var player: root.mediaPlayer
 
+                // WHEN NOTHING IS PLAYING the card is one line of text and the
+                // rest of the view is untouched. That is the whole reason this
+                // is a card in a column rather than a section that collapses:
+                // a card that shrank would drag the dials up into the gap and
+                // the panel would be a different shape depending on whether
+                // music happened to be on.
                 Text {
                     anchors.centerIn: parent
-                    visible: !parent.player
+                    visible: !mediaCard.player
                     text: "Nothing is playing"
                     font.family: Theme.fontFamily
                     font.pointSize: Theme.fontSize
                     color: Theme.textOnSurfaceVariant
                 }
 
-                Row {
-                    id: playerRow
-
-                    readonly property var player: parent.player
+                Column {
+                    id: media
 
                     // ---- Cover art, and the fallback for Firefox players ----
                     // Zen publishes title, album and artist over MPRIS but NOT
@@ -536,7 +454,7 @@ Item {
                     // player is untouched -- trackArtUrl wins whenever it has
                     // a value.
                     readonly property string youtubeId: {
-                        const meta = player?.metadata ?? null;
+                        const meta = mediaCard.player?.metadata ?? null;
                         const url = meta ? (meta["xesam:url"] ?? "") : "";
                         const m = url.match(/[?&]v=([\w-]{11})/) || url.match(/youtu\.be\/([\w-]{11})/);
                         return m ? m[1] : "";
@@ -552,501 +470,481 @@ Item {
                     onYoutubeIdChanged: maxResFailed = false
 
                     readonly property string artSource: {
-                        const direct = player?.trackArtUrl ?? "";
+                        const direct = mediaCard.player?.trackArtUrl ?? "";
                         if (direct)
                             return direct;
-                        if (!youtubeId)
+                        if (!media.youtubeId)
                             return "";
-                        const size = maxResFailed ? "mqdefault" : "maxresdefault";
-                        return "https://i.ytimg.com/vi/" + youtubeId + "/" + size + ".jpg";
+                        const size = media.maxResFailed ? "mqdefault" : "maxresdefault";
+                        return "https://i.ytimg.com/vi/" + media.youtubeId + "/" + size + ".jpg";
                     }
 
-                    anchors.fill: parent
-                    anchors.margins: 20
-                    spacing: 20
-                    visible: !!playerRow.player
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.margins: root.cardPad
+                    // Centred rather than pinned to the top: this card takes
+                    // whatever height the dials below it did not, so there are
+                    // a few pixels of slack and they belong evenly above and
+                    // below rather than all at the bottom.
+                    anchors.verticalCenter: parent.verticalCenter
 
-                    // ---- Cover ----
-                    // ClippingRectangle and NOT a Rectangle with clip: true.
-                    // A plain Item clips to its BOUNDING BOX, so the rounded
-                    // corners were painted on the rectangle and the artwork
-                    // carried straight on over them -- a square photo sitting
-                    // in a rounded frame, which is what looked out of place
-                    // against every other card here. This one clips to the
-                    // radius itself.
-                    ClippingRectangle {
-                        id: cover
+                    spacing: 12
+                    visible: !!mediaCard.player
 
-                        width: parent.height
-                        height: parent.height
-                        radius: Theme.cardRadius - 8
-                        color: Theme.surfaceContainerHighest
+                    // ---- Cover, and what it is playing ----
+                    Item {
+                        width: parent.width
+                        height: root.coverSize
 
-                        // A BLURRED COPY BEHIND, and the sharp one fitted in
-                        // front. This is damage control, not a fix: what the
-                        // player publishes is all there is.
-                        //
-                        // Measured, on the track that prompted this: Chromium
-                        // writes the MediaSession thumbnail to a temp file and
-                        // that file is 150x83. Drawn into a ~300px square with
-                        // PreserveAspectCrop it was being magnified more than
-                        // three times AND cropped to its middle third, which is
-                        // most of why it looked so rough.
-                        //
-                        // Fit instead of Crop halves the magnification and
-                        // shows the whole thumbnail; the blurred fill is what
-                        // stops that leaving two empty bands. Blur is the one
-                        // treatment that costs nothing here -- there is no
-                        // detail left to protect.
-                        Image {
-                            id: artBackdrop
+                        // ClippingRectangle and NOT a Rectangle with clip:
+                        // true. A plain Item clips to its BOUNDING BOX, so the
+                        // rounded corners were painted on the rectangle and the
+                        // artwork carried straight on over them -- a square
+                        // photo sitting in a rounded frame, which is what
+                        // looked out of place against every other card here.
+                        // This one clips to the radius itself.
+                        ClippingRectangle {
+                            id: cover
 
-                            anchors.fill: parent
-                            source: art.source
-                            visible: false
-                            fillMode: Image.PreserveAspectCrop
-                            sourceSize.width: 1024
-                            asynchronous: true
-                        }
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
 
-                        MultiEffect {
-                            anchors.fill: parent
-                            source: artBackdrop
-                            visible: art.visible
-                            blurEnabled: true
-                            blur: 1.0
-                            blurMax: 48
-                            brightness: -0.35
-                            saturation: 0.2
-                        }
+                            width: root.coverSize
+                            height: root.coverSize
+                            radius: Theme.cardRadius - 10
+                            color: Theme.surfaceContainerHighest
 
-                        Image {
-                            id: art
+                            // A BLURRED COPY BEHIND, and the sharp one fitted
+                            // in front. This is damage control, not a fix:
+                            // what the player publishes is all there is.
+                            //
+                            // Measured, on the track that prompted this:
+                            // Chromium writes the MediaSession thumbnail to a
+                            // temp file and that file is 150x83. Drawn into a
+                            // square with PreserveAspectCrop it was being
+                            // magnified and cropped to its middle third, which
+                            // is most of why it looked so rough.
+                            //
+                            // Fit instead of Crop halves the magnification and
+                            // shows the whole thumbnail; the blurred fill is
+                            // what stops that leaving two empty bands. Blur is
+                            // the one treatment that costs nothing here --
+                            // there is no detail left to protect.
+                            Image {
+                                id: artBackdrop
 
-                            anchors.fill: parent
-                            source: playerRow.artSource
-                            // Ready and not just "source is set": a player that
-                            // publishes no art would otherwise leave the
-                            // broken-image chequerboard sitting in the card.
-                            visible: status === Image.Ready
-
-                            // The retry described on playerRow.artSource. An
-                            // Error on the maxres URL means that video has no
-                            // maxres thumbnail, so drop to mqdefault; the flag
-                            // resets by itself on the next track.
-                            onStatusChanged: {
-                                if (status === Image.Error && playerRow.youtubeId && !playerRow.maxResFailed)
-                                    playerRow.maxResFailed = true;
+                                anchors.fill: parent
+                                source: art.source
+                                visible: false
+                                fillMode: Image.PreserveAspectCrop
+                                sourceSize.width: 1024
+                                asynchronous: true
                             }
-                            fillMode: Image.PreserveAspectFit
-                            asynchronous: true
 
-                            // Decoded at up to 1024 rather than at the size it
-                            // is drawn. sourceSize never ENLARGES -- Qt only
-                            // uses it to scale down -- so a 150px thumbnail
-                            // costs nothing here and a real 600px cover, which
-                            // is what other players send, keeps its detail.
-                            sourceSize.width: 1024
+                            MultiEffect {
+                                anchors.fill: parent
+                                source: artBackdrop
+                                visible: art.visible
+                                blurEnabled: true
+                                blur: 1.0
+                                blurMax: 48
+                                brightness: -0.35
+                                saturation: 0.2
+                            }
 
-                            mipmap: true
-                            smooth: true
-                        }
+                            Image {
+                                id: art
 
-                        // The stand-in. A blank square reads as a load that
-                        // failed; a glyph reads as "this track has no cover".
-                        Text {
-                            anchors.centerIn: parent
-                            visible: !art.visible
-                            text: Icons.music
-                            font.family: Theme.fontFamily
-                            font.pointSize: 42
-                            color: Theme.outline
-                        }
-                    }
+                                anchors.fill: parent
+                                source: media.artSource
+                                // Ready and not just "source is set": a player
+                                // that publishes no art would otherwise leave
+                                // the broken-image chequerboard in the card.
+                                visible: status === Image.Ready
 
-                    // ---- Everything else ----
-                    Column {
-                        id: details
-
-                        // Centred against the cover rather than starting at
-                        // its top edge: the cover is a fixed square and this
-                        // column is shorter, so top-aligning left the whole
-                        // right-hand side hanging off the ceiling.
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        width: parent.width - cover.width - parent.spacing
-                        spacing: 10
-
-                        Text {
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            text: playerRow.player?.trackTitle ?? ""
-                            elide: Text.ElideRight
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize + 5
-                            font.weight: Font.Bold
-                            color: Theme.textOnSurface
-                        }
-
-                        Text {
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            // Through Track, not raw: it strips the " - Topic"
-                            // suffix YouTube's auto-generated channels carry.
-                            // Shared with the island so the same track never
-                            // reads two different ways in two places.
-                            text: Track.artist(playerRow.player?.trackArtist ?? "")
-                            elide: Text.ElideRight
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize
-                            color: Theme.textOnSurfaceVariant
-                        }
-
-                        Text {
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            text: playerRow.player?.trackAlbum ?? ""
-                            // An empty album would otherwise keep a blank line
-                            // and its spacing, which is the gap that made the
-                            // block look pushed upwards.
-                            visible: text !== ""
-                            elide: Text.ElideRight
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize - 1
-                            color: Theme.outline
-                        }
-
-                        // The island's waveform, given room. Same component and
-                        // the same cava feed -- it is one instrument shown at
-                        // two sizes, not a second visualiser.
-                        //
-                        // It spans exactly the seek bar's width, so the two
-                        // read as one block instead of a short row of bars
-                        // floating above a long line. The bar COUNT is fixed by
-                        // cava's config, so filling the width means solving for
-                        // the bar width rather than adding bars:
-                        //
-                        //   n*w + (n-1)*gap = width
-                        //
-                        // Floored, so rounding never pushes the last bar past
-                        // the edge and makes the Row wider than the column.
-                        Waveform {
-                            anchors.horizontalCenter: parent.horizontalCenter
-
-                            maxHeight: 46
-
-                            // Solve for the GAP and not for the bar width.
-                            // Filling the width by fattening the bars was the
-                            // first attempt and it looked wrong: cava gives 14
-                            // bands, so spreading them over ~430px made each
-                            // one 27px across -- a row of lozenges rather than
-                            // a spectrum. The bars keep a fixed slim width and
-                            // the space between them absorbs the rest.
-                            barWidth: 8
-                            spacing: Math.max(3, (details.width - Spectrum.bars * barWidth) / (Spectrum.bars - 1))
-                        }
-
-                        // ---- Seek ----
-                        // Only when the player actually reports a position. A
-                        // progress bar frozen at zero is worse than no bar.
-                        Item {
-                            width: parent.width
-                            height: 22
-                            visible: (playerRow.player?.lengthSupported ?? false) && (playerRow.player?.length ?? 0) > 0
-
-                            Rectangle {
-                                id: track
-
-                                anchors.left: parent.left
-                                anchors.right: elapsed.left
-                                anchors.rightMargin: 10
-                                anchors.verticalCenter: parent.verticalCenter
-                                height: 5
-                                radius: 2.5
-                                color: Qt.alpha(Theme.textOnSurfaceVariant, 0.25)
-
-                                Rectangle {
-                                    width: parent.width * Math.min(1, root.livePosition / Math.max(1, playerRow.player?.length ?? 1))
-
-                                    // Smoothed, or the bar jumps twice a
-                                    // second instead of creeping.
-                                    Behavior on width {
-                                        NumberAnimation { duration: 480 }
-                                    }
-                                    height: parent.height
-                                    radius: parent.radius
-                                    color: Theme.primary
+                                // The retry described on media.artSource. An
+                                // Error on the maxres URL means that video has
+                                // no maxres thumbnail, so drop to mqdefault;
+                                // the flag resets by itself on the next track.
+                                onStatusChanged: {
+                                    if (status === Image.Error && media.youtubeId && !media.maxResFailed)
+                                        media.maxResFailed = true;
                                 }
+                                fillMode: Image.PreserveAspectFit
+                                asynchronous: true
 
-                                MouseArea {
-                                    anchors.fill: parent
-                                    anchors.margins: -8
-                                    cursorShape: Qt.PointingHandCursor
-                                    enabled: playerRow.player?.canSeek ?? false
-                                    onClicked: mouse => {
-                                        const p = playerRow.player;
-                                        if (!p)
-                                            return;
-                                        p.position = (mouse.x / track.width) * p.length;
-                                    }
+                                // Decoded at up to 1024 rather than at the size
+                                // it is drawn. sourceSize never ENLARGES -- Qt
+                                // only uses it to scale down -- so a 150px
+                                // thumbnail costs nothing here and a real 600px
+                                // cover, which is what other players send,
+                                // keeps its detail.
+                                sourceSize.width: 1024
+
+                                mipmap: true
+                                smooth: true
+                            }
+
+                            // The stand-in. A blank square reads as a load that
+                            // failed; a glyph reads as "this track has no
+                            // cover".
+                            Text {
+                                anchors.centerIn: parent
+                                visible: !art.visible
+                                text: Icons.music
+                                font.family: Theme.fontFamily
+                                font.pointSize: 34
+                                color: Theme.outline
+                            }
+                        }
+
+                        Column {
+                            anchors.left: cover.right
+                            anchors.leftMargin: 14
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            spacing: 3
+
+                            // The eyebrow, and it says which of the two states
+                            // this is. A label that read "NOW PLAYING" over a
+                            // paused track would be the one piece of text on
+                            // the card that is not true, and the transport
+                            // glyph is the only other thing saying otherwise.
+                            Text {
+                                width: parent.width
+                                text: mediaCard.player?.isPlaying ? "NOW PLAYING" : "PAUSED"
+                                elide: Text.ElideRight
+                                font.family: Theme.fontFamily
+                                font.pointSize: Theme.fontSize - 4
+                                font.weight: Font.Bold
+                                // Letter-spaced, which is what makes four
+                                // small bold words read as a label rather than
+                                // as a very short first line of the title.
+                                font.letterSpacing: 1.4
+                                color: Theme.primary
+
+                                Behavior on color {
+                                    ColorAnimation { duration: Theme.recolorDuration }
                                 }
                             }
 
                             Text {
-                                id: elapsed
+                                width: parent.width
+                                text: mediaCard.player?.trackTitle ?? ""
+                                // Two lines and then an ellipsis. A track
+                                // title is the one string here worth the
+                                // second line -- everything else on the card
+                                // is short by nature -- and a fixed two keeps
+                                // the block the same height whichever it gets.
+                                maximumLineCount: 2
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideRight
+                                font.family: Theme.fontFamily
+                                font.pointSize: Theme.fontSize + 2
+                                font.weight: Font.Bold
+                                color: Theme.textOnSurface
+                            }
 
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: {
-                                    const p = playerRow.player;
-                                    if (!p)
-                                        return "";
-                                    return `${root.clockFormat(root.livePosition)} / ${root.clockFormat(p.length)}`;
-                                }
+                            Text {
+                                width: parent.width
+                                // Through Track, not raw: it strips the
+                                // " - Topic" suffix YouTube's auto-generated
+                                // channels carry. Shared with the island so the
+                                // same track never reads two different ways in
+                                // two places.
+                                text: Track.artist(mediaCard.player?.trackArtist ?? "")
+                                elide: Text.ElideRight
                                 font.family: Theme.fontFamily
                                 font.pointSize: Theme.fontSize - 1
                                 color: Theme.textOnSurfaceVariant
                             }
                         }
-
-                        // ---- Transport ----
-                        // Round buttons rather than bare glyphs. Three marks
-                        // floating on a card have no target to aim at and no
-                        // hover to speak of; the play button is also the one
-                        // control here anyone reaches for without looking, so
-                        // it is the only filled one and the larger of the
-                        // three. That size difference IS the hierarchy.
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            spacing: 10
-
-                            RoundButton {
-                                glyph: Icons.skipPrevious
-                                enabled: playerRow.player?.canGoPrevious ?? false
-                                onActivated: playerRow.player?.previous()
-                            }
-
-                            RoundButton {
-                                glyph: playerRow.player?.isPlaying ? Icons.pause : Icons.play
-                                filled: true
-                                enabled: playerRow.player?.canTogglePlaying ?? false
-                                onActivated: playerRow.player?.togglePlaying()
-                            }
-
-                            RoundButton {
-                                glyph: Icons.skipNext
-                                enabled: playerRow.player?.canGoNext ?? false
-                                onActivated: playerRow.player?.next()
-                            }
-                        }
-
                     }
-                }
-            }
 
-            // ============ Performance ============
-            // WHAT THIS MACHINE IS on the left, WHAT IT IS DOING on the right.
-            //
-            // The left column is the narrow one and holds the two readings
-            // that are a list: the hardware's identity on top, memory below.
-            // The right column is wide because CPU and GPU lie down -- three
-            // short readings each, which sit beside the headline rather than
-            // under it, and that shape wants width more than height.
-            Row {
-                anchors.fill: parent
-                spacing: 14
-                visible: root.tab === "Performance"
-
-                // ---- Left: identity over memory ----
-                Column {
-                    width: (parent.width - 14) * 0.38
-                    height: parent.height
-                    spacing: 14
-
-                    Card {
-                        id: systemCard
+                    // ---- The progress line ----
+                    //
+                    // A WAVEFORM THAT IS ALSO THE SEEK BAR, which is one row
+                    // where the old tab had two: a spectrum above a rule, each
+                    // spanning the same width and reading as a short row of
+                    // bars floating over a long line.
+                    //
+                    // THE HEIGHTS ARE REAL AUDIO. They come from the same cava
+                    // feed the island's capsule draws, through the same
+                    // component -- one instrument at two sizes, not a second
+                    // visualiser, and not a decorative squiggle that would be
+                    // a picture of audio that is not this audio.
+                    //
+                    // THE PROGRESS IS THE CLIP, NOT THE BAR COUNT. The obvious
+                    // implementation is to light each bar whose turn has come,
+                    // and it does not work: cava gives fourteen bands, so the
+                    // fill would move once every seventeen seconds on a
+                    // four-minute track and sit dead still in between. So the
+                    // waveform is drawn TWICE in two colours, and the played
+                    // copy sits inside an Item that is `fraction` of the width
+                    // with `clip: true`. The edge is vertical and straight, so
+                    // clipping costs it nothing -- this is not the curved
+                    // boundary CornerWedge.qml had to solve.
+                    //
+                    // AT REST it is a row of dots on the centre line, which is
+                    // Waveform's own resting shape and the same vocabulary the
+                    // workspace dots use. cava is not running then: Spectrum
+                    // binds the process to MPRIS playback, so a paused track
+                    // costs nothing to draw.
+                    Item {
+                        id: progress
 
                         width: parent.width
+                        height: 26
 
-                        // MEASURED FROM ITS CONTENT, not a number picked to
-                        // fit. It was 104, then 88 when RAM needed the space,
-                        // and at 88 its own rows were the cramped ones -- two
-                        // cards trading the same pixels back and forth, each
-                        // fix creating the next complaint. Bound to the rows
-                        // plus a fixed 18 of padding it cannot be cramped, and
-                        // RAM still gets everything left over.
-                        height: systemRows.implicitHeight + 36
+                        readonly property real fraction: {
+                            const len = mediaCard.player?.length ?? 0;
+                            if (len <= 0)
+                                return 0;
+                            return Math.max(0, Math.min(1, root.livePosition / len));
+                        }
 
-                        Column {
-                            id: systemRows
+                        // Only when the player actually reports a position. A
+                        // progress line frozen at zero is worse than none, and
+                        // the times either side of it would both be lies.
+                        readonly property bool seekable: (mediaCard.player?.lengthSupported ?? false)
+                            && (mediaCard.player?.length ?? 0) > 0
+
+                        Text {
+                            id: elapsed
 
                             anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            visible: progress.seekable
+                            text: root.clockFormat(root.livePosition)
+                            font.family: Theme.fontFamily
+                            font.pointSize: Theme.fontSize - 3
+                            color: Theme.textOnSurfaceVariant
+                        }
+
+                        Text {
+                            id: total
+
                             anchors.right: parent.right
-                            anchors.top: parent.top
-                            anchors.margins: 18
-                            spacing: 12
+                            anchors.verticalCenter: parent.verticalCenter
 
-                            // ASKED RATHER THAN ASSERTED, all three rows. The
-                            // distribution and the compositor were written out
-                            // as text here, and one of them was simply wrong:
-                            // the card said Hyprland on a machine running niri.
-                            // That is the failure mode of a literal -- it does
-                            // not stop being drawn when it stops being true.
-                            // `Compositor.name` is what the facade already
-                            // publishes for exactly this question, and it had no
-                            // readers at all until now.
-                            //
-                            // The uptime is read once, as the card is built, and
-                            // that is the whole of it: the popout destroys its
-                            // content on close, so every opening is a fresh
-                            // reading and nothing ticks in between. SessionInfo's
-                            // own, rather than a second implementation of the
-                            // same arithmetic -- the settings window has printed
-                            // "4h 12m" from that function all along.
-                            //
-                            // The glyph beside the distribution stays Arch's.
-                            // Following the name would take a table of logos, and
-                            // this machine is not going to become another
-                            // distribution between two openings of a popout.
-                            Repeater {
-                                model: [
-                                    { glyph: Icons.arch, value: SessionInfo.distro },
-                                    { glyph: Icons.gpu, value: Compositor.name },
-                                    { glyph: Icons.clock, value: SessionInfo.uptime() }
-                                ]
+                            visible: progress.seekable
+                            text: root.clockFormat(mediaCard.player?.length ?? 0)
+                            font.family: Theme.fontFamily
+                            font.pointSize: Theme.fontSize - 3
+                            color: Theme.textOnSurfaceVariant
+                        }
 
-                                Row {
-                                    required property var modelData
+                        Item {
+                            id: line
 
-                                    width: parent.width
-                                    spacing: 10
+                            // Between the two times, and measured off them
+                            // rather than given a share of the width: the
+                            // strings are as wide as the track is long, and a
+                            // fixed reservation would either crowd "1:04" or
+                            // clip "112:30".
+                            anchors.left: elapsed.visible ? elapsed.right : parent.left
+                            anchors.right: total.visible ? total.left : parent.right
+                            anchors.leftMargin: elapsed.visible ? 10 : 0
+                            anchors.rightMargin: total.visible ? 10 : 0
+                            anchors.verticalCenter: parent.verticalCenter
 
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: parent.modelData.glyph
-                                        font.family: Theme.fontFamily
-                                        font.pointSize: Theme.iconSize
-                                        color: Theme.primary
-                                    }
+                            height: parent.height
 
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        // Elided rather than wrapped: the
-                                        // distribution's PRETTY_NAME is the long
-                                        // one and a second line would push the row
-                                        // out of the card.
-                                        width: parent.width - Theme.iconSize - 16
-                                        elide: Text.ElideRight
-                                        text: parent.modelData.value
-                                        font.family: Theme.fontFamily
-                                        font.pointSize: Theme.fontSize - 1
-                                        font.weight: Theme.fontWeight
-                                        color: Theme.textOnSurface
-                                    }
+                            // Solve for the GAP and not for the bar width.
+                            // Filling the width by fattening the bars was
+                            // tried on the old Media tab and looked wrong:
+                            // fourteen bands spread over the full width made
+                            // each one a lozenge rather than a spectrum. The
+                            // bars keep a fixed slim width and the space
+                            // between them absorbs the rest. Floored, so
+                            // rounding never pushes the last bar past the edge.
+                            readonly property real barGap: Math.max(2,
+                                (line.width - Spectrum.bars * 7) / (Spectrum.bars - 1))
+
+                            Waveform {
+                                id: ghost
+
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: line.width
+
+                                maxHeight: 22
+                                barWidth: 7
+                                spacing: line.barGap
+
+                                // Flat and muted: this is the part of the track
+                                // that has not played. Both ends of Waveform's
+                                // gradient are set to the same colour, which is
+                                // how a two-colour component draws one colour.
+                                barColor: Theme.outlineVariant
+                                barColorEnd: Theme.outlineVariant
+                            }
+
+                            Item {
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+
+                                width: line.width * progress.fraction
+                                clip: true
+
+                                // Smoothed, or the fill jumps twice a second
+                                // instead of creeping. Same 480 the old seek
+                                // bar used, which is just under the poll.
+                                Behavior on width {
+                                    NumberAnimation { duration: 480 }
+                                }
+
+                                Waveform {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: line.width
+
+                                    maxHeight: ghost.maxHeight
+                                    barWidth: ghost.barWidth
+                                    spacing: line.barGap
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.topMargin: -4
+                                anchors.bottomMargin: -4
+                                cursorShape: Qt.PointingHandCursor
+                                enabled: mediaCard.player?.canSeek ?? false
+                                onClicked: mouse => {
+                                    const p = mediaCard.player;
+                                    if (!p)
+                                        return;
+                                    p.position = (mouse.x / line.width) * p.length;
                                 }
                             }
                         }
                     }
 
-                    StatCard {
-                        width: parent.width
-                        // Everything the identity card did not take. RAM was
-                        // cramped when the split was a fraction: its headline
-                        // plus four rows came to more than the share it was
-                        // given, so the rows ended up shoulder to shoulder.
-                        height: parent.height - systemCard.height - 14
+                    // ---- Transport ----
+                    // Round buttons rather than bare glyphs. Three marks
+                    // floating on a card have no target to aim at and no hover
+                    // to speak of; the play button is also the one control here
+                    // anyone reaches for without looking, so it is the only
+                    // filled one and the larger of the three. That size
+                    // difference IS the hierarchy.
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 8
 
-                        title: "RAM"
-                        glyph: Icons.ram
-                        percent: SystemStats.ramPercent
-                        // Used AND total on one line. They were two rows and a
-                        // third for free, which is the same fact said three
-                        // ways -- and three rows of it are what made the card
-                        // feel packed. "8.5 / 31.1" answers "how much is left"
-                        // without arithmetic and without a row of its own.
-                        details: [
-                            { label: "Used", value: `${SystemStats.ramUsed.toFixed(1)} / ${SystemStats.ramTotal.toFixed(1)} GiB` },
-                            { label: "Free", value: `${(SystemStats.ramTotal - SystemStats.ramUsed).toFixed(1)} GiB` },
-                            { label: "Swap", value: SystemStats.swapTotal > 0
-                                ? `${SystemStats.swapUsed.toFixed(1)} / ${SystemStats.swapTotal.toFixed(1)} GiB`
-                                : "off" }
-                        ]
-                        footer: ""
-                    }
-                }
+                        RoundButton {
+                            glyph: Icons.skipPrevious
+                            enabled: mediaCard.player?.canGoPrevious ?? false
+                            onActivated: mediaCard.player?.previous()
+                        }
 
-                // ---- Right: the two that are working ----
-                Column {
-                    width: (parent.width - 14) * 0.62
-                    height: parent.height
-                    spacing: 14
+                        RoundButton {
+                            glyph: mediaCard.player?.isPlaying ? Icons.pause : Icons.play
+                            filled: true
+                            enabled: mediaCard.player?.canTogglePlaying ?? false
+                            onActivated: mediaCard.player?.togglePlaying()
+                        }
 
-                    StatCard {
-                        width: parent.width
-                        // Half the column, or the whole of it when the GPU
-                        // card is not there to take the other half. The same
-                        // arrangement RAM has with the identity card above it:
-                        // one card takes what the other left, so a card that
-                        // does not apply to this machine costs no empty space.
-                        height: gpuCard.visible ? (parent.height - 14) / 2 : parent.height
-                        horizontal: true
-
-                        title: "CPU"
-                        glyph: Icons.cpu
-                        percent: SystemStats.cpuPercent
-                        details: [
-                            { label: "Temp", value: `${Math.round(SystemStats.cpuTemp)} °C` },
-                            { label: "Clock", value: `${(SystemStats.cpuFreq / 1000).toFixed(2)} GHz` },
-                            { label: "Threads", value: `${SystemStats.cpuThreads}` }
-                        ]
-                        footer: SystemStats.cpuModel
-                    }
-
-                    StatCard {
-                        id: gpuCard
-
-                        width: parent.width
-                        height: (parent.height - 14) / 2
-                        horizontal: true
-
-                        // ONLY ONCE A CARD HAS ANSWERED. On a machine with
-                        // neither vendor bound SystemStats spawns nothing and
-                        // leaves every figure below at its initial zero, and a
-                        // tile reading 0 °C, 0.0 / 0 GiB, 0 W under a blank
-                        // name looks like a panel that broke rather than a
-                        // machine without the part. No tile says the second.
-                        //
-                        // `visible` and not a zero height, for the reason the
-                        // empty album line down in Media uses it: a Column
-                        // skips an invisible child AND the spacing in front of
-                        // it, which is what lets the CPU card above simply
-                        // grow into the space instead of leaving a gap where
-                        // this one would have been.
-                        //
-                        // It only ever turns on. Both readers run whether or
-                        // not this tab is open -- the island has to be able to
-                        // warn about a hot card with the dashboard shut -- so
-                        // by the first time anyone opens Performance the card
-                        // is either already here or was never coming, and
-                        // there is no appearing tile to animate.
-                        visible: SystemStats.gpuAvailable
-
-                        title: "GPU"
-                        glyph: Icons.gpu
-                        percent: SystemStats.gpuPercent
-                        details: [
-                            { label: "Temp", value: `${Math.round(SystemStats.gpuTemp)} °C` },
-                            { label: "VRAM", value: `${SystemStats.gpuVramUsed.toFixed(1)} / ${SystemStats.gpuVramTotal.toFixed(0)} GiB` },
-                            { label: "Power", value: `${Math.round(SystemStats.gpuPower)} W` }
-                        ]
-                        // Already trimmed of its vendor prefix by SystemStats,
-                        // for both vendors, where the card is named and the
-                        // vendor is known. Nothing to do here.
-                        footer: SystemStats.gpuName
+                        RoundButton {
+                            glyph: Icons.skipNext
+                            enabled: mediaCard.player?.canGoNext ?? false
+                            onActivated: mediaCard.player?.next()
+                        }
                     }
                 }
             }
 
+            // ---------------- What this machine is doing ----------------
+            //
+            // THREE DIALS AND NOT THREE CARDS OF ROWS. Each subsystem used to
+            // carry a headline percentage, a bar under it and three lines of
+            // detail -- Used / Free / Swap, Temp / Clock / Threads, Temp /
+            // VRAM / Power -- plus the hardware's name at the foot. Nine
+            // readings, of which the ones anybody opened the panel for were
+            // the three percentages and, when something sounded wrong, the two
+            // temperatures.
+            //
+            // The rest were either the percentage said again in another unit
+            // (Free is Used subtracted from Total; Used-of-Total is the
+            // percentage with a GiB on it) or facts about the machine that do
+            // not change between two openings of a popout: the thread count,
+            // the card's name, the model string. Those belong with the
+            // identity card, and the identity card is what left.
+            //
+            // So each subsystem gets a dial: the load large in the middle,
+            // and under it in small type the one reading that says whether it
+            // is in trouble.
+            Card {
+                width: parent.width
+                height: root.gaugeCardHeight
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 8
+
+                    Gauge {
+                        title: "CPU"
+                        percent: SystemStats.cpuPercent
+                        reading: `${Math.round(SystemStats.cpuTemp)} °C`
+                    }
+
+                    // WHICH READING FOR RAM, since memory has no temperature.
+                    //
+                    // The line under a dial answers a different question from
+                    // the dial itself: the percentage says how hard the thing
+                    // is working, the line says whether that is a problem.
+                    // Used-of-total fails that test -- it is the same fact in
+                    // GiB, and it moves in lockstep with the ring above it.
+                    //
+                    // Swap does not. A machine at 85% memory with an empty
+                    // swap is a machine using its memory, which is what it is
+                    // for; the same machine with two gigabytes in swap is
+                    // paging, and paging is the thing you actually get up and
+                    // do something about. It is also the one memory reading
+                    // that is invisible everywhere else in this shell -- the
+                    // island's alert watches ramPercent, not swap.
+                    //
+                    // Short-form GiB, because it has to fit inside the ring
+                    // next to "100%": "2.1G swap" is nine characters where
+                    // "2.1 / 8.0 GiB" is thirteen. "no swap" when there is no
+                    // swap device at all, which is a fact worth stating rather
+                    // than a zero to be misread as "none in use".
+                    Gauge {
+                        title: "RAM"
+                        percent: SystemStats.ramPercent
+                        reading: SystemStats.swapTotal > 0
+                            ? `${SystemStats.swapUsed.toFixed(1)}G swap`
+                            : "no swap"
+                    }
+
+                    // ONLY ONCE A CARD HAS ANSWERED. On a machine with neither
+                    // vendor bound SystemStats spawns nothing and leaves every
+                    // figure at its initial zero, and a dial reading 0% and
+                    // 0 °C looks like a panel that broke rather than a machine
+                    // without the part. No dial says the second.
+                    //
+                    // `visible` and not a zero width, because a Row skips an
+                    // invisible child AND the spacing in front of it: the two
+                    // that remain simply close up and stay centred, with no
+                    // gap where this one would have been. The panel does not
+                    // change size -- the dials are centred in a card whose
+                    // width is the column's.
+                    //
+                    // It only ever turns on, and it turns on early: the GPU
+                    // reader runs whether or not this panel is open, because
+                    // the island has to be able to warn about a hot card with
+                    // the dashboard shut. By the first time anyone opens this
+                    // the dial is either already here or was never coming, so
+                    // there is nothing appearing to animate.
+                    Gauge {
+                        title: "GPU"
+                        visible: SystemStats.gpuAvailable
+                        percent: SystemStats.gpuPercent
+                        reading: `${Math.round(SystemStats.gpuTemp)} °C`
+                    }
+                }
+            }
         }
     }
 
@@ -1063,6 +961,10 @@ Item {
 
     // A transport button. Filled and larger for the primary action, a ghost
     // circle for the others.
+    //
+    // Smaller than it was -- 44 where the old Media tab used 58 -- because the
+    // tab had a card to itself and this has a third of a column. The ratio
+    // between the two sizes is what carries the hierarchy, and that is kept.
     component RoundButton: Rectangle {
         id: button
 
@@ -1078,8 +980,8 @@ Item {
         // the small buttons ended up sitting high against the play button.
         // Equal boxes make the alignment structural instead of something each
         // instance has to remember to anchor.
-        implicitWidth: 58
-        implicitHeight: 58
+        implicitWidth: 44
+        implicitHeight: 44
         radius: width / 2
 
         // The box itself draws nothing; `disc` below is the circle.
@@ -1101,7 +1003,7 @@ Item {
             // Drawn smaller than the box for the secondary buttons, so the
             // play button still reads as the larger of the three without the
             // boxes having to differ.
-            width: button.filled ? 56 : 46
+            width: button.filled ? 42 : 34
             height: width
             radius: width / 2
 
@@ -1123,7 +1025,7 @@ Item {
             // Material Design glyphs sit well inside their em box, so a size
             // that looks right as text looks lost inside a circle. These are
             // set against the disc, not against the body text.
-            font.pointSize: button.filled ? Theme.fontSize + 11 : Theme.fontSize + 8
+            font.pointSize: button.filled ? Theme.fontSize + 8 : Theme.fontSize + 5
             color: button.filled ? Theme.textOnPrimary : Theme.textOnSurface
 
             Behavior on color {
@@ -1142,184 +1044,141 @@ Item {
         }
     }
 
-    // One subsystem's card: a headline percentage over a bar, a table of
-    // details, and the hardware's name at the foot.
-    // One subsystem's card. Two shapes from one definition: a GridLayout of
-    // one column stacks the headline over the details, of two columns it sets
-    // them side by side. Writing the two layouts out separately would be the
-    // same card twice, and they would drift.
-    component StatCard: Rectangle {
-        id: stat
+    // One subsystem, drawn as a dial.
+    //
+    // WHY IT IS A RING OF TICKS AND NOT AN ARC. The obvious implementation is
+    // QtQuick.Shapes: one PathAngleArc for the track and a second for the
+    // sweep. This shell has already paid for that lesson once. The header of
+    // components/CornerWedge.qml records it with the measurement -- a Shape's
+    // curved edge averaged 0.94 intermediate pixels per row against 5.25 for a
+    // Rectangle's rounded corner, five times worse, and neither 4x
+    // multisampling nor a 4x supersampled layer texture fixed it. The house
+    // answer is to build curves out of `Rectangle { radius: width / 2 }`,
+    // which is the one case Qt's documentation says is antialiased without
+    // multisampling.
+    //
+    // A ring can be built that way -- CornerWedge punches a circle out of a
+    // square with an inverted MultiEffect mask, and UserBlock.qml rounds an
+    // avatar the same way. A PARTIAL ring cannot: a mask has no way to say
+    // "up to this angle", and the sweep is the entire point of a gauge.
+    //
+    // So it is not a curve at all. It is thirty-seven rounded rectangles
+    // standing on a circle, lit up to the value, which is what a meter has
+    // looked like since long before there were screens -- and it is exactly
+    // what components/LevelMeter.qml already does in a straight line, for the
+    // reasons written in its header. Each tick is a plain Rectangle with a
+    // radius, so each one is antialiased by the case Qt is good at, and the
+    // rotation is applied to the tick's parent rather than to the geometry.
+    //
+    // 37 ticks over 270 degrees is a step of exactly 7.5, and 270 is the
+    // sweep a car's dial uses: it leaves a gap at the bottom, which is what
+    // tells you at a glance which end is empty.
+    component Gauge: Item {
+        id: dial
 
         property string title: ""
-        property string glyph: ""
         property real percent: 0
-        property var details: []
-        property string footer: ""
-        property bool horizontal: false
+        // The small line under the number: what says whether this is in
+        // trouble. A temperature where there is one, and see the note beside
+        // the RAM dial for what stands in where there is not.
+        property string reading: ""
 
-        radius: Theme.cardRadius - 6
-        color: Theme.surfaceContainerHigh
+        readonly property int ticks: 37
+        readonly property real sweep: 270
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
+        // Clamped here rather than at each reader: nvidia-smi has been seen to
+        // report over 100 for a moment, and a dial with more ticks lit than it
+        // has is worse than one that saturates.
+        readonly property real fraction: Math.max(0, Math.min(1, dial.percent / 100))
 
-        // Anchored top AND bottom, so the layout knows the whole height it has
-        // to work with. That is what lets the detail rows below distribute
-        // into the space left over instead of running past the card -- three
-        // rounds of hand-arithmetic between this card and the one above it
-        // said clearly enough that the sizes should not be arithmetic.
-        GridLayout {
-            id: cardLayout
+        // The whole dial turns as the load does, so it can be read from across
+        // the room without the number -- the same thresholds and the same
+        // argument as the bar it replaces. Not LevelMeter's rule, where only
+        // the top few ticks go warm: that is right for a signal that is about
+        // to clip and wrong for a load, where 95% is not "nearly at the top of
+        // the scale", it is "this machine is busy".
+        readonly property color lit: dial.percent > 90 ? Theme.critical
+            : dial.percent > 66 ? Theme.warning
+            : Theme.primary
 
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.margins: 18
-            // Room for the footer, when there is one.
-            anchors.bottomMargin: stat.footer !== "" ? 38 : 18
+        implicitWidth: root.gaugeSize
+        implicitHeight: root.gaugeSize
 
-            columns: stat.horizontal ? 2 : 1
-            columnSpacing: 24
-            // The gap between the headline and the rows in the stacked shape.
-            rowSpacing: 14
+        Repeater {
+            model: dial.ticks
 
-            // ---- Headline ----
-            Column {
-                Layout.alignment: Qt.AlignTop
-                // Wide enough for "100%" and the bar under it, and no wider:
-                // in the two-column shape everything left over goes to the
-                // detail rows.
-                Layout.preferredWidth: stat.horizontal ? 130 : stat.width - 36
-                spacing: 8
+            // A full-size Item rotated about its own centre, with the tick
+            // drawn at the top of it. Rotating the PARENT and not the
+            // rectangle is what keeps the tick's own geometry axis-aligned in
+            // its item coordinates, which is the form Qt's antialiased
+            // rectangle path expects; the transform is then applied to the
+            // finished, feathered edge.
+            Item {
+                id: spoke
 
-                Row {
-                    spacing: 8
+                required property int index
 
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: stat.glyph
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.iconSize
-                        color: Theme.primary
-                    }
+                // Through the id and not through `parent`: a Repeater's
+                // delegate is reparented on the way in, so a binding that
+                // reads parent.ticks evaluates once against nothing.
+                readonly property real position: (spoke.index + 1) / dial.ticks
+                readonly property bool on: dial.fraction >= spoke.position
 
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: stat.title
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize
-                        font.weight: Font.Bold
-                        color: Theme.textOnSurfaceVariant
-                    }
-                }
+                anchors.fill: parent
 
-                Text {
-                    text: `${Math.round(stat.percent)}%`
-                    font.family: Theme.fontFamily
-                    // Smaller in the stacked shape than in the wide one. A
-                    // vertical card has to fit a headline AND four rows in one
-                    // column, and the percentage is the one element with room
-                    // to give -- it is still by far the largest thing on the
-                    // card at 22.
-                    font.pointSize: stat.horizontal ? 26 : 22
-                    font.weight: Font.Bold
-                    color: Theme.textOnSurface
-                }
+                // Zero is twelve o'clock, so half the sweep either side of it
+                // puts the gap at the bottom.
+                rotation: -dial.sweep / 2 + spoke.index * (dial.sweep / (dial.ticks - 1))
 
                 Rectangle {
-                    width: parent.width
-                    height: 6
-                    radius: 3
-                    color: Qt.alpha(Theme.textOnSurfaceVariant, 0.25)
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: 1
 
-                    Rectangle {
-                        width: parent.width * Math.max(0, Math.min(1, stat.percent / 100))
-                        height: parent.height
-                        radius: parent.radius
+                    width: 3
+                    height: 9
+                    radius: width / 2
+                    antialiasing: true
 
-                        // The bar turns as the load does, so the card can be
-                        // read from across the room without the number.
-                        color: stat.percent > 90 ? Theme.critical
-                            : stat.percent > 66 ? Theme.warning
-                            : Theme.primary
+                    color: spoke.on ? dial.lit : Theme.surfaceContainerHighest
 
-                        Behavior on width {
-                            NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
-                        }
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.animDuration }
-                        }
-                    }
-                }
-            }
-
-            // ---- Details ----
-            Column {
-                id: detailRows
-
-                readonly property int rowHeight: 18
-
-                Layout.alignment: Qt.AlignTop
-                Layout.fillWidth: true
-                // Takes whatever the headline did not, and spreads its rows
-                // across it. Clamped at both ends: never tighter than 4, so
-                // the rows stay legible if the card is short, and never looser
-                // than 10, so a tall card does not drift into a list of
-                // widely separated lines.
-                Layout.fillHeight: true
-
-                spacing: Math.max(4, Math.min(10,
-                    (height - stat.details.length * rowHeight) / Math.max(1, stat.details.length - 1)))
-
-                Repeater {
-                    model: stat.details
-
-                    Item {
-                        required property var modelData
-
-                        width: parent.width
-                        height: detailRows.rowHeight
-
-                        Text {
-                            anchors.left: parent.left
-                            text: parent.modelData.label
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize - 1
-                            color: Theme.textOnSurfaceVariant
-                        }
-
-                        Text {
-                            anchors.right: parent.right
-                            text: parent.modelData.value
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize - 1
-                            font.weight: Font.Bold
-                            color: Theme.textOnSurface
-                        }
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.animDuration }
                     }
                 }
             }
         }
 
-        // Pinned to the bottom rather than sitting at the end of the layout:
-        // the cards carry names of different lengths and this keeps them on
-        // one line whichever shape the card is in.
-        Text {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            anchors.margins: 18
+        Column {
+            anchors.centerIn: parent
+            spacing: 0
 
-            visible: stat.footer !== ""
-            text: stat.footer
-            elide: Text.ElideRight
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 2
-            color: Theme.outline
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: dial.title
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize - 3
+                font.weight: Font.Bold
+                font.letterSpacing: 1.2
+                color: Theme.textOnSurfaceVariant
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: `${Math.round(dial.percent)}%`
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize + 7
+                font.weight: Font.Bold
+                color: Theme.textOnSurface
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: dial.reading
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize - 3
+                color: Theme.outline
+            }
         }
     }
 

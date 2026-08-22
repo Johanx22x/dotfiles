@@ -1,10 +1,14 @@
 // Do not disturb, as a row in the dashboard's control card.
 //
-// One line and no chevron: unlike Wi-Fi and Bluetooth there is nothing under
-// it to open -- the state is the whole of the setting. That is also why it
-// sits ABOVE both of them in the column. Those two grow downwards when their
-// lists open, and anything below a control that expands is a control that
-// moves out from under the pointer.
+// One line and no chevron: there is nothing under it to open, because the
+// state is the whole of the setting.
+//
+// It used to sit above Wi-Fi and Bluetooth for a structural reason -- those
+// two grew downwards when their lists opened, and anything below a control
+// that expands is a control that moves out from under the pointer. Both left
+// the dashboard when it became one view, so nothing in that card moves any
+// more and this row is first by grouping rather than by necessity: it is the
+// only toggle, and the rule under it separates it from the two sliders.
 //
 // The state, the persistence and the reasoning about which notifications still
 // get through live in modules/notifications/NotificationState.qml. This file is

@@ -265,8 +265,9 @@ Item {
         // An onDashboardOpenRequested was here, opening rather than toggling
         // for the one caller that sent you to a named tab. That caller was the
         // do-not-disturb badge and the tab was Notifications, which is now a
-        // widget of its own at the right end of the bar; nothing asks for this
-        // panel by tab any more. See IslandState.dashboardTabs.
+        // widget of its own at the right end of the bar. There are no tabs at
+        // all now -- the dashboard is one view -- so there is nothing left to
+        // be sent to. See the header of modules/island/Dashboard.qml.
     }
 
     Rectangle {

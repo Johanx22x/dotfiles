@@ -1,22 +1,37 @@
-// Instant replay: the switch, how much it keeps, and the button that keeps it.
+// Instant replay: is it running, and keep the last thirty seconds.
 //
-// It lives in the same column as the recorder rather than under the Wi-Fi and
-// Bluetooth rows, and that move fixed a real problem: those two expand into
-// lists, and everything below them was pushed off the bottom of the card when
-// they did. Things that grow and things that must stay put do not share a
-// column.
+// TWO CONTROLS, AND IT USED TO BE FIVE. The switch and the save button are
+// what is here; a row of four length chips with the buffer's size in RAM
+// beside them, and a row of monitor chips with the connector name beside
+// those, are what left. They were not wrong -- each of them was added to fix
+// something real, and the reasoning is preserved below where it still applies
+// -- they simply stopped being the only way to reach those settings.
 //
-// The header reads like the Wi-Fi and Bluetooth ones -- glyph, name, switch --
-// because it is the same kind of thing: a background service that is either on
-// or off. What follows is what makes it different: a buffer has a LENGTH and a
-// SUBJECT, and those are the two real decisions here, so they are two rows of
-// chips rather than a menu.
+// WHERE THEY WENT. modules/settings/pages/RecordingPage.qml owns the buffer's
+// configuration now: the length, whether it lives in RAM or on disk, which
+// screen, the codec, the container, the bitrate and its mode, the framerate
+// and the microphone. It explains each one beside the control, it can offer
+// the codecs THIS card actually has an encoder for, and it does not have to
+// fit in a column of a popout. A dashboard that also carried two of those
+// rows was carrying a worse copy of a page that already exists.
 //
-// The size in RAM is on screen next to the lengths because it is the entire
-// cost of that choice, and it is not knowable from anywhere else -- a buffer is
-// exactly its bitrate times its duration. The connector name is next to the
-// screens for the opposite reason: it is knowable, from `hyprctl monitors`, and
-// nobody was going to go and look. See the section on that row.
+// WHAT A KEYSTROKE-OPENED PANEL IS FOR is the other half of it: the act, not
+// the settings. Whether the buffer is running, and the button that turns the
+// last thirty seconds into a file. Everything else is a decision you make
+// twice a year.
+//
+// THE CONNECTOR NAME STAYED, and that is deliberate rather than an oversight
+// in the trimming. The monitor chips were added because their absence cost a
+// clip: the buffer followed the shell's own screen with nothing on screen
+// saying which one that was, and it spent a long time holding the side panel
+// while the switch said "Instant replay" and the button said "Save last 30s",
+// both telling the truth about the wrong screen. A capture with no visible
+// subject is the one setting you cannot check by looking at what it produces,
+// because by then what it produces is the evidence.
+//
+// CHOOSING the screen belongs with the rest of the configuration. SEEING
+// which one it is belongs wherever the save button is. So the chips went and
+// the readout stayed, on the header line, where it costs no height at all.
 //
 // The state, the process and the persisted duration live in
 // modules/recorder/ReplayState.qml.
@@ -28,10 +43,9 @@ import "root:/modules/recorder"
 Item {
     id: root
 
-    implicitHeight: header.height + 10 + chips.height
-        + (screens.visible ? 8 + screens.height : 0) + 12 + 42
+    implicitHeight: header.height + 10 + save.height
 
-    // ---------------- Header: what it is, and the switch ----------------
+    // ---------------- Header: what it is, where, and the switch ----------
     Item {
         id: header
 
@@ -57,10 +71,43 @@ Item {
             }
         }
 
+        // The connector gpu-screen-recorder was actually handed, not the
+        // monitor as a person names it. Those two disagree in exactly one
+        // case -- a chosen monitor that is not plugged in -- and that is the
+        // case worth being able to see.
+        //
+        // Shown when there is more than one screen to be wrong about, and
+        // shown anyway when the stored choice is missing, which is what a
+        // machine with two screens yesterday and one today looks like. Amber
+        // then: the buffer is running, it is simply not running where it was
+        // told to, and that is a state that ends when the screen comes back
+        // rather than an error.
+        //
+        // It is measured off its own string and the label to its left elides
+        // against it, so a long connector name never pushes anything off the
+        // row and there is no loop between the two widths.
+        Text {
+            id: connector
+
+            anchors.right: toggle.left
+            anchors.rightMargin: Theme.itemSpacing
+            anchors.verticalCenter: parent.verticalCenter
+
+            visible: Screens.all.length > 1 || ReplayState.monitorMissing
+            text: ReplayState.monitor === "" ? "no screen" : ReplayState.monitor
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize - 3
+            color: ReplayState.monitorMissing ? Theme.warning : Theme.outline
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.animDuration }
+            }
+        }
+
         Text {
             anchors.left: glyph.right
             anchors.leftMargin: Theme.itemSpacing
-            anchors.right: toggle.left
+            anchors.right: connector.visible ? connector.left : toggle.left
             anchors.rightMargin: Theme.itemSpacing
             anchors.verticalCenter: parent.verticalCenter
 
@@ -109,247 +156,19 @@ Item {
         }
     }
 
-    // ---------------- How much it keeps ----------------
-    Item {
-        id: chips
-
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: header.bottom
-        anchors.topMargin: 10
-
-        height: 26
-
-        Row {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-
-            spacing: 5
-
-            Repeater {
-                model: ReplayState.options
-
-                Rectangle {
-                    id: chip
-
-                    required property int modelData
-
-                    readonly property bool current: ReplayState.seconds === chip.modelData
-
-                    width: 38
-                    height: 24
-                    radius: 7
-                    color: {
-                        if (chip.current)
-                            return Theme.primary;
-                        return chipMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent";
-                    }
-
-                    border.width: chip.current ? 0 : 1
-                    border.color: Theme.outlineVariant
-
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.animDuration }
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-
-                        text: `${chip.modelData}s`
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize - 3
-                        font.weight: chip.current ? Font.Bold : Theme.fontWeight
-                        color: chip.current ? Theme.textOnPrimary : Theme.textOnSurfaceVariant
-                    }
-
-                    MouseArea {
-                        id: chipMouse
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: ReplayState.setSeconds(chip.modelData)
-                    }
-                }
-            }
-        }
-
-        // The price of the chip on the left of it. A buffer is its bitrate
-        // times its duration and nothing else, so this is the whole cost --
-        // and the arithmetic is ReplayState's rather than this file's, because
-        // the settings page shows the same number under the same choice and
-        // two of them would drift the day the bitrate became a setting. It
-        // has: in constant bitrate this is a number, and in the other two
-        // modes gsr promises nothing about the size, so the reading says so
-        // instead of quoting an average.
-        Text {
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-
-            text: ReplayState.cost
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 3
-            color: Theme.outline
-        }
-    }
-
-    // ---------------- Which screen it keeps ----------------
-    //
-    // THIS ROW IS HERE BECAUSE ITS ABSENCE COST A CLIP. The buffer used to
-    // follow the shell's monitor with nothing on screen saying which one that
-    // was, and it spent a long time holding the side panel: the switch said
-    // "Instant replay", the button said "Save last 30s", and both were telling
-    // the truth about the wrong screen. A capture with no visible subject is
-    // the one setting you cannot check by looking at the thing it produces --
-    // by then the thing it produces is the evidence.
-    //
-    // Chips and not a dropdown, for the reason the lengths above are chips:
-    // the alternatives ARE the information here, and there are two of them.
-    //
-    // A MONITOR AND NOTHING ELSE. There is no "Auto" chip, deliberately: the
-    // whole failure this row exists to end was an automatic answer nobody had
-    // given and nobody could see, and offering it back as an option would be
-    // offering the failure back. One screen is filled, always, and it is the
-    // screen being recorded.
-    //
-    // WHICH IS NOT THE SAME AS SAYING THE SETTING IS NEVER EMPTY. A machine
-    // that has never touched this row -- a fresh clone, the first boot after
-    // pulling it -- has no choice stored, and the buffer still has to record
-    // something: it falls to the shell's own monitor, exactly as it did before
-    // any of this existed. What that resolves to is what is filled below, so
-    // the row is never blank and never lying, and the first click on it turns
-    // the inherited answer into a given one. See ReplayState.screen.
-    //
-    // Hidden with one monitor, where a choice between one thing is not a choice.
-    Item {
-        id: screens
-
-        visible: Screens.all.length > 1
-
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: chips.bottom
-        anchors.topMargin: 8
-
-        height: 26
-
-        readonly property var options: Screens.all.map(screen => ({
-            key: Config.screenKey(screen),
-            connector: screen.name,
-            // The model -- "PG32QF2B" -- because that is the monitor as it is
-            // sold and as it is labelled on the box. Falls back to the
-            // connector for the virtual outputs that report no model, which is
-            // the same fallback screenKey makes.
-            label: screen.model || screen.name
-        }))
-
-        // The connector, which is a second fact and not a repeat of the filled
-        // chip: the chip is a monitor as a person names it, this is the string
-        // gpu-screen-recorder was handed. They disagree in exactly one case --
-        // a chosen monitor that is not plugged in -- and that is the case worth
-        // being able to see.
-        Text {
-            id: connector
-
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-
-            text: ReplayState.monitor === "" ? "no screen" : ReplayState.monitor
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 3
-            // Amber when the chosen monitor is not plugged in: the buffer is
-            // running, it is simply not running where it was told to. That is a
-            // state that ends when the screen comes back, not an error.
-            color: ReplayState.monitorMissing ? Theme.warning : Theme.outline
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-        }
-
-        Row {
-            id: screenRow
-
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-
-            spacing: 5
-
-            // EQUAL SHARES OF WHAT IS LEFT, rather than a width per chip: a
-            // third monitor should make the chips narrower, not push one off
-            // the card. Measured against the connector text, whose width comes
-            // from its own string and not from this row -- so there is no loop.
-            readonly property real slot: (screens.width - connector.width - Theme.itemSpacing
-                - screenRow.spacing * (screens.options.length - 1)) / screens.options.length
-
-            Repeater {
-                model: screens.options
-
-                Rectangle {
-                    id: screenChip
-
-                    required property var modelData
-
-                    // Filled when it is the screen being recorded, which is the
-                    // stored choice when there is one and the resolved screen
-                    // when there is not. Comparing only against the stored key
-                    // would leave every chip hollow on a machine that has never
-                    // picked -- a row of options with the answer missing, about
-                    // a recorder that is running right now.
-                    readonly property bool current: Config.replayMonitor === ""
-                        ? ReplayState.monitor === screenChip.modelData.connector
-                        : Config.replayMonitor === screenChip.modelData.key
-
-                    width: Math.max(0, screenRow.slot)
-                    height: 24
-                    radius: 7
-                    color: {
-                        if (screenChip.current)
-                            return Theme.primary;
-                        return screenMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent";
-                    }
-
-                    border.width: screenChip.current ? 0 : 1
-                    border.color: Theme.outlineVariant
-
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.animDuration }
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        width: parent.width - 8
-                        horizontalAlignment: Text.AlignHCenter
-                        elide: Text.ElideRight
-
-                        text: screenChip.modelData.label
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize - 3
-                        font.weight: screenChip.current ? Font.Bold : Theme.fontWeight
-                        color: screenChip.current ? Theme.textOnPrimary : Theme.textOnSurfaceVariant
-                    }
-
-                    MouseArea {
-                        id: screenMouse
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        // Costs the seconds the buffer is holding, exactly like
-                        // changing the length does: -w is a command-line flag,
-                        // so the recorder comes back. ReplayState.setMonitor is
-                        // where that is arranged.
-                        onClicked: ReplayState.setMonitor(screenChip.modelData.key)
-                    }
-                }
-            }
-        }
-    }
-
     // ---------------- Save ----------------
-    // Filled, and the only filled button in the panel. Everything else here
-    // adjusts something that is already happening; this is the one control
-    // that produces a file, and it is the reason the buffer is running at all.
+    // Filled, and the only filled button in the panel. Everything else in the
+    // dashboard adjusts something that is already happening; this is the one
+    // control that produces a file, and it is the reason the buffer is running
+    // at all.
+    //
+    // THE LENGTH IS ON THE BUTTON and no longer in a row of chips above it.
+    // That is not a consolation prize for the chips: the number was always the
+    // useful half of them -- what this button is about to hand you -- and it
+    // is the half that has to be visible at the moment of pressing. What went
+    // with the chips is the size in RAM, which was the cost of CHOOSING and
+    // belongs where the choosing now happens; ReplayState.cost still computes
+    // it and the settings page still shows it.
     Rectangle {
         id: save
 
@@ -414,10 +233,10 @@ Item {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
 
-            // The panel goes away with the click. Watching a dashboard while it
-            // saves the last thirty seconds -- of a dashboard -- is not what
-            // anyone wants the clip to contain, and the island confirms the
-            // save on its own, which is where a confirmation belongs.
+            // The panel goes away with the click. Watching a dashboard while
+            // it saves the last thirty seconds -- of a dashboard -- is not
+            // what anyone wants the clip to contain, and the island confirms
+            // the save on its own, which is where a confirmation belongs.
             onClicked: {
                 IslandState.closeDashboard();
                 ReplayState.save();
