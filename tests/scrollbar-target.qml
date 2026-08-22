@@ -211,10 +211,21 @@ Item {
                 Repeater {
                     model: 40
 
-                    Loader {
+                    Rectangle {
                         width: rows.width
                         height: 40
-                        sourceComponent: Case.rowsClickable ? clickableRow : inertRow
+
+                        // Opaque only where a case asks for it. Every real
+                        // row in the tree is "transparent" at rest and paints
+                        // on hover or selection, so this is the hovered row
+                        // and the question is what it does to the bar under
+                        // the pointer.
+                        color: Case.rowColour
+
+                        Loader {
+                            anchors.fill: parent
+                            sourceComponent: Case.rowsClickable ? clickableRow : inertRow
+                        }
                     }
                 }
             }
@@ -228,6 +239,13 @@ Item {
         id: clickableRow
 
         MouseArea {
+            // `Case.rowZ` is the control for the bar's own `z: 1`. Stacking
+            // in Qt Quick is per parent: a z inside a row orders that row's
+            // own children and cannot lift anything over a sibling of the
+            // row's ancestor. So a row carrying z=99 must still lose to a bar
+            // at z=1, and if it ever does not, one is enough is wrong.
+            z: Case.rowZ
+
             onPressed: scene.lastHit = "content"
         }
     }

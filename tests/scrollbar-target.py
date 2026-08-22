@@ -81,6 +81,11 @@ from pathlib import Path
 # platform plugin is chosen at construction and cannot be changed after.
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
+# The software scene graph, so the one rendered assertion at the bottom needs
+# no GL context and answers the same on this desk and on a runner. Measured:
+# every press row above reports identically under both backends.
+os.environ.setdefault("QT_QUICK_BACKEND", "software")
+
 from PyQt6.QtCore import QCoreApplication, QPointF, QUrl, Qt
 from PyQt6.QtGui import QGuiApplication, QInputDevice, QMouseEvent, QPointingDevice
 from PyQt6.QtQml import QQmlAbstractUrlInterceptor, QQmlComponent
@@ -220,11 +225,13 @@ def check(case: dict, bar, content) -> None:
 # is what every call site in the tree now does and therefore what is worth
 # asserting. The one case that sets them says so in its own comment.
 BESIDE = {"shape": "beside", "rowsClickable": True, "viewClips": True,
-          "tuned": False, "inward": 0, "outward": 0}
+          "tuned": False, "inward": 0, "outward": 0, "rowZ": 0,
+          "rowColour": "transparent"}
 VIEW = {"shape": "view", "rowsClickable": True, "viewClips": True,
-        "tuned": False, "inward": 0, "outward": 0}
+        "tuned": False, "inward": 0, "outward": 0, "rowZ": 0,
+        "rowColour": "transparent"}
 LIST = {"shape": "list", "barX": 0, "tuned": False, "inward": 0, "outward": 0,
-        "viewClips": True}
+        "viewClips": True, "rowZ": 0, "rowColour": "transparent"}
 
 # ---------------------------------------------------------------------------
 # The bar beside the list, in padding the call site already had
@@ -301,20 +308,58 @@ check({**VIEW, "name": "view, unclipped", "listLeft": 0, "listRight": 780,
 
 note("--- ScrollList's own bar ---")
 
-# Bluetooth's two lists, Input, Network and the Updates package packs: every
-# row carries a MouseArea across the full width. The rows are above the bar,
-# so they take everything and THE BAR ANSWERS NOWHERE. It is drawn and it
-# cannot be grabbed. Recorded, not endorsed.
-check({**LIST, "name": "ScrollList, live rows", "rowsClickable": True,
-       "listLeft": 226, "listRight": 804, "sceneWidth": 820},
-      bar=None, content=(226, 803))
+# ALL SEVEN, ONE ROW EACH, because the fault was never uniform: five of these
+# carry a MouseArea across the full row and two do not, and until ScrollList's
+# bar was given a z the five were the ones where the bar could not be grabbed
+# at any x. The list's WIDTH is not what any of this turns on -- the bar hangs
+# on the right edge wherever that edge is, and the answer is always its last
+# seven pixels -- so one width stands for all of them and the per-site column
+# that matters is whether the rows take presses.
+#
+#   Bluetooth paired / available   MouseArea anchors.fill, unconditional
+#   Updates, packages in a pack    MouseArea anchors.fill, unconditional
+#   Input, xkb layouts             the same, `enabled: entry.addable`
+#   Network, wifi                  the same, but only over the collapsed 32px
+#   Keybinds                       no input handler in the list at all
+#   Updates, installer log         one Text, no handler
+#
+# The two conditional ones fall back to the row below when their condition is
+# off, which is why the inert row is asserted as well and not merely noted.
 
-# Keybinds and the Updates log: nothing in the rows takes a press, so the bar
-# gets its seven -- three inward and the four it is drawn on. The outward
-# eleven is inside ScrollList's own `clip: true` and is discarded.
-check({**LIST, "name": "ScrollList, inert rows", "rowsClickable": False,
-       "listLeft": 226, "listRight": 804, "sceneWidth": 820},
-      bar=(797, 803), content=None)
+SITES = (
+    ("bluetooth paired", True),
+    ("bluetooth available", True),
+    ("input layouts", True),
+    ("network wifi", True),
+    ("updates packages", True),
+    ("keybinds", False),
+    ("updates log", False),
+)
+
+for name, clickable in SITES:
+    check({**LIST, "name": name, "rowsClickable": clickable,
+           "listLeft": 226, "listRight": 804, "sceneWidth": 820},
+          bar=(797, 803),
+          content=(226, 796) if clickable else None)
+
+# THE ROWS GIVE UP SEVEN PIXELS AND NOT ONE MORE, which is the other half of
+# the question and the half a "the bar is reachable now" check would miss. The
+# rows above answer to 796 on a list whose edge is 804: the bar's own four and
+# the three of inward margin, and nothing else moved. Nothing clickable in any
+# of the seven sits in that strip -- the tightest inset in the tree is eight
+# pixels, on the Bluetooth and Network rows, and what sits at eight is a
+# status label. The chips those rows carry are around a hundred pixels in.
+
+# A ROW'S OWN z CANNOT CLIMB BACK OVER IT, which is what says `z: 1` is
+# enough rather than merely enough for now. Stacking is per parent: the z on a
+# row orders that row against its siblings in the Column, and the bar is a
+# sibling of the Column itself. Bluetooth's and Network's row MouseAreas
+# really do carry `z: -1`, so this is not hypothetical in either direction.
+for row_z in (99, 1000):
+    check({**LIST, "name": f"row at z={row_z}", "rowsClickable": True,
+           "rowZ": row_z, "listLeft": 226, "listRight": 804,
+           "sceneWidth": 820},
+          bar=(797, 803), content=(226, 796))
 
 # THE PROPERTIES ARE STILL WIRED TO SOMETHING. Every row above leaves the
 # margins at the component's defaults, which is the right thing to assert and
@@ -363,6 +408,51 @@ elif where == {0.0}:
 else:
     note(f"a press at y=190 lands at contentY {landed[0][2]} for all of "
          f"{[(i, o) for i, o, _ in landed]}")
+
+# ---------------------------------------------------------------------------
+# And it is drawn where a row paints over it
+# ---------------------------------------------------------------------------
+# THE ONLY ROW HERE THAT IS SEEN RATHER THAN ASKED. Being unreachable was half
+# of what being underneath cost ScrollList's bar; the other half is that it
+# was PAINTED underneath too, and a press check cannot see that at all. Every
+# row in the tree is transparent at rest and paints on hover, on selection, on
+# pairing or while a password box is open -- so what this looked like was an
+# indicator that disappeared under whatever the pointer was on.
+#
+# The window is grabbed and the pixels are read. If the grab comes back empty
+# -- no renderer, somewhere this has not been tried -- that is said out loud
+# and not counted as a pass or a failure, because a rendered assertion that
+# quietly turns into nothing is worse than none.
+
+note("--- and the row does not paint over it ---")
+
+ROW = "#804060"
+case = {**LIST, "name": "opaque row", "rowsClickable": True,
+        "rowColour": ROW, "listLeft": 0, "listRight": 600, "sceneWidth": 700}
+
+import tempfile
+with tempfile.TemporaryDirectory() as empty:
+    view = build(case, Path(empty))
+    app.processEvents()
+    shot = view.grabWindow()
+    if shot.isNull() or shot.width() < case["sceneWidth"]:
+        note("the window did not render here, so nothing was looked at")
+    else:
+        # 596..599 is the bar; 590 is the row beside it and is the control --
+        # without it, a grab that came back blank would read as a pass.
+        beside = shot.pixelColor(590, 150).name()
+        over = [shot.pixelColor(x, 150).name() for x in range(596, 600)]
+        if beside != ROW:
+            fail(f"the row itself did not paint: x=590 is {beside}, not {ROW}")
+        elif any(c == ROW for c in over):
+            fail(f"the row paints over the bar: 596..599 are {over}")
+        else:
+            note(f"the row is {beside} beside the bar and the bar's four "
+                 f"pixels are {over[0]}")
+    view.hide()
+    view.setSource(QUrl())
+    view.deleteLater()
+    app.processEvents()
 
 if failed == 0:
     note("every placement takes the pixels it is meant to and no others")
