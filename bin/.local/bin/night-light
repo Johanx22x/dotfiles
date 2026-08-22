@@ -13,6 +13,11 @@
 # the screen plainly untinted. The file below is the truth; the daemon is told
 # what it says.
 #
+# The other daemon tells the same lie in D-Bus. wl-gammarelay-rs's Temperature
+# property is the value it was last handed and not a reading of the output --
+# see the long note over gammarelay_temperature, which is where that costs
+# something rather than merely being untidy.
+#
 # That is also what keeps the two backends interchangeable: the shell's
 # NightLight.qml reads this file and calls `night-light on|off|temp N`, and it
 # has no idea which compositor is running or which daemon answered. Everything
@@ -263,11 +268,50 @@ ensure_gammarelay() {
     wait_until 10 0.1 gammarelay_running
 }
 
+# WHY THE TEMPERATURE IS WRITTEN TWICE, and why nothing in this file may be
+# built on reading it back. Both halves come out of wl-gammarelay-rs 1.0.1's
+# own source, and both were measured on this machine.
+#
+#   - THE SET IS GUARDED. `set_temperature_root_cb` in its dbus_server.rs is
+#     wrapped in `if ctx.state.color().temp != val`, and `Output::set_color` in
+#     its wayland.rs in `if color != self.color`. Handing the daemon the
+#     temperature it already holds is therefore not a cheap re-apply, it is
+#     NOTHING AT ALL: no ramp uploaded, no property signal, no screen.
+#   - THE PROPERTY IS A WRITE CACHE, not a reading. `get_temperature_root_cb`
+#     hands back that same in-memory field, and wlr-gamma-control has no request
+#     that asks what is on the output, so no reading of the truth exists
+#     anywhere to compare it against. Measured: with the daemon reporting 4100
+#     the CRTC's GAMMA_LUT held the 4100 ramp, and an hour earlier, with the
+#     daemon reporting the same 4100, the screen carried no filter at all. One
+#     number, two opposite realities.
+#
+# Together those mean a filter the compositor drops underneath the daemon --
+# and it can, the ramp lives on the CRTC and is reset by paths the daemon is
+# never told about -- CANNOT be repaired by asserting the saved temperature,
+# because that assertion is the no-op above. Turning the filter off and then on
+# is what worked by hand, and it worked because it is two CHANGES rather than
+# one.
+#
+# So the ramp is forced rather than asked for: one step off the target, then the
+# target. Whatever the daemon believed on the way in, it believes target+1 after
+# the first call, so the second is always a real change and the ramp that lands
+# is always the target's.
+#
+# +1 K AND NOT THE NEUTRAL POINT. The intermediate value is on screen for one
+# round trip, and one kelvin cannot be seen, where a bounce through 6500 is a
+# visible flash to no filter at all. The daemon clamps to 1000..10000, so
+# target+1 is in range above both the top of the slider (6000) and neutral
+# (6500).
+gammarelay_temperature() {
+    busctl --user set-property "$GAMMARELAY_BUS" / "$GAMMARELAY_IFACE" \
+        Temperature q "$1" >/dev/null
+}
+
 apply_gammarelay() {
     # Off with nothing running is already off. Starting a daemon just to tell it
     # to do nothing would hand it gamma control of every output for no reason,
     # and this is not a corner case: it is every single login where the filter
-    # is off, through the `apply` that autostart runs.
+    # is off, through the `apply` the shell runs as it starts.
     if (( ! enabled )) && ! gammarelay_running; then
         return 0
     fi
@@ -296,8 +340,8 @@ apply_gammarelay() {
     # NOT 6000: that is MAX_TEMP, the top of the slider, and its table entry is
     # 0.919, 1.0, 0.965 -- visibly warm. The two numbers answer different
     # questions and must not be merged.
-    busctl --user set-property "$GAMMARELAY_BUS" / "$GAMMARELAY_IFACE" \
-        Temperature q "$target" >/dev/null
+    gammarelay_temperature $(( target + 1 ))
+    gammarelay_temperature "$target"
 }
 
 # ---- no backend -------------------------------------------------------------
@@ -369,9 +413,23 @@ case "${1:-show}" in
                     || echo "daemon:      hyprsunset, not running"
                 ;;
             gammarelay)
-                gammarelay_running \
-                    && echo "daemon:      wl-gammarelay-rs, running" \
-                    || echo "daemon:      wl-gammarelay-rs, not running"
+                # AND THEN THE WARNING, because everything above this line can
+                # agree and the screen still carry no filter: the daemon's
+                # Temperature property is the last value it was handed, not a
+                # reading of the output, and there is no reading of the output
+                # to be had. See the note over gammarelay_temperature. An hour
+                # went into "all four checks say 4100 and the screen is white"
+                # before that was understood, so the answer ships with the
+                # question.
+                if gammarelay_running; then
+                    echo "daemon:      wl-gammarelay-rs, running"
+                    echo "note:        neither the daemon nor this script can"
+                    echo "             see what is on the screen. If the filter"
+                    echo "             is missing while the lines above look"
+                    echo "             right, run 'night-light apply'."
+                else
+                    echo "daemon:      wl-gammarelay-rs, not running"
+                fi
                 ;;
             *)
                 echo "daemon:      none for this compositor"
