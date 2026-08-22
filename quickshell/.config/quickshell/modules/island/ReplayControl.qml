@@ -70,6 +70,84 @@ Item {
     implicitWidth: line.implicitWidth
     implicitHeight: 40
 
+    // ---- EVERY LABEL IN HERE RESERVES ITS WIDEST FORM ----
+    //
+    // Toggling the replay resized the whole dashboard. The panel's width is
+    // derived from the row this control sits in -- deliberately, so that a
+    // larger Theme.fontSize widens the panel instead of eliding "Display"
+    // down to "Disp..." -- and the save button's label changes length with
+    // the state:
+    //
+    //   armed            "Save last 30s"
+    //   held elsewhere   "Replay elsewhere"
+    //   off              "Replay off"
+    //
+    // Deriving a container's size from live content is right. It is only SAFE
+    // when the content reserves its own widest case, and this did not: it
+    // reserved whichever string happened to be showing, so flipping a switch
+    // moved the edge of the panel.
+    //
+    // Measured rather than guessed at, because the widest of the three is not
+    // the one with the most characters at every font: "Replay elsewhere" is
+    // sixteen and "Save last 120s" is fourteen, and which draws wider depends
+    // on the face. TextMetrics answers with the font actually in use.
+    //
+    // THE SECONDS ARE PART OF THE CANDIDATE SET, so the reservation follows a
+    // change to the configured buffer length. That is a settings change made
+    // twice a year rather than a switch flipped daily, and it is the one case
+    // where the panel is allowed to resize.
+    readonly property font labelFont: Qt.font({
+        family: Theme.fontFamily,
+        pointSize: Theme.fontSize * 0.85,
+        weight: Font.Bold
+    })
+
+    TextMetrics {
+        id: mSave
+
+        font: root.labelFont
+        text: `Save last ${ReplayState.seconds}s`
+    }
+
+    TextMetrics {
+        id: mElsewhere
+
+        font: root.labelFont
+        text: "Replay elsewhere"
+    }
+
+    TextMetrics {
+        id: mOff
+
+        font: root.labelFont
+        text: "Replay off"
+    }
+
+    readonly property real widestLabel: Math.max(mSave.width, mElsewhere.width, mOff.width)
+
+    // The connector readout is the other one, and it cannot reserve its own
+    // widest form because a connector name is whatever the kernel says.
+    // So it reserves a CONSTANT instead -- the wider of the two fixed strings
+    // it can be measured against -- and anything longer elides. A name that
+    // elides is a readout that is still there; a name that moves the panel's
+    // edge is the bug this is fixing.
+    TextMetrics {
+        id: mNoScreen
+
+        font.family: Theme.fontFamily
+        font.pointSize: Theme.fontSize * 0.78
+        text: "no screen"
+    }
+
+    TextMetrics {
+        id: mConnector
+
+        font: mNoScreen.font
+        text: "HDMI-A-1"
+    }
+
+    readonly property real connectorReserve: Math.max(mNoScreen.width, mConnector.width)
+
     Row {
         id: line
 
@@ -90,7 +168,9 @@ Item {
 
             anchors.verticalCenter: parent.verticalCenter
 
-            implicitWidth: saveRow.implicitWidth + 26
+            // Built from the RESERVED label width rather than from the row,
+            // so it is the same number in all three states.
+            implicitWidth: saveGlyph.implicitWidth + saveRow.spacing + root.widestLabel + 26
             implicitHeight: 40
             radius: 10
 
@@ -123,6 +203,8 @@ Item {
                 spacing: 7
 
                 Text {
+                    id: saveGlyph
+
                     anchors.verticalCenter: parent.verticalCenter
                     text: Icons.replay
                     font.family: Theme.fontFamily
@@ -132,11 +214,16 @@ Item {
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
+
+                    // The reserved width, with the text centred in it, so the
+                    // shorter states sit in the middle of the button rather
+                    // than leaving all the slack on one side.
+                    width: root.widestLabel
+                    horizontalAlignment: Text.AlignHCenter
+
                     text: ReplayState.armed ? `Save last ${ReplayState.seconds}s`
                         : ReplayState.heldElsewhere ? "Replay elsewhere" : "Replay off"
-                    font.family: Theme.fontFamily
-                    font.pointSize: Theme.fontSize * 0.85
-                    font.weight: Font.Bold
+                    font: root.labelFont
                     color: root.ink
                 }
             }
@@ -169,9 +256,14 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
 
             visible: Screens.all.length > 1 || ReplayState.monitorMissing
+
+            // Constant, so a connector name cannot move the panel's edge.
+            width: root.connectorReserve
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
+
             text: ReplayState.monitor === "" ? "no screen" : ReplayState.monitor
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize * 0.78
+            font: mNoScreen.font
             color: ReplayState.monitorMissing ? Theme.warning : root.inkMuted
 
             Behavior on color {
