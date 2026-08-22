@@ -14,7 +14,7 @@
 // ever seen before the day it matters, so the first sighting of it is also the
 // first time anybody has to work out what it is; and this is the door to the
 // page, which somebody may well want to open on a machine that is perfectly up
-// to date -- to tick a pack, or to look at what `etc` is reporting. A widget
+// to date -- to tick a pack, or to read what the units are saying. A widget
 // that vanishes when everything is fine cannot be clicked when everything is
 // fine.
 //

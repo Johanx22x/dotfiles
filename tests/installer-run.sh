@@ -57,14 +57,9 @@
 #                    in the profile below -- which is what the profile is FOR,
 #                    and is the honest answer for a machine with no session.
 #                    palette_apply is therefore not covered by this.
-#   etc              writes nothing at all any more -- it prints the diff and
-#                    the command and stops -- so it IS driven here, by name,
-#                    with an assertion that not one file under /etc moved. It
-#                    stays unticked in the profile because its check answers
-#                    `na` wherever anything differs, which in a container is
-#                    everything, and a `na` unit is not applied by the menu.
-#   services-system  enables system units and would write into /etc for the
-#                    same non-answer. Unticked.
+#   services-system  enables system units and writes into /etc, and a container
+#                    with no running systemd cannot say whether that worked.
+#                    Unticked.
 #   gpu              installs a graphics driver. Unticked, because a driver for
 #                    a card you do not have is not a harmless mistake and this
 #                    is meant to be runnable on a real machine.
@@ -281,7 +276,7 @@ say "the profile it will be driven with"
 # profile's entire reason to exist, so seeding one and watching install.sh
 # honour it IS the round trip. It is read back and compared further down.
 #
-# The four zeroes are the units listed at the top of this file as unsafe or
+# The zeroes are the units listed at the top of this file as unsafe or
 # meaningless to run here. unit.optional and group.apps are ticked on purpose
 # rather than left alone: the optional groups are opt-in, so a run that said
 # nothing about them would never reach tui_optional or optional_apply at all.
@@ -291,16 +286,16 @@ printf '%s\t%s\n' \
     unit.gpu             0 \
     unit.services-user   0 \
     unit.services-system 0 \
-    unit.etc             0 \
     unit.optional        1 \
     group.apps           1 \
     > "$PROFILE"
 sed 's/^/installer-run:   | /' "$PROFILE"
 
-# What /etc looks like before install.sh has been anywhere near it. pacman
-# rewrites nothing in here on its own, so anything that moves was the etc unit
-# getting in when it was told not to -- the one thing in this run that could
-# damage the machine it is running on.
+# What /etc looks like before install.sh has been anywhere near it. Nothing in
+# the installer writes outside $HOME except services-system, which is unticked
+# above, so anything that moves here is the installer reaching somewhere it has
+# no business being -- the one thing in this run that could damage the machine
+# it is running on.
 etc_before="$(sha256sum /etc/pacman.conf /etc/fstab 2>/dev/null || true)"
 
 # ---------------------------------------------------------------------------
@@ -342,7 +337,7 @@ want "the first run runs the symlinks reload hook" \
 
 # The units the profile said no to are not in the list the run announces, and
 # nothing pulled them back in as a requirement of something else.
-want_not "an unticked unit is not applied" grep -qE '^== (Colour palette|/etc) ==' "$first"
+want_not "an unticked unit is not applied" grep -qxF '== Colour palette ==' "$first"
 
 # ---------------------------------------------------------------------------
 say "what the first run left on disk"
@@ -415,9 +410,8 @@ want "the laptop answer was written down" test -f "$HOME_DIR/.local/state/laptop
 want "the laptop answer is the one --yes gives" \
      grep -qP '^battery\t1' "$HOME_DIR/.local/state/laptop-modules"
 
-# AND NOTHING IN /etc MOVED. The etc unit rewrites pacman.conf and fstab and
-# offers to run mkinitcpio and grub-mkconfig; it was told no, and this is the
-# assertion that the answer was honoured rather than merely given.
+# AND NOTHING IN /etc MOVED. No unit writes there at all any more, and this is
+# the assertion that says so rather than the comment that claims it.
 want_eq "nothing wrote to /etc" \
         "$etc_before" "$(sha256sum /etc/pacman.conf /etc/fstab 2>/dev/null || true)"
 
@@ -433,8 +427,6 @@ want_eq "the compositor chosen on the command line was remembered" \
         "both" "$(awk -F'\t' '$1 == "compositor" { print $2 }' "$PROFILE")"
 want_eq "the unticked palette stayed unticked" \
         "0" "$(awk -F'\t' '$1 == "unit.palette" { print $2 }' "$PROFILE")"
-want_eq "the unticked etc unit stayed unticked" \
-        "0" "$(awk -F'\t' '$1 == "unit.etc" { print $2 }' "$PROFILE")"
 want_eq "the ticked optional pack was recorded" \
         "1" "$(awk -F'\t' '$1 == "group.apps" { print $2 }' "$PROFILE")"
 want_eq "the packs nobody ticked were recorded as a no" \
@@ -511,7 +503,7 @@ say "what check says once everything has been applied"
 #
 # palette is `missing` on purpose: it was never ticked, there is no session to
 # generate a colour scheme in, and calling it fine would be a lie. gpu, shell,
-# services-user, services-system, etc and monitors are left out of this list
+# services-user, services-system and monitors are left out of this list
 # because their answer depends on the machine -- most of them say `na` in a
 # container and something else on a desktop -- and pinning them would make this
 # pass only in CI.
@@ -594,45 +586,6 @@ if installer apply nosuchunit -y >/dev/null 2>&1; then
 else
     pass "apply refuses a unit that does not exist"
 fi
-
-# ---------------------------------------------------------------------------
-say "the etc unit reports and writes nothing"
-
-# THE UNIT THAT WAS THE RISKIEST THING IN THIS REPOSITORY AND THE ONLY ONE WITH
-# NO TEST AT ALL. It wrote /etc with `sudo install -Dm` and then offered to run
-# mkinitcpio -P and grub-mkconfig, and no container could ever have covered
-# that: a container's /etc boots nobody, the initramfs would be for a kernel
-# that is not running, and grub-mkconfig would enumerate the runner's disks.
-# What it does now -- print the diff and the exact command, and run neither --
-# is a thing a container can check, so it is checked.
-etc_out="$SANDBOX/apply-etc.txt"
-# `|| true` INSIDE THE PIPELINE AND NOT AFTER IT. This file runs under `set -o
-# pipefail`, and find exits non-zero the moment it meets a directory it may not
-# read -- /etc/sudoers.d is 0750 root on any Arch machine and this runs as an
-# unprivileged user. Without it the pipeline fails, the assignment fails, and
-# errexit takes the whole test out on the line that was only taking a snapshot.
-etc_snapshot() {
-    { find /etc -xdev \( -type f -o -type l \) -printf '%p %s %T@\n' 2>/dev/null || true; } |
-        LC_ALL=C sort | sha256sum
-}
-etc_all_before="$(etc_snapshot)"
-
-if installer apply etc -y > "$etc_out" 2>&1; then
-    pass "apply etc exits zero"
-else
-    bad "apply etc exits zero"
-fi
-sed 's/^/installer-run:   | /' "$etc_out"
-
-want "apply etc prints the command instead of running it" \
-     grep -qF 'sudo install -Dm' "$etc_out"
-want "apply etc says so before it prints anything" \
-     grep -qF 'Nothing here is written' "$etc_out"
-# --yes IS PASSED ON PURPOSE. The old unit asked a question per file and --yes
-# answered all of them; this one has no question to ask, so --yes must be the
-# same output as no --yes, and the assertion below is what that means in
-# practice.
-want_eq "and not one file under /etc moved" "$etc_all_before" "$(etc_snapshot)"
 
 # ---------------------------------------------------------------------------
 say "--dry-run writes nothing either"
