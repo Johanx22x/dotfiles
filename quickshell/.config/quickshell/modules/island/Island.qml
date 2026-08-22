@@ -25,6 +25,7 @@ import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
 import QtQuick
 import "root:/"
+import "root:/modules/notifications"
 import "root:/modules/recorder"
 
 Item {
@@ -68,6 +69,14 @@ Item {
             return "media";
         return "idle";
     }
+
+    // WHICH ACKNOWLEDGEMENTS ARE A READOUT. Volume and brightness share one
+    // row -- a glyph, a bar and a percentage -- because they are the same
+    // event with a different glyph; the replay and the mute each say a
+    // sentence instead. Asked positively and in one place, because it is read
+    // by both the width and the row's opacity and the alternative was a chain
+    // of negations that grew a term every time a sentence was added.
+    readonly property bool valueAck: IslandState.ack === "volume" || IslandState.ack === "brightness"
 
     // Expansion only means something when the mode has more to give. Hovering
     // the idle capsule should not make it breathe.
@@ -196,6 +205,55 @@ Item {
         }
     }
 
+    // ---------------- The mute, as an acknowledgement ----------------
+    //
+    // THE FOURTH TIME THIS SHAPE IS USED, and deliberately the same one as the
+    // volume and the brightness above: watch the thing itself, and flash when
+    // it moves. Watching beats being told for the same reason it does there --
+    // the mute has four doors (the bell's right click, the switch in the
+    // notification panel, SUPER + N, and `qs ipc call dnd`) and this covers
+    // all four without any of them knowing the island exists.
+    //
+    // THE FLASH LIVES HERE AND NOT IN NotificationState, which is the same
+    // split the paragraph above the brightness watcher argues: that singleton
+    // owns what the mute IS, and this file owns what the bar does about it.
+    //
+    // WHY THE MUTE NEEDS ANNOUNCING when the bell already draws it: on a right
+    // click the pointer is on the bell, hover has already turned its glyph
+    // accent, and so the only thing that changes there is bell to bellOff --
+    // a thin diagonal on a small glyph. The full argument is in the header of
+    // modules/bar/NotificationButton.qml.
+    //
+    // IT FIRES FROM EVERY DOOR, the panel's own switch included, and that is
+    // the trade taken rather than an oversight. The dashboard's volume slider
+    // raises the volume acknowledgement in exactly the same way; a flash that
+    // appeared for some ways of changing a value and not others would be a
+    // confirmation you could not learn to trust. The panel hangs off the right
+    // end of the bar and the island is in the middle of it, so nothing is
+    // covered either way.
+
+    // The shell starting up is not the user muting anything. The same argument
+    // `volumeSettled` makes, and needed here for a sharper reason: the mute is
+    // PERSISTED, so on a reload with it on the JsonAdapter delivers false and
+    // then true a moment later -- without this guard every restart would flash
+    // "Do not disturb on" at whoever had just logged in.
+    property bool dndSettled: false
+
+    Timer {
+        interval: 1000
+        running: true
+        onTriggered: root.dndSettled = true
+    }
+
+    Connections {
+        target: NotificationState
+        enabled: root.dndSettled
+
+        function onDndChanged(): void {
+            IslandState.flashDnd();
+        }
+    }
+
     // ---------------- Size ----------------
     // What the capsule is aiming at. The Behavior on `capsule.width` is what
     // turns a change here into the morph.
@@ -204,7 +262,9 @@ Item {
         case "alert":
             return alertContent.implicitWidth + root.pad * 2;
         case "ack":
-            return (IslandState.ack === "replay" ? replayAck.implicitWidth : ackContent.implicitWidth) + root.pad * 2;
+            if (root.valueAck)
+                return ackContent.implicitWidth + root.pad * 2;
+            return (IslandState.ack === "dnd" ? dndAck.implicitWidth : replayAck.implicitWidth) + root.pad * 2;
         case "recording":
             return recordingContent.implicitWidth + root.pad * 2;
         case "media":
@@ -390,7 +450,7 @@ Item {
 
             anchors.centerIn: parent
             spacing: 9
-            opacity: root.mode === "ack" && IslandState.ack !== "replay" ? 1 : 0
+            opacity: root.mode === "ack" && root.valueAck ? 1 : 0
             visible: opacity > 0
 
             Behavior on opacity {
@@ -482,6 +542,52 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: `Last ${ReplayState.seconds}s saved`
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize
+                font.weight: Font.Bold
+                color: Theme.textOnSurface
+            }
+        }
+
+        // ---------------- Do not disturb ----------------
+        // The mute was switched, from wherever. It is an ACKNOWLEDGEMENT and
+        // not a rung of its own for the same reason the replay above is one:
+        // the state is already carried permanently by the bell at the right of
+        // the bar (and by the badge on a bar with no bell), so there is nothing
+        // here left to watch -- only the fact that the thing you just did took
+        // effect, which is exactly what this rung is for.
+        //
+        // IT SAYS THE STATE AND NOT THE ACTION. "Do not disturb" alone would
+        // be the same string in both directions and would read as a label on a
+        // mode that had just been turned OFF; naming the state outright is the
+        // one wording that cannot be got backwards. It reads NotificationState
+        // directly rather than a payload on IslandState -- see flashDnd there.
+        Row {
+            id: dndAck
+
+            anchors.centerIn: parent
+            spacing: 9
+            opacity: root.mode === "ack" && IslandState.ack === "dnd" ? 1 : 0
+            visible: opacity > 0
+
+            Behavior on opacity {
+                NumberAnimation { duration: Theme.animDuration }
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: NotificationState.dnd ? Icons.bellOff : Icons.bell
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.iconSize
+                // Accent for on, quiet for off -- the same pair the bell uses,
+                // and the same reasoning: a mode you asked for is a state and
+                // not a fault, so it never reaches for critical.
+                color: NotificationState.dnd ? Theme.primary : Theme.textOnSurfaceVariant
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: NotificationState.dnd ? "Do not disturb on" : "Do not disturb off"
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.fontSize
                 font.weight: Font.Bold

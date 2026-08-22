@@ -16,12 +16,14 @@
 // So the three questions are asked at once, in three columns:
 //
 //   left    the time and the month
-//   middle  the things reached for without leaving the panel, and capture
+//   middle  the sliders reached for without leaving the panel, and capture
 //   right   what is playing, and what this machine is doing
 //
-// It fits because five things left, and each of them left for a reason that
+// It fits because six things left, and each of them left for a reason that
 // is written where it used to be:
 //
+//   do not disturb           the panel the bell opens governs the list it
+//                            silences; a dashboard about this desktop did not
 //   Wi-Fi and Bluetooth      full pages in the settings window do this better
 //   the identity card        distribution, compositor and uptime
 //   the replay's own config  length, screen, codecs -- all on the settings
@@ -66,9 +68,11 @@ Item {
 
     // 296, and it was 330 while Wi-Fi and Bluetooth lived here. Those two
     // opened into LISTS -- a network name plus a signal glyph plus a lock --
-    // and the width was theirs. What is left is a switch, two sliders and
-    // three capture buttons; at 296 each of those buttons is 84 across, which
-    // holds "Display" at 9pt with room either side.
+    // and the width was theirs. What is left is two sliders and three capture
+    // buttons; at 296 each of those buttons is 84 across, which holds
+    // "Display" at 9pt with room either side. It is NOT narrowed again now
+    // that the mute has gone too: the buttons are what set this number, and
+    // they have not moved.
     readonly property int midWidth: 296
 
     // 348: three dials of 100 with 8 between them and the card's own padding
@@ -270,8 +274,23 @@ Item {
             height: parent.height
             spacing: root.gap
 
-            // The settings, in the sense of things you set and stop thinking
-            // about.
+            // The two things you set by feel: the backlight and the volume.
+            //
+            // DO NOT DISTURB IS NOT HERE ANY MORE either, and it is the reason
+            // this card has no rule left in it -- the rule existed to separate
+            // the one toggle from the two sliders, and with the toggle gone it
+            // separated nothing from nothing. The mute went to the panel the
+            // bell opens, which is the thing it actually governs: a list of
+            // notifications that cannot silence them was the odd arrangement,
+            // and a dashboard about this DESKTOP was a strange place to keep a
+            // setting about that list. See the header of
+            // modules/notifications/NotificationHistory.qml.
+            //
+            // On a desktop what is left is a single slider in a card of its
+            // own, which is thinner than this card has ever been and is still
+            // the right shape: the capture card below is a different kind of
+            // thing -- two acts that produce a file -- and folding the volume
+            // in beside them to fill the space would be grouping by leftovers.
             //
             // WI-FI AND BLUETOOTH ARE NOT HERE ANY MORE, and their absence is
             // most of why this panel got shorter. Each was a row plus a list
@@ -291,11 +310,11 @@ Item {
                 id: controlsCard
 
                 width: parent.width
-                // FROM ITS CONTENT. This card holds three fixed rows on a
-                // desktop and four on a laptop, and it is also the first term
-                // of the capture card's height below, so a number picked by
-                // hand here would be a number to re-pick every time a row
-                // joins or leaves.
+                // FROM ITS CONTENT. This card holds one slider on a desktop
+                // and two on a laptop, and it is also the first term of the
+                // capture card's height below, so a number picked by hand here
+                // would be a number to re-pick every time a row joins or
+                // leaves -- which it just did.
                 height: controlsColumn.implicitHeight + root.cardPad * 2
 
                 Column {
@@ -304,23 +323,6 @@ Item {
                     anchors.fill: parent
                     anchors.margins: root.cardPad
                     spacing: root.gap
-
-                    // First, because it is the only toggle here and the rule
-                    // below separates it from the two sliders. It used to be
-                    // first for a different reason -- it was the one row that
-                    // never changed height, and below Wi-Fi and Bluetooth it
-                    // would have been shoved down the card every time one of
-                    // their lists opened. Nothing in this card moves any more;
-                    // the order is now just the grouping.
-                    DndControl {
-                        width: parent.width
-                    }
-
-                    Rectangle {
-                        width: parent.width
-                        height: 1
-                        color: Theme.outlineVariant
-                    }
 
                     // ABOVE THE VOLUME AND WITH NO RULE BETWEEN THEM. They are
                     // the same kind of control -- a value you set by feel and
@@ -350,11 +352,23 @@ Item {
                 width: parent.width
                 height: root.bodyHeight - controlsCard.height - root.gap
 
+                // CENTRED AND NOT FILLED, which is the same treatment the
+                // media card's contents get and for the same reason. This card
+                // is given whatever height the controls card above it did not
+                // take, so it has slack in it whenever another column is the
+                // tallest -- and it gained a further sixty-three pixels of it
+                // the day the mute left the card above. Anchored to the top
+                // that slack would all pool at the bottom and read as a hole;
+                // split evenly it reads as padding.
                 Column {
                     id: captureColumn
 
-                    anchors.fill: parent
-                    anchors.margins: root.cardPad
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: root.cardPad
+                    anchors.rightMargin: root.cardPad
+                    anchors.verticalCenter: parent.verticalCenter
+
                     spacing: root.gap
 
                     RecordControl {

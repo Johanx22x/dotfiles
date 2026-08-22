@@ -25,8 +25,8 @@
 // actually ABOUT, the one you press to find out what it swallowed -- sat
 // unchanged at the far right. One control carries both halves now: bellOff
 // while the mute is on, bell when it is not, which is byte for byte how the
-// dashboard's own switch draws it in island/DndControl.qml. The badge stays
-// only as a stand-in for a bar with no bell; see DndIndicator.active.
+// switch inside the panel it opens draws it. The badge stays only as a
+// stand-in for a bar with no bell; see DndIndicator.active.
 //
 // THE ACCENT MEANS "THE MUTE IS ON", and that is not a second job for it.
 // A count can only exist inside a mute -- NotificationState.record raises
@@ -49,6 +49,30 @@
 // number first, and the badge gave it up for as long as this widget is drawn
 // so that exactly one thing on the bar is ever saying it. That handoff now
 // covers the whole badge rather than only its number, for the same reason.
+//
+// RIGHT CLICK SWITCHES THE MUTE, without opening anything. It is the shortcut
+// for the one case where you are already pointing at the control the mute is
+// about -- the same argument the island makes for taking a right click as
+// play/pause, and the same one the do-not-disturb badge makes for unmuting on
+// its own right button. Left click is unchanged, because the panel is what
+// this button is FOR; a gesture that only exists for people who already know
+// it must not take the primary one.
+//
+// AND IT IS ANNOUNCED, which is not optional here. The obvious objection is
+// that this button already draws the state, so the right click confirms
+// itself -- and it does not, on precisely this gesture. Read the glyph's
+// colour below: hover is one of the three conditions that turns it accent, and
+// the pointer is on top of this button by definition when it is right-clicked.
+// So the accent, which the note above calls the half that survives being read
+// at a glance, does not move at all. What is left changing under the pointer
+// is bell to bellOff, which the same note calls a thin diagonal nobody catches.
+//
+// The island says it instead, on the acknowledgement rung it already keeps for
+// exactly this -- something you just did, confirmed, and gone in two seconds.
+// It is wired in modules/island/Island.qml, watching the value rather than
+// being told by this file, so EVERY door announces itself: this button, the
+// switch in the panel, SUPER + N, and `qs ipc call dnd enable`. See the note
+// there for why the flash lives in that file and not in the singleton.
 
 import QtQuick
 import "root:/"
@@ -160,9 +184,9 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
 
             // THE ONE THING ON THE BAR THAT SAYS THE MUTE IS ON. The same
-            // pair island/DndControl.qml draws for the same state, so the row
-            // in the dashboard and the button on the bar are recognisably one
-            // setting rather than two things that happen to be about bells.
+            // pair the switch inside the panel draws for the same state, so
+            // the button and the thing it opens are recognisably one setting
+            // rather than two things that happen to be about bells.
             text: root.muted ? Icons.bellOff : Icons.bell
 
             font.family: Theme.fontFamily
@@ -213,12 +237,27 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
 
-        // Toggle and not open, the same as the two buttons beside it: clicking
-        // the button that opened the panel should put it away again. The
-        // popout's toggleAt compares what it is currently holding against the
-        // component it is handed, so a second click here closes it while a
-        // click on the tray next door swaps the contents instead.
-        onClicked: root.popout.toggleAt(root.anchorX(), historyComponent)
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+
+        onClicked: mouse => {
+            // TOGGLE AND NOT SET, unlike the badge's right button, and the
+            // difference is that the badge only exists while the mute is on --
+            // it has nothing to switch back to. This button is drawn either
+            // way, so a right click that only ever unmuted would do nothing at
+            // all half the time it was tried.
+            if (mouse.button === Qt.RightButton) {
+                NotificationState.toggle();
+                return;
+            }
+
+            // Toggle and not open, the same as the two buttons beside it:
+            // clicking the button that opened the panel should put it away
+            // again. The popout's toggleAt compares what it is currently
+            // holding against the component it is handed, so a second click
+            // here closes it while a click on the tray next door swaps the
+            // contents instead.
+            root.popout.toggleAt(root.anchorX(), historyComponent);
+        }
     }
 
     Component {

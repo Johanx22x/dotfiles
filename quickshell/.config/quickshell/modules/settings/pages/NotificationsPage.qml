@@ -103,11 +103,17 @@ SettingsPage {
         width: parent.width
         title: "Do not disturb"
 
-        // THE SAME SWITCH AS THE DASHBOARD'S AND THE SAME KEY, not a copy of
-        // the state: all three write NotificationState, which owns the mute
-        // and persists it. A settings window that kept its own idea of
-        // whether notifications were muted would be a second answer to a
+        // THE SAME SWITCH AS THE NOTIFICATION PANEL'S AND THE SAME KEY, not
+        // a copy of the state: every door writes NotificationState, which owns
+        // the mute and persists it. A settings window that kept its own idea
+        // of whether notifications were muted would be a second answer to a
         // question that already has one.
+        //
+        // The panel's copy is the one that is actually reached for -- it is
+        // beside the list it silences. This one is here because a setting with
+        // a page has to be ON that page: somebody looking for the mute in the
+        // settings window and not finding it would conclude the shell has
+        // none.
         ToggleRow {
             glyph: NotificationState.dnd ? Icons.bellOff : Icons.bell
             label: "Mute notifications"
