@@ -19,9 +19,9 @@ sudo grub-mkconfig -o /boot/grub/grub.cfg
 ```
 
 **Half of these files are about one machine**: `fstab` names this box's UUIDs,
-`default-grub` points at a `CyberGRUB-2077` theme this repository does not
-carry, `modprobe-nvidia-gaming.conf` is for this card, and `sddm-Xsetup` is
-where these screens sit. Installing this machine's `fstab` on another one does
+`default-grub` turns the OS prober off because there is no second operating
+system on this disk, `modprobe-nvidia-gaming.conf` is for this card, and
+`sddm-Xsetup` is where these screens sit. Installing this machine's `fstab` on another one does
 not reproduce a setup; it produces a machine that will not boot. So the useful
 thing to know about a row is what it is for, which is what this file is.
 
