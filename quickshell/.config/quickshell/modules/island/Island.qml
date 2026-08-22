@@ -20,32 +20,40 @@
 // inactive content how wide it WOULD be, so the capsule can start growing on
 // the same frame the mode changes instead of a frame later.
 //
-// THE MEDIA STATES ARE IN THE ALBUM'S COLOURS, NOT THE WALLPAPER'S. The panel
-// this island opens into is the cover art -- see the header of Dashboard.qml
-// -- and an island that stayed in matugen's palette would have read as a
-// different widget about the same track. So while media is showing, the
-// capsule takes end-4's colLayer0, the title takes colOnLayer0, the artist
-// takes colSubtext, the waveform's gradient runs between colPrimary and
-// colOnLayer0, and the play button is a filled disc in colPrimary that is a
-// rounded square while it plays and a circle while it does not -- which is
-// the panel's 44px button at 26. Every one of those roles comes out of
-// components/AdaptedMaterialScheme.qml, fed by a ColorQuantizer reading the
-// same remembered cover the panel reads.
+// WHILE MEDIA IS SHOWING, THIS IS end-4's MEDIA CARD AT BAR SIZE. Not a
+// widget that quotes the panel -- the same construction, in a capsule 36
+// pixels tall. The cover art is drawn behind the whole capsule, cropped and
+// blurred, under a measured scrim; the spectrum runs across it as one
+// continuous filled wave; and the title, the artist and the transport sit on
+// top of that. Every colour comes from components/AdaptedMaterialScheme.qml,
+// fed by a ColorQuantizer reading the same remembered cover the panel reads:
+// the capsule takes colLayer0, the title colOnLayer0, the artist colSubtext,
+// the wave colPrimary, and the play button is a filled disc that is a rounded
+// square while it plays and a circle while it does not -- the panel's 44px
+// button at 26.
+//
+// THE FIRST VERSION OF THIS CHANGED THE COLOURS AND NOT THE CONSTRUCTION,
+// which was the wrong reading of the request: it recoloured a row of fourteen
+// bars from the cover's palette and left them a row of fourteen bars. The
+// bars are gone, and modules/island/Waveform.qml and cava.conf went with
+// them -- there is one cava, one config and one feed for the whole shell now,
+// because both consumers finally want the same shape. See Spectrum.qml for
+// the band count and why eighty serves a 780px panel and a 250px capsule at
+// once.
 //
 // WHAT IS DELIBERATELY NOT THE SAME, because "the same family" is not "the
 // same thing" in a capsule 36 pixels tall:
 //
-//   the source glyph    the panel shows the cover; this shows WHICH PLAYER
-//                       the audio is coming from, and a 24px thumbnail of an
-//                       album sleeve says nothing a 24px glyph does not say
-//                       better. The glyph is also what makes the collapsed
-//                       and expanded states read as one widget with more of
-//                       itself showing
-//   the spectrum        bars, not the panel's continuous wave. The bars are
-//                       the island's shape and they are 14 because that is
-//                       what fits a capsule shared with a track title; the
-//                       panel's wave is 80 points because it spans a panel.
-//                       See cava-wave.conf, which carries both sums
+//   the source glyph    the panel shows the cover sharp and small; this shows
+//                       WHICH PLAYER the audio is coming from, and a 24px
+//                       thumbnail of an album sleeve says nothing a 24px
+//                       glyph does not say better. The glyph is also what
+//                       makes the collapsed and expanded states read as one
+//                       widget with more of itself showing
+//   the ground's alpha  the panel's is opaque and this one is at the bar's
+//                       own glass alpha, because a solid strip of photograph
+//                       would be the only thing up there that is not
+//                       see-through
 //   no seek bar, no     there is no third line in a 36px capsule. The title
 //   elapsed time        and the artist already fill it, and a control that
 //                       needed a drag in the bar would be a control aimed at
@@ -53,6 +61,8 @@
 
 import Quickshell
 import Quickshell.Services.Pipewire
+import Quickshell.Widgets
+import QtQuick.Effects
 import QtQuick
 import "root:/"
 import "root:/components"
@@ -164,6 +174,14 @@ Item {
     property QtObject cover: AdaptedMaterialScheme {
         color: root.artDominantColor
     }
+
+    // HOW DARK THE COVER HAS TO BE BEHIND THE TITLE, by the same rule the
+    // dashboard uses -- see ColorUtils.scrimFor. The capsule is a strip of
+    // somebody else's artwork with a track title on it, which is exactly the
+    // problem that function exists for, and having the island answer it
+    // differently from the panel is how two surfaces end up disagreeing about
+    // whether a white sleeve is readable.
+    readonly property real scrim: ColorUtils.scrimFor(coverQuantizer.colors)
 
     // Per-player glyph, the same table Media.qml carried. Matched against the
     // D-Bus identity, lowercased.
@@ -401,7 +419,12 @@ Item {
         // be sent to. See the header of modules/island/Dashboard.qml.
     }
 
-    Rectangle {
+    // A ClippingRectangle and not a Rectangle, because the cover art is drawn
+    // to this capsule's own edges now. `clip: true` on a plain Item clips to
+    // the BOUNDING BOX, so a blurred photograph would be painted straight over
+    // the rounded ends and square them off -- the same trap the media card
+    // fell into twice. This clips to the radius.
+    ClippingRectangle {
         id: capsule
 
         anchors.verticalCenter: parent.verticalCenter
@@ -436,6 +459,98 @@ Item {
         // artwork changing in a panel nobody has open.
         Behavior on color {
             ColorAnimation { duration: Theme.animDuration }
+        }
+
+        // ---------------- The cover, blurred, with the wave on it --------
+        //
+        // THIS IS end-4's MEDIA CARD AT BAR SIZE, and it is what "change the
+        // island's design" actually meant: not the colours of a row of bars,
+        // but the construction. Their card draws the art again behind itself,
+        // cropped and blurred, covers it with its own surface colour, and runs
+        // the spectrum across the whole thing as one continuous wave. So does
+        // this, in a capsule 36 pixels tall.
+        //
+        // AT THE BAR'S OWN ALPHA. Their card is opaque; this is a group on a
+        // bar whose whole vocabulary is glass, and an opaque strip of
+        // photograph in the middle of it would be the one thing up there that
+        // is not see-through. The ground goes to Theme.glassAlpha and the
+        // text does not, so the type keeps its contrast while the picture
+        // behaves like every other surface on the bar.
+        //
+        // WHAT IT COSTS, since this is the first blurred surface in the shell
+        // that is on screen whenever music plays rather than when a panel is
+        // open: the capsule is about 250 x 36 collapsed and 420 x 36
+        // expanded, which is nine and fifteen thousand pixels against the
+        // dashboard ground's three hundred thousand -- three and five percent
+        // of a blur that already runs. The wave's cava is the same process
+        // the dashboard reads and was already running for the bars.
+        Item {
+            id: mediaGround
+
+            anchors.fill: parent
+            visible: root.mode === "media"
+            opacity: Theme.glassAlpha
+
+            Image {
+                id: islandArt
+
+                // Past the ends by a blur radius, so the blur has real pixels
+                // to sample at the capsule's edges instead of dragging
+                // transparency inwards. Same reason the panel's ground is
+                // grown; see Dashboard.qml.
+                anchors.fill: parent
+                anchors.margins: -24
+                visible: false
+
+                source: root.coverArt
+                fillMode: Image.PreserveAspectCrop
+                sourceSize.width: 96
+                asynchronous: true
+            }
+
+            MultiEffect {
+                anchors.fill: islandArt
+                source: islandArt
+
+                // Faded in rather than cut in, and only once there is
+                // something to fade to: a capsule that blinked to a new
+                // photograph on every track change would be the most
+                // distracting thing on the bar.
+                opacity: islandArt.status === Image.Ready ? 1 : 0
+
+                blurEnabled: true
+                blur: 1.0
+                blurMax: 32
+                saturation: -0.1
+
+                Behavior on opacity {
+                    NumberAnimation { duration: Theme.animDuration }
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                color: "#000000"
+                opacity: root.scrim
+
+                Behavior on opacity {
+                    NumberAnimation { duration: Theme.animDuration }
+                }
+            }
+
+            // The spectrum, across the whole capsule and behind everything.
+            // No opacity of its own: it fills at 0.15 alpha inside its canvas
+            // and blurs the result, and stacking an item opacity on that would
+            // be a second dimming on top of the one this Item already applies.
+            WaveVisualizer {
+                anchors.fill: parent
+
+                live: Spectrum.active
+                points: Spectrum.values
+                maxVisualizerValue: Spectrum.maxValue
+                smoothing: 2
+                color: root.cover.colPrimary
+            }
         }
 
         Behavior on width {
@@ -819,33 +934,18 @@ Item {
                 }
             }
 
-            // The waveform sits AFTER the title, not behind it and not
-            // instead of it.
+            // THE SPECTRUM USED TO SIT HERE, as a row of bars after the
+            // title. The note that was here said behind-the-title had been
+            // tried and dropped -- faint enough not to fight the words it was
+            // barely visible, and strong enough to see it made them hard to
+            // read -- and that was true of bars drawn in an accent over a
+            // flat surface.
             //
-            // Behind was tried and dropped: faint enough not to fight the
-            // words it was barely visible, and strong enough to see it made
-            // the text hard to read.
-            //
-            // Order matters here too. The title is what you read and the
-            // waveform is what you glance at, so the text keeps the reading
-            // position next to the glyph and the bars trail off to the right.
-            // Put first, the moving thing pulls the eye before the words every
-            // time.
-            // FOURTEEN BARS AND IT STAYS FOURTEEN. The dashboard's wave went
-            // from 50 points to 80 when the card it was drawn for became a
-            // panel two and a half times as wide; nothing about this changed
-            // size, so nothing about its number should. See cava-wave.conf,
-            // which now carries both sums.
-            Waveform {
-                anchors.verticalCenter: parent.verticalCenter
-
-                // The album's colours, like everything else in this row.
-                // Accent at the low end and the title's own colour at the
-                // high end -- two roles from one picture, which is what the
-                // wallpaper pair it replaces was.
-                lowColor: root.cover.colPrimary
-                highColor: root.cover.colOnLayer0
-            }
+            // It is not true of what is there now. The wave is a filled
+            // silhouette at 0.15 alpha, blurred, under a measured scrim, on a
+            // ground that is already a photograph; it reads as texture rather
+            // than as a chart, which is the whole reason end-4 draw theirs
+            // that way. See the capsule's own ground above.
         }
 
         // ---------------- Media, expanded ----------------
