@@ -19,12 +19,43 @@
 // loaded on demand. That is deliberate: `targetWidth` has to be able to ask an
 // inactive content how wide it WOULD be, so the capsule can start growing on
 // the same frame the mode changes instead of a frame later.
+//
+// THE MEDIA STATES ARE IN THE ALBUM'S COLOURS, NOT THE WALLPAPER'S. The panel
+// this island opens into is the cover art -- see the header of Dashboard.qml
+// -- and an island that stayed in matugen's palette would have read as a
+// different widget about the same track. So while media is showing, the
+// capsule takes end-4's colLayer0, the title takes colOnLayer0, the artist
+// takes colSubtext, the waveform's gradient runs between colPrimary and
+// colOnLayer0, and the play button is a filled disc in colPrimary that is a
+// rounded square while it plays and a circle while it does not -- which is
+// the panel's 44px button at 26. Every one of those roles comes out of
+// components/AdaptedMaterialScheme.qml, fed by a ColorQuantizer reading the
+// same remembered cover the panel reads.
+//
+// WHAT IS DELIBERATELY NOT THE SAME, because "the same family" is not "the
+// same thing" in a capsule 36 pixels tall:
+//
+//   the source glyph    the panel shows the cover; this shows WHICH PLAYER
+//                       the audio is coming from, and a 24px thumbnail of an
+//                       album sleeve says nothing a 24px glyph does not say
+//                       better. The glyph is also what makes the collapsed
+//                       and expanded states read as one widget with more of
+//                       itself showing
+//   the spectrum        bars, not the panel's continuous wave. The bars are
+//                       the island's shape and they are 14 because that is
+//                       what fits a capsule shared with a track title; the
+//                       panel's wave is 80 points because it spans a panel.
+//                       See cava-wave.conf, which carries both sums
+//   no seek bar, no     there is no third line in a 36px capsule. The title
+//   elapsed time        and the artist already fill it, and a control that
+//                       needed a drag in the bar would be a control aimed at
+//                       while the pointer is on its way somewhere else
 
 import Quickshell
-import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
 import QtQuick
 import "root:/"
+import "root:/components"
 import "root:/modules/notifications"
 import "root:/modules/recorder"
 
@@ -84,15 +115,55 @@ Item {
 
     // ---------------- Media ----------------
     // Prefer whatever is actually playing; fall back to the first player that
-    // exists, so a paused track still holds the island.
-    readonly property var player: {
-        const players = Mpris.players.values;
-        if (players.length === 0)
-            return null;
-        return players.find(p => p.isPlaying) ?? players[0];
-    }
+    // exists, so a paused track still holds the island. The rule itself lives
+    // in Track.qml, because this file and Dashboard.qml each had a copy of it
+    // and neither knew about the mirror playerctld puts on the bus.
+    readonly property var player: Track.active
 
     readonly property bool hasPlayer: root.player !== null
+
+    // ---------------- The cover's palette ----------------
+    //
+    // THE SAME SOURCE THE DASHBOARD'S MEDIA USES, and that is the point of
+    // this block. The panel the island opens into draws whatever is playing
+    // in the ALBUM's colours -- the whole wall is the cover art -- and an
+    // island that stayed in the wallpaper's palette would read as a different
+    // widget belonging to a different thing.
+    //
+    // The cover comes through Track for the same reason the panel's does: the
+    // player retracts mpris:artUrl two milliseconds after publishing it, so
+    // trackArtUrl is empty most of the time a track is up. See Track.qml.
+    readonly property string coverArt: Track.covers[root.player?.dbusName ?? ""] ?? ""
+
+    ColorQuantizer {
+        id: coverQuantizer
+
+        // LOCAL FILES ONLY. Quickshell's src/core/colorquantizer.cpp loads
+        // with `QImage(source.toLocalFile())` and has no network code, so a
+        // remote cover -- the YouTube thumbnail fallback, or any player that
+        // publishes an https url -- yields nothing and the island falls back
+        // to the wallpaper's accent below. That is the same limit the
+        // dashboard has and it is the same fallback.
+        source: root.coverArt.startsWith("file:") ? root.coverArt : ""
+
+        // One colour off a 1x1 rescale, which is why it costs nothing.
+        depth: 0
+        rescaleSize: 1
+    }
+
+    // Pulled 20% toward the shell's own primary container before use, which
+    // is what stops a saturated cover from producing a bar that glows. Same
+    // line the dashboard's card had; theirs too.
+    readonly property color artDominantColor: {
+        const quantized = coverQuantizer.colors.length > 0
+            ? coverQuantizer.colors[0]
+            : Theme.primary;
+        return ColorUtils.mix(quantized, Theme.primaryContainer, 0.8);
+    }
+
+    property QtObject cover: AdaptedMaterialScheme {
+        color: root.artDominantColor
+    }
 
     // Per-player glyph, the same table Media.qml carried. Matched against the
     // D-Bus identity, lowercased.
@@ -343,9 +414,29 @@ Item {
         // Idle is quieter than the groups around it: at rest the island should
         // read as part of the bar's surface, not as another pill sitting on
         // it. Anything else and it earns the group's own background.
-        color: root.mode === "idle" && !hover.hovered
-            ? Qt.alpha(Theme.surfaceContainerHigh, 0.35)
-            : Theme.glass(Theme.surfaceContainerHigh)
+        //
+        // AND WHILE MEDIA IS SHOWING IT IS THE ALBUM'S COLOUR. This is the
+        // change that makes the island and the dashboard read as one thing
+        // rather than as two widgets about the same track: the panel is the
+        // cover art, so the capsule is the cover's surface role -- end-4's
+        // colLayer0, the colour their media card paints itself. It also makes
+        // every other cover-derived role below VALID, which they are not over
+        // a surface in the wallpaper's palette: colOnLayer0 and colSubtext
+        // are computed to sit on colLayer0 and nothing else.
+        color: {
+            if (root.mode === "media")
+                return Theme.glass(root.cover.colLayer0);
+            if (root.mode === "idle" && !hover.hovered)
+                return Qt.alpha(Theme.surfaceContainerHigh, 0.35);
+            return Theme.glass(Theme.surfaceContainerHigh);
+        }
+
+        // A track change is a colour change now, and a cut between two album
+        // colours in the middle of the bar is more noticeable than the
+        // artwork changing in a panel nobody has open.
+        Behavior on color {
+            ColorAnimation { duration: Theme.animDuration }
+        }
 
         Behavior on width {
             NumberAnimation {
@@ -698,7 +789,11 @@ Item {
                 text: root.mediaGlyph
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.iconSize
-                color: root.player?.isPlaying ? Theme.tertiary : Theme.outline
+                color: root.player?.isPlaying ? root.cover.colPrimary : root.cover.colSubtext
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
             }
 
             Text {
@@ -712,8 +807,16 @@ Item {
                 width: Math.min(implicitWidth, 200)
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.fontSize
-                font.weight: Theme.fontWeight
-                color: root.player?.isPlaying ? Theme.textOnSurface : Theme.textOnSurfaceVariant
+                // BOLD, AND IT WAS THE BAR'S DemiBold. A title in bold with a
+                // quieter line under it is the relationship the media card
+                // sets, and the collapsed island shows the same title -- it
+                // should be the same weight in both places.
+                font.weight: Font.Bold
+                color: root.player?.isPlaying ? root.cover.colOnLayer0 : root.cover.colSubtext
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
             }
 
             // The waveform sits AFTER the title, not behind it and not
@@ -728,8 +831,20 @@ Item {
             // position next to the glyph and the bars trail off to the right.
             // Put first, the moving thing pulls the eye before the words every
             // time.
+            // FOURTEEN BARS AND IT STAYS FOURTEEN. The dashboard's wave went
+            // from 50 points to 80 when the card it was drawn for became a
+            // panel two and a half times as wide; nothing about this changed
+            // size, so nothing about its number should. See cava-wave.conf,
+            // which now carries both sums.
             Waveform {
                 anchors.verticalCenter: parent.verticalCenter
+
+                // The album's colours, like everything else in this row.
+                // Accent at the low end and the title's own colour at the
+                // high end -- two roles from one picture, which is what the
+                // wallpaper pair it replaces was.
+                lowColor: root.cover.colPrimary
+                highColor: root.cover.colOnLayer0
             }
         }
 
@@ -759,7 +874,7 @@ Item {
                 text: root.mediaGlyph
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.iconSize
-                color: root.player?.isPlaying ? Theme.tertiary : Theme.outline
+                color: root.player?.isPlaying ? root.cover.colPrimary : root.cover.colSubtext
 
                 Behavior on color {
                     ColorAnimation { duration: Theme.animDuration }
@@ -777,7 +892,11 @@ Item {
                     font.family: Theme.fontFamily
                     font.pointSize: Theme.fontSize
                     font.weight: Font.Bold
-                    color: Theme.textOnSurface
+                    color: root.cover.colOnLayer0
+
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.animDuration }
+                    }
                 }
 
                 Text {
@@ -785,9 +904,19 @@ Item {
                     elide: Text.ElideRight
                     width: Math.min(implicitWidth, 240)
                     font.family: Theme.fontFamily
-                    font.pointSize: Theme.fontSize - 1
+                    // THE CARD'S RATIO, NOT "one point smaller". end-4 set
+                    // the artist at 12 against a body of 16 and this shell
+                    // expresses that as a fraction of Theme.fontSize so the
+                    // whole thing still answers the setting. The card does
+                    // the same sum, so the artist is literally the same size
+                    // in the island as it is in the panel.
+                    font.pointSize: Theme.fontSize * 12 / 16
                     font.weight: Theme.fontWeight
-                    color: Theme.textOnSurfaceVariant
+                    color: root.cover.colSubtext
+
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.animDuration }
+                    }
                 }
             }
 
@@ -803,7 +932,10 @@ Item {
             // turns out to be.
             Row {
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 2
+                // Four rather than two: the middle control is a filled disc
+                // now and two flat glyphs pressed against it read as one
+                // three-part object rather than as three buttons.
+                spacing: 4
 
                 Repeater {
                     model: [
@@ -854,20 +986,47 @@ Item {
                             }
                         }
 
-                        implicitWidth: control.primary ? 28 : 24
-                        implicitHeight: 24
+                        readonly property bool playing: root.player?.isPlaying ?? false
+
+                        // 26 for the middle one and 24 for the other two,
+                        // which is the media card's 44-and-24 pair scaled to a
+                        // capsule 36 tall. The ratio is what carries, not the
+                        // number: a large filled disc between two bare glyphs.
+                        implicitWidth: control.primary ? 26 : 24
+                        implicitHeight: control.primary ? 26 : 24
                         anchors.verticalCenter: parent.verticalCenter
 
                         opacity: control.available ? 1 : 0.35
 
+                        // A ROUNDED SQUARE WHILE IT IS PLAYING AND A CIRCLE
+                        // WHEN IT IS NOT, which is end-4's and is the one
+                        // detail that makes the button read as a state rather
+                        // than as a button. The dashboard's play button does
+                        // exactly this at 44; this is the same object in the
+                        // bar, which is the whole point of the island being
+                        // the thing that opens it.
                         Rectangle {
                             anchors.centerIn: parent
                             width: parent.width
                             height: parent.height
-                            radius: height / 2
-                            color: controlMouse.containsMouse && control.available
-                                ? Qt.alpha(Theme.primary, 0.18)
-                                : "transparent"
+
+                            radius: control.primary
+                                ? (control.playing ? 9 : height / 2)
+                                : height / 2
+
+                            color: {
+                                if (control.primary)
+                                    return controlMouse.containsMouse && control.available
+                                        ? root.cover.colPrimaryHover
+                                        : root.cover.colPrimary;
+                                return controlMouse.containsMouse && control.available
+                                    ? root.cover.colSecondaryContainerHover
+                                    : "transparent";
+                            }
+
+                            Behavior on radius {
+                                NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
+                            }
 
                             Behavior on color {
                                 ColorAnimation { duration: Theme.animDuration }
@@ -879,11 +1038,9 @@ Item {
                             text: control.glyph
                             font.family: Theme.fontFamily
                             font.pointSize: control.primary ? Theme.iconSize + 1 : Theme.iconSize
-                            color: {
-                                if (controlMouse.containsMouse && control.available)
-                                    return Theme.primary;
-                                return control.primary ? Theme.textOnSurface : Theme.textOnSurfaceVariant;
-                            }
+                            color: control.primary
+                                ? root.cover.colOnPrimary
+                                : root.cover.colOnSecondaryContainer
 
                             Behavior on color {
                                 ColorAnimation { duration: Theme.animDuration }

@@ -1,8 +1,22 @@
-// Output volume, with a slider you can actually aim at.
+// Output volume, as a hairline along the very bottom edge of the dashboard.
 //
-// The bar's island shows the volume for two seconds after you change it; this
-// is the other half -- the place you go when you want to SET it rather than
-// be told about it.
+// IT WAS A CARD: a speaker glyph doubling as the mute button, a percentage on
+// the right, and a slider under both -- sixty-two pixels of panel to carry one
+// number. A control that needs ONE DIMENSION gets one dimension, so it is a
+// six-pixel rule spanning the whole panel now. It says the same thing, it
+// takes no height from anything else, and because it spans the panel it is a
+// wider target than the slider it replaces ever was.
+//
+// WHAT MOVED RATHER THAN LEFT. The mute is a RIGHT-CLICK on the line, and the
+// whole line goes dim to say so; there is no room on a rule for a button and
+// there was no honest way to keep one. That is the least discoverable thing in
+// this redesign and it is written down here rather than left to be found. The
+// percentage is on hover, above the right-hand end, so the number is available
+// without a label sitting there permanently saying what any straight line
+// already says.
+//
+// The wheel works too, which the card never offered: the pointer is already on
+// the line to read it.
 //
 // PwObjectTracker is not optional. PipeWire binds objects lazily: without
 // something declaring interest in the node, its `audio` data is never
@@ -12,46 +26,41 @@ import Quickshell
 import Quickshell.Services.Pipewire
 import QtQuick
 import "root:/"
-import "root:/components"
 
 Item {
     id: root
+
+    // The panel this is drawn on is a photograph, so the colour cannot come
+    // from Theme -- see the note on `ink` in Dashboard.qml. The default is
+    // the shell's own text colour, so the control still works anywhere else.
+    property color ink: Theme.textOnSurface
+
+    // How far above the line the pointer still counts as being on it. The
+    // rule is six pixels tall and nobody can hit six pixels on purpose.
+    readonly property int reach: 16
 
     readonly property var sink: Pipewire.defaultAudioSink
     readonly property bool muted: sink?.audio?.muted ?? false
     readonly property real volume: sink?.audio?.volume ?? 0
 
     // The keyboard keys go to 150% on purpose (see hyprland.lua) and this
-    // track only represents 0..100: past that the fill would be drawn wider
-    // than its own rail and the handle would walk off the end. The slider is
-    // given a maximum of 1 and clamps the geometry itself; colouring the
-    // overflow says "above the limit" without the bar having to grow a second
-    // scale nobody asked for.
-    //
-    // THE SETTINGS WINDOW MAKES THE OPPOSITE CHOICE and shows the real 0..150
-    // range. That is not a contradiction: this control hangs off the bar
-    // under a pointer that is on its way somewhere else, and the settings
-    // page is somewhere you go on purpose. See the note over VolumeLine in
-    // AudioPage.qml.
+    // rail only represents 0..100: past that the fill would be drawn wider
+    // than the panel. Colouring the overflow says "above the limit" without
+    // the line having to grow a second scale nobody asked for.
     readonly property bool overamplified: root.volume > 1.001
 
     readonly property color accent: {
         if (root.muted)
-            return Theme.outline;
-        return root.overamplified ? Theme.warning : Theme.primary;
+            return Qt.alpha(root.ink, 0.3);
+        return root.overamplified ? Theme.warning : Qt.alpha(root.ink, 0.85);
     }
-
-    // Shared with the sound page rather than decided twice -- see the note on
-    // the function in Icons.qml.
-    readonly property string glyph: Icons.outputGlyph(
-        `${sink?.name ?? ""} ${sink?.description ?? ""}`, root.muted, root.volume)
 
     function setVolume(value: real): void {
         if (!root.sink?.audio)
             return;
         // Capped at 1.0. Above that PipeWire applies gain in software and the
-        // sound distorts; the keyboard keys allow it deliberately, a slider
-        // dragged with a mouse should not do it by accident.
+        // sound distorts; the keyboard keys allow it deliberately, a pointer
+        // should not do it by accident.
         root.sink.audio.volume = Math.max(0, Math.min(1, value));
     }
 
@@ -59,81 +68,86 @@ Item {
         objects: [root.sink]
     }
 
-    implicitHeight: 62
+    implicitHeight: 6
 
-    // ---------------- Icon, doubling as the mute button ----------------
+    // ---------------- The rail ----------------
     Rectangle {
-        id: muteButton
+        anchors.fill: parent
+        color: Qt.alpha(root.ink, 0.15)
+    }
 
+    Rectangle {
         anchors.left: parent.left
         anchors.top: parent.top
+        anchors.bottom: parent.bottom
 
-        width: 34
-        height: 34
-        radius: height / 2
-        color: muteMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+        width: parent.width * Math.max(0, Math.min(1, root.volume))
+        color: root.accent
 
         Behavior on color {
             ColorAnimation { duration: Theme.animDuration }
         }
-
-        Text {
-            anchors.centerIn: parent
-            text: root.glyph
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.iconSize
-            color: root.muted ? Theme.outline : Theme.textOnSurface
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-        }
-
-        MouseArea {
-            id: muteMouse
-
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                if (root.sink?.audio)
-                    root.sink.audio.muted = !root.sink.audio.muted;
-            }
-        }
     }
 
+    // ---------------- The number, only while it is being looked at --------
     Text {
         anchors.right: parent.right
-        anchors.verticalCenter: muteButton.verticalCenter
+        anchors.rightMargin: 30
+        anchors.bottom: parent.top
+        anchors.bottomMargin: 6
+
+        visible: opacity > 0
+        opacity: rail.containsMouse ? 1 : 0
 
         text: root.muted ? "muted" : `${Math.round(root.volume * 100)}%`
         font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize
+        font.pointSize: Theme.fontSize * 0.85
         font.weight: Font.Bold
-        color: {
-            if (root.muted)
-                return Theme.outline;
-            return root.overamplified ? Theme.warning : Theme.textOnSurface;
+        color: root.overamplified && !root.muted ? Theme.warning : root.ink
+
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.animDuration }
         }
     }
 
-    // ---------------- Slider ----------------
+    // ---------------- Aiming ----------------
     //
-    // The drawing moved out to components/VolumeSlider.qml when the sound
-    // page needed four more of them. Nothing about the behaviour here
-    // changed with it except for one bug that came out in the move: the
-    // MouseArea is inset by negative margins, and the old code divided its
-    // raw x by the track width without correcting for them, so every click
-    // landed about 3% high.
-    VolumeSlider {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
+    // The hit area reaches UP out of the item. Nothing above it is closer
+    // than the actions strip, which clears the bottom edge by the panel's own
+    // margin, so there is nothing for this to steal a click from.
+    MouseArea {
+        id: rail
 
-        value: root.volume
-        maximum: 1
-        accent: root.accent
+        anchors.fill: parent
+        anchors.topMargin: -root.reach
 
-        onMoved: value => root.setVolume(value)
+        hoverEnabled: true
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        cursorShape: Qt.PointingHandCursor
+
+        function report(mouseX: real): void {
+            if (root.width <= 0)
+                return;
+            root.setVolume(mouseX / root.width);
+        }
+
+        onPressed: mouse => {
+            if (mouse.button === Qt.RightButton) {
+                if (root.sink?.audio)
+                    root.sink.audio.muted = !root.sink.audio.muted;
+                return;
+            }
+            rail.report(mouse.x);
+        }
+
+        onPositionChanged: mouse => {
+            if (rail.pressed && !(rail.pressedButtons & Qt.RightButton))
+                rail.report(mouse.x);
+        }
+
+        onWheel: wheel => {
+            const step = wheel.angleDelta.y > 0 ? 0.02 : -0.02;
+            root.setVolume(root.volume + step);
+        }
     }
 }

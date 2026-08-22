@@ -1,4 +1,4 @@
-// The month, for the clock's popout.
+// The month, for the dashboard.
 //
 // Built by hand rather than with QtQuick.Controls' MonthGrid: the Controls
 // version drags a style along and its delegates are themed through a
@@ -12,10 +12,25 @@
 import Quickshell
 import QtQuick
 import "root:/"
-import "root:/components"
 
 Column {
     id: root
+
+    // ---- The colours, because the ground under this is not always ours ----
+    //
+    // Every colour here used to be a Theme role read in place, which was
+    // right while the calendar sat on a card in the wallpaper's palette. The
+    // dashboard now draws it on a photograph -- see the header of
+    // Dashboard.qml -- where a role derived from the wallpaper has nothing to
+    // do with what is behind the type.
+    //
+    // The defaults are exactly the roles that were read here before, so a
+    // caller that says nothing gets the calendar it had.
+    property color ink: Theme.textOnSurface
+    property color inkMuted: Theme.textOnSurfaceVariant
+    property color todayFill: Theme.primary
+    property color todayInk: Theme.textOnPrimary
+    property color hoverWash: Theme.surfaceContainerHigh
 
     // Which month to show. Defaults to the current one; the arrows move it.
     property date shown: new Date()
@@ -45,7 +60,7 @@ Column {
         width: grid.width
         height: Theme.groupHeight
 
-        MenuRow {
+        Arrow {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             glyph: "‹"
@@ -58,10 +73,10 @@ Column {
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize
             font.weight: Font.Bold
-            color: Theme.textOnSurface
+            color: root.ink
         }
 
-        MenuRow {
+        Arrow {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             glyph: "›"
@@ -83,7 +98,7 @@ Column {
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.fontSize - 2
                 font.weight: Font.Bold
-                color: Theme.textOnSurfaceVariant
+                color: root.inkMuted
             }
         }
     }
@@ -118,7 +133,7 @@ Column {
                     height: 28
                     radius: height / 2
                     visible: cell.isToday
-                    color: Theme.primary
+                    color: root.todayFill
 
                     Behavior on color {
                         ColorAnimation { duration: Theme.recolorDuration }
@@ -132,9 +147,52 @@ Column {
                     font.family: Theme.fontFamily
                     font.pointSize: Theme.fontSize
                     font.weight: cell.isToday ? Font.Bold : Theme.fontWeight
-                    color: cell.isToday ? Theme.textOnPrimary : Theme.textOnSurface
+                    color: cell.isToday ? root.todayInk : root.ink
                 }
             }
+        }
+    }
+
+    // The two month steppers.
+    //
+    // IT WAS components/MenuRow.qml, which is the row a tray menu is built
+    // out of and paints itself from Theme. Two of them here meant the only
+    // part of this calendar that could not follow `ink` was the pair of
+    // arrows, and on the dashboard's photographic ground that is the pair
+    // that would have disappeared. Same size and same hover wash, one colour
+    // that answers the caller.
+    component Arrow: Rectangle {
+        id: arrow
+
+        property string glyph: ""
+
+        signal activated
+
+        implicitWidth: Theme.groupHeight
+        implicitHeight: Theme.groupHeight
+
+        radius: Theme.groupRadius
+        color: arrowMouse.containsMouse ? root.hoverWash : "transparent"
+
+        Behavior on color {
+            ColorAnimation { duration: Theme.animDuration }
+        }
+
+        Text {
+            anchors.centerIn: parent
+            text: arrow.glyph
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.iconSize
+            color: root.inkMuted
+        }
+
+        MouseArea {
+            id: arrowMouse
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: arrow.activated()
         }
     }
 }
