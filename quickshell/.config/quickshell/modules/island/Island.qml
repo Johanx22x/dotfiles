@@ -452,8 +452,10 @@ Item {
     // that is the calendar's month, which already resets on every close for the
     // same reason; the clock, the media block and the readings all come off
     // Track, Volume, Brightness and Compositor and rebuild identical. The
-    // launcher pays exactly the same price for exactly the same reason and
-    // loses the query typed into it.
+    // launcher looks like it pays the same price for the same reason -- its
+    // query is a property on a window Variants rebuilds -- but that is read off
+    // the code rather than watched happening, so take it as the argument it is
+    // and not as a measurement.
     function syncDashboard(): void {
         // The Component at the bottom of this file may not exist yet if this
         // runs while the object is still being built. Completion calls it
