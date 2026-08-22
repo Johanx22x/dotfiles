@@ -163,6 +163,30 @@ PanelWindow {
             ColorAnimation { duration: Theme.recolorDuration }
         }
 
+        // THE BAR'S OWN EMPTY SPACE STILL PUTS A POPOUT AWAY.
+        //
+        // A popout leaves this strip out of its click catcher on purpose, so
+        // that moving from one of its panels to the next costs one click
+        // rather than two. The gaps between the widgets are not widgets
+        // though, and a click there was a click outside the panel like any
+        // other -- without this it would land on the bar and do nothing at
+        // all, which is the one thing the hole would have made worse.
+        //
+        // FIRST among the children, and that is load-bearing: a later sibling
+        // is offered input before an earlier one, so every widget declared
+        // below still takes its own clicks and only what none of them wanted
+        // reaches this. The island's catch-all is placed by the same rule.
+        MouseArea {
+            anchors.fill: parent
+            // hoverEnabled, and it earns its place: without it the press
+            // that follows a click somewhere else on the bar was not
+            // delivered to this item at all -- nothing fired and the popout
+            // stayed up. Measured three times out of three each way.
+            hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+            onPressed: barPopout.close()
+        }
+
         // Every direct child of these Rows anchors its own vertical centre.
         // A Row positions on the x axis only and leaves children at y = 0, so
         // items of different heights -- a 30px button next to a 28px group
