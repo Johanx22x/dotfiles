@@ -157,6 +157,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: tests/shell-load.sh
 
+      - name: The QML tree keeps to its rules
+        if: ${{ !cancelled() }}
+        run: tests/qml-rules.sh
+
       - name: Shell scripts pass shellcheck
         if: ${{ !cancelled() }}
         run: tests/shell-lint.sh
