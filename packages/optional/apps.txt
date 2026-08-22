@@ -1,18 +1,31 @@
 # Applications this desktop was set up with, and nothing here depends on.
 #
-# Optional in the real sense: the browser, the chat client, the torrent client
-# and the recorder are personal choices, and skipping the group leaves a
-# working desktop. mimeapps.list in seeds/ points at Brave for the web, which
-# is the one line to change if this group is skipped.
+# Optional in the real sense: the browsers, the chat client, the torrent
+# client, the recorder and the two system monitors are personal choices, and
+# skipping the group leaves a working desktop.
+#
+# BOTH BROWSERS ARE IN THIS GROUP, so a machine that skips it has no way to
+# open a link at all. That is the honest consequence of where the line falls
+# -- no tracked file in this repository needs a browser in order to work --
+# and not an oversight to fix by promoting one of them back. mimeapps.list in
+# seeds/ points at Brave for the web, so that is the one line to change on a
+# machine that goes without or picks a third.
+#
+# Zen is the one the rest of the repository is themed for: matugen writes
+# ~/.zen/rice/chrome/colors.css and desktop-opacity writes opacity.css beside
+# it, both into the fixed profile that zen/ links. Both files are written
+# whether or not Zen is installed, and an unread stylesheet costs nothing.
 #
 # The installer ticks a group as one box, and can be opened to pick packages
 # out of it one at a time.
 
 brave-bin
+btop
 discord
-github-cli
 gimp
+github-cli
 htop
 nano
 obs-studio-liberty
 qbittorrent
+zen-browser-bin

@@ -6,12 +6,25 @@
 # machine that is being set up from this repository is usually also being
 # partitioned, copied onto and inspected on the same afternoon.
 #
+# openrgb IS THE ONE WITH A TRACKED CONFIG and it still belongs on this side
+# of the line. openrgb/.config/OpenRGB/OpenRGB.json is the device profile
+# this machine's LEDs were set up with -- a file for the program, not a file
+# the desktop reads -- and no keybind, script or QML starts it.
+#
+# i2c-tools is beside it because it is the diagnostic half of the same job:
+# OpenRGB reaches the RAM and the motherboard over SMBus through /dev/i2c-*,
+# and i2cdetect is how you find out what is on that bus and whether the
+# kernel is exposing it at all. Nothing calls i2cdetect either, which is
+# precisely the reason it is in this file and not in required/desktop.txt.
+#
 # The installer ticks a group as one box, and can be opened to pick packages
 # out of it one at a time.
 
 7zip
 dmidecode
 gptfdisk
+i2c-tools
+openrgb
 rsync
 smartmontools
 tree

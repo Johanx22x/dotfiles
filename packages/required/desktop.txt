@@ -10,10 +10,20 @@
 #
 # stow is the one entry that is about the installer itself: it is what links
 # every other directory in this repo into $HOME.
+#
+# WHAT LEFT THIS LIST, AND THE LINE THAT SENT IT AWAY. btop, openrgb and
+# i2c-tools were here and nothing in this repository calls any of the three.
+# Two of them even have a tracked config -- shell/.config/btop/btop.conf and
+# openrgb/.config/OpenRGB/OpenRGB.json -- and that is the distinction worth
+# writing down, because it is the one that got them filed wrong: a file in
+# here that CONFIGURES a program is not a file in here that DEPENDS on one.
+# Take btop off a machine and its config sits unread; take satty off one and
+# SUPER+SHIFT+S is a keybind pointing at nothing. Only the second kind earns
+# a place on this list. The three are in optional/apps.txt and
+# optional/hardware.txt now.
 
 atool
 bat
-btop
 celluloid
 cliphist
 eza
@@ -28,7 +38,6 @@ grim
 highlight
 hyprpicker
 hyprshot
-i2c-tools
 kdegraphics-thumbnailers
 kitty
 loupe
@@ -36,7 +45,6 @@ mediainfo
 mpv
 nautilus
 neovim
-openrgb
 python-pillow
 ranger
 satty
