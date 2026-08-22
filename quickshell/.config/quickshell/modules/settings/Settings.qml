@@ -304,6 +304,14 @@ FloatingWindow {
             ScrollBar {
                 view: railScroll
 
+                // THREE AND NOT THE DEFAULT SEVEN, and it is not a nicety.
+                // This channel is ten pixels wide and the entries end at the
+                // edge of it, so the usual target reached back over every row
+                // and pressing the right-hand edge of an entry scrolled the
+                // rail instead of opening the page. Three fills the channel
+                // exactly and stops at the entries. See ScrollBar.qml.
+                grabMargin: 3
+
                 anchors.right: parent.right
                 anchors.rightMargin: 3
                 anchors.top: railScroll.top

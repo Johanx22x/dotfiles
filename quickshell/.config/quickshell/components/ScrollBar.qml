@@ -132,10 +132,26 @@ Rectangle {
         }
     }
 
-    // The target is far wider than the bar it drives. Four pixels is the right
-    // width to LOOK at and an unfair thing to ask anyone to hit, so the
-    // pointer gets eighteen and the drawing keeps its four.
+    // How far past the bar a press still counts. Four pixels is the right width
+    // to LOOK at and an unfair thing to ask anyone to hit, so the target is
+    // widened -- but ONLY INTO SPACE THE CALL SITE ACTUALLY HAS, which is why
+    // this is a property and not the seven it used to be everywhere.
     //
+    // SEVEN IS FOR A BAR WITH ROOM ON BOTH SIDES. The page pane and the search
+    // results have it: they sit in the window's own groupPadding, and every
+    // card inside them keeps twelve pixels of its own before any control, so
+    // eighteen pixels of target land on padding either way.
+    //
+    // THE RAIL DOES NOT, and passes 3. Its channel is ten pixels wide in
+    // total and its entries run right up to the edge of it, with no padding of
+    // their own to spend -- so seven reached four pixels back over every row.
+    // Measured on the real rail, offscreen, pressing a row at four heights of
+    // the pointer: at x=194 the entry is selected, at x=197 and x=199 the
+    // entry hears nothing and the list jumps to where the bar was pressed.
+    // Which is a settings window where the right-hand edge of every
+    // navigation entry silently scrolls instead of opening anything.
+    property int grabMargin: 7
+
     // WIDER ONLY, never taller. Growing it vertically as well would move this
     // item's origin above the track, and `mouse.y` is measured from that
     // origin -- so every position below would be off by the overhang and the
@@ -144,8 +160,8 @@ Rectangle {
         id: scrollMouse
 
         anchors.fill: parent
-        anchors.leftMargin: -7
-        anchors.rightMargin: -7
+        anchors.leftMargin: -root.grabMargin
+        anchors.rightMargin: -root.grabMargin
 
         // Only while there is something to drive. An invisible bar's mouse
         // area would still take the press, leaving a dead strip down the edge
