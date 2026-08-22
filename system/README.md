@@ -7,30 +7,42 @@ machine and to pacman — pacman writes `.pacnew` files beside anything it finds
 edited, and a symlink into a git repository turns every one of those into a
 question about which side is real. So these are **copies and recipes**.
 
-**Nothing here is installed for you, and that is deliberate.**
-`./install.sh apply etc` compares every row against the machine, shows you the
-diff, and prints the exact command:
+**Nothing here is installed for you, nothing here is checked for you, and the
+installer does not know this directory exists.** These files are documentation:
+a written record of what this machine needs outside `$HOME`, kept in git so the
+reasoning is somewhere other than one person's memory. Applying one is a person
+reading the table below and running the command themselves:
 
 ```
 sudo install -Dm 0644 ~/dotfiles/system/default-grub /etc/default/grub
 sudo grub-mkconfig -o /boot/grub/grub.cfg
 ```
 
-It runs none of them, with or without `--yes`. Two reasons, and the first is not
-about risk. **Half of these files are about one machine**: `fstab` names this
-box's UUIDs, `default-grub` points at a `CyberGRUB-2077` theme this repository
-does not carry, `modprobe-nvidia-gaming.conf` is for this card, and
-`sddm-Xsetup` is where these screens sit. Installing this machine's `fstab` on
-another one does not reproduce a setup; it produces a machine that will not
-boot. The second reason is that these are the files that decide whether a
-machine boots at all, and a container cannot prove anything useful about writing
-them — so the one part of the installer that could leave a box unbootable would
-also have been the only part with no test behind it.
+**Half of these files are about one machine**: `fstab` names this box's UUIDs,
+`default-grub` points at a `CyberGRUB-2077` theme this repository does not
+carry, `modprobe-nvidia-gaming.conf` is for this card, and `sddm-Xsetup` is
+where these screens sit. Installing this machine's `fstab` on another one does
+not reproduce a setup; it produces a machine that will not boot. So the useful
+thing to know about a row is what it is for, which is what this file is.
 
-`./install.sh check` reads the same table and reports what differs without
-touching anything — and tells **drift in content apart from drift in comments**,
-because several of these files differ from `/etc` only in the language of their
-comments and a unit that shouts about that every day is a unit nobody reads.
+## There is no `etc` unit, and that is on purpose
+
+There used to be one. It wrote these files with `sudo install -Dm` and then
+offered to run `mkinitcpio -P` and `grub-mkconfig`, which made it the one part
+of the installer that could leave a machine unable to boot and the only part a
+container could not test — a container's `/etc` boots nobody, the initramfs
+would be built for a kernel that is not running, and `grub-mkconfig` would
+enumerate the runner's disks. So it was cut back to comparing and reporting.
+
+The reporting half was dropped too, and for a different reason: **it is noise
+everywhere.** Half of these files describe this one machine, so on any machine
+they are compared against, most rows differ and always will. A row that reports
+drift on every run, on every machine, and that no `apply` can ever turn green,
+is not a finding — it is a line people learn to skip, sitting in a table whose
+whole value is that every line in it means something.
+
+Do not rebuild it. Nothing was overlooked here: the table stays because it is
+worth reading, not because something is meant to be reading it.
 
 ## The table
 
@@ -51,28 +63,28 @@ comments and a unit that shouts about that every day is a unit nobody reads.
 | `bluetooth-main.conf` | `/etc/bluetooth/main.conf` | `0644` | recipe |
 | `snapper-root` | `/etc/snapper/configs/root` | `0640` | recipe |
 
-**The table is the interface.** `lib/units/95-etc.sh` parses exactly these rows,
-so a new file in this directory reaches the installer by being added here — and
-one that is not in the table is reported by name rather than silently ignored.
+**The table is for people.** Nothing parses it, so a file added to this
+directory without a row here is a file whose reason nobody wrote down.
 
 ## The three kinds
 
-**copy** — the file here is what should be at the destination. `check` diffs the
-two and `apply` shows you the diff and the `sudo install -Dm <mode>` line that
-would apply it, plus `mkinitcpio -P` or `grub-mkconfig` where the file is an
-input to one of those. Running it is yours.
+**copy** — the file here is what should be at the destination. To see where the
+machine stands, `diff` the two; to put it there, `sudo install -Dm <mode>`,
+followed by `mkinitcpio -P` or `grub-mkconfig` where the file is an input to one
+of those. Editing an input to a generator changes nothing until the generator
+runs, which is the failure mode worth remembering: the file says what you meant
+and the machine carries on as it was.
 
 **reference** — the file here is a *record of what the machine has*, and must
 not be installed anywhere else. There is exactly one, and it is `fstab`: **the
 UUIDs in it belong to the original machine.** Installing it on another box gives
-you a machine that does not boot. So `apply` prints the opposite direction for
-this kind — the `cp` that updates the copy in the repo from the live file, which
-is a change git can show you and undo.
+you a machine that does not boot. The only direction worth running for this
+kind is the opposite one — `cp /etc/fstab ~/dotfiles/system/fstab`, catching the
+record up with the machine, which is a change git can show you and undo.
 
 **recipe** — not a copy at all, but a document describing edits to make to a
 file that belongs to a package and is mostly left at its defaults. There is
-nothing to diff, so `check` leaves these out of its counts and `apply` points at
-the document.
+nothing to diff; read the file here and run what it says.
 
 ## Two that are not obvious
 
@@ -91,8 +103,8 @@ Copying the whole thing in would mean carrying every default bluez ever changes
 and finding out about it through a `.pacnew`.
 
 `snapper-root` is a recipe for the same reason and one more: `/etc/snapper/
-configs/root` is `0640 root:root`, so it cannot be read without root, and a
-`check` that needed sudo would not be a check. It is also not a file you write
+configs/root` is `0640 root:root`, so it cannot even be read without root. It
+is also not a file you write
 by hand — `snapper -c root create-config /` creates it and `snapper -c root
 set-config` edits it — so a copy would be the wrong shape even if it could be
 read.
@@ -119,6 +131,6 @@ read.
 ## Adding one
 
 Two steps, and the second is the one to forget: put the file here, then add its
-row to the table above. The `etc` unit walks this directory and reports anything
-it finds that the table does not mention — the same shape `seeds/` uses, and for
-the same reason.
+row to the table above and a line to *What each one is for*. Nothing enforces
+it, so a file with no row is a file whose reason is lost the week after it is
+added — which is the whole thing this directory exists to prevent.

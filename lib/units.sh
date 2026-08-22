@@ -33,9 +33,9 @@
 # available from _apply and from _post alike -- a _post whose return value
 # cannot fail the run can still have discovered that /boot is half written --
 # and it is deliberately not a seventh function here, because severity belongs
-# to the individual failure and not to the unit: `etc` refusing to write a
-# system file and `etc` declining to rebuild the initramfs are not the same
-# kind of news. See lib/fail.sh.
+# to the individual failure and not to the unit: `packages` failing to install
+# one name and `packages` finding pacman's sync databases empty are not the
+# same kind of news. See lib/fail.sh.
 #
 # NEITHER MAY BE CALLED FROM _check OR _available. Both of those run in command
 # substitutions, where `exit` ends only the subshell; they report their troubles
@@ -285,10 +285,11 @@ unit_print_json() {
 # A UNIT THAT MEANS "STOP" SAYS SO ITSELF, by calling fail_stop, which does not
 # return. That is deliberately NOT a seventh member of the contract at the top
 # of this file: a `<id>_severity` would be one answer for a whole unit, and the
-# units that have a fatal path have a non-fatal one beside it -- `etc` refusing
-# to write a system file is not the same as `etc` declining to rebuild the
-# initramfs. The severity belongs to the failure, so it is chosen where the
-# failure is detected, and this file goes on knowing the name of no unit at all.
+# units that have a fatal path have a non-fatal one beside it -- `packages`
+# failing to install one name is not the same as `packages` finding pacman's
+# sync databases empty. The severity belongs to the failure, so it is chosen
+# where the failure is detected, and this file goes on knowing the name of no
+# unit at all.
 #
 # So the entry below is the DEFAULT, and it is the mild one on purpose: a unit
 # that returned non-zero without saying anything about how bad it was has not
