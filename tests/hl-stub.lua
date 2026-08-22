@@ -54,6 +54,27 @@ hl = setmetatable({
     end,
 }, { __index = function(t) return sink end })
 
+-- STDOUT BELONGS TO THE BIND LIST, so the config does not get to write to it.
+--
+-- print() is not decoration in a Hyprland config: it reaches the compositor's
+-- log as "[Lua] ...", which is how hyprland.lua says out loud that no main
+-- monitor was named and its window rules are falling back to the focused one.
+-- Under this stub that line landed on stdout next to the binds, and the parity
+-- check duly reported a sentence as a keybind bound under Hyprland and missing
+-- under niri -- a real failure, about nothing.
+--
+-- Sent to stderr rather than dropped. A message the config went out of its way
+-- to print is worth seeing when a test run is being read by a person, and it
+-- cannot corrupt a stream nothing parses. This is the same bargain the sink
+-- above makes: everything the stub does not consume still runs, it just has
+-- nowhere to land.
+local emit = print
+print = function(...)
+    local parts = {}
+    for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+    io.stderr:write("[Lua] ", table.concat(parts, "\t"), "\n")
+end
+
 -- The config file is given on the command line. It is loaded with the hypr
 -- config directory on package.path so its own `require("gaming")` resolves,
 -- exactly as it does under Hyprland.
@@ -63,4 +84,4 @@ package.path = dir .. "/?.lua;" .. package.path
 
 dofile(target)
 
-for _, line in ipairs(binds) do print(line) end
+for _, line in ipairs(binds) do emit(line) end

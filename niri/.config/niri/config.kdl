@@ -167,7 +167,7 @@ input {
 // WHAT THE RECORDS FOR THIS MACHINE MEAN, since the file itself is generated and
 // carries no prose:
 //
-//   PNP(ASR) PG32QF2B G5VL0A003533       main, 1440p, on the right at x=1080.
+//   PNP(ASR) PG32QF2B <serial>           main, 1440p, on the right at x=1080.
 //                                        y=240 centres it against the portrait
 //                                        panel: (1920-1440)/2. vrr on-demand,
 //                                        which is Hyprland's misc.vrr = 1 -- the
@@ -176,7 +176,7 @@ input {
 //                                        windows may ask for it. Never plain
 //                                        `variable-refresh-rate` on NVIDIA: that
 //                                        is always-on and the desktop flickers.
-//   GIGA-BYTE ... GS27FA 24476B001914    secondary, 1080p, rotated to portrait
+//   GIGA-BYTE ... GS27FA <serial>        secondary, 1080p, rotated to portrait
 //                                        on the left. Rotated it occupies
 //                                        1080x1920, which is where the main
 //                                        monitor's x=1080 comes from.
@@ -190,15 +190,16 @@ input {
 // the name from the same three EDID fields, but Hyprland NORMALISES the
 // manufacturer and niri does not:
 //
-//   Hyprland  desc:ASR PG32QF2B G5VL0A003533
-//   niri          "PNP(ASR) PG32QF2B G5VL0A003533"
+//   Hyprland  desc:ASR PG32QF2B <serial>
+//   niri          "PNP(ASR) PG32QF2B <serial>"
 //                   ^^^^ niri keeps the PNP vendor id; Hyprland strips it
 //
-//   Hyprland  desc:GIGA-BYTE TECHNOLOGY CO. LTD. GS27FA 24476B001914
-//   niri          "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA 24476B001914 "
-//                                        ^ comma kept              ^ and a
-//                                                 TRAILING SPACE, straight out
-//                                                 of the EDID serial
+//   Hyprland  desc:GIGA-BYTE TECHNOLOGY CO. LTD. GS27FA <serial>
+//   niri          "GIGA-BYTE TECHNOLOGY CO., LTD. GS27FA <serial> "
+//                                          ^                     ^
+//                                          the comma is kept     and there is a
+//                                          TRAILING SPACE, straight out of the
+//                                          EDID serial, inside the quotes
 //
 // Both were read off the running compositor once the first session had come up
 // -- and the guess made from Hyprland's own strings was wrong on BOTH monitors.

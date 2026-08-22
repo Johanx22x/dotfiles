@@ -50,11 +50,18 @@ monitors_tool() { printf '%s\n' "$HOME/.local/bin/desktop-monitors"; }
 # writes it.
 #
 # UNDER HYPRLAND THERE IS A SECOND PLACE, and reading only the first is exactly
-# the mistake this check exists to avoid. hyprland.lua carries a hand-written
-# monitor block and dofile()s the generated ~/.config/hypr/monitors.lua after
-# it, with a later hl.monitor for the same output winning -- so a screen named
-# in the tracked config IS configured, and reporting it as unrecorded would
-# send somebody off to write a record that is already there.
+# the mistake this check exists to avoid. ~/.config/hypr/outputs.lua is
+# hand-written and declares this machine's screens, and hyprland.lua dofile()s
+# the generated ~/.config/hypr/monitors.lua after it, with a later hl.monitor
+# for the same output winning -- so a screen named in outputs.lua IS
+# configured, and reporting it as unrecorded would send somebody off to write a
+# record that is already there.
+#
+# IT USED TO BE hyprland.lua ITSELF that was read here, which is what it means
+# that this changed: the declaration was tracked, so two monitors' serial
+# numbers were published with the repository. Untracked now, and the check
+# follows it. A machine with no outputs.lua reports its screens as not
+# recorded, which is exactly right -- they are not.
 #
 # Under niri there is no second place, by design: an `output` block in an
 # included file is IGNORED when the including file names the same monitor, so
@@ -65,10 +72,10 @@ monitors_recorded() {
   tool="$(monitors_tool)"
   "$tool" 2>/dev/null | grep -v '^\( \|Main monitor:\|No monitors recorded\)' || true
 
-  if [[ -z ${NIRI_SOCKET:-} && -f "$HOME/.config/hypr/hyprland.lua" ]]; then
-    # hyprland.lua writes them "desc:like this" and the generated file writes
-    # 'desc:like this', so both quotes end the match.
-    grep -ohP "desc:\K[^\"']+" "$HOME/.config/hypr/hyprland.lua" | LC_ALL=C sort -u || true
+  if [[ -z ${NIRI_SOCKET:-} && -f "$HOME/.config/hypr/outputs.lua" ]]; then
+    # A hand-written file may quote them "desc:like this" or 'desc:like this',
+    # so both quotes end the match.
+    grep -ohP "desc:\K[^\"']+" "$HOME/.config/hypr/outputs.lua" | LC_ALL=C sort -u || true
   fi
 }
 

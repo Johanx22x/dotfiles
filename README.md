@@ -316,8 +316,9 @@ it.
 it lists what is connected in one shape whichever compositor answered, applies a
 provisional change, and writes the confirmed one into `monitors.lua` or
 `monitors.kdl`. The one thing that is **not** symmetric is what that file is.
-Under Hyprland it is an override layer on top of the monitor block in
-`hyprland.lua`; under niri it is the only declaration of any output there is,
+Under Hyprland it is an override layer on top of `outputs.lua`, the untracked
+hand-written file `hyprland.lua` reads before anything names a monitor; under
+niri it is the only declaration of any output there is,
 because an `output` block in an included file is ignored when the including file
 names the same monitor. So `config.kdl` declares none and includes the generated
 file first — and the display page's *Copy config* chip, which hands you a block
@@ -332,7 +333,9 @@ RetroArch and Resolve — and a window rule has to be included *after* the rules
 overrides, where an output block has to come *first*. With no such file those
 five rules carry no `open-on-output` and their windows open wherever niri
 decides. Hyprland needs no equivalent: `monitors.lua` reassigns `MONITOR_MAIN`
-and `gaming.lua` reads it afterwards.
+and `gaming.lua` reads it afterwards. Which is also what happens there with no
+file at all — the field falls out of the rule and the window opens on the
+focused monitor — so the two flavors degrade the same way.
 
 ### What niri cannot do
 
@@ -509,12 +512,21 @@ not already have.
 
 ## Per-machine
 
-No tracked file names a home directory, and none names a monitor either. What
-belongs to one machine stays out of git: `hypr/monitors.lua`, `niri/monitors.kdl`
-and `niri/main-monitor.kdl`, written by `desktop-monitors` or the settings
-window, and the state files under `~/.local/state` that the scripts and the shell
-share — so a value set from a terminal moves the switch in the
-settings window, and back.
+No tracked file names a home directory, and none names a monitor either — not
+in a value and not in a comment. That second half was a claim before it was a
+fact: `hyprland.lua` opened with two EDID descriptions, serial numbers included,
+on a repository that is public, and five window rules keyed to them matched
+nothing on any other machine without ever saying so. What belongs to one machine
+stays out of git: `hypr/outputs.lua`, hand-written and holding this machine's
+screens; `hypr/monitors.lua`, `niri/monitors.kdl` and `niri/main-monitor.kdl`,
+written by `desktop-monitors` or the settings window; and the state files under
+`~/.local/state` that the scripts and the shell share — so a value set from a
+terminal moves the switch in the settings window, and back.
+
+With none of them the screens still come up, at their preferred mode and
+unarranged, and the rules that would pin games or Resolve to the main monitor
+apply on the focused one instead. Hyprland's log says so in as many words, which
+is the part that was missing.
 
 The installer keeps its own answers there too, in
 `~/.local/state/dotfiles-profile`: which compositor, which GPU, which units this

@@ -27,9 +27,11 @@ QtObject {
         return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
     }
 
-    // The pasteable form: hyprland.lua's own layout, aligned on the equals
-    // signs, with the monitor named above it the way the two blocks in that
-    // file already are.
+    // The pasteable form: the layout ~/.config/hypr/outputs.lua uses, aligned
+    // on the equals signs, with the monitor named above it the way the blocks
+    // in that file already are. outputs.lua and not hyprland.lua: a monitor
+    // description is per-unit data and the repository is public, so the
+    // hand-written declaration lives untracked in $HOME.
     //
     // transform IS ALWAYS WRITTEN, even when it is 0 and even though the
     // existing block for the main monitor leaves it out. A generated block

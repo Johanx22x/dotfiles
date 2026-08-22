@@ -201,7 +201,7 @@ QtObject {
     // and asking for one would mean two output formats to keep in step for the
     // sake of one caller, so this parses the human one:
     //
-    //     ASR PG32QF2B G5VL0A003533
+    //     ASR PG32QF2B <serial>
     //         2560x1440@165 at 1080x240, scale 1.25, transform 0
     //
     // THE INDENTATION IS THE ONLY THING SEPARATING THE TWO LINES, and it holds
