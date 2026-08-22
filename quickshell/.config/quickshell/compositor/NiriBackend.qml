@@ -238,6 +238,86 @@ CompositorBackend {
         return n;
     }
 
+    // ---- Is the bar actually covered? ------------------------------------
+    //
+    // The wlr protocol says which toplevels are fullscreen and which output
+    // each one sits on. It does not say whether that window is the one the
+    // monitor is currently showing, and niri never withdraws the output when a
+    // workspace scrolls out of sight -- so the inherited answer said "covered"
+    // for a game parked fullscreen three workspaces away, forever. The long
+    // note over fullscreenOutputs in CompositorBackend.qml is where that is
+    // written down; this is the half niri has to supply.
+    //
+    // IT SUPPLIES IT IN TWO HOPS IT ALREADY SENDS DOWN THIS SOCKET: a window
+    // carries `workspace_id`, and a workspace carries `output` and `is_active`
+    // -- which is exactly "the workspace this monitor is showing right now".
+    // Both arrive in the opening snapshot and both are kept up to date by
+    // events this backend already handles (WorkspaceActivated,
+    // WindowOpenedOrChanged, WindowClosed), so there is nothing new to poll.
+    //
+    // THE JOIN IS BY app_id AND title, WHICH IS NOT WHAT ANYBODY WOULD CHOOSE.
+    // A wlr Toplevel cannot be tied back to a niri window id: that id travels
+    // as ext-foreign-toplevel-list's `identifier`, and Quickshell 0.3.0 does
+    // not bind that protocol at all -- the same gap this file's header records
+    // for ext-workspace-v1, and the reason this backend speaks the socket
+    // itself. app_id and title are the only fields both sides publish, and both
+    // sides read them off the same xdg_toplevel role, so they agree by
+    // construction rather than by luck.
+    //
+    // WHICH WAY THE JOIN FAILS IS THE POINT. Two windows of one app sharing a
+    // title -- one fullscreen out of sight, one on the visible workspace --
+    // read as "covered" when nothing is covering, which is precisely what this
+    // shell did for every window before the join existed. Steady state cannot
+    // fail the other way: the fullscreen window is itself one of the windows
+    // niri lists, so when its own workspace is the active one it matches
+    // itself. The one moment it can is a title changing, since the new text
+    // reaches the wlr protocol and this socket independently -- a player
+    // stepping to the next track leaves the two disagreeing for as long as it
+    // takes the second message to arrive, and a panel open at that instant
+    // welds itself back on for a frame. It corrects itself and nothing else
+    // depends on it.
+    readonly property var visibleWindowKeys: {
+        const outputOfActive = {};
+        for (const ws of rawWorkspaces)
+            if (ws.is_active === true)
+                outputOfActive[ws.id] = ws.output ?? "";
+
+        const keys = {};
+        for (const w of rawWindows) {
+            const output = outputOfActive[w.workspace_id];
+            if (output === undefined)
+                continue;
+            keys[root.windowKey(output, w.app_id ?? "", w.title ?? "")] = true;
+        }
+        return keys;
+    }
+
+    // A NUL byte joins the three parts, for two reasons. It cannot occur in an
+    // output name, an app id or a title, so no pair of windows can be joined
+    // into one key by a separator that appears inside a field; and every key
+    // therefore contains one, which is what keeps a window titled "toString"
+    // from finding something on Object.prototype instead of missing.
+    function windowKey(output: string, appId: string, title: string): string {
+        return `${output}\u0000${appId}\u0000${title}`;
+    }
+
+    fullscreenOutputs: {
+        const names = [];
+        for (const tl of root.toplevelManager.toplevels.values) {
+            if (tl.fullscreen !== true)
+                continue;
+            for (const s of (tl.screens ?? [])) {
+                const output = s?.name ?? "";
+                if (output === "" || names.includes(output))
+                    continue;
+                const key = root.windowKey(output, tl.appId ?? "", tl.title ?? "");
+                if (root.visibleWindowKeys[key] === true)
+                    names.push(output);
+            }
+        }
+        return names;
+    }
+
     // ---- Keybindings ------------------------------------------------------
     //
     // READ FROM THE CONFIG FILE, because there is no IPC for this: niri knows
