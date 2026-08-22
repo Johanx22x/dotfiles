@@ -31,12 +31,40 @@ Flickable {
     clip: true
     boundsBehavior: Flickable.StopAtBounds
 
-    // NO `visible: height > 0` HERE, however tidy it looks. `visible` in QML
-    // is effective visibility: hiding this hides every delegate, an invisible
-    // child contributes nothing to a Column's implicitHeight, the height it
-    // is given goes to zero and the list is held shut forever. Measured on a
-    // stripped copy of exactly this arrangement -- with the line in, adding
-    // three rows to an empty hidden list left implicitHeight at 0.
+    // `visible: height > 0` ON ONE OF THESE IS A QUESTION ABOUT WHERE THE
+    // HEIGHT COMES FROM, and that answer is the whole of it. This header used
+    // to forbid the line outright and was overstated: five call sites carried
+    // it anyway and not one of them was broken, which is how a rule in
+    // capitals teaches the next reader that the capitals can be ignored.
+    //
+    // Two things are true and neither latches anything alone. `visible` in
+    // QML is EFFECTIVE visibility, so hiding one of these hides every delegate
+    // under it. And an invisible child contributes nothing to the
+    // implicitHeight of a Column it sits in. The latch needs a third thing --
+    // THE HEIGHT HAS TO COME BACK DOWN FROM THE PARENT THAT WAS JUST SHRUNK.
+    //
+    // SO DO NOT WRITE IT ON A LIST SIZED BY ITS PARENT. `Layout.fillHeight:
+    // true` in a ColumnLayout, or a height bound to the implicitHeight of the
+    // very Column this sits in: the list hides, the parent loses its only tall
+    // child, zero comes back down, and nothing ever reopens it. Both shapes
+    // were built to check, and they are worse than described -- neither
+    // survives its first layout, so such a list is born shut rather than
+    // latched by some later sequence.
+    //
+    // IT IS SAFE ON A LIST SIZED BY THE COLUMN INSIDE IT, which is every list
+    // in this shell. Nothing closes there: a positioner counts a child's own
+    // `visible` and not the effective one it inherits, so the inner Column
+    // goes on laying out while hidden and the height comes straight back when
+    // the rows do. Driven on Qt 6.11.1 in a headless compositor against the
+    // real pages, not a stripped copy. The keybinds list, emptied by a query
+    // that matches nothing and refilled by clearing it, over the eighty binds
+    // read out of the niri config; both bluetooth lists emptied and refilled
+    // over a STAND-IN model, because emptying the real one means toggling a
+    // live adapter. Every one came back at full height, including when the
+    // refill happened with the whole page switched away and invisible.
+    //
+    // On most lists it also buys nothing: an empty Flickable is already zero
+    // pixels tall.
     readonly property bool scrollable: root.contentHeight > root.height
 
     // Whether this draws its own bar. On by default: every list this component

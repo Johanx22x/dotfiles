@@ -788,6 +788,13 @@ SettingsPage {
 
             width: parent.width
             height: Math.min(groupList.implicitHeight, root.listCeiling)
+
+            // `visible: height > 0`, which ScrollList's header allows on a
+            // list sized by the Column inside it and not on one sized by its
+            // parent. This is the first kind. Driven, not argued: a query
+            // matching nothing empties this list, and clearing the query
+            // brings it back at 340 whether the page was on screen for the
+            // refill or not.
             visible: height > 0
             contentHeight: groupList.implicitHeight
 
