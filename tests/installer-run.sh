@@ -229,10 +229,43 @@ installer() {
         "$MINI/install.sh" "$@" </dev/null
 }
 
-# `check` asks nothing and must never need an answer, so it is given a stdin
-# that has none. If it ever starts reading one, that is the bug, and this is
-# what makes it visible instead of silently satisfied.
+# `check` asks nothing and must never need an answer.
+#
+# THAT USED TO BE ENFORCED WITH `</dev/null`, AND `</dev/null` CANNOT ENFORCE
+# IT. The comment here said an attempt to read would be "visible instead of
+# silently satisfied"; the opposite is true. A `read` against /dev/null returns
+# EOF immediately, the variable comes back empty, the code carries on with its
+# default and the mode exits 0 with the same output it always had. Measured on
+# a stand-in that reads only when told to: under `</dev/null` the asking
+# version and the silent one produce the same exit status and the same last
+# line. A test that supplies no input cannot tell "it never asked" from "it
+# asked and nobody answered" -- and for most prompts the default answer and the
+# right answer are the same value, so the assertion downstream agrees either
+# way. That is the same shape as every dead assertion this branch is about,
+# with a different disguise.
+#
+# SO IT IS HANDED A STDIN THAT HAS SOMETHING IN IT. The descriptor is opened
+# here and stays open, `check` gets it as its stdin, and afterwards the next
+# line is read back off the same descriptor -- which is shared, so a read by
+# the child has moved the offset. First line still there: nothing consumed it.
+# Anything else, including EOF: something did, and it is named on the spot
+# rather than found as a hang on somebody's TTY six months from now.
+#
+# ONLY FOR `check`, NOT FOR `installer` BELOW. check runs no package manager
+# and writes nothing, so "it must never read stdin" is unambiguous there. A
+# full apply shells out to pacman, sudo and makepkg, and asserting that none of
+# them ever touches its stdin would be asserting something about them rather
+# than about install.sh -- a false failure waiting for the first tool that
+# slurps a line it was given. The claim for `-y` is answered next door in
+# tests/installer-menus.sh, on a pty, where a keystroke can be sent and then
+# shown to be still unread.
+SENTINEL_FIRST='installer-run: nothing here should ever read this line'
+STDIN_SENTINEL="$SANDBOX/stdin-sentinel"
+printf '%s\ninstaller-run: nor this one\n' "$SENTINEL_FIRST" > "$STDIN_SENTINEL"
+
 checker() {
+    local status=0 leftover=''
+    exec 9<"$STDIN_SENTINEL"
     env -u NIRI_SOCKET -u HYPRLAND_INSTANCE_SIGNATURE \
         HOME="$HOME_DIR" \
         XDG_CONFIG_HOME="$HOME_DIR/.config" \
@@ -240,7 +273,13 @@ checker() {
         XDG_DATA_HOME="$HOME_DIR/.local/share" \
         XDG_CACHE_HOME="$HOME_DIR/.cache" \
         NO_COLOR=1 \
-        "$MINI/install.sh" check "$@" </dev/null
+        "$MINI/install.sh" check "$@" <&9 || status=$?
+    IFS= read -r leftover <&9 || true
+    exec 9<&-
+    if [[ $leftover != "$SENTINEL_FIRST" ]]; then
+        bad "check read from stdin -- it asked for an answer it must never need"
+    fi
+    return "$status"
 }
 
 # ---------------------------------------------------------------------------
