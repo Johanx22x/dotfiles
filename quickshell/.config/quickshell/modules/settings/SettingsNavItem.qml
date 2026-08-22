@@ -81,6 +81,33 @@ Rectangle {
 
         anchors.fill: parent
         hoverEnabled: true
+
+        // THE RAIL IS INSIDE A LIST THAT CAN BE DRAGGED, and a Flickable that
+        // is moving takes the next press away from whatever is under it, so
+        // that the press carries on the gesture instead of landing on the row
+        // that happened to slide there. That is right for a finger. Here it
+        // means the first click after dragging the rail is thrown away, and
+        // the only two entries anybody drags to are the two below the fold --
+        // which is how a scrolling problem got reported as "Updates does not
+        // open".
+        //
+        // preventStealing is the documented way to refuse that: it holds
+        // keepMouseGrab from the moment it is set, and QQuickFlickable's
+        // filter checks that flag before it ever consults its own moving
+        // state. Measured on the rail at 0, 100, 300 and 600 ms after a drag
+        // and after a flick: the click lands at all four, where before it
+        // landed only at 600.
+        //
+        // WHAT IT COSTS is dragging the rail. A row that keeps its own grab
+        // never hands it to the Flickable, so pulling the list by an entry no
+        // longer scrolls it -- the wheel and the scrollbar beside it still
+        // do, which is every way a mouse actually moves this list. NOT
+        // `interactive: false` on the list itself, which looks like the same
+        // trade and is not: that switch also turns off the Flickable's own
+        // wheel handling, which is the net under ScrollList's handler, and
+        // taking it away stopped the whole settings window scrolling.
+        preventStealing: true
+
         cursorShape: Qt.PointingHandCursor
         onClicked: root.clicked()
     }

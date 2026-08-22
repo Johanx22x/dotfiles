@@ -31,13 +31,30 @@
 // ever wheeled and clicked, it means the first click after every scroll is
 // thrown away.
 //
-// Measured on Qt 6.11.1, offscreen, against the settings rail's real
-// geometry: through a plain Flickable a click 0 ms, 100 ms and 300 ms after
-// one wheel notch was lost every time, and only the one at 600 ms landed.
-// Through this component all four landed, and dragging still scrolls. It cost
-// a real complaint first -- the settings rail's Updates entry is the only one
-// anybody reaches by scrolling, so a window-wide effect was reported, and
-// hunted, as one page refusing to open on the first click.
+// THAT PARAGRAPH WAS TRUE AND FOR A LONG TIME IT DID NOTHING, which is the
+// part worth remembering. The handler below declined every wheel event this
+// machine produced -- see the note on `acceptedDevices` -- so the Flickable
+// went on doing the scrolling and went on eating the click, and the component
+// written to stop it had never once run. The measurement that said it worked
+// was taken offscreen, where Qt hands out a device typed Mouse and the
+// handler accepts; a Wayland seat hands out one typed TouchPad and it does
+// not. A bench that cannot produce the machine's own event is a bench that
+// agrees with you.
+//
+// MEASURED, Qt 6.11.2, offscreen, against the settings rail's real geometry
+// -- an 820x580 window, a 452px list over 530px of entries -- clicking the
+// entry that is only reachable by scrolling, at 0, 100, 300 and 600 ms after
+// the gesture, and driven through a device the handler accepts AND one it
+// declines:
+//
+//     wheel, handler accepting     lands at all four
+//     wheel, handler declining     lost at 0 and 100, before this change
+//     drag or flick                lost at 0, 100 and 300, before this change
+//     the scrollbar                lands at all four, throughout
+//
+// It cost three rounds and one broken settings window. The rail's Updates and
+// About entries are the only two anybody reaches by scrolling, so a
+// window-wide effect kept being reported as two pages refusing to open.
 
 import QtQuick
 import "root:/"
@@ -103,10 +120,40 @@ Flickable {
     WheelHandler {
         enabled: root.scrollable
 
+        // EVERY DEVICE, AND THIS LINE IS THE WHOLE OF THE BUG THIS FILE WAS
+        // WRITTEN FOR. A WheelHandler defaults to `acceptedDevices: Mouse`
+        // and, on top of that, drops any wheel event Qt marks as synthesized
+        // -- and a handler that declines an event is a handler that does
+        // nothing, so on a machine whose pointer Qt does not type as a mouse
+        // this component was, for months, an ordinary Flickable with a dead
+        // handler bolted to it. The scrolling still worked, because the
+        // Flickable underneath caught everything the handler dropped; what
+        // did not work was the one thing the handler is here for, so the
+        // click after a wheel notch went on being eaten and the fix that was
+        // supposed to stop it had never run.
+        //
+        // It was found the hard way. Turning `interactive` off to stop a drag
+        // stealing the same click took the Flickable away as well, and the
+        // settings window stopped scrolling outright -- which is the proof
+        // that the handler was never the thing doing the scrolling.
+        //
+        // AllDevices AND NOT Mouse|TouchPad, because the failure mode of
+        // naming device types is silence: nothing is logged, nothing throws,
+        // the list simply scrolls through the other path and the click is
+        // lost again. There is no device this component wants to refuse.
+        // Naming TouchPad is also what lifts the synthesized-source check, so
+        // this one line answers both halves.
+        acceptedDevices: PointerDevice.AllDevices
+
         onWheel: event => {
+            // angleDelta is what a wheel reports and pixelDelta is what a
+            // continuous scroll reports; a device that sends only the second
+            // would otherwise be accepted here and then moved by zero, which
+            // is the same silence as declining it.
+            const step = event.angleDelta.y !== 0 ? event.angleDelta.y
+                : event.pixelDelta.y;
             const limit = Math.max(0, root.contentHeight - root.height);
-            root.contentY = Math.max(0, Math.min(limit,
-                root.contentY - event.angleDelta.y));
+            root.contentY = Math.max(0, Math.min(limit, root.contentY - step));
         }
     }
 

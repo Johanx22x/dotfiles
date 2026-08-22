@@ -236,11 +236,13 @@ FloatingWindow {
             // visits. "Updates does not open on the first click" was the
             // whole of the report, and it was the rail, not that page.
             //
-            // Measured on Qt 6.11.1 offscreen, on this geometry: with a plain
-            // Flickable a click 0 ms, 100 ms and 300 ms after the notch was
-            // lost every time and only the one at 600 ms landed; through
-            // ScrollList all four landed, and dragging the rail still scrolls
-            // it.
+            // AND IT TOOK THREE GOES, because for two of them the handler in
+            // ScrollList was declining every wheel event this machine sends
+            // and the Flickable was quietly doing the scrolling after all --
+            // so the fix was in the tree, doing nothing, while the click went
+            // on being eaten. The whole account is in components/ScrollList.qml.
+            // Dragging the rail is answered separately, on the entries
+            // themselves, in SettingsNavItem.qml.
             ScrollList {
                 id: railScroll
 
