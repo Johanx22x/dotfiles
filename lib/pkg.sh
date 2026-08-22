@@ -227,13 +227,13 @@ pkg_needs_multilib() {
 # provider to take for a name that several packages provide, whether to
 # replace a package, whether to remove something that conflicts. On a terminal,
 # with no --yes, those are worth seeing -- pacman's own transaction list is the
-# last look at 119 names and a download size before any of it arrives, and this
-# script cannot put those questions on screen for it. So the rule is that
-# pacman is told to take its defaults in exactly the three cases where this
-# script would not ask a question either: --yes was given, questions are
-# switched off (which is what `update` does), or there is no terminal to ask
-# on. Those are ui_confirm's three branches, in ui.sh, and they stay in step
-# by being the same three.
+# last look at a hundred-odd names and a download size before any of it
+# arrives, and this script cannot put those questions on screen for it. So the
+# rule is that pacman is told to take its defaults in exactly the three cases
+# where this script would not ask a question either: --yes was given, questions
+# are switched off (which is what `update` does), or there is no terminal to
+# ask on. Those are ui_confirm's three branches, in ui.sh, and they stay in
+# step by being the same three.
 pkg_noconfirm() {
   (( ${ASSUME_YES:-0} )) && return 0
   (( ${UI_ASK:-1} == 0 )) && return 0

@@ -18,16 +18,16 @@ UUID=e17dc18f-4c30-4279-a999-0c48a7166b69	/var/log  	btrfs     	rw,relatime,comp
 UUID=7784-1E64      	/efi     	vfat      	rw,relatime,fmask=0077,dmask=0077,codepage=437,iocharset=ascii,shortname=mixed,utf8,errors=remount-ro	0 2
 
 
-# Samsung 870 EVO 2TB — datos y juegos
+# Samsung 870 EVO 2TB -- data and games
 UUID=d3315465-aba9-4581-857c-1e005a550d90	/mnt/datos	btrfs	rw,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2,subvol=/@datos,nofail,x-systemd.device-timeout=10s	0 0
 UUID=d3315465-aba9-4581-857c-1e005a550d90	/mnt/juegos	btrfs	rw,noatime,ssd,discard=async,space_cache=v2,subvol=/@juegos,nofail,x-systemd.device-timeout=10s	0 0
 
-# Snapshots de snapper (raíz)
+# snapper's snapshots (root)
 UUID=e17dc18f-4c30-4279-a999-0c48a7166b69	/.snapshots	btrfs	rw,relatime,compress=zstd:3,ssd,discard=async,space_cache=v2,subvol=/@snapshots	0 0
 
-# ADATA LEGEND 700 240GB (antes Bazzite). Disco de datos.
-# Mismas opciones que /mnt/datos del Samsung.
+# ADATA LEGEND 700 240GB (Bazzite's disk before it was reformatted). Data.
+# Same options as the Samsung's /mnt/datos.
 UUID=272f064a-40ee-4092-8372-0c99464e06c8	/mnt/datos-nvme	btrfs	rw,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2,subvol=/@datos-nvme,nofail,x-systemd.device-timeout=10s	0 0
 
-# Toshiba MQ01ABD100 1TB - NTFS Ronaldo (HDD: sin discard)
+# Toshiba MQ01ABD100 1TB - NTFS Ronaldo (spinning disk: no discard)
 UUID=01D998EA6EDAE9F0	/mnt/ronaldo	ntfs3	rw,noatime,uid=1000,gid=1000,fmask=133,dmask=022,prealloc,nofail,x-systemd.device-timeout=10s	0 0

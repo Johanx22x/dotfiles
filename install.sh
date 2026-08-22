@@ -157,11 +157,18 @@ compositor_resolve() {
 want_hyprland() { [[ $COMPOSITOR == hyprland || $COMPOSITOR == both ]]; }
 want_niri()     { [[ $COMPOSITOR == niri     || $COMPOSITOR == both ]]; }
 
-# Every stow package EXCEPT the compositor's, which is appended once the
-# compositor is known. seeds/ is deliberately NOT one of them -- it is copied,
-# not linked, see seeds/README.md and the seeds unit. There is no `qt` or `xdg`
-# package any more either: qt6ct.conf and mimeapps.list were all they held, and
-# both are seeds now.
+# Every stow package except two, and the two are left out for different
+# reasons. The compositor's is not missing, only late: it is appended once the
+# compositor is known. backup/ IS a stow package and is genuinely not here --
+# borgmatic's configuration is linked by hand, along with the machine's own two
+# values that never reach git, which README.md sets out under Backups. Putting
+# it in this list would start linking a backup policy onto every machine that
+# runs this, so its absence is a decision rather than an oversight to tidy up.
+#
+# seeds/ is not a stow package at all -- it is copied, not linked, see
+# seeds/README.md and the seeds unit. There is no `qt` or `xdg` package any
+# more either: qt6ct.conf and mimeapps.list were all they held, and both are
+# seeds now.
 STOW_PACKAGES=()
 stow_packages_resolve() {
   STOW_PACKAGES=(zsh quickshell kitty matugen shell gtk media openrgb systemd
@@ -447,8 +454,9 @@ mode_check() {
 # design of this mode. `apply` is what somebody reaches for after reading a
 # `check` table and seeing one row that is wrong. Expanding the request into its
 # dependencies is correct in principle and useless in practice: `symlinks`
-# requires `packages`, `packages` is not `ok` while one name out of 119 is
-# missing, and so asking to relink one file produced an offer to run
+# requires `packages`, `packages` is not `ok` while one name out of its
+# hundred-odd is missing -- 107 shared, plus the three or four the chosen
+# compositor brings -- and so asking to relink one file produced an offer to run
 # `pacman -S --needed` over the entire desktop plus four AUR builds. Nobody
 # takes that offer, so the mode was unusable for the thing it is best at.
 #
@@ -680,7 +688,7 @@ tui_units() {
 # ---------------------------------------------------------------------------
 # THE OPTIONAL GROUPS, at two levels.
 #
-# The first is the one anybody wants: four boxes, one per pack. The second is
+# The first is the one anybody wants: one box per pack. The second is
 # for the case no set of groups drawn by somebody else can cover -- "gaming, but
 # not Steam" -- and is deliberately behind a question, because a menu of a
 # hundred package names as the FIRST thing anybody sees would be a worse menu
@@ -843,10 +851,12 @@ One thing is still yours, and it is a decision rather than a chore:
   or do it from the settings window, SUPER + C, which applies a change live and
   puts it back unless you confirm it.
 
-Outside $HOME, nothing here is automated at all: no unit reads /etc, reports on
-it or writes to it. system/ is a tracked record of what this machine needs out
-there, kept as documentation and applied by hand -- read system/README.md when
-you need it.
+Outside $HOME, nothing here is automated at all: no unit writes to /etc or
+reports on what is there. Two of them read it to answer a question about this
+machine -- whether zsh is in /etc/shells, whether [multilib] is on -- and that
+is the whole of the traffic. system/ is a tracked record of what this machine
+needs out there, kept as documentation and applied by hand -- read
+system/README.md when you need it.
 
 Everything else has a unit. To see where this machine stands at any moment:
 

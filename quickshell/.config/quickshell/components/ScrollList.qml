@@ -55,6 +55,41 @@
 // It cost three rounds and one broken settings window. The rail's Updates and
 // About entries are the only two anybody reaches by scrolling, so a
 // window-wide effect kept being reported as two pages refusing to open.
+//
+// `visible: height > 0` ON ONE OF THESE IS A QUESTION ABOUT WHERE THE
+// HEIGHT COMES FROM, and that answer is the whole of it. This header used
+// to forbid the line outright and was overstated: five call sites carried
+// it anyway and not one of them was broken, which is how a rule in
+// capitals teaches the next reader that the capitals can be ignored.
+//
+// Two things are true and neither latches anything alone. `visible` in
+// QML is EFFECTIVE visibility, so hiding one of these hides every delegate
+// under it. And an invisible child contributes nothing to the
+// implicitHeight of a Column it sits in. The latch needs a third thing --
+// THE HEIGHT HAS TO COME BACK DOWN FROM THE PARENT THAT WAS JUST SHRUNK.
+//
+// SO DO NOT WRITE IT ON A LIST SIZED BY ITS PARENT. `Layout.fillHeight:
+// true` in a ColumnLayout, or a height bound to the implicitHeight of the
+// very Column this sits in: the list hides, the parent loses its only tall
+// child, zero comes back down, and nothing ever reopens it. Both shapes
+// were built to check, and they are worse than described -- neither
+// survives its first layout, so such a list is born shut rather than
+// latched by some later sequence.
+//
+// IT IS SAFE ON A LIST SIZED BY THE COLUMN INSIDE IT, which is every list
+// in this shell. Nothing closes there: a positioner counts a child's own
+// `visible` and not the effective one it inherits, so the inner Column
+// goes on laying out while hidden and the height comes straight back when
+// the rows do. Driven on Qt 6.11.1 in a headless compositor against the
+// real pages, not a stripped copy. The keybinds list, emptied by a query
+// that matches nothing and refilled by clearing it, over the eighty binds
+// read out of the niri config; both bluetooth lists emptied and refilled
+// over a STAND-IN model, because emptying the real one means toggling a
+// live adapter. Every one came back at full height, including when the
+// refill happened with the whole page switched away and invisible.
+//
+// On most lists it also buys nothing: an empty Flickable is already zero
+// pixels tall.
 
 import QtQuick
 import "root:/"
@@ -67,40 +102,8 @@ Flickable {
     clip: true
     boundsBehavior: Flickable.StopAtBounds
 
-    // `visible: height > 0` ON ONE OF THESE IS A QUESTION ABOUT WHERE THE
-    // HEIGHT COMES FROM, and that answer is the whole of it. This header used
-    // to forbid the line outright and was overstated: five call sites carried
-    // it anyway and not one of them was broken, which is how a rule in
-    // capitals teaches the next reader that the capitals can be ignored.
-    //
-    // Two things are true and neither latches anything alone. `visible` in
-    // QML is EFFECTIVE visibility, so hiding one of these hides every delegate
-    // under it. And an invisible child contributes nothing to the
-    // implicitHeight of a Column it sits in. The latch needs a third thing --
-    // THE HEIGHT HAS TO COME BACK DOWN FROM THE PARENT THAT WAS JUST SHRUNK.
-    //
-    // SO DO NOT WRITE IT ON A LIST SIZED BY ITS PARENT. `Layout.fillHeight:
-    // true` in a ColumnLayout, or a height bound to the implicitHeight of the
-    // very Column this sits in: the list hides, the parent loses its only tall
-    // child, zero comes back down, and nothing ever reopens it. Both shapes
-    // were built to check, and they are worse than described -- neither
-    // survives its first layout, so such a list is born shut rather than
-    // latched by some later sequence.
-    //
-    // IT IS SAFE ON A LIST SIZED BY THE COLUMN INSIDE IT, which is every list
-    // in this shell. Nothing closes there: a positioner counts a child's own
-    // `visible` and not the effective one it inherits, so the inner Column
-    // goes on laying out while hidden and the height comes straight back when
-    // the rows do. Driven on Qt 6.11.1 in a headless compositor against the
-    // real pages, not a stripped copy. The keybinds list, emptied by a query
-    // that matches nothing and refilled by clearing it, over the eighty binds
-    // read out of the niri config; both bluetooth lists emptied and refilled
-    // over a STAND-IN model, because emptying the real one means toggling a
-    // live adapter. Every one came back at full height, including when the
-    // refill happened with the whole page switched away and invisible.
-    //
-    // On most lists it also buys nothing: an empty Flickable is already zero
-    // pixels tall.
+    // Is there anywhere to go? This is what enables the wheel handler and
+    // what decides whether the bar below is drawn at all.
     readonly property bool scrollable: root.contentHeight > root.height
 
     // Whether this draws its own bar. On by default: every list this component
@@ -108,13 +111,22 @@ Flickable {
     // that all of them" is the question being asked, and a call site that has
     // to remember to ask for the answer is a call site that will forget.
     //
-    // OFF IS FOR A CALL SITE THAT PLACES ITS OWN, and there is exactly one --
-    // the cheatsheet. Its contents are columns of a FIXED width rather than
-    // rows bound to this item's, so the four pixels that land on card padding
-    // everywhere else would land on the last column's key names; and its card
-    // already keeps thirty pixels of padding outside this, which is a better
-    // place for a bar than on top of anything. Off there means "somewhere
-    // better", not "never".
+    // OFF IS FOR A CALL SITE THAT PLACES ITS OWN, and there are four of them.
+    // Three are in the settings window -- the rail, the pane the pages sit in
+    // and the search results -- and their reason is the same one: the bar for
+    // each of those is drawn in the padding that is already beside the list,
+    // placed and anchored from OUTSIDE it, so a second one just inside the
+    // list's own edge would be a bar drawn twice.
+    //
+    // The fourth is the cheatsheet, and its reason is its own. Its contents
+    // are columns of a FIXED width rather than rows bound to this item's, so
+    // the four pixels that land on card padding everywhere else would land on
+    // the last column's key names; and its card already keeps thirty pixels of
+    // padding outside this, which is a better place for a bar than on top of
+    // anything.
+    //
+    // Off anywhere means "somewhere better", not "never" -- which is why the
+    // default is on. A list nobody has placed a bar for still gets one.
     property bool showScrollBar: true
 
     WheelHandler {
@@ -180,9 +192,9 @@ Flickable {
     // OVER THE INSIDE EDGE, and not in a strip taken out of the width. Every
     // call site binds its content to THIS ITEM's width rather than to
     // contentWidth -- `width: list.width`, `width: parent.width` -- so there is
-    // no way to narrow the content from in here at all, and the seven call
-    // sites that would have to be edited include one this branch must not
-    // touch.
+    // no way to narrow the content from in here at all: narrowing it means
+    // editing all eleven call sites, one of them in a module nobody was
+    // touching at the time.
     //
     // HARD AGAINST THAT EDGE, with no inset, because the inset is what the
     // rows already leave and moving in from the edge spends it twice. Measured
