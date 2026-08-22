@@ -268,16 +268,56 @@ QtObject {
     // own IPC does the job better, but nobody has to, and a compositor nobody
     // has written a backend for gets it for free.
     //
-    // Fullscreen detection is the first of these. wlr-foreign-toplevel carries
-    // a `fullscreen` flag and the screens a window is on, so this needs no
-    // compositor-specific help at all -- which is just as well, because niri's
-    // IPC does not report fullscreen on a window (its Window has ten fields and
-    // none of them is that) while Hyprland's does, and a facade whose answer
-    // depended on which one you were running would be exactly the kind of thing
-    // this layer exists to prevent.
+    // The window list every compositor speaks, exposed so a backend can reach
+    // it without importing Quickshell.Wayland of its own.
     property var toplevelManager: ToplevelManager
 
-    readonly property var fullscreenOutputs: {
+    // FULLSCREEN DETECTION IS HALF SUCH A THING, and the half it is not cost a
+    // bug. wlr-foreign-toplevel carries a `fullscreen` flag and the outputs a
+    // window is on, so WHAT IS FULLSCREEN needs no compositor-specific help at
+    // all -- which is just as well, because niri's IPC does not report
+    // fullscreen on a window (its Window has ten fields and none of them is
+    // that, confirmed against niri 26.04) while Hyprland's does, and a facade
+    // whose answer to "is this window fullscreen" depended on which one you
+    // were running would be exactly the kind of thing this layer exists to
+    // prevent. That has not changed: both backends read the flag from this
+    // protocol and only this protocol.
+    //
+    // WHAT THE PROTOCOL DOES NOT CARRY IS WHETHER THE WINDOW IS ON SCREEN.
+    // An output is announced with output_enter and taken back with
+    // output_leave, and niri sends neither when a workspace is merely scrolled
+    // out of sight: its foreign_toplevel.rs walks the whole layout and reports
+    // the output each window's workspace BELONGS to, visible or not. So a game
+    // parked fullscreen on another workspace kept its monitor in this list for
+    // as long as it lived, and every surface welded to the bar stayed detached
+    // -- square top corners and a fillet hanging off a bar that was right
+    // there, until the game was closed.
+    //
+    // AND NOTHING ELSE IN THE PROTOCOL ANSWERS IT. A Toplevel has appId, title,
+    // parent, activated, screens, maximized, minimized and fullscreen -- that
+    // is the whole type in Quickshell 0.3.0 -- and `activated` is keyboard
+    // focus, which is one window in the entire session: it cannot tell a
+    // fullscreen window on the other monitor's visible workspace apart from one
+    // on the other monitor's hidden workspace, and both are ordinary states.
+    //
+    // SO THE ON-SCREEN HALF IS ANSWERED PER COMPOSITOR, by overriding this
+    // property, and that is a stated exception rather than a hole in the rule
+    // at the top of this file. What the facade still guarantees: the shell asks
+    // one question, hasFullscreenOn(output), and never learns which compositor
+    // answered it; the meaning of "fullscreen" is the protocol's on every
+    // flavor; and the default below is a working answer, not a stub. A
+    // compositor nobody has written a backend for still detaches its panels
+    // under a fullscreen window -- it just keeps this bug while doing it, which
+    // is the conservative direction to be wrong in: a panel that detaches when
+    // it need not looks odd, one welded to a bar that is covered hangs a fillet
+    // in mid-air over the game.
+    //
+    // NOT readonly, therefore, and that is the override being possible rather
+    // than an oversight: QML refuses to rebind a readonly property from a
+    // derived component. Everything else on this contract that a backend
+    // replaces -- workspaces, activeWindow, capabilities -- is declared the
+    // same way for the same reason.
+    property var fullscreenOutputs: {
         const names = [];
         for (const tl of ToplevelManager.toplevels.values) {
             if (tl.fullscreen !== true)
@@ -290,9 +330,9 @@ QtObject {
         return names;
     }
 
-    // Is something fullscreen on this monitor? Asked by every surface that is
-    // welded to the bar, since a fullscreen window covers the bar and leaves
-    // the weld joining a panel to nothing.
+    // Is something fullscreen AND ON SCREEN on this monitor? Asked by every
+    // surface that is welded to the bar, since a fullscreen window covers the
+    // bar and leaves the weld joining a panel to nothing.
     function hasFullscreenOn(outputName: string): bool {
         return fullscreenOutputs.includes(outputName);
     }
