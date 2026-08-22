@@ -27,9 +27,13 @@
 //
 // The rule lives HERE, in the newcomer, which is the convention CheatsheetState
 // set and states: one file to read when the windows disagree about who is up,
-// rather than a clause added to each of the four older singletons. The
-// dashboard is reached through LauncherState.dashboardOpen, which Bar.qml keeps
-// wired to the popout in both directions.
+// rather than a clause added to each of the four older singletons.
+//
+// THE DASHBOARD IS REACHED THROUGH IslandState.closeDashboard(), the singleton
+// that owns which bar the panel is drawn on. It used to be reached by assigning
+// LauncherState.dashboardOpen false, and that closed nothing: the flag is a
+// report Bar.qml publishes about its own popout. CheatsheetState carried the
+// same line and lost it in the same change; the long version of why is there.
 //
 // DO NOT name an IPC function `show` -- `qs ipc show` is a subcommand of the
 // CLI and swallows the call, printing the handler listing and exiting 0. It
@@ -42,9 +46,10 @@ import Quickshell.Io
 // For Connections. A singleton that only declares properties does not need
 // QtQuick; the handlers below do.
 import QtQuick
+import "root:/modules/cheatsheet"
+import "root:/modules/island"
 import "root:/modules/launcher"
 import "root:/modules/powermenu"
-import "root:/modules/cheatsheet"
 
 Singleton {
     id: root
@@ -68,7 +73,7 @@ Singleton {
             return;
 
         LauncherState.isOpen = false;
-        LauncherState.dashboardOpen = false;
+        IslandState.closeDashboard();
         PowerMenuState.isOpen = false;
         CheatsheetState.isOpen = false;
     }
@@ -84,8 +89,13 @@ Singleton {
                 root.isOpen = false;
         }
 
-        function onDashboardOpenChanged(): void {
-            if (LauncherState.dashboardOpen)
+        // ANY popout going up, not only the dashboard -- see the note over
+        // popoutOpen in LauncherState. This sheet covers the bar while it is
+        // up, so what can still raise one is a keybind: SUPER + D for the
+        // dashboard, SUPER + SHIFT + N for the notification history. Either
+        // means the carousel is no longer what is being asked for.
+        function onPopoutOpenChanged(): void {
+            if (LauncherState.popoutOpen)
                 root.isOpen = false;
         }
     }
