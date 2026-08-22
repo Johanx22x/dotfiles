@@ -206,6 +206,35 @@ Singleton {
         root.historyScreen = root.historyScreen === name ? "" : name;
     }
 
+    // PUTTING THE LIST AWAY, from anywhere and whichever bar is showing it:
+    // one string set to "" is every copy there can be.
+    //
+    // THE MIRROR OF IslandState.closeDashboard(), and the symmetry is the
+    // point rather than a tidiness. These two panels are the same kind of
+    // thing -- the note at the top of this section says so -- and whoever adds
+    // a third will copy whichever door they find first, so there must not be
+    // two shapes to find. A caller reaching in and assigning `historyScreen`
+    // directly would work today and would be the wrong example to leave lying
+    // around.
+    //
+    // WHO NEEDS IT: the fullscreen sheets. The cheatsheet and the wallpaper
+    // carousel cover the screen and take an exclusive keyboard grab, so a list
+    // left up behind one is invisible, unreachable, and still there when the
+    // sheet goes away. And worse than merely stale -- `historyScreen` stays
+    // set, so the rule below retargets it every time the focus settles
+    // somewhere else and the list is torn down and rebuilt on each monitor the
+    // pointer crosses onto, behind a sheet the user believes closed
+    // everything. That is exactly what the dashboard was doing before
+    // IslandState.closeDashboard() was wired into those two.
+    //
+    // NOT toggleHistory() WITH THE PANEL UP, which would look equivalent from
+    // the outside. A toggle answers the key that opened the list; this is a
+    // third party saying it has to go, and it has to mean the same thing
+    // whether or not the list was up when it was called.
+    function closeHistory(): void {
+        root.historyScreen = "";
+    }
+
     // AND IT MOVES, off the settled answer rather than the live one -- see the
     // note over settledPanelScreen in Screens.qml for why a focus that follows
     // the mouse must not drag a panel across on its way past. Identical to the
