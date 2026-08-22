@@ -203,8 +203,25 @@ Item {
 
     implicitWidth: root.edge * 2 + root.leftWidth + root.columnGap + root.rightWidth
 
-    // The art square, top left, and the height of the whole media block.
+    // The art square, top left.
     readonly property int artSize: 104
+
+    // AND THE BLOCK IS AS TALL AS THE TALLER OF THE TWO THINGS IN IT, which
+    // it was not, and that is what let the seek wave draw straight through
+    // the elapsed time.
+    //
+    // `height: root.artSize` said the block was as tall as the picture. The
+    // column beside the picture -- title, artist, times, then the wave and
+    // the transport -- was never in that sum at all, so when the compaction
+    // took the art square from 132 to 104 the column simply carried on being
+    // as tall as it needed and the two ends of it met in the middle. The
+    // times ran to about 76 pixels and the transport started at 60.
+    //
+    // Asking rather than asserting is the same discipline every other height
+    // in this panel already follows; the media block was the one that did
+    // not. There is no loop: `info` reports what its CONTENT needs and the
+    // block is sized from the answer.
+    readonly property int mediaHeight: Math.max(root.artSize, info.implicitHeight)
 
     // ASKED, NOT ASSERTED, exactly as the old grid did it: the calendar grows
     // with the type size and the readings row grows with it too, so a stated
@@ -216,7 +233,7 @@ Item {
     readonly property int clockHeight: clockLines.implicitHeight + root.glassPad * 2
     readonly property int calendarHeight: month.implicitHeight + root.glassPad * 2
 
-    readonly property int leftHeight: root.artSize + root.gap + root.readingsHeight
+    readonly property int leftHeight: root.mediaHeight + root.gap + root.readingsHeight
         + root.gap + root.slidersHeight + root.gap + root.actionsHeight
     readonly property int rightHeight: root.clockHeight + root.gap + root.calendarHeight
 
@@ -813,7 +830,7 @@ Item {
             x: root.edge
             y: root.edge
             width: root.leftWidth
-            height: root.artSize
+            height: root.mediaHeight
 
             // ---- The sharp copy of the ground ----
             ClippingRectangle {
@@ -874,7 +891,29 @@ Item {
             }
 
             // ---- Everything beside it ----
-            Item {
+            // ---- Everything beside it ----
+            //
+            // A ColumnLayout AND NOT FOUR ANCHORED ITEMS, and the difference
+            // is the whole bug. The title, the artist and the times used to
+            // hang DOWNWARD from the top of this block while the transport
+            // rose from its bottom, and nothing anywhere reserved the space
+            // between the two ends. They did not collide because they were
+            // positioned wrongly; they collided because nothing prevented it,
+            // which is a bug that waits rather than a bug that is fixed.
+            //
+            // Widening a margin would have bought a few pixels and left the
+            // same collision waiting for the next change to Theme.fontSize --
+            // and this panel's own width is derived from font metrics
+            // precisely because text growing is a case it is designed for.
+            // In one chain the separation is guaranteed by construction: the
+            // spacer takes whatever is left over and never less than eight,
+            // so the transport can never reach the line above it.
+            //
+            // The spacer is end-4's, from the card this block came from --
+            // everything above it sits at the top, everything below it at the
+            // bottom. It was dropped in the rewrite that turned their card
+            // into this panel, and dropping it is what removed the guarantee.
+            ColumnLayout {
                 id: info
 
                 anchors.left: artFrame.right
@@ -883,13 +922,13 @@ Item {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
 
+                spacing: 2
+
                 Text {
                     id: trackTitle
 
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.topMargin: 6
+                    Layout.fillWidth: true
+                    Layout.topMargin: 2
 
                     text: root.player ? (root.player.trackTitle ?? "Untitled") : "Nothing is playing"
                     elide: Text.ElideRight
@@ -902,10 +941,7 @@ Item {
                 Text {
                     id: trackArtist
 
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: trackTitle.bottom
-                    anchors.topMargin: 2
+                    Layout.fillWidth: true
 
                     visible: !!root.player
 
@@ -921,9 +957,8 @@ Item {
                 }
 
                 Text {
-                    anchors.left: parent.left
-                    anchors.top: trackArtist.bottom
-                    anchors.topMargin: 6
+                    Layout.alignment: Qt.AlignLeft
+                    Layout.topMargin: 4
 
                     visible: !!root.player
                     text: root.timeText
@@ -932,13 +967,21 @@ Item {
                     color: Qt.alpha(root.ink, 0.55)
                 }
 
+                // THE SLACK, AND THE FLOOR UNDER IT. Whatever the block has
+                // spare lands here, so the text sits at the top and the
+                // transport at the bottom exactly as before -- but never less
+                // than eight pixels, which is what makes the two ends unable
+                // to meet however the type grows.
+                Item {
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 8
+                }
+
                 // ---- The seek wave and the transport, on one row ----
                 RowLayout {
                     id: transport
 
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
+                    Layout.fillWidth: true
 
                     visible: !!root.player
                     spacing: 14
