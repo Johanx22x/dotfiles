@@ -118,7 +118,10 @@ Item {
         onColorChanged: wave.requestPaint()
 
         FrameAnimation {
-            running: root.animateWave && root.visible
+            // wave.visible and not root.visible: at position zero the wave
+            // has no width and there is nothing to repaint sixty times a
+            // second.
+            running: root.animateWave && wave.visible
             onTriggered: wave.requestPaint()
         }
     }

@@ -755,20 +755,29 @@ Item {
                     // ours rather than theirs.
                     property string held: ""
 
-                    // WHAT CLEARS IT: the remembered cover going away, which
-                    // Track does only on a genuine track change. Holding a
-                    // cover across a track change would be worse than holding
-                    // none, because it would confidently show the wrong album
-                    // -- the failure being fixed is only ever "the same track,
-                    // source retracted".
+                    // WHAT CLEARS IT: there being nothing left to show.
+                    // Holding a cover across a track change would be worse
+                    // than holding none, because it would confidently show the
+                    // wrong album -- the failure being fixed is only ever "the
+                    // same track, source retracted".
                     //
-                    // Note this is keyed off the REMEMBERED cover and not off
-                    // the track's own fields. Deciding "is this a new track"
-                    // twice, in two files, with two slightly different rules,
-                    // is how the two end up disagreeing; Track decides, and
-                    // this follows.
-                    onRememberedChanged: {
-                        if (media.remembered === "")
+                    // KEYED ON `offered` AND NOT ON `remembered`, and the
+                    // difference is not cosmetic. `remembered` only ever comes
+                    // from mpris:artUrl, so for a player that never publishes
+                    // one it is permanently empty -- and a property that is
+                    // always "" never emits a change. A track change on such a
+                    // player would therefore clear nothing, and if the new
+                    // track had no YouTube id either, the PREVIOUS track's
+                    // thumbnail would simply stay on screen. `offered` is
+                    // empty only when the remembered cover and the fallback
+                    // are BOTH empty, which is the real "nothing to show".
+                    //
+                    // Note this still does not decide "is this a new track" on
+                    // its own. Deciding that twice, in two files, with two
+                    // slightly different rules, is how the two end up
+                    // disagreeing; Track decides, and this follows.
+                    onOfferedChanged: {
+                        if (media.offered === "")
                             media.held = "";
                     }
 
@@ -1036,6 +1045,18 @@ Item {
                                                 if (!p || !p.length)
                                                     return;
                                                 p.position = at * p.length;
+
+                                                // AND MOVE THE BAR NOW. The
+                                                // position is read back off
+                                                // MPRIS twice a second, so
+                                                // without this the handle
+                                                // snaps back to where the
+                                                // track was and animates
+                                                // forward again when the next
+                                                // poll lands -- a visible
+                                                // rubber-band after every
+                                                // seek.
+                                                root.livePosition = at * p.length;
                                             }
 
                                             // Smoothed, or the fill jumps
