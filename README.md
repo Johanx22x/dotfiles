@@ -82,6 +82,15 @@ symlinks it lists them and offers to move them to
 `~/dotfiles-replaced-<timestamp>` — all of them or none, never deleting and
 never adopting.
 
+The one thing it does delete is a link this repo made to a file this repo no
+longer has: an update that removes a file leaves the symlink behind pointing at
+nothing, for ever, and a dangling `.qml` under `~/.config/quickshell` is read by
+the shell on its next start. `check` counts them and `apply symlinks` removes
+them — only symlinks, only ones that resolve into this repo and resolve to
+nothing, and only under the paths the packages say `stow` writes to. A broken
+link that belongs to something else, like Discord's `SingletonLock` or
+Firefox's `lock`, is none of its business and stays where it is.
+
 **Left to you:** the monitor layout, if the table listed a screen as not
 recorded. That is a decision about where the screens physically are, and
 nothing here can guess it.
@@ -131,8 +140,8 @@ cd ~/dotfiles && git pull
 
 The config lives in `$HOME` as symlinks back into this repo, so a pull is
 already live for every file that was linked before. What a pull cannot do on its
-own is add a package, link a file that is new, or enable a unit that did not
-exist yesterday:
+own is add a package, link a file that is new, remove the link of one that is
+gone, or enable a unit that did not exist yesterday:
 
 ```sh
 git pull && ./install.sh update
