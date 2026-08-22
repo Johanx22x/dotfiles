@@ -180,6 +180,30 @@ jobs:
         if: ${{ !cancelled() }}
         run: tests/qml-rules.sh
 
+      # THE LINTER THAT THE NOTE AT THE BOTTOM OF THIS FILE USED TO SAY COULD
+      # NOT EXIST. It could not, while the tree imported through Quickshell's
+      # `root:/` scheme: qmllint cannot resolve that, so it could not find a
+      # type behind any import and buried the tree under 4,074 warnings, 3,039
+      # of them `[unqualified]` and every one of those an import it could not
+      # follow rather than a fault in the code.
+      #
+      # The tree now imports by module name -- `import qs.components` -- which
+      # is what Quickshell registers those directories as, and the same sweep is
+      # 326. The script builds the qmldirs qmllint needs into a copy under
+      # mktemp, because a committed qmldir would turn Quickshell's own
+      # synthesis off and become a second place every component has to be
+      # registered. It gates per category at what the tree measured rather than
+      # at zero, which nobody can reach today.
+      #
+      # AND IT WOULD NOT HAVE CAUGHT EITHER OF THIS WEEK'S TWO BREAKAGES, which
+      # is measured in the script rather than assumed: with the launcher fix of
+      # 279c1d3 reverted the sweep gives 326, and with it in place, 326. It sees
+      # names and types, not what any of it does on a screen. The header says so
+      # at length, and it belongs there rather than only here.
+      - name: The QML tree passes qmllint
+        if: ${{ !cancelled() }}
+        run: tests/qml-lint.sh
+
       - name: Shell scripts pass shellcheck
         if: ${{ !cancelled() }}
         run: tests/shell-lint.sh
@@ -244,42 +268,40 @@ jobs:
         if: ${{ !cancelled() }}
         run: tests/workflows.py
 
-      # NO QMLLINT, AND NOT FOR WANT OF TRYING. Neither of the two on an Arch
-      # system can answer the question:
+      # THE QMLLINT NOTE THAT USED TO SAY THERE COULD BE NO QMLLINT. It is kept
+      # rather than deleted, because what it got right is the reason the check
+      # above is shaped the way it is, and what it got wrong took one afternoon
+      # to disprove.
       #
-      #   /usr/bin/qmllint is Qt 5, from qt5-declarative. It exits 255 and
-      #   prints NOTHING on any file using a `: var` return type, which is most
-      #   of them: sweeping quickshell/ leaves 40 files "clean" and 60 exiting
-      #   non-zero with no message at all. It is not analysing them, so a green
-      #   run would mean nothing whatsoever.
+      # WHAT IT GOT RIGHT, AND STILL IS. /usr/bin/qmllint is Qt 5, from
+      # qt5-declarative. It exits 255 and prints NOTHING on any file using a
+      # `: var` return type, which is most of this tree -- when it was measured,
+      # 49 files passed and 76 failed in total silence. tests/qml-lint.sh names
+      # /usr/lib/qt6/bin/qmllint by
+      # absolute path for exactly this reason and never takes `qmllint` off the
+      # PATH.
       #
-      #   /usr/lib/qt6/bin/qmllint is the real one, and it cannot resolve
-      #   Quickshell's `root:/` import scheme. Every file emits well over a
-      #   hundred messages on master -- 109 for the first one tried -- all
-      #   about types it cannot find rather than about the code.
-      #
-      # A baseline comparison against the merge base could be built on top of
-      # that: a hundred files' worth of noise wrapped in an arithmetic that
-      # goes wrong the first time an import moves. The real fix is teaching
+      # WHAT IT GOT RIGHT ABOUT THE FIX. It said the answer was "teaching
       # qmllint where Quickshell's imports live, which is work in quickshell/
-      # and not work in CI. Until then this is left out rather than shipped
-      # permanently red, or permanently meaningless.
+      # and not work in CI", and that is precisely what happened: the tree was
+      # migrated off the `root:/` scheme onto module imports, and the CI side of
+      # it is the four lines above.
       #
-      # tests/shell-load.sh above is what stands in for it, and it answers a
-      # different question rather than a smaller one. qmllint reads files;
-      # that check runs them, in a compositor, as the shell -- so it sees the
-      # import resolve for real, the singleton get constructed for real and the
-      # binding get evaluated for real, with no import path to teach it. What
-      # it cannot do is point at a line in a file nothing reaches yet, which is
-      # the one thing a linter is better at.
+      # WHAT IT GOT WRONG was how expensive that would be. Quickshell has
+      # registered the config root as the module `qs` for a long time, so
+      # `import qs.components` is the same directory under a name a linter can
+      # resolve, and it synthesizes a qmldir per directory at startup -- which
+      # is both the proof that the mapping is well-defined and the specification
+      # the script's generator was checked against. The rewrite was mechanical
+      # and the sweep went from 4,074 warnings to 326.
       #
-      # AND tests/wheel-and-click.py IS NOT A THIRD ATTEMPT AT IT EITHER. It
-      # asks about behaviour rather than about types, over three files rather
-      # than a hundred, and it gets past `root:/` by pointing the scheme at an
-      # empty directory and handing Theme in as a context property -- which is
-      # fine for three components and answers nothing at all for a linter that
-      # has to resolve every name in every file. Sixty files with imports
-      # qmllint cannot follow is still the state of things.
+      # WHAT REMAINS TRUE OF tests/shell-load.sh, and it is the more important
+      # half. It answers a different question rather than a smaller one:
+      # qmllint reads files, that check RUNS them, in a compositor, as the shell
+      # -- the import resolves for real, the singleton is constructed for real,
+      # the binding is evaluated for real. Neither replaces the other, and
+      # neither of them sees a layout fault. tests/wheel-and-click.py is still
+      # the only thing here that measures what a component DOES.
 
   # ---------------------------------------------------------------------------
   # THE ONE CHECK THAT RUNS install.sh.
