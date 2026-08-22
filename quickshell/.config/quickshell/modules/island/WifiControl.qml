@@ -201,6 +201,12 @@ Item {
         // Everything in range, but inside a fixed box: it scrolls rather than
         // pushing the card around.
         height: root.expanded ? root.listCeiling : 0
+
+        // `visible: height > 0` is safe here for a plainer reason than the
+        // one in ScrollList's header: this height is a bool, so nothing the
+        // hiding does to any parent can feed back into it at all. Driven
+        // anyway, since nothing instantiates this file -- expanded, collapsed
+        // and expanded again in a throwaway window, back at 96 both times.
         visible: height > 0
         clip: true
         spacing: 1

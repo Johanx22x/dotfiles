@@ -807,10 +807,12 @@ SettingsPage {
             x: Theme.groupPadding
             width: parent.width - Theme.groupPadding * 2
 
-            // Height and not `visible`, which that component's own header
-            // forbids in bold: hiding a Flickable hides its delegates, an
-            // invisible child contributes nothing, and the list is then held
-            // shut forever.
+            // Height and not `visible`, though not for the reason first
+            // written here: this list is sized by the Text inside it, which is
+            // the shape `visible: height > 0` is safe on -- see the header of
+            // components/ScrollList.qml. It stays a height because a height is
+            // all that is needed. An empty Flickable is zero pixels tall
+            // already, so the extra binding would buy nothing.
             height: InstallerState.log === "" ? 0 : Math.min(logText.implicitHeight + 12, 220)
             contentHeight: logText.implicitHeight + 12
 

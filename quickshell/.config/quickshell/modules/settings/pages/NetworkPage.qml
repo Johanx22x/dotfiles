@@ -296,17 +296,12 @@ SettingsPage {
             width: parent.width
             height: Math.min(entries.implicitHeight, 200)
 
-            // NO `visible: height > 0` HERE, however tidy that looks -- the
-            // island's version of this list can afford it and this one cannot.
-            // There the height comes from a bool nobody else reads; here it
-            // comes from the column inside, and `visible` in QML is EFFECTIVE
-            // visibility: hiding this hides every delegate, an invisible child
-            // contributes nothing to a Column's implicitHeight, so the height
-            // would go to zero and hold the thing shut. Measured on a stripped
-            // copy of exactly this arrangement rather than reasoned about:
-            // with the line in, adding three rows to an empty hidden list left
-            // implicitHeight at 0 and the list closed forever. An empty
-            // Flickable is zero pixels tall anyway, so it buys nothing.
+            // No `visible: height > 0` here, and the reason is that it buys
+            // nothing rather than that it would break. This height comes from
+            // the Column inside, which is the shape the line is safe on -- see
+            // the header of components/ScrollList.qml for where it is not. An
+            // empty Flickable is already zero pixels tall, so the line would
+            // add a binding and take nothing away.
             contentHeight: entries.implicitHeight
 
             // A Repeater IN a Flickable, not a ListView, and that is a

@@ -170,6 +170,9 @@ Item {
         anchors.topMargin: 4
 
         height: root.expanded ? root.listCeiling : 0
+
+        // The same bool-driven height as WifiControl's, and safe for the same
+        // reason -- see the note there.
         visible: height > 0
         clip: true
         spacing: 1
