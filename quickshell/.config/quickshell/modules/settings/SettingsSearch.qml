@@ -27,6 +27,18 @@ Item {
     property string query: ""
     property var pages: []
 
+    // The list itself, handed out so the window can hang its scrollbar on it.
+    //
+    // A COMPONENT EXPOSING ITS OWN SCROLL SURFACE IS ODD, and the alternative
+    // was worse. The bar belongs in the margin the window leaves around this
+    // pane -- that is where the pages' bar is, and these two panes occupy the
+    // same rectangle one at a time, so a bar that moved sideways by eight
+    // pixels the moment somebody typed would be a bar drawing attention to
+    // itself instead of to the list. That margin is not this item's to draw
+    // in; it is outside it. So the window places the bar and this says what to
+    // point it at.
+    readonly property alias view: resultView
+
     signal picked(int page, string row)
 
     // Rebuilt on every keystroke. Measured against the alternative of caching
@@ -99,6 +111,8 @@ Item {
     }
 
     Flickable {
+        id: resultView
+
         anchors.fill: parent
 
         contentWidth: width

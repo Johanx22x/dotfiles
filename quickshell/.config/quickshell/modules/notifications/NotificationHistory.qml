@@ -26,6 +26,7 @@
 import Quickshell
 import QtQuick
 import "root:/"
+import "root:/components"
 
 Item {
     id: root
@@ -172,7 +173,7 @@ Item {
         // the list overflows: taking it back when the last entry is cleared
         // would re-lay out every remaining row sideways, which is a lot of
         // movement to pay for eleven pixels.
-        anchors.rightMargin: scrollTrack.width + 8
+        anchors.rightMargin: scrollBar.width + 8
         anchors.top: header.bottom
         anchors.topMargin: 12
         anchors.bottom: parent.bottom
@@ -355,114 +356,26 @@ Item {
 
     // ---------------- Scrollbar ----------------
     //
-    // Hand-drawn, for the same reason the volume slider is: a Controls
-    // ScrollBar arrives with its own style and putting it back into this
-    // palette is more code than two rectangles.
+    // components/ScrollBar.qml now, and it used to be a hundred lines of
+    // rectangles right here. This was the first of them; the cheatsheet grew
+    // the second and said in its own comment that a third is what should lift
+    // it into components/. The third turned out to be every capped list in the
+    // settings window at once.
     //
-    // IT ANSWERS TWO QUESTIONS, and the list could not answer either on its
-    // own. "Is there more below" -- a row cut off by the bottom edge looks the
-    // same as a row that happens to end there. And "how far down am I" -- with
-    // twenty entries of similar shape, scrolling with no landmark feels like
-    // the list is going nowhere.
-    //
-    // It disappears when everything fits: a scrollbar that is always full
-    // height is a control that says nothing and takes up room saying it.
-    Rectangle {
-        id: scrollTrack
+    // WHAT MOVED OUT AND WHAT STAYED. The drawing, the thumb's floor, the
+    // remapped travel and the widened hit target are all the component's; the
+    // placement is this file's, because what a bar can sit on top of is a
+    // question only the thing underneath can answer. Here it sits in a gutter
+    // the list gives up, which is the arrangement the note above the list
+    // explains and the reason this one is anchored to the panel rather than
+    // over the rows.
+    ScrollBar {
+        id: scrollBar
+
+        view: list
 
         anchors.right: parent.right
         anchors.top: list.top
         anchors.bottom: list.bottom
-
-        width: 4
-        radius: width / 2
-
-        visible: list.contentHeight > list.height
-
-        color: Qt.alpha(Theme.outlineVariant, 0.5)
-
-        Rectangle {
-            id: thumb
-
-            // As tall a share of the track as the visible part is of the
-            // whole, with a floor: proportional alone means fifty entries
-            // leave a four-pixel dot, which is a position indicator you have
-            // to hunt for.
-            height: Math.max(30, scrollTrack.height * list.visibleArea.heightRatio)
-
-            // The floor is also why the position is not simply
-            // `yPosition * track.height`: once the thumb is taller than its
-            // share, it has less room to travel than the content does, so the
-            // scroll position is mapped onto the travel that is actually left.
-            // Without that the bar reaches the bottom before the list does.
-            y: {
-                const travel = scrollTrack.height - thumb.height;
-                const range = 1 - list.visibleArea.heightRatio;
-                if (travel <= 0 || range <= 0)
-                    return 0;
-                const progress = Math.max(0, Math.min(1, list.visibleArea.yPosition / range));
-                return progress * travel;
-            }
-
-            width: parent.width
-            radius: parent.radius
-
-            // Brighter while it is being used -- moved, dragged or pointed at
-            // -- and quiet the rest of the time. At rest this is a hint about
-            // the shape of the list; in the hand it is a control, and the two
-            // should not look the same.
-            //
-            // Both `moving` and the velocity are asked, because they do not
-            // cover the same gestures: `moving` is a drag or a flick, and a
-            // wheel notch on a desktop is neither -- it moves the view without
-            // ever putting the Flickable into that state.
-            color: list.moving || list.verticalVelocity !== 0 || scrollMouse.pressed || scrollMouse.containsMouse
-                ? Theme.primary
-                : Theme.outline
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-        }
-
-        // The target is far wider than the bar it drives. Four pixels is the
-        // right width to LOOK at and an unfair thing to ask anyone to hit, so
-        // the pointer gets eighteen and the drawing keeps its four.
-        //
-        // WIDER ONLY, never taller. Growing it vertically as well would move
-        // this item's origin above the track, and `mouse.y` is measured from
-        // that origin -- so every position below would be off by the overhang
-        // and the thumb would sit seven pixels from where it was grabbed.
-        MouseArea {
-            id: scrollMouse
-
-            anchors.fill: parent
-            anchors.leftMargin: -7
-            anchors.rightMargin: -7
-
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-
-            // Press jumps and drag follows, which is what the volume slider
-            // does and for the same reason: one gesture, and no dead zone on
-            // the track where nothing happens.
-            //
-            // The pointer is treated as the MIDDLE of the thumb, so what you
-            // pressed on ends up under your finger rather than starting there
-            // and sliding down by half a thumb.
-            function scrollTo(y: real): void {
-                const travel = scrollTrack.height - thumb.height;
-                if (travel <= 0)
-                    return;
-                const progress = Math.max(0, Math.min(1, (y - thumb.height / 2) / travel));
-                list.contentY = progress * (list.contentHeight - list.height);
-            }
-
-            onPressed: mouse => scrollMouse.scrollTo(mouse.y)
-            onPositionChanged: mouse => {
-                if (pressed)
-                    scrollMouse.scrollTo(mouse.y);
-            }
-        }
     }
 }
