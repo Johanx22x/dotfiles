@@ -74,10 +74,18 @@ hl.window_rule({
     name  = "games-fullscreen",
     match = { class = GAMES },
 
-    -- ALWAYS on the landscape 1440p monitor, never on the portrait one.
-    -- MONITOR_MAIN is defined by hyprland.lua before require("gaming"); it is
-    -- an EDID description, not a connector name, because connector names
-    -- change across kernels.
+    -- ALWAYS on the landscape 1440p monitor, never on the portrait one --
+    -- WHEN THIS MACHINE HAS ONE. MONITOR_MAIN comes from
+    -- ~/.config/hypr/outputs.lua, or from the settings window's monitors.lua
+    -- when that names a main monitor; hyprland.lua reads both long before
+    -- require("gaming"). It is an EDID description and not a connector name,
+    -- because connector names change across kernels.
+    --
+    -- WITH NEITHER FILE IT IS nil, this field drops out of the table entirely,
+    -- and the rule applies on the focused monitor with everything under it
+    -- intact -- which is the whole answer, not a fallback that quietly does
+    -- nothing. The MONITORS section of hyprland.lua carries the long version
+    -- and logs a line saying it happened.
     monitor      = MONITOR_MAIN,
     fullscreen   = true,         -- and always fullscreen
     border_size  = 0,

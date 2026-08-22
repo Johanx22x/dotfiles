@@ -45,8 +45,9 @@
 //
 // THE TWO FLAVORS DO NOT AGREE ON WHAT THAT FILE *IS*, EITHER, and it shows up
 // on this page in exactly one place. Under Hyprland the generated file is an
-// override layer: hyprland.lua declares the monitors by hand, dofile()s the
-// generated one after them, and a later hl.monitor for the same output wins --
+// override layer: the hand-written ~/.config/hypr/outputs.lua declares the
+// monitors, hyprland.lua dofile()s it and then the generated one, and a later
+// hl.monitor for the same output wins --
 // so Copy config exists, to promote a value the shell worked out into the file
 // a person maintains. Under niri there is no layering to be had (an `output`
 // block in an include is ignored when the main config names the same monitor,

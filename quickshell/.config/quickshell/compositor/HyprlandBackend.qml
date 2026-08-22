@@ -49,9 +49,11 @@ CompositorBackend {
         focusGrab: true,
         bindsIntrospection: true,
         monitorConfig: true,
-        // hyprland.lua declares the monitors by hand and the generated
-        // monitors.lua only overrides it, so promoting a value from one file to
-        // the other is a thing to want and Copy config is how it crosses.
+        // The hand-written ~/.config/hypr/outputs.lua declares the monitors
+        // and the generated monitors.lua only overrides it, so promoting a
+        // value from one file to the other is a thing to want and Copy config
+        // is how it crosses. It used to be hyprland.lua carrying that
+        // declaration, until the serials in it were noticed on a public repo.
         monitorConfigCopy: true,
         inputConfig: true,
         scratchpad: true,
