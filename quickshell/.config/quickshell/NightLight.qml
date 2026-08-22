@@ -106,6 +106,39 @@ Singleton {
         Quickshell.execDetached(["night-light", value ? "on" : "off"]);
     }
 
+    // ---------------- Saying it again at startup ----------------
+
+    // WHAT A NEW SHELL OWED THE SCREEN AND WAS NOT PAYING. Everything below
+    // under "Reading it back" restores what this singleton BELIEVES -- the
+    // FileView reads the state file, adopt() moves the switch -- and none of
+    // it reaches the daemon. The daemon is a separate process on purpose: it
+    // is started with `systemd-run` so it outlives whatever called it, which
+    // means `qs kill && qs -d` leaves it running and leaves this file with
+    // nothing to do about the screen.
+    //
+    // That is fine while the screen still agrees, and it does not always. The
+    // ramp lives on the CRTC, and the compositor resets it in places the daemon
+    // is never told about -- and because the daemon holds its temperature in
+    // memory rather than reading it back, asserting the same number again is a
+    // no-op, so nothing self-repairs. That is the whole of the "Pull and
+    // update wipes my night light" report: the button ends in `qs kill` and
+    // `qs -d`, the ramp had gone somewhere during the run, and the new shell
+    // came up believing the filter was on and saying nothing to anybody.
+    //
+    // `apply` AND NOT `on`. The script's own verb for exactly this, and it
+    // reads the state file itself, so this does not have to wait for the
+    // FileView, cannot disagree with it, and does not write the file back. It
+    // also costs nothing on a session with the filter off: apply_gammarelay
+    // returns early rather than starting a daemon to tell it to do nothing.
+    //
+    // BEFORE readClock() AND NOT AFTER, in the handler below. Reading the clock
+    // can settle `dueNow` and fire followSchedule, which spawns its own
+    // `night-light on|off`; going first means the schedule's answer is the
+    // later of the two processes and has the last word.
+    function reassert(): void {
+        Quickshell.execDetached(["night-light", "apply"]);
+    }
+
     // DEBOUNCED, like the opacity's stepper and for the same reason: the
     // buttons repeat while held, and each press would otherwise spawn a
     // process and a round trip to the compositor. The property moves at once
@@ -202,7 +235,13 @@ Singleton {
     // Read once more at startup, before anything can look at it. Timers fire
     // from the event loop, so triggeredOnStart is not early enough on its own
     // -- the property bindings are evaluated first.
-    Component.onCompleted: root.readClock()
+    //
+    // The re-assert goes first; see the note over reassert() for why the order
+    // between these two lines is load-bearing.
+    Component.onCompleted: {
+        root.reassert();
+        root.readClock();
+    }
 
     function readClock(): void {
         const now = new Date();
