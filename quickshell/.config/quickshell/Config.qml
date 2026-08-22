@@ -802,28 +802,47 @@ Singleton {
         return `file://${root.wallpaperThumb(path).split("/").map(encodeURIComponent).join("/")}`;
     }
 
-    // ---------------- The preview clip of a video ----------------
+    // ---------------- The preview frames of a video ----------------
     //
-    // WHAT THE CAROUSEL ACTUALLY PLAYS. These wallpapers are 4K -- one of them
-    // 4K at 120 fps -- and playing one measured about two thirds of a core.
-    // wallpaper-switch builds a 960x540 copy at 24 fps beside the still
-    // frames, and twelve seconds of that decodes in a third of a second of
-    // CPU.
+    // WHAT THE CAROUSEL ACTUALLY SHOWS ON THE CENTRED CARD: a run of numbered
+    // JPEGs that it flips through on a timer, 001.jpg upwards, built by
+    // wallpaper-switch beside the still frames.
     //
-    // Same naming as the frame: the source path with its slashes flattened,
-    // which is what keeps two `loop.mp4` in different subfolders apart. This
-    // reproduces it rather than asking the script, for the reason the thumb
-    // path already does -- a running shell cannot ask a script where it filed
-    // something without spawning it.
+    // NOT A VIDEO, AND NOT BECAUSE OF THE DECODING. This cache used to hold a
+    // 960x540 clip per wallpaper and the carousel played it with a QtMultimedia
+    // MediaPlayer. Measured on this machine -- an RTX 5070, where
+    // qt6-multimedia-ffmpeg decodes through NVDEC -- a player costs the same
+    // whatever you feed it: 9.8% of a core for a 960x540 24 fps clip and 9.9%
+    // for a 480x270 15 fps one. The bill is a CUDA context, not pixels, and
+    // BUILDING or DESTROYING one costs 250 to 466 ms with a third of that on
+    // the GUI thread. Stepping through the fan did exactly that, once per step.
+    // Flipping an Image through JPEGs costs the same at rest and nothing at all
+    // to start or stop. The carousel's own header carries the full table.
     //
-    // NOT DEFINED FOR A STILL. A caller with an image has nothing to play, and
-    // an empty string is the answer that makes that obvious at the call site
-    // instead of handing back a path that will never exist.
+    // A DIRECTORY, so the frames of one wallpaper are one thing to sweep and
+    // one thing to publish atomically. Named the way the still frame is -- the
+    // source path with its slashes flattened -- which is what keeps two
+    // `loop.mp4` in different subfolders apart. This reproduces the name rather
+    // than asking the script, for the reason the thumb path already does: a
+    // running shell cannot ask a script where it filed something without
+    // spawning it.
+    //
+    // HOW MANY FRAMES IS NOT STATED HERE, deliberately. It depends on the
+    // video -- a clip shorter than WALLPAPER_PREVIEW_SECONDS yields fewer --
+    // and on knobs that live in the script and can be overridden per run. A
+    // constant in this file would be a second place for that number to be, and
+    // the two would disagree the first time anyone touched either. The carousel
+    // finds the end by asking for one frame past the last one that loaded; see
+    // its `frameCount` there.
+    //
+    // NOT DEFINED FOR A STILL. A caller with an image has nothing to animate,
+    // and an empty string is the answer that makes that obvious at the call
+    // site instead of handing back a path that will never exist.
     function wallpaperPreview(path: string): string {
         if (!root.isWallpaperVideo(path))
             return "";
 
-        return `${root.cacheDir}/wallpaper-previews/${path.replace(/^\//, "").replace(/\//g, "_")}.mp4`;
+        return `${root.cacheDir}/wallpaper-previews/${path.replace(/^\//, "").replace(/\//g, "_")}`;
     }
 
     // The same thing as a URL, encoded segment by segment. See the note on
@@ -835,6 +854,34 @@ Singleton {
             return "";
 
         return `file://${preview.split("/").map(encodeURIComponent).join("/")}`;
+    }
+
+    // HOW FAST THE CAROUSEL FLIPS THROUGH THEM, and the one number about this
+    // cache that this file does have to state. It has to match
+    // WALLPAPER_PREVIEW_FPS in wallpaper-switch, which is where the frames are
+    // built and where the reasoning for 15 lives -- change one, change the
+    // other. Unlike the frame count, a disagreement here is harmless: the loop
+    // plays fast or slow and nothing else goes wrong, which is the whole reason
+    // this one is allowed to be written down twice and the count is not.
+    readonly property int wallpaperPreviewFps: 15
+
+    // One frame inside that directory, given the directory's URL and a
+    // 1-based frame number.
+    //
+    // TAKES THE URL AND NOT THE WALLPAPER PATH, which is the whole point of the
+    // signature: this is called fifteen times a second while a card is playing,
+    // and re-deriving and re-encoding the directory every time would be that
+    // work fifteen times a second for an answer that never changes. The frame
+    // number is digits, so nothing here needs encoding and the two can simply
+    // be pasted together.
+    //
+    // Padded to three, which is `%03d` on the ffmpeg side. padStart leaves
+    // anything longer alone, so a sequence past 999 frames still lines up.
+    function wallpaperPreviewFrameUrl(dirUrl: string, frame: int): string {
+        if (dirUrl === "")
+            return "";
+
+        return `${dirUrl}/${String(frame).padStart(3, "0")}.jpg`;
     }
 
     // Those files have to exist before anything asks for one, and the views
@@ -851,15 +898,14 @@ Singleton {
         id: wallpaperThumbsProcess
 
         // Builds ALL THREE caches in one pass -- a thumbnail for every
-        // wallpaper, plus a still frame and a preview clip for every video --
-        // because they are named after the same file and go stale together.
-        // See the mode's own note in the script.
+        // wallpaper, plus a still frame and a run of preview frames for every
+        // video -- because they are named after the same file and go stale
+        // together. See the mode's own note in the script.
         command: ["wallpaper-switch", "thumbs"]
 
         // The bump is what tells the views to look again. Until ffmpeg has
-        // finished, a video's thumbnail and its preview do not exist, and
-        // neither an Image nor a MediaPlayer pointed at a missing file retries
-        // on its own.
+        // finished, a video's thumbnail and its preview frames do not exist,
+        // and an Image pointed at a missing file does not retry on its own.
         onExited: root.wallpaperThumbsRevision++
     }
 
