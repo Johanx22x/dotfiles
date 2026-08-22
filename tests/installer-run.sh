@@ -567,8 +567,29 @@ want_not "apply symlinks reports no failures" grep -qF 'thing(s) to know' "$repa
 # APPLY DOES NOT CHAIN, and that is the design: it is what somebody reaches for
 # after reading one wrong row in the check table, and expanding `symlinks` into
 # `packages` turned "relink one file" into an offer to reinstall the desktop.
+#
+# WHAT THE REGRESSION WOULD ACTUALLY PRINT, which is not what this used to look
+# for. It watched $repair for `with what they require` -- a string install.sh
+# emits in exactly one place, inside `if (( WITH_REQUIRES ))`, and the run above
+# is `apply symlinks -y` with no such flag. So the grep could not match whether
+# the chaining came back or not, and an assertion that cannot match is an
+# assertion that cannot fail. `symlinks` requires `packages`, and a chained run
+# applies it: `== Packages ==` is the unit header unit_apply prints, and it
+# appears only when the unit RAN.
+#
+# Measured against the regression rather than argued from the source. With
+# mode_apply's `unit_order_within` swapped back to `unit_order` in a sandbox
+# copy of the tree, and the run made under --dry-run so no pacman was involved:
+#
+#     $ install.sh apply symlinks -y -n
+#     == Packages ==
+#        packages/required/*.txt and the chosen compositor's own list
+#        would run: sudo pacman -S --needed --noconfirm base base-devel ...
+#     == Symlinks ==
+#     $ grep -c 'with what they require' out   ->  0
+#     $ grep -cF '== Packages ==' out          ->  1
 want_not "apply on its own does not pull in what it requires" \
-         grep -q 'with what they require' "$repair"
+         grep -qF '== Packages ==' "$repair"
 
 # --with-requires is the way back, and says so before it does it.
 chained="$SANDBOX/apply-chained.txt"
