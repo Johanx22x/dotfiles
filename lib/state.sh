@@ -8,7 +8,7 @@
 # `update` cannot exist -- a non-interactive mode has nothing to be
 # non-interactive ABOUT.
 #
-# THE FORMAT IS THE ONE THIS REPOSITORY ALREADY USES. `desktop-tweaks` and
+# THE FORMAT IS THE ONE THIS REPOSITORY ALREADY USES. `desktop-tweak` and
 # `laptop-modules` keep TSV, one `key<TAB>value` per line, sorted, under
 # ~/.local/state. Same shape here, for the same reasons: it diffs, it greps, it
 # can be edited in any editor, and `sort` makes the file's order independent of

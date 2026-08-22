@@ -119,10 +119,10 @@ unit_order() {
 # `apply` is the surgical tool: somebody has read a `check` table, seen one row
 # that is wrong and named it. Expanding that into its requirements is correct in
 # principle and useless in practice -- `apply symlinks` reaches `packages`, and
-# a `packages` that is one name short of 119 is not `ok`, so asking for one
-# missing symlink produced an offer to run `pacman -S --needed` over the whole
-# desktop plus four AUR builds. The requirement was real and the answer was
-# still wrong.
+# a `packages` that is one name short of its hundred-odd is not `ok`, so asking
+# for one missing symlink produced an offer to run `pacman -S --needed` over
+# the whole desktop plus four AUR builds. The requirement was real and the
+# answer was still wrong.
 #
 # So the named set is the plan, ordering still comes from _requires, and
 # anything required from outside the set is REPORTED rather than added -- see

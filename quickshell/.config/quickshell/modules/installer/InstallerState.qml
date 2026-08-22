@@ -28,9 +28,9 @@
 // WHETHER IT IS IN PLACE. The moment it did, there would be two answers to
 // that question on this machine and no way to know which one is stale.
 //
-// THE COMPLAINT THIS EXISTS FOR, in the owner's words: "me se hace tedioso que
-// la gente tenga que reproducir todos los pasos de vuelta al querer hacer
-// update". Keeping a machine up to date should not mean remembering a sequence
+// THE COMPLAINT THIS EXISTS FOR, in the owner's words, translated: "it gets
+// tedious for people to have to reproduce every step all over again when they
+// want to update". Keeping a machine up to date should not mean a sequence
 // of terminal steps. So the desktop says when there is something to catch up
 // on, and the catching up is one button.
 //
@@ -592,11 +592,13 @@ Singleton {
     // this one replaced the restart with a "nudge" -- create a file inside
     // ~/.config/quickshell, delete it again -- on the strength of a report
     // that it reloaded the shell in 15 ms. It does not. Run against this
-    // shell's real 121 files in a headless compositor with its own runtime
-    // dir, HOME and private bus, the nudge produced ZERO reloads in every
-    // trial, in the symlink layout and in the real `stow --no-folding` one,
-    // on a healthy shell, on a shell whose watches were all dead, and after a
-    // failed reload. So did creating without deleting, deleting without
+    // shell's real files -- 121 of them on the day this was measured, 125 by
+    // the time somebody counted again, and every number below is the one that
+    // run saw -- in a headless compositor with its own runtime dir, HOME and
+    // private bus, the nudge produced ZERO reloads in every trial, in the
+    // symlink layout and in the real `stow --no-folding` one, on a healthy
+    // shell, on a shell whose watches were all dead, and after a failed
+    // reload. So did creating without deleting, deleting without
     // creating, doing it with a .qml name, `mv`-ing a file into a watched
     // directory, touching the directory, and chmod-ing it.
     //

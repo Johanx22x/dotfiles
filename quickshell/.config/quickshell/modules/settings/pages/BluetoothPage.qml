@@ -651,19 +651,25 @@ SettingsPage {
         title: "Available devices"
 
         // THE LIMIT, IN FRONT OF THE USER, and a plain line rather than a
-        // Tooltip on an info mark. Three reasons, in order of weight:
+        // Tooltip on an info mark. Two reasons, in order of weight:
         //
         //   - A tooltip has to be hovered, so it is only found by someone who
         //     already suspects there is something to know. This is the opposite
         //     case: it has to be read BEFORE the first click, because the
         //     failure it describes is a pairing attempt that never finishes and
         //     never says why.
-        //   - Tooltip.qml's own header warns that it is clipped by the first
-        //     ancestor with clip: true -- the Flickable holding the pages --
-        //     and calls itself "wrong for one at the very bottom". This section
-        //     is the bottom of the page.
         //   - It would be explaining the section, not a row, and there is no
         //     row here for the mark to belong to.
+        //
+        // THERE WAS A THIRD AND IT NO LONGER HOLDS, which is worth writing
+        // down so nobody cites it again. It read that Tooltip.qml "calls
+        // itself wrong for one at the very bottom", and that section is the
+        // bottom of the page. Tooltip.qml no longer says any such thing: it is
+        // still clipped by the first ancestor with clip: true -- the Flickable
+        // holding the pages -- but it now decides its own placement and flips
+        // ABOVE the row when there is no room below, so the bottom of a page
+        // is precisely the case it was rewritten to get right. The two reasons
+        // above are the whole of the argument now.
         //
         // Kept to what someone can act on. The reason there is no agent is in
         // this file's header, where it belongs; here it only has to say what

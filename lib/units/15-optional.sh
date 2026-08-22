@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# The optional package groups: apps, gaming, neovim, hardware.
+# The optional package groups: apps, backup, gaming, hardware, laptop, neovim.
 #
 # OPT-IN, AND SKIPPABLE WHOLE. The line between packages/required/ and
 # packages/optional/ is one question -- does the desktop still work without it
@@ -18,14 +18,14 @@
 
 optional_meta() {
   echo "Optional packages"
-  echo "apps, gaming, neovim and hardware -- opt in by the pack or by the name"
+  echo "one pack per file in packages/optional/ -- by the pack or by the name"
 }
 
 optional_requires() { echo packages; }
 optional_available() { :; }
 
 # The group names, one per line, from the directory rather than from a list --
-# so a fifth file in packages/optional/ appears in the menu on its own.
+# so a new file in packages/optional/ appears in the menu on its own.
 optional_groups() {
   local list
   for list in "$DOT"/packages/optional/*.txt; do
@@ -60,8 +60,9 @@ optional_check() {
   mapfile -t names < <(optional_wanted)
 
   # NOTHING TICKED IS NOT THE SAME AS NOTHING MISSING. A machine that has never
-  # been asked and a machine that said no to all four look identical from here,
-  # and neither of them has a problem -- so this is `na` rather than `ok`, and
+  # been asked and a machine that said no to every one of them look identical
+  # from here, and neither has a problem -- so this is `na` rather than `ok`,
+  # and
   # says which of the two it is by saying nothing was chosen.
   if (( ${#names[@]} == 0 )); then
     echo "na:no optional group has been chosen"
@@ -78,7 +79,7 @@ optional_check() {
 
 # INSTALLED GROUP BY GROUP RATHER THAN ALL AT ONCE, so that a failure names the
 # pack it came from. "gaming failed" is a sentence somebody can act on;
-# "optional failed" across four unrelated groups is not.
+# "optional failed" across six unrelated groups is not.
 optional_apply() {
   local group groups=() names=() any=0
 
