@@ -104,9 +104,14 @@ failed=0
 note() { echo "shell-load: $*"; }
 fail() { echo "shell-load: FAIL $*" >&2; failed=1; }
 
+# Named the way the other checks name what they need, so the answer to "this
+# does not run on my machine" is on the line that says so. Neither is skipped
+# when absent, unlike actionlint in tests/workflows.py: a check that quietly
+# does nothing is the thing this whole file exists to stop.
+declare -A provided_by=([labwc]=labwc [qs]=quickshell)
 for tool in labwc qs; do
     command -v "$tool" >/dev/null || {
-        echo "shell-load: $tool is not installed" >&2
+        echo "shell-load: $tool is not installed -- pacman -S ${provided_by[$tool]}" >&2
         exit 1
     }
 done
@@ -134,10 +139,17 @@ shell_pid=""
 cleanup() {
     # By recorded PID and never by name: there is a real shell running on this
     # desktop under the same binary, and `pkill qs` would take it down.
-    [[ -n $shell_pid ]] && kill "$shell_pid" 2>/dev/null
-    [[ -n $compositor_pid ]] && kill "$compositor_pid" 2>/dev/null
-    wait 2>/dev/null
-    rm -rf "$sandbox"
+    #
+    # Every line ends in `|| true`, and not as a reflex. This runs as an EXIT
+    # trap under `set -e`, so the first command that returns non-zero ends the
+    # trap where it stands and the sandbox is never deleted -- and on the
+    # failure path there is a lot to return non-zero with: shell_pid is empty
+    # when qs died on its own, `kill` fails on a process that has already gone,
+    # and `wait` reports the 143 it got for the one that had not.
+    if [[ -n $shell_pid ]]; then kill "$shell_pid" 2>/dev/null || true; fi
+    if [[ -n $compositor_pid ]]; then kill "$compositor_pid" 2>/dev/null || true; fi
+    wait 2>/dev/null || true
+    rm -rf "$sandbox" || true
 }
 trap cleanup EXIT
 
