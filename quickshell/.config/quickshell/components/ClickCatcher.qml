@@ -16,11 +16,19 @@
 // It takes no keyboard focus. The surface being dismissed keeps whatever focus
 // mode it asked for, and this only ever catches the pointer.
 //
-// Cost, stated plainly because it is a real difference from a compositor-side
-// grab: the click that dismisses is SWALLOWED here, so it does not also reach
-// the window underneath. With HyprlandFocusGrab the compositor drops the grab
-// and the click goes on to do whatever it was going to do. One click versus
-// two, and no way around it from this side of the protocol.
+// COST, AND WHAT IS DONE ABOUT IT. The click that dismisses is SWALLOWED
+// here, so it does not also reach the window underneath -- press a button
+// while a popout is open and the first click only puts the popout away. That
+// is worth one exception, and `passthrough` below is it: the bar keeps its own
+// clicks, so moving from one of its panels to the next takes one click rather
+// than two.
+//
+// This is NOT the portable path being worse than the compositor's own grab.
+// Both were driven with a virtual pointer, one click at a time: under Hyprland
+// 0.56.2 the click that drops a HyprlandFocusGrab reaches the widget under it
+// with nothing at all -- no press, no release, no cancel -- so a bar widget is
+// just as unreachable there. The difference is that a grab cannot be given a
+// hole and this can.
 
 import Quickshell
 import Quickshell.Wayland
@@ -30,6 +38,13 @@ PanelWindow {
     id: root
 
     required property var targetScreen
+
+    // A rectangle of this screen the catcher does not take input over, in
+    // screen coordinates. Anything there reaches whatever is underneath --
+    // for a bar popout, the bar itself. Empty by default: a catcher with no
+    // hole is the plain "every click outside dismisses" this file describes.
+    property rect passthrough: Qt.rect(0, 0, 0, 0)
+
     signal dismissed
 
     screen: targetScreen
@@ -47,6 +62,27 @@ PanelWindow {
         right: true
     }
     exclusionMode: ExclusionMode.Ignore
+
+    // THE HOLE IS IN THE INPUT REGION, not in the MouseArea.
+    //
+    // A MouseArea that ignored the strip would still be the surface the
+    // compositor picks for those coordinates, and the click would land on a
+    // window that decided to do nothing with it -- swallowed just the same.
+    // The input region is what the compositor reads when it decides WHICH
+    // surface a click belongs to, so subtracting the strip there is what sends
+    // the click to the bar instead of here.
+    mask: Region {
+        width: root.width
+        height: root.height
+
+        Region {
+            intersection: Intersection.Subtract
+            x: root.passthrough.x
+            y: root.passthrough.y
+            width: root.passthrough.width
+            height: root.passthrough.height
+        }
+    }
 
     MouseArea {
         anchors.fill: parent
