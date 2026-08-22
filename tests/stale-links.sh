@@ -53,6 +53,40 @@ HOME_REAL="$HOME"
 source "$REPO/install.sh" check >/dev/null 2>&1 || true
 HOME="$HOME_REAL"
 
+# AND THEN ASK WHETHER THE SOURCING ACTUALLY GAVE US ANYTHING, because the line
+# above cannot tell us and is not the thing to change. `|| true` is right where
+# it is: `check` exits non-zero on any machine where a unit is not ok, which is
+# an ordinary state and none of this file's business, and under `set -e` that
+# status would end the run before the first assertion. What `|| true` also
+# swallows is a source that failed outright -- a renamed file under lib/, a
+# syntax error, install.sh moved -- and then EVERY function below is missing.
+#
+# That is not a hypothetical failure mode, it is a silent one. `set -e` does
+# not fire for a command that dies inside a command substitution used as an
+# argument, so `$(symlinks_stale | wc -l)` with no such function is `0`, which
+# is exactly what three of the assertions below expect. Measured, with
+# symlinks_stale renamed in lib/units/40-symlinks.sh and nothing else touched:
+#
+#     ok    a regular file is not a stale link
+#     ok    it is not counted as left by a deleted file
+#     ok    a broken link into another checkout is left alone
+#
+# Three green ticks for code that does not exist. So the functions this file
+# drives are named here and their absence is a stop -- exit 2, because "the
+# thing under test is not here" is not the same answer as "the thing under test
+# is wrong", and only one of the two is about the sweep.
+#
+# `run` is in the list rather than only the three unit functions: the header of
+# this file says install.sh is sourced for `run`, the ui and the unit, and it is
+# `run` that DRY_RUN goes through -- a sweep that ran with no such function
+# would take the dry-run assertion down with it and say something else.
+for fn in run symlinks_stale symlinks_check symlinks_sweep_stale; do
+    declare -F "$fn" >/dev/null && continue
+    echo "stale-links: sourcing install.sh left no $fn -- there is nothing here to test." >&2
+    echo "stale-links: run \`$REPO/install.sh check\` on its own to see what it says." >&2
+    exit 2
+done
+
 FAILS=0
 pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1" >&2; FAILS=$(( FAILS + 1 )); }
@@ -63,6 +97,11 @@ there()     { [[ -e $1 || -L $1 ]]; }
 assert_there()     { there "$1" && pass "$2" || fail "$2 -- $1 is gone"; }
 assert_gone()      { there "$1" && fail "$2 -- $1 is still there" || pass "$2"; }
 assert_equal()     { [[ $1 == "$2" ]] && pass "$3" || fail "$3 -- got '$1', wanted '$2'"; }
+# NOT `assert_equal "$(symlinks_stale | wc -l)" "0"`, WHICH IS WHAT THE THREE
+# CALLS BELOW USED TO BE. `wc -l` answers 0 for a function that found nothing
+# and 0 for a function that is not there, and when it is not 0 it has thrown
+# away the one thing worth reading: which link the sweep was about to take.
+assert_none()      { [[ -z $1 ]] && pass "$2" || fail "$2 -- it named $(tr '\n' ' ' <<<"$1")"; }
 
 # ---------------------------------------------------------------------------
 # The sandbox: one package with a file at its root, a directory of files and a
@@ -152,7 +191,7 @@ build
 rm "$DOT/pkg/.config/app/b.conf"
 rm "$HOME/.config/app/b.conf"
 echo "written by hand" > "$HOME/.config/app/b.conf"
-assert_equal "$(symlinks_stale | wc -l)" "0" "a regular file is not a stale link"
+assert_none "$(symlinks_stale)" "a regular file is not a stale link"
 symlinks_sweep_stale >/dev/null
 assert_equal "$(cat "$HOME/.config/app/b.conf")" "written by hand" "and it still says what it said"
 
@@ -162,7 +201,7 @@ build
 # The file is right there in the package; the link aims at the wrong place
 # inside the repository. That is not a deletion and removing it would hide it.
 ln -sfn "../../../repo/pkg/a.conf" "$HOME/.config/app/a.conf"
-assert_equal "$(symlinks_stale | wc -l)" "0" "it is not counted as left by a deleted file"
+assert_none "$(symlinks_stale)" "it is not counted as left by a deleted file"
 assert_equal "$(symlinks_check)" "drift:1 in the way" "check reports it as in the way"
 symlinks_sweep_stale >/dev/null
 assert_there "$HOME/.config/app/a.conf" "and the sweep leaves it for stow to deal with"
@@ -173,7 +212,7 @@ build
 other="$SANDBOX/other-clone"
 mkdir -p "$other/pkg/.config/app"
 ln -sfn "$other/pkg/.config/app/gone.conf" "$HOME/.config/app/gone.conf"
-assert_equal "$(symlinks_stale | wc -l)" "0" "a broken link into another checkout is left alone"
+assert_none "$(symlinks_stale)" "a broken link into another checkout is left alone"
 symlinks_sweep_stale >/dev/null
 assert_there "$HOME/.config/app/gone.conf" "and it is still there afterwards"
 
