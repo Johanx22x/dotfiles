@@ -684,7 +684,35 @@ hl.bind(mainMod .. " + C", hl.dsp.exec_cmd("qs ipc call settings toggle"), { des
 -- SUPER + / because ? is the help key everywhere and / is where it lives
 -- unshifted. It was free, and it is the only bind whose job is to explain the
 -- others, so it belongs to the shell rather than to any category.
+--
+-- TWO BINDS FOR ONE KEY, and the second one is not a spare: it is the same
+-- physical key seen through a different layout.
+--
+-- A KEYSYM WRITTEN HERE IS REALLY A POSITION ON THE KEYBOARD. Hyprland
+-- resolves binds against the FIRST layout in kb_layout and not against the
+-- one that is active -- `input:resolve_binds_by_sym` would change that and is
+-- not set anywhere in this config. So `slash` means "wherever slash sits in
+-- layout number one", and with `us` first that is AB10, the key right of the
+-- period. On a Spanish keyboard the very same key prints `-`, which is why
+-- SUPER + `-` opened this sheet for anyone typing in Spanish: the position was
+-- fixed even though the label was not.
+--
+-- WHAT MOVED. kb_layout used to be `us` and nothing else, written once in the
+-- input block above. It is not any more: desktop-tweak generates tweaks.lua,
+-- which is read at the end of this file and overrides it, and the layout
+-- selector ROTATES the list so the active layout is the first entry. Choose
+-- Spanish and `es`/`latam` becomes layout number one -- where AB10 is `minus`
+-- and `slash` only exists as Shift+7, which cannot match a bind whose modmask
+-- is SUPER alone. One bind on `slash` left the cheatsheet with no way in at
+-- all, on a key nobody had touched.
+--
+-- Binding both keysyms puts one of them on AB10 whichever layout leads, so the
+-- sheet keeps the key it always had and the other spelling costs a `-` on the
+-- number row that nothing else wanted. THIS IS THE ONLY PUNCTUATION BIND IN
+-- THE FILE, which is why it is the only one that had to learn this: letters
+-- sit in the same holes in every latin layout, punctuation does not.
 hl.bind(mainMod .. " + slash", hl.dsp.exec_cmd("qs ipc call cheatsheet toggle"), { description = "Shell: this cheatsheet" })
+hl.bind(mainMod .. " + minus", hl.dsp.exec_cmd("qs ipc call cheatsheet toggle"), { description = "Shell: this cheatsheet" })
 
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager), { description = "Apps: open the file manager" })
 -- Toggle floating. It used to be SUPER+V, Hyprland's example bind, but that

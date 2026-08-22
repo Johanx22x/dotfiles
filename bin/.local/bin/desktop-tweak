@@ -658,6 +658,16 @@ sensitivity_float() {
 # The Lua both halves of the Hyprland path send. Built once so the running
 # compositor and the generated file cannot drift apart -- which they would,
 # given two copies of this and one of them edited.
+#
+# THE kb_layout LINE BELOW MOVES EVERY PUNCTUATION BIND, and that is not
+# obvious from looking at it. Hyprland resolves binds against the FIRST layout
+# in the list and not against the one that is active, so rotating the list --
+# which is exactly what `layout next` does, see switch_layout -- re-points
+# every keysym at whatever key holds it in the new leader. Letters do not
+# care, since they sit in the same holes in every latin layout; punctuation
+# does. The cheatsheet is bound on both `slash` and `minus` in hyprland.lua
+# for this reason, and the long note next to those two binds is where the
+# mechanism is written down.
 config_lua() {
     local natural="false"
     [[ $(current natural-scroll) == 1 ]] && natural="true"

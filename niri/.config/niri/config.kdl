@@ -620,7 +620,21 @@ binds {
     // the same bind.
     Mod+Shift+N hotkey-overlay-title="Shell: notification history" { spawn "qs" "ipc" "call" "notifications" "history"; }
     Mod+C hotkey-overlay-title="Shell: settings" { spawn "qs" "ipc" "call" "settings" "toggle"; }
+    // TWO CHORDS FOR ONE SHEET, for the same reason hyprland.lua binds both --
+    // read the long note there, it is the one that explains the mechanism.
+    // The short of it: `/` is not on the same key in every layout, and the
+    // layout list is the user's now. On a Spanish keyboard the key that prints
+    // `/` on a US board prints `-`, so binding both keysyms keeps the sheet on
+    // that key whichever layout is in force.
+    //
+    // THE TWO FLAVORS GET THERE DIFFERENTLY, which is worth knowing before
+    // moving either one. Hyprland resolves every bind against the FIRST layout
+    // in its list, so the bind is pinned to a position; niri matches the keysym
+    // the ACTIVE layout produces, falling back to latin letters only, so
+    // punctuation follows what is being typed. Opposite rules, same fix: bind
+    // the two spellings and one of them is always the key under the finger.
     Mod+Slash hotkey-overlay-title="Shell: this cheatsheet" { spawn "qs" "ipc" "call" "cheatsheet" "toggle"; }
+    Mod+Minus hotkey-overlay-title="Shell: this cheatsheet" { spawn "qs" "ipc" "call" "cheatsheet" "toggle"; }
     Mod+Shift+Escape hotkey-overlay-title="Shell: power menu" { spawn "qs" "ipc" "call" "powermenu" "toggle"; }
 
     // ---- Look (parity) --------------------------------------------------
