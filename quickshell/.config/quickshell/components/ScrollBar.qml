@@ -64,7 +64,7 @@
 // -- and it is the reason those seven never suffered the fault the rail and
 // the launcher did, rather than any care taken about their margins.
 import QtQuick
-import "root:/"
+import qs
 
 Rectangle {
     id: root

@@ -32,7 +32,7 @@
 //                    the note there
 
 import QtQuick
-import "root:/"
+import qs
 
 Item {
     id: root

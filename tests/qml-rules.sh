@@ -29,13 +29,14 @@
 # decision. `Mouse` alone is a legitimate answer for a handler that genuinely
 # only wants a mouse; the default is not an answer, it is the absence of one.
 #
-# What this file is NOT is a QML linter. There is a long note in
-# .github/workflows/checks.yml about why qmllint is not here: the Qt 5 one
-# exits 255 in silence on most of these files, and the Qt 6 one cannot resolve
-# Quickshell's `root:/` imports and buries every file under a hundred messages
-# about types it cannot find. Adding rules here is cheap and each one has to
-# earn its place by naming the bug it would have caught. A rule with no such
-# story does not belong.
+# What this file is NOT is a QML linter. tests/qml-lint.sh next door is that,
+# and it exists now that the tree imports by module name rather than through
+# Quickshell's `root:/` scheme -- which is what qmllint could not resolve, and
+# what used to bury every file under a hundred messages about types it could not
+# find. The two do not overlap: qmllint answers about names and types, and this
+# file is for faults that are correct QML by every rule a linter knows. Adding
+# rules here is cheap and each one has to earn its place by naming the bug it
+# would have caught. A rule with no such story does not belong.
 #
 # Run it from anywhere:  tests/qml-rules.sh
 set -euo pipefail

@@ -64,10 +64,10 @@ import Quickshell.Services.Pipewire
 import Quickshell.Widgets
 import QtQuick.Effects
 import QtQuick
-import "root:/"
-import "root:/components"
-import "root:/modules/notifications"
-import "root:/modules/recorder"
+import qs
+import qs.components
+import qs.modules.notifications
+import qs.modules.recorder
 
 Item {
     id: root
@@ -642,10 +642,6 @@ Item {
                 easing.type: Easing.OutBack
                 easing.overshoot: 0.7
             }
-        }
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
         }
 
         // ---------------- Machine in trouble ----------------

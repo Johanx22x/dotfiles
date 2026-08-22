@@ -13,11 +13,10 @@
 // enumerating what "everything" is rather than a list somebody remembers to
 // extend, and it needs its writes spaced out; neither exists yet.
 
-import Quickshell
 import QtQuick
-import "root:/"
-import "root:/components"
-import "root:/modules/settings"
+import qs
+import qs.components
+import qs.modules.settings
 
 SettingsPage {
     id: root

@@ -19,12 +19,11 @@
 // where a display manager looks too, so the picture is the account's and not
 // just this shell's.
 
-import Quickshell
 import Quickshell.Io
 import QtQuick
-import "root:/"
-import "root:/components"
-import "root:/modules/settings"
+import qs
+import qs.components
+import qs.modules.settings
 
 SettingsPage {
     id: root

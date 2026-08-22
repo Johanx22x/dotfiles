@@ -5,7 +5,7 @@
 // by hand and a menu coming off D-Bus are the same object on screen.
 
 import QtQuick
-import "root:/"
+import qs
 
 Rectangle {
     id: root

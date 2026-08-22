@@ -21,11 +21,11 @@
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
-import "root:/"
-import "root:/components"
-import "root:/modules"
-import "root:/modules/island"
-import "root:/modules/notifications"
+import qs
+import qs.components
+import qs.modules
+import qs.modules.island
+import qs.modules.notifications
 
 PanelWindow {
     id: bar

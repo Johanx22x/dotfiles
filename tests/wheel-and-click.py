@@ -99,17 +99,13 @@ geometry is the settings window's own. Two things are stood in for:
   none of which exists under a plain QQuickView. tests/theme-stub.qml carries
   the real values for every token the three components read.
 
-  `import "root:/"`, which is Quickshell's own resolver and means "the config
-  root". A plain QML engine has never heard of the scheme, and the obvious
-  repair -- a QQmlAbstractUrlInterceptor rewriting root:/ to a file: URL --
-  does not work: Qt keeps the import's base URL remote and fails the directory
-  import outright with "Cannot update qmldir content for 'root:/'" the moment
-  a qmldir is found there. Quickshell itself gets around that with a whole
-  QNetworkAccessManager, which is more machinery than this bench is worth. So
-  the interceptor points root:/ at an EMPTY directory -- the import then
-  resolves to nothing and contributes no types -- and Theme is handed in as a
-  root context property instead, which is looked up exactly when a name is not
-  a type. The components are not edited and do not know the difference.
+  `import qs`, which is the config root -- Config, Theme, Icons and the rest.
+  A plain QQuickView has no such module, so one is built: a temporary import
+  root holding a `qs/qmldir` that names the module and lists no types. The
+  import then succeeds and contributes nothing, and every name it would have
+  provided falls through to the root context, where Theme is handed in as a
+  context property -- which is looked up exactly when a name is not a type.
+  The components are not edited and do not know the difference.
 
 WHAT IS NOT ASKED HERE. The scrollbar, which #159 measured separately and
 which the rail places from outside this component; the hand-back to the page
@@ -173,7 +169,7 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 from PyQt6.QtCore import QCoreApplication, QElapsedTimer, QEventLoop, QPoint, QPointF, QUrl, Qt
 from PyQt6.QtGui import QGuiApplication, QInputDevice, QMouseEvent, QPointingDevice, QWheelEvent
-from PyQt6.QtQml import QQmlAbstractUrlInterceptor, QQmlComponent
+from PyQt6.QtQml import QQmlComponent
 from PyQt6.QtQuick import QQuickView
 
 TESTS = Path(__file__).resolve().parent
@@ -206,38 +202,54 @@ def check(condition: bool, message: str) -> bool:
 # ---------------------------------------------------------------------------
 # The engine
 # ---------------------------------------------------------------------------
-# See the header for why root:/ goes to an empty directory and Theme comes in
+# See the header for why `qs` resolves to an empty module and Theme comes in
 # as a context property.
 
 
-# Kept alive here on purpose. Both are BORROWED by the engine rather than
-# owned by it, and a Python object with no remaining reference is collected
-# under a running engine, which segfaults rather than raising. Each is replaced
-# only after the view that was using it has been torn down.
-_interceptor = None
+# Kept alive here on purpose. It is BORROWED by the engine rather than owned by
+# it, and a Python object with no remaining reference is collected under a
+# running engine, which segfaults rather than raising. It is replaced only
+# after the view that was using it has been torn down.
 _theme = None
 
 
-class RootScheme(QQmlAbstractUrlInterceptor):
-    """Sends Quickshell's root:/ imports somewhere that resolves to nothing."""
+def empty_qs_module(root: Path) -> Path:
+    """Builds an import root under which `import qs` resolves to nothing.
 
-    def __init__(self, target: Path) -> None:
-        super().__init__()
-        self.target = target
+    The components under test open with `import qs`, which in the real shell is
+    the config root -- Config, Theme, Icons and the rest. Here it has to resolve
+    to a module that exists and declares no types, so that the import succeeds
+    and every name it would have provided falls through to the root context,
+    where Theme is waiting.
 
-    def intercept(self, url: QUrl, kind: object) -> QUrl:
-        if url.scheme() == "root":
-            return QUrl.fromLocalFile(str(self.target / url.path().lstrip("/")))
-        return url
+    IT CANNOT BE EMPTY, which is the one surprise here. A `qmldir` carrying
+    nothing but `module qs` is not a module Qt will load: the import fails with
+    `module "qs" is not installed`, the same message as if the directory were
+    not there at all. It needs to declare at least one type before Qt agrees
+    that the module exists, so it declares exactly one and nothing under test
+    ever names it.
+
+    This replaces a QQmlAbstractUrlInterceptor that pointed Quickshell's
+    `root:/` scheme at an empty directory, which was the only thing that worked
+    while the imports were paths: Qt keeps a remote import's base URL remote
+    and fails the directory import outright with "Cannot update qmldir content
+    for 'root:/'" the moment a qmldir is found there. The tree now imports by
+    module name, so the scheme is gone and so is the machinery that stood in
+    for it.
+    """
+    module = root / "qs"
+    module.mkdir(parents=True, exist_ok=True)
+    (module / "Placeholder.qml").write_text("import QtQuick\nQtObject {}\n")
+    (module / "qmldir").write_text("module qs\nPlaceholder 1.0 Placeholder.qml\n")
+    return root
 
 
-def build_view(app: QGuiApplication, empty_root: Path) -> QQuickView:
+def build_view(app: QGuiApplication, import_root: Path) -> QQuickView:
     view = QQuickView()
     engine = view.engine()
 
-    global _interceptor, _theme
-    _interceptor = RootScheme(empty_root)
-    engine.addUrlInterceptor(_interceptor)
+    global _theme
+    engine.addImportPath(str(import_root))
 
     theme = QQmlComponent(engine, QUrl.fromLocalFile(str(THEME_STUB)))
     _theme = theme.create()
@@ -575,8 +587,8 @@ def main() -> int:
     app = QGuiApplication(sys.argv)
     devices()
 
-    with tempfile.TemporaryDirectory() as empty_root:
-        root = Path(empty_root)
+    with tempfile.TemporaryDirectory() as import_root:
+        root = empty_qs_module(Path(import_root))
 
         # A view of its own for each measurement; see the header for why one
         # cannot be reused. Every one of them is torn down before the next is

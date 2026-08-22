@@ -16,11 +16,11 @@
 // choice actually lives.
 
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 // SettingsSection lives two directories UP, and QML's implicit import covers a
 // file's own directory only.
-import "root:/modules/settings"
+import qs.modules.settings
 
 SettingsSection {
     id: root

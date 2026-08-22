@@ -132,9 +132,9 @@ import Quickshell.Widgets
 import QtQuick.Effects
 import QtQuick.Layouts
 import QtQuick
-import "root:/"
-import "root:/components"
-import "root:/modules/bar"
+import qs
+import qs.components
+import qs.modules.bar
 
 Item {
     id: root

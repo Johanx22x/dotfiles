@@ -12,7 +12,7 @@
 
 import Quickshell
 import QtQuick
-import "root:/"
+import qs
 
 Item {
     id: root

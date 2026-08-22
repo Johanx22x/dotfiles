@@ -11,7 +11,7 @@
 // pills.
 
 import QtQuick
-import "root:/"
+import qs
 
 Rectangle {
     id: root

@@ -17,10 +17,9 @@
 // own: ~/.face is the freedesktop convention, so a display manager finds the
 // same picture.
 
-import Quickshell
 import QtQuick
 import QtQuick.Effects
-import "root:/"
+import qs
 
 Rectangle {
     id: root

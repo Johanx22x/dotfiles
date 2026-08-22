@@ -29,7 +29,7 @@
 // settling silently inside a refactor, so every note keeps the size it had.
 
 import QtQuick
-import "root:/"
+import qs
 
 Text {
     id: root

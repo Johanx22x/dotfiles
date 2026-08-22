@@ -26,7 +26,7 @@
 // reason -- the modifier is the part you already know.
 
 import QtQuick
-import "root:/"
+import qs
 
 Item {
     id: root

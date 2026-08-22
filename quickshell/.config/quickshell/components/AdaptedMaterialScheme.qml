@@ -31,7 +31,7 @@
 // colOnSecondaryContainer -- one number, right below.
 
 import QtQuick
-import "root:/"
+import qs
 
 QtObject {
     id: root

@@ -24,14 +24,14 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import Qt.labs.folderlistmodel
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 // WallpaperState, which the Browse button opens. A singleton is not in scope
 // just because it is one -- its directory has to be imported.
-import "root:/modules/wallpaper"
+import qs.modules.wallpaper
 // SettingsPage and SettingsSection live one directory UP, and QML's implicit
 // import covers a file's own directory only.
-import "root:/modules/settings"
+import qs.modules.settings
 
 SettingsPage {
     id: root

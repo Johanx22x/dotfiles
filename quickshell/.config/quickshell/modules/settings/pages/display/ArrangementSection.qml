@@ -33,14 +33,13 @@
 // thing that reads or writes an arrangement, and there is no second view of it
 // to keep in step, where the mode draft is read by one card per monitor.
 
-import Quickshell
 import Quickshell.Io
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 // SettingsSection lives two directories UP, and QML's implicit import covers a
 // file's own directory only.
-import "root:/modules/settings"
+import qs.modules.settings
 
 SettingsSection {
     id: root

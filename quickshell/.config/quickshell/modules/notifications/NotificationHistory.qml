@@ -33,8 +33,8 @@
 
 import Quickshell
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 
 Item {
     id: root

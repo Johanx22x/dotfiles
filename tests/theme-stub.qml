@@ -29,8 +29,8 @@
 //
 // NOT A SINGLETON, and that is not a detail. This is handed to the engine as a
 // root context property named "Theme" rather than registered as a type,
-// because `import "root:/"` is Quickshell's own resolver and a plain engine
-// resolves it to nothing -- see the long note in wheel-and-click.py. A context
+// because `import qs` is the config root and a plain engine is given an empty
+// module in its place -- see the long note in wheel-and-click.py. A context
 // property is looked up exactly when a name is not a type, which is what makes
 // `Theme.groupHeight` inside the real components resolve to this file.
 import QtQuick

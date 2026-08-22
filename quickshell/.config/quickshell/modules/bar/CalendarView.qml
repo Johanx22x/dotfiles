@@ -26,9 +26,8 @@
 // carries what the letter cannot, which is the same bargain every seven-column
 // calendar makes.
 
-import Quickshell
 import QtQuick
-import "root:/"
+import qs
 
 Column {
     id: root

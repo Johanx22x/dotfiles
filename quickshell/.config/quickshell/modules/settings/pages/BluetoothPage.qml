@@ -31,13 +31,13 @@
 import Quickshell
 import Quickshell.Bluetooth
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 // SettingsPage lives one directory UP, and QML's implicit import covers a
 // file's own directory only -- without this line the root element below is an
 // unknown type and the page fails to load. The other imports are the
 // shell-wide ones every file here takes.
-import "root:/modules/settings"
+import qs.modules.settings
 
 SettingsPage {
     id: root

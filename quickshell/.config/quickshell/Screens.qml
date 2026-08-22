@@ -39,7 +39,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import "root:/"
 
 Singleton {
     id: root

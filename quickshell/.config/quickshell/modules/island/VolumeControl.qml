@@ -27,11 +27,10 @@
 // something declaring interest in the node, its `audio` data is never
 // populated and the volume reads 0 forever.
 
-import Quickshell
 import Quickshell.Services.Pipewire
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 
 Item {
     id: root

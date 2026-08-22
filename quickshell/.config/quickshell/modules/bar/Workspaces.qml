@@ -43,7 +43,7 @@
 // genuinely added or removed and not when one is merely focused.
 
 import QtQuick
-import "root:/"
+import qs
 
 Item {
     id: root

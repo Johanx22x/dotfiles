@@ -22,7 +22,7 @@
 // quarters, which is where -14 dBFS belongs.
 
 import QtQuick
-import "root:/"
+import qs
 
 Item {
     id: root

@@ -17,7 +17,7 @@
 
 import QtQuick
 import QtQuick.Effects
-import "root:/"
+import qs
 
 Canvas {
     id: root

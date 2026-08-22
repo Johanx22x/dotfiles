@@ -7,11 +7,10 @@
 // than a rendered menu: nothing here is embedding someone else's GTK or Qt
 // popup, so the menu can look welded to the bar like everything else.
 
-import Quickshell
 import Quickshell.Services.SystemTray
 import QtQuick
-import "root:/"
-import "root:/components"
+import qs
+import qs.components
 
 Row {
     id: root

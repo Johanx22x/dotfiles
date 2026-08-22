@@ -27,11 +27,11 @@ import QtQuick
 // because it is one. Without this the entries below build with an undefined
 // glyph and the whole list comes out empty, with a single ReferenceError as
 // the only clue.
-import "root:/"
+import qs
 // The carousel's state singleton, which is what the wallpaper entry opens.
 // A singleton is not in scope just because it is one -- its directory has to
 // be imported, exactly like Icons above.
-import "root:/modules/wallpaper"
+import qs.modules.wallpaper
 
 Singleton {
     id: root

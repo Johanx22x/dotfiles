@@ -34,8 +34,8 @@
 // JetBrainsMono Nerd Font.
 
 import QtQuick
-import "root:/"
-import "root:/modules/launcher"
+import qs
+import qs.modules.launcher
 
 Item {
     id: root
