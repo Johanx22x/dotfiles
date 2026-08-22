@@ -148,6 +148,24 @@ PanelWindow {
     // the entries carry a thumbnail URL that FolderListModel knows nothing
     // about -- see rebuild() -- and because finding the applied wallpaper's
     // index means walking the list.
+    //
+    // EVERY FIELD IS A PURE FUNCTION OF THE PATH, and it has to stay that way.
+    // An entry describes a wallpaper; it must not describe the state of the
+    // thumbnail cache, however convenient that is for getting a card to look
+    // at a file again. Assigning this array is not free and is not quiet: a
+    // PathView handed a model it considers different destroys and rebuilds
+    // every delegate, each of which re-decodes its picture, and it resets
+    // currentIndex and offset to 0 on the way.
+    //
+    // Config.wallpaperThumbsRevision in here is the specific mistake, because
+    // it looks like it costs nothing and it bumps on EVERY opening -- the open
+    // calls refreshWallpaperThumbs() and the process bumps when it exits
+    // whether it wrote a file or not. Measured offscreen on Qt 6.11.2, on a
+    // fan of eight already up and settled: with the revision in the entry, the
+    // bump rebuilt 8 of 8 delegates and re-set 8 of 8 image sources, which is
+    // a flash on screen every time the carousel is opened. Without it, 0 and
+    // 0. The cache tells the CARDS it has changed, in the delegate's
+    // Connections on Config, and never the model.
     property var entries: []
 
     readonly property int count: root.entries.length
@@ -160,20 +178,6 @@ PanelWindow {
                 name: folder.get(i, "fileName").replace(/\.[^.]+$/, ""),
                 path: path,
                 video: Config.isWallpaperVideo(path),
-                // WHAT MAKES A REBUILD A CHANGE AT ALL, and the only field
-                // here that says nothing about the wallpaper. Every other one
-                // is a pure function of `path`, so the array this built after
-                // a thumbnail run was byte for byte the array already in
-                // place -- and an array whose contents compare equal is a
-                // no-op on PathView, which is a rebuild that repairs nothing.
-                // Measured offscreen on Qt 6.11.2: an identical rebuild costs
-                // 0 delegate constructions and 0 onModelDataChanged, one that
-                // differs costs one of each per card on the path.
-                //
-                // The bill for that is in the Connections on Config below: a
-                // model PathView accepts as new puts currentIndex and offset
-                // back to 0, and something has to put them back.
-                rev: Config.wallpaperThumbsRevision,
                 // NOT THE WALLPAPER ITSELF but the DIRECTORY of small frames
                 // that wallpaper-switch keeps beside the still ones: 960 px
                 // JPEGs at 15 fps against a 4K original at up to 120.
@@ -231,53 +235,6 @@ PanelWindow {
         }
     }
 
-    // THE RUN THAT FINALLY WRITES THE PICTURES HAS TO REACH THE CARDS. An
-    // Image pointed at a file that is not there reports Error and stops
-    // asking, and the delegate latches that -- thumbMissing for a still,
-    // framesMissing for a video's preview -- with nothing clearing either in
-    // place. So the only way back is a model PathView treats as new: it
-    // regenerates every delegate, and a delegate built after ffmpeg has been
-    // past the file simply loads it. That a fresh Image will even try is the
-    // premise of this handler and was measured rather than assumed -- see the
-    // note on `cache` in the delegate.
-    //
-    // THIS USED TO DO NOTHING WHATSOEVER. rebuild() built an array that
-    // compared equal to the one already in place, PathView returned early, and
-    // no delegate heard a thing: a video copied into the folder with the shell
-    // running stayed blank until the next restart, and a still added the same
-    // way spent the session decoding the 4K original. `rev` in rebuild() is
-    // what makes the array differ.
-    //
-    // AND PUTTING THE FAN BACK IS THE BILL FOR IT. A model PathView accepts as
-    // new resets currentIndex and offset to 0, and this bump lands about a
-    // second after every opening -- the open calls refreshWallpaperThumbs()
-    // and the process bumps on the way out whether it had anything to build or
-    // not. Without the reveal below, opening the carousel would snap the fan
-    // to the alphabetically first wallpaper a moment later, and Enter would
-    // apply that one.
-    //
-    // BACK TO THE CARD THAT WAS CENTRED, and not to the applied one the way
-    // folder.onCountChanged goes. Nothing about the collection changed here --
-    // the same wallpapers in the same order, now with the pictures they should
-    // always have had -- so there is nothing to re-orient anybody about, and
-    // anyone who had stepped away from the applied wallpaper inside that first
-    // second would be dragged back to it for no reason they could see.
-    //
-    // Not deferred, unlike the two calls that go through revealCurrent: those
-    // wait because the view has just been made visible and has nothing laid
-    // out to position. Here it has been laid out for as long as the sheet has
-    // been open, and staying in this turn leaves no moment at all where
-    // currentIndex is 0 for anything else to read.
-    Connections {
-        target: Config
-
-        function onWallpaperThumbsRevisionChanged(): void {
-            const centred = root.entries[view.currentIndex]?.path ?? "";
-            root.rebuild();
-            root.revealPath(centred);
-        }
-    }
-
     // ---------------- What is applied right now ----------------
     //
     // A READING, NOT A CONTROL -- the same one the settings page takes, from
@@ -310,23 +267,10 @@ PanelWindow {
     // whole fan past you at open time, which is a lot of movement to say
     // "nothing has changed yet".
     function revealCurrent(): void {
-        root.revealPath(root.currentPath);
-    }
-
-    // The same move aimed at a wallpaper that is not the applied one, which is
-    // what a rebuild needs: the model is replaced, the fan goes back to the
-    // start, and putting it back means naming the card that was centred rather
-    // than the one on the desktop.
-    //
-    // BY PATH AND NOT BY INDEX, because an index means nothing across a
-    // rebuild -- a file added to or taken out of the collection shifts every
-    // index after it, and the carousel would come back pointing at the
-    // wallpaper next door.
-    function revealPath(path: string): void {
-        if (path === "")
+        if (root.currentPath === "")
             return;
 
-        const i = root.entries.findIndex(e => e.path === path);
+        const i = root.entries.findIndex(e => e.path === root.currentPath);
         if (i >= 0)
             view.positionViewAtIndex(i, PathView.Center);
     }
@@ -755,6 +699,48 @@ PanelWindow {
                     card.framesMissing = false;
                 }
 
+                // AND THE OTHER WAY A CARD LEARNS SOMETHING IT GOT WRONG: the
+                // file it asked for was not there at the time, and now it is.
+                //
+                // An Image pointed at a missing file reports Error and stops;
+                // both flags below latch that so the card does not spend the
+                // session asking. wallpaper-switch builds the thumbnails and
+                // the preview frames after the fact -- a wallpaper copied into
+                // the folder with the shell running is listed before ffmpeg has
+                // been near it -- and this bump is the shell being told that
+                // run has finished. Without it a card that latched stays blank,
+                // or stays on the 4K original, until the next restart.
+                //
+                // TO THE CARDS AND NOT TO THE MODEL, which is the whole point
+                // of doing it here. The version this replaces stamped the
+                // revision into every entry so that PathView would regenerate
+                // the delegates; it did clear the flags, by destroying the
+                // objects holding them, and it also rebuilt every card on
+                // screen on every opening -- a visible flash, reported from the
+                // desktop, for a cache that in the ordinary case had nothing
+                // new in it. See the note over `entries` for the measurement.
+                //
+                // COSTS NOTHING WHEN THERE IS NOTHING TO UNDO. Assigning false
+                // to a bool that is already false emits no change, so a card
+                // whose pictures were all there is untouched and nothing
+                // redraws. The retry is paid for only by the cards that failed,
+                // which is the one case where a redraw is what you want.
+                //
+                // A VIDEO'S STILL FRAME IS NOT RETRIED HERE, and that is not an
+                // oversight: fullUrl is empty for a video, so thumbMissing is
+                // never set for one and `picture` goes on pointing at the frame
+                // it could not load. The preview sequence covers it within a
+                // frame or two of restarting, which is the same run's other
+                // output, so there is nothing left to see underneath.
+                Connections {
+                    target: Config
+
+                    function onWallpaperThumbsRevisionChanged(): void {
+                        card.thumbMissing = false;
+                        card.framesMissing = false;
+                    }
+                }
+
                 Image {
                     id: picture
 
@@ -923,16 +909,13 @@ PanelWindow {
                 // letting it ask for a file that does not exist fifteen times a
                 // second, and leaves the card on its still frame.
                 //
-                // NOTHING CLEARS IT IN PLACE, and that is the point to hold on
-                // to. It goes when this delegate does: the bump at the end of
-                // Config's thumbnail run rebuilds the entries carrying the new
-                // revision, PathView is handed a model that genuinely differs,
-                // and every card is built again -- this one by an object that
-                // has never asked for a frame. The version of that rebuild
-                // this replaces produced an identical array, which PathView
-                // discards, so this flag survived the one event that exists to
-                // clear it and the card stayed blank until the shell was
-                // restarted. See the Connections on Config above.
+                // TWO THINGS CLEAR IT and they are the two ways the answer can
+                // have changed: this card being handed a different wallpaper,
+                // and Config's thumbnail run finishing. Both are above.
+                // Clearing it is not quite enough on its own -- the hidden
+                // Image is still holding 001.jpg in its failed state, and an
+                // Image re-handed the source it already has says nothing --
+                // which is what advanceFrame clears for.
                 property bool framesMissing: false
 
                 // THE ONE FRAME AHEAD OF THE ONE ON SCREEN. Two Images and not
@@ -977,9 +960,24 @@ PanelWindow {
                     // emits no status, so the card would simply stop. Rare
                     // enough to be a fifth of a second of video, common enough
                     // that "the preview froze" would be impossible to explain.
-                    if (back.source.toString() === url && back.status === Image.Ready) {
-                        card.showPendingFrame();
-                        return;
+                    if (back.source.toString() === url) {
+                        if (back.status === Image.Ready) {
+                            card.showPendingFrame();
+                            return;
+                        }
+
+                        // THE SAME SILENCE, FROM THE OTHER DIRECTION. This
+                        // Image is holding the answer it got when the file did
+                        // not exist, which is exactly the state framesMissing
+                        // was cleared out of a moment ago: the URL is the one
+                        // we want, the status is Error, and re-handing it the
+                        // source it already has emits nothing at all -- so
+                        // framePending would stay set and the card would never
+                        // ask again. Clearing it first is what makes the line
+                        // below a change. Measured: without this, a video whose
+                        // frames arrive mid-session stays frozen after the
+                        // retry; with it, the sequence starts.
+                        back.source = "";
                     }
 
                     back.source = url;
