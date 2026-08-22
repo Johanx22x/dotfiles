@@ -37,11 +37,13 @@
 //  stays up, warns once rather than every tick, and applied the fix 205 ms
 //  after it was saved with nobody asking.
 //
-//  So Hyprland is the one that has to be told, and only when a pull moved
-//  hypr/. It is not that Hyprland fails to see a renamed file -- it re-arms
-//  its watch and sees it fine -- it is that stow can unlink a link before
-//  making it again, and an unlink with a gap leaves Hyprland holding zero
-//  watches for the rest of the session, silently. See the update chain in
+//  So Hyprland is the one that gets told, and only when a pull moved hypr/.
+//  Not because it fails to see a renamed file -- it re-arms its watch on every
+//  event and saw an `mv`, a retargeted symlink and a `git checkout` unaided --
+//  but because an unlink with a GAP before the file comes back leaves it
+//  holding zero inotify watches for the rest of the session, silently and
+//  permanently, and nothing in this repository can promise that never happens.
+//  niri has nothing of the sort to lose. See the update chain in
 //  quickshell/.config/quickshell/modules/installer/InstallerState.qml.
 //
 //  ONE THING NIRI DOES SHARE with Hyprland: a config that stops SETTING an

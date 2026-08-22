@@ -146,9 +146,9 @@ the wrong moment. `--pull` is there for an unattended run and is `--ff-only`.
 
 Only niri picks the changes up reliably on its own — it holds no inotify watch
 and polls its config every 500 ms, so nothing a pull or a relink does to the
-file gets past it. Hyprland usually manages too, but stops forever and without
-a word if a link is ever unlinked with a gap before it comes back, and the
-shell has to be asked:
+file gets past it. Hyprland manages too in every case that was tried, but its
+watch dies for good, and silently, if the file is ever unlinked with a gap
+before it comes back, so it is worth telling. The shell has to be asked:
 
 ```sh
 hyprctl reload && hyprctl configerrors    # Hyprland, and only if hypr/ moved

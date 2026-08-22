@@ -299,14 +299,18 @@ symlinks_move_aside() {
 # Hyprland holding zero watches for the rest of the session. There is nothing
 # for a person to run.
 #
-# Hyprland is printed because of that last case and not because it cannot see a
-# renamed file: it re-arms its watch on every event and picks up an `mv` over
+# Hyprland is printed for that last case and not because it cannot see a
+# renamed file: it re-arms its watch on every event and picked up an `mv` over
 # the config, a retargeted symlink and a `git checkout` unaided. What it does
-# not survive is an unlink with a gap before the file comes back, which is a
-# shape stow is entitled to produce, and `hyprctl reload` is the only thing
-# that re-arms it. It answers "ok" and exits 0 whatever it just read, and so
-# does `hyprctl configerrors` -- so the errors are the output, never the
-# status.
+# not survive is an unlink with a GAP before the file comes back -- after that
+# its inotify fds hold zero watches for the rest of the session, silently, and
+# only `hyprctl reload` brings them back. This unit is not the one that does
+# that: measured, stow leaves a link that is already right completely alone,
+# same inode and same ctime across re-runs, and nothing here passes -R or -D.
+# It is printed because it is cheap and the failure is permanent, not because
+# it is known to be needed. `hyprctl reload` answers "ok" and exits 0 whatever
+# it just read, and so does `hyprctl configerrors` -- the errors are the
+# output, never the status.
 symlinks_post() {
   run systemctl --user daemon-reload 2>/dev/null || true
 
