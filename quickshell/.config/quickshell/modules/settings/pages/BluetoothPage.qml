@@ -1,10 +1,14 @@
 // The bluetooth page: the radio, the devices already paired, and whatever
 // else is in the air.
 //
-// The island's BluetoothControl lists ONLY paired devices, and its header says
-// why: discovery has a different rhythm, it fills the list with strangers'
-// headphones, and pairing asks questions. This page is where that job was
-// sent -- the same relationship NetworkPage has with WifiControl.
+// DISCOVERY LIVES HERE AND NOWHERE ELSE IN THE SHELL, which is a rule rather
+// than an accident. It has a different rhythm from reconnecting to something
+// already known: it needs the adapter scanning, it fills the list with
+// strangers' headphones, and pairing asks questions. A panel hanging off the
+// bar answers "reconnect my headset" and stops there -- the island carried
+// exactly such a card once, listing paired devices only -- and this window is
+// where everything past that was sent. It is the same split NetworkPage makes
+// over the password field, for the same reason.
 //
 // EXCEPT THAT ONE THIRD OF IT CANNOT BE DELIVERED, and the page says so
 // instead of pretending. Read out of the module's own type registration
@@ -187,8 +191,10 @@ SettingsPage {
     // has not reported a name arrives as an EMPTY STRING, not as null or
     // undefined -- and `??` only falls through on those two. Written with `??`
     // this returns "" and the row draws a blank line where the device should
-    // be. The island's BluetoothControl has the same expression in it and the
-    // same hole; this is the version to copy.
+    // be. It is a fact about the TYPES and not about this page: anywhere that
+    // falls back through a QString coming out of a Quickshell backend wants
+    // `||`, and `??` there is a bug that only shows itself on a device that
+    // never reported a name.
     // The parameter carries no type annotation, unlike every other function on
     // this page: `device: var` is what it would want to say, and qmlformat
     // cannot parse that annotation -- no other file here uses one either. An
@@ -670,9 +676,10 @@ SettingsPage {
                 + "so those attempts stall silently — pair them with bluetoothctl instead."
         }
 
-        // The escape hatch, and it OPENS rather than just being named --
-        // WifiControl does not tell you about nm-connection-editor, it launches
-        // it, and a limit is only honest if the way round it is one click away.
+        // The escape hatch, and it OPENS rather than just being named: a limit
+        // is only honest if the way round it is one click away. NetworkPage
+        // does the same with nm-connection-editor, for the enterprise and
+        // hidden rows it cannot build a profile for -- see its header.
         //
         // `kitty -e` because bluetoothctl is a terminal program with a prompt
         // that has to be typed at; the launcher already spawns terminal entries
