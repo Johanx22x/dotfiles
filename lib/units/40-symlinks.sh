@@ -33,6 +33,195 @@ symlinks_ignored() {
 }
 
 # ---------------------------------------------------------------------------
+# THE LINKS A DELETED FILE LEAVES BEHIND, WHICH NOTHING HERE COULD SEE.
+#
+# stow makes one link per file and then forgets that link exists. Delete the
+# file from the repository and every machine that pulls keeps the link,
+# pointing at nothing, for ever: a re-stow only ever looks at the files a
+# package HAS. The walk in symlinks_check starts from those same files, so it
+# was blind in the same way -- measured on this machine on 2026-08-21, three
+# files deleted that morning left three dangling links in ~/.config/quickshell
+# and `check` answered `ok` with all three of them sitting there.
+#
+# IT IS NOT TIDINESS. Quickshell finds its own tree by scanning directories, so
+# a dangling .qml inside it is opened on the next start and takes the desktop
+# with it -- while the one command that is supposed to repair the configuration
+# says everything is fine.
+#
+# WHY NOT `stow -R`, WHICH DOES CLEAR THEM. It does, and it is still not what
+# this runs. Measured against stow 2.4.1, in a scratch target directory:
+#
+#   * -R REBUILDS EVERY FOLDED DIRECTORY. ~/.config/MangoHud is one link
+#     standing for a whole directory -- stow folded it before --no-folding was
+#     in the arguments -- and a restow of it prints `UNLINK: .config/MangoHud`,
+#     then MKDIR, then a link per file. Plain stow leaves it completely alone.
+#     That unlink is a gap in which the directory does not exist, which is the
+#     exact event symlinks_post is written about: after one of those, Hyprland's
+#     inotify fds hold zero watches for the rest of the session, silently.
+#   * -R ONLY VISITS THE PACKAGES IT IS GIVEN, and recognises a link by the
+#     package directory it points into. A link left by a package that is no
+#     longer in STOW_PACKAGES -- the other compositor after a switch, a package
+#     deleted from the repository outright -- survives an unstow untouched
+#     (measured). This sweep starts from the target side instead, so it does
+#     not care which package wrote a link or whether that package still exists.
+#   * THE CONFLICT HANDLING BELOW READS STOW'S OUTPUT, and the three wordings
+#     it knows all belong to the stow phase. -R adds an unstow phase with its
+#     own, and `unhandled` is deliberately fatal.
+#
+# So the sweep is narrower than an unstow by design. It removes a link and
+# never anything else, and only where all four of these hold:
+#
+#   1. It is a symlink. Never a regular file, never a directory.
+#   2. It does not resolve.
+#   3. Resolved, it lands INSIDE this repository. A broken link to anywhere
+#      else was made by something else and is none of this script's business:
+#      ~/.config/discord/SingletonLock and SingletonCookie are broken links by
+#      design and so are Firefox's and Zen's `lock`, and all of them are left
+#      exactly where they are.
+#   4. The repository does not still have the file for that destination. A link
+#      that is broken although its file is right there is a bad relative path
+#      and not a deletion -- the walk in symlinks_check already counts it `in
+#      the way`, and stow's conflict path below already offers to move it
+#      aside. Deleting it here would destroy the evidence and fix nothing.
+#
+# WHERE IT LOOKS is only what the package list says stow writes into: the
+# destination directory of each file of each package, one level deep each. A
+# directory the repository no longer has any file in is looked into as well --
+# deleting a whole directory of a package leaves exactly that, and the links in
+# it are the same problem -- but only when it holds nothing except links and
+# further directories. One regular file and the directory belongs to whoever
+# wrote that file, which is what keeps this walk out of ~/.config/discord and
+# the rest of $HOME.
+#
+# It prints one absolute path per line and writes nothing, so that _check can
+# count what it prints and _apply can remove it and the two cannot disagree
+# about what "stale" means.
+# WHETHER A DIRECTORY THE REPOSITORY NO LONGER NAMES CAN BE ANYTHING BUT
+# LEFTOVERS. It qualifies when every single entry in it is a symlink into this
+# repository, or another directory of which the same is true, and there is at
+# least one entry. That is what a package directory deleted whole looks like
+# from the target side: stow put every link in it there, --no-folding means the
+# directory itself is real, and nothing else ever wrote into it.
+#
+# IT IS THE SCOPE AND NOT THE SAFETY. Nothing is removed on the strength of
+# this -- the four conditions in symlinks_stale decide that, one link at a time
+# -- but a walk that entered any directory it found would be reading somebody's
+# ~/Documents to answer a question about stow, and would also be treating a
+# link a PERSON made to a file in this repository as one of stow's. So the
+# first entry that is not stow-shaped ends it: ~/Documents on its first file,
+# ~/.config/discord on settings.json, ~/.mozilla on a profile directory that
+# holds one.
+#
+# MEASURED ON THE MACHINE THIS COMES FROM, the whole scan is 42 directories the
+# packages name, 144 subdirectories of those looked at once each, and 2 of them
+# entered -- ~/.config/borgmatic and ~/.config/systemd/user/timers.target.wants,
+# both of which really do hold nothing but links into this repository. 208 links
+# examined, 0.38 s, which is what it costs `check` and the menu on every run.
+# Without the test it was 543 directories and 1.6 s, most of it spent reading
+# ~/Documents, ~/Games and ~/Pictures to no purpose.
+#
+# THE SECOND OF THOSE TWO IS NOT STOW'S, and that is deliberate rather than
+# overlooked. `systemctl --user enable` writes timers.target.wants/foo.timer
+# pointing at ~/.config/systemd/user/foo.timer, which is itself a stow link into
+# this repository, so deleting foo.timer from the repository leaves BOTH broken
+# and both are removed in the same pass. That is what `systemctl disable` would
+# have done; leaving it is a dangling enablement systemd complains about on
+# every daemon-reload.
+symlinks_orphan_dir() {
+  local dir="$1" dot="$2" entry entries=0
+
+  while IFS= read -r entry; do
+    entries=$(( entries + 1 ))
+    if [[ -L $entry ]]; then
+      [[ "$(readlink -m "$entry" 2>/dev/null || true)" == "$dot"/* ]] || return 1
+    elif [[ -d $entry ]]; then
+      symlinks_orphan_dir "$entry" "$dot" || return 1
+    else
+      return 1
+    fi
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 2>/dev/null)
+
+  (( entries ))
+}
+
+symlinks_stale() {
+  local dot pkg src rel dst dir sub link target i
+  local -A managed=() expect=()
+  local dirs=()
+
+  # The comparison is against the RESOLVED repository path because that is what
+  # readlink gives back for the link, and $DOT can perfectly well be reached
+  # through a symlink -- /home/johan/dotfiles being one on a machine that keeps
+  # the clone elsewhere. Both sides canonical or the prefix test silently never
+  # matches and this whole sweep quietly does nothing.
+  dot="$(readlink -f "$DOT" 2>/dev/null || printf '%s' "$DOT")"
+
+  for pkg in "${STOW_PACKAGES[@]}"; do
+    [[ -d "$DOT/$pkg" ]] || continue
+    while IFS= read -r src; do
+      rel="${src#"$DOT/$pkg/"}"
+      symlinks_ignored "$rel" && continue
+      dst="$HOME/$rel"
+      expect["$dst"]=1
+      dir="$HOME"
+      [[ $rel == */* ]] && dir="$HOME/${rel%/*}"
+      [[ -n ${managed[$dir]:-} ]] && continue
+      managed["$dir"]=1
+      # NOT THROUGH A SYMLINK. A destination directory that is itself a link is
+      # a folded package directory, so what is on the other side of it is the
+      # repository, and walking in there would be walking the repository's own
+      # files. It also cannot hold a stale link: a file deleted from a folded
+      # directory disappears from $HOME on its own.
+      [[ -d $dir && ! -L $dir ]] && dirs+=("$dir")
+    done < <(find "$DOT/$pkg" \( -type f -o -type l \))
+  done
+
+  # $HOME ITSELF IS ALWAYS ONE OF THEM, seeded rather than discovered. Every
+  # package's root-level dotfiles land straight in it -- .zshrc, .gtkrc-2.0 --
+  # so it is a directory stow writes into by definition; and it is the one the
+  # loop above stops naming at exactly the wrong moment, because deleting the
+  # last root-level file of every package is what both leaves the leftover link
+  # AND takes $HOME out of the list of destinations. The walk below can rescue a
+  # directory the repository has forgotten only when it can reach it from a
+  # directory above, and there is nothing above this one.
+  if [[ -z ${managed[$HOME]:-} ]]; then
+    managed["$HOME"]=1
+    dirs+=("$HOME")
+  fi
+
+  (( ${#dirs[@]} )) || return 0
+
+  # Breadth-first, appending to the array being walked, so a package directory
+  # deleted several levels deep is still reached: a directory that qualifies is
+  # appended, and its own subdirectories are examined when the loop gets to it.
+  for (( i = 0; i < ${#dirs[@]}; i++ )); do
+    while IFS= read -r sub; do
+      [[ -n ${managed[$sub]:-} ]] && continue
+      managed["$sub"]=1
+      # THE REPOSITORY IS NOT SOMEWHERE THIS LOOKS, and on this machine it is
+      # sitting right there in $HOME. Nothing under it is a link stow made into
+      # a target; a directory of links inside a package would qualify below on
+      # its shape alone, and the one thing worse than a leftover link in $HOME
+      # is a deleted file in the repository.
+      [[ $sub == "$DOT" || $sub == "$DOT"/* || $sub == "$dot" || $sub == "$dot"/* ]] && continue
+      symlinks_orphan_dir "$sub" "$dot" && dirs+=("$sub")
+    done < <(find "${dirs[i]}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+  done
+
+  while IFS= read -r link; do
+    [[ -L $link ]] || continue
+    [[ -e $link ]] && continue
+    [[ -n ${expect[$link]:-} ]] && continue
+    # -m and not -f: -f gives back nothing at all when a directory in the
+    # middle of the path is missing too, which is precisely what a deleted
+    # package directory looks like, and an empty answer matches no prefix.
+    target="$(readlink -m "$link" 2>/dev/null || true)"
+    [[ $target == "$dot"/* ]] || continue
+    printf '%s\n' "$link"
+  done < <(find "${dirs[@]}" -maxdepth 1 -type l 2>/dev/null)
+}
+
+# ---------------------------------------------------------------------------
 # READ-ONLY, AND NOT THROUGH `stow -n`. stow's dry run is the right tool for
 # planning an install, but it wants the packages to be stowable right now and
 # says nothing at all about the links that are already correct -- so it cannot
@@ -49,7 +238,8 @@ symlinks_ignored() {
 # links to links, and the plain case, all with the same comparison.
 symlinks_check() {
   local pkg src rel dst target note=""
-  local missing=0 blocked=0 elsewhere=0
+  local missing=0 blocked=0 elsewhere=0 stale=0
+  local stale_links=()
 
   for pkg in "${STOW_PACKAGES[@]}"; do
     [[ -d "$DOT/$pkg" ]] || continue
@@ -81,21 +271,102 @@ symlinks_check() {
     done < <(find "$DOT/$pkg" \( -type f -o -type l \))
   done
 
+  # The links a deleted file left behind are counted from the target side and
+  # not from this walk, which cannot reach them -- see symlinks_stale.
+  mapfile -t stale_links < <(symlinks_stale)
+  stale=${#stale_links[@]}
+
   # THE NOTE IS BUILT FROM WHATEVER IS NON-ZERO rather than from the first
   # branch that matches, because these three happen together: a machine linked
   # to another checkout, with one file added since it was last stowed and one
   # left over from before, has something to say about all three.
   (( blocked ))   && note+="${note:+, }$blocked in the way"
+  (( stale ))     && note+="${note:+, }$stale left by deleted files"
   (( missing ))   && note+="${note:+, }$missing not linked"
   (( elsewhere )) && note+="${note:+, }$elsewhere linked to another checkout"
 
-  if (( blocked || elsewhere )); then
+  if (( blocked || elsewhere || stale )); then
     echo "drift:$note"
   elif (( missing )); then
     echo "missing:$note"
   else
     echo ok
   fi
+}
+
+# ---------------------------------------------------------------------------
+# REMOVING THEM, AND NOTHING ELSE.
+#
+# NO QUESTION IS ASKED, unlike the conflicts further down, and the difference
+# is what is at stake. A conflict is somebody's own file, which is why it is
+# moved to a dated folder rather than deleted; every path here is a link this
+# repository made to a file this repository no longer has. There is nothing in
+# it to keep and nothing to put back -- what it named is gone from the
+# repository, so re-creating it is not something anybody could want. Asking
+# would also mean `update`, which exists to run unattended from a keybind,
+# stopping on a question with nobody there to answer it.
+#
+# A FAILED REMOVAL IS NOT FATAL. Nothing after this needs them gone: stow links
+# the rest of the tree either way and `check` goes on reporting them on every
+# run until somebody looks. fail_stop here would take a working desktop away
+# over a link that was already broken.
+symlinks_sweep_stale() {
+  local stale=() link
+
+  mapfile -t stale < <(symlinks_stale)
+  (( ${#stale[@]} )) || return 0
+
+  ui_say "   ${#stale[@]} link(s) left behind by files this repository no longer has:"
+  printf '     ~/%s\n' "${stale[@]#"$HOME"/}"
+
+  if ! run rm -- "${stale[@]}"; then
+    ui_warn "   some of them could not be removed -- check will keep saying so"
+    return 0
+  fi
+  ui_did "   removed ${#stale[@]} link(s) that pointed at nothing"
+
+  (( ${DRY_RUN:-0} )) && return 0
+  for link in "${stale[@]}"; do
+    symlinks_prune_empty "${link%/*}"
+  done
+}
+
+# THE EMPTY DIRECTORIES, AND ONLY THE ONES THIS JUST EMPTIED.
+#
+# Deleting the last file of a directory from the repository leaves the
+# directory itself in $HOME, and nothing else will ever take it away: stow
+# removes the directories it empties when it unstows, and this never unstows.
+# One is harmless; they accumulate, one per directory the repository has ever
+# dropped, and a target tree full of them is a tree nobody can read to see what
+# stow actually owns. So they are pruned, under four conditions that between
+# them make it impossible to lose anything a person put there:
+#
+#   * The directory held a stale link this just removed. A directory this sweep
+#     never touched is not a candidate at all, so an empty directory somebody
+#     made themselves is never even looked at.
+#   * `rmdir` and never `rm -r`: it refuses anything that is not empty. One
+#     file or link left in there -- including one written between the unlink
+#     above and this, which really does happen -- saves the whole directory.
+#   * No package has that directory any more. If the repository still has it,
+#     stow wants it and it would be back a second later.
+#   * Under $HOME, and never $HOME itself.
+#
+# It walks upwards afterwards because a package directory deleted whole empties
+# its parent as well, and stops at the first rmdir that refuses.
+symlinks_prune_empty() {
+  local dir="$1" rel pkg keep
+
+  while [[ $dir == "$HOME"/?* ]]; do
+    rel="${dir#"$HOME"/}"
+    keep=0
+    for pkg in "${STOW_PACKAGES[@]}"; do
+      [[ -d "$DOT/$pkg/$rel" ]] && { keep=1; break; }
+    done
+    (( keep )) && return 0
+    rmdir "$dir" 2>/dev/null || return 0
+    ui_dim "   removed the empty ~/$rel"
+    dir="${dir%/*}"
+  done
 }
 
 # ---------------------------------------------------------------------------
@@ -131,6 +402,12 @@ symlinks_apply() {
   mapfile -t stow_args < <(symlinks_args)
 
   ui_say "   packages: ${STOW_PACKAGES[*]}"
+
+  # BEFORE STOW RUNS, because a link pointing at a file the repository no
+  # longer has is not a conflict and stow will never mention it: the simulation
+  # below would report a clean tree and leave all of them exactly where they
+  # are. See symlinks_stale for what it is willing to remove.
+  symlinks_sweep_stale
 
   # Simulated first. stow plans the whole operation and aborts the LOT on the
   # first conflict, so a single pre-existing file means not one link gets made
@@ -309,6 +586,13 @@ symlinks_move_aside() {
 # only `hyprctl reload` brings them back. This unit is not the one that does
 # that: measured, stow leaves a link that is already right completely alone,
 # same inode and same ctime across re-runs, and nothing here passes -R or -D.
+#
+# STILL NOTHING DOES, AND THAT IS NOT AN OVERSIGHT. Clearing the links a deleted
+# file leaves behind is the obvious reason to reach for -R, and it is done by a
+# sweep of this unit's own instead -- see the header over symlinks_stale, which
+# has the measurements against stow 2.4.1 that decided it. One of them is this
+# very failure: -R unlinks and rebuilds every folded directory it finds.
+#
 # It is printed because it is cheap and the failure is permanent, not because
 # it is known to be needed. `hyprctl reload` answers "ok" and exits 0 whatever
 # it just read, and so does `hyprctl configerrors` -- the errors are the

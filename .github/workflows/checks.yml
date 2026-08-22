@@ -144,6 +144,17 @@ jobs:
         if: ${{ !cancelled() }}
         run: tests/stow-conflicts.sh
 
+      # The other half of the same question. stow-conflicts.sh asks whether the
+      # packages can be linked into an empty home; this one asks what happens to
+      # a link once the file behind it is deleted from the repository, which is
+      # what an update does and what nothing here could see until it was
+      # measured on the real machine. It builds its own repository and its own
+      # home under mktemp -- it is the deletion path, so it goes nowhere near
+      # anybody's $HOME -- and stow above is what it needs installed.
+      - name: A deleted file leaves no link behind
+        if: ${{ !cancelled() }}
+        run: tests/stale-links.sh
+
       # LAST, BECAUSE IT IS ABOUT THE OTHER CHECKS RATHER THAN ABOUT THE
       # REPOSITORY. It answers whether the workflows in this directory run at
       # all, whether any of them still filters a `pull_request` by base branch
