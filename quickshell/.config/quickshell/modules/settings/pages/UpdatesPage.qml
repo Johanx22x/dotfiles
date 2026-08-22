@@ -34,7 +34,7 @@
 //
 // THE PROSE THAT WAS ON THIS PAGE IS NOW IN THESE COMMENTS, which is the other
 // half of the same cut. Every paragraph below explaining a boundary -- the
-// privilege split, what `etc` does, what a pack is -- was once a note drawn on
+// privilege split, what a pack is, what the profile is -- was once drawn on
 // screen. The reasoning is worth keeping and the wall of text was not, so it
 // moved to where the person who needs it is already reading.
 
@@ -67,8 +67,10 @@ SettingsPage {
     // note in SettingsPage.qml -- three pages recorded from the microphone for
     // hours because of that distinction.
     onOnScreenChanged: {
-        if (root.onScreen)
+        if (root.onScreen) {
             InstallerState.checkIfStale();
+            InstallerState.measureOriginIfStale();
+        }
     }
 
     // ---------------- Vocabulary ----------------
@@ -161,34 +163,27 @@ SettingsPage {
             Text {
                 width: parent.width
 
-                // The title and the id are for two different readers of the
-                // same row: the title is what the unit is, the id is what you
-                // type after `./install.sh apply` when you want to do
-                // something about it. So the id cannot go -- it is the only
-                // word on this row that is also a command argument.
+                // THE TITLE ALONE. The row used to carry the unit's id after
+                // it -- `GPU driver · gpu`, `User services · services-user` --
+                // on the argument that the id is what you type after
+                // `./install.sh apply`, so it had to be somewhere.
                 //
-                // IT IS PRINTED ONLY WHERE IT SAYS SOMETHING THE TITLE DOES
-                // NOT. Four of the fifteen units are titled exactly their own
-                // id, and those rows read as a rendering fault: `Packages ·
-                // packages`, `Symlinks · symlinks`, `Seeds · seeds`,
-                // `Monitors · monitors`.
+                // It did not have to be here. Printing it on every row made a
+                // reading table carry a second column of command arguments
+                // for a reader who, by definition, has already left this page
+                // for a terminal; the dot and the word after it were on
+                // fifteen rows to serve the one visit in twenty where
+                // somebody wanted them. A first pass suppressed only the ids
+                // that repeated their own title, which fixed `Seeds · seeds`
+                // and left every other row still trailing a word that the
+                // title had already said in full.
                 //
-                // The rule is the whole test -- print the id when it differs
-                // from the lowercased title. Checked against the real list
-                // from `./install.sh check --json`: it suppresses those four
-                // and keeps every id that earns its place, which is the eleven
-                // where the id is an abbreviation, a fragment or a different
-                // word altogether -- `GPU driver · gpu`, `Neovim config ·
-                // nvim`, `User services · services-user`, `System files ·
-                // etc`, `Optional packages · optional`. Nothing hyphenated can
-                // ever match a title, so no two-word id is at risk of being
-                // swallowed by it.
-                readonly property bool idSaysMore:
-                    (unitRow.modelData.id ?? "") !== (unitRow.modelData.title ?? "").toLowerCase()
-
-                text: idSaysMore
-                    ? `${unitRow.modelData.title}  ·  ${unitRow.modelData.id}`
-                    : (unitRow.modelData.title ?? "")
+                // WHERE THE ID STILL SURFACES, and it is not a quieter copy of
+                // this: the two hand-off rows below print the exact command
+                // they are about to run, ids and all, and that is the moment
+                // somebody actually needs to read one. The id belongs next to
+                // the command, not next to the state.
+                text: unitRow.modelData.title ?? ""
                 wrapMode: Text.WordWrap
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.fontSize
@@ -457,6 +452,69 @@ SettingsPage {
                 }
             }
 
+            // THE SECOND DISTANCE, AND THE REASON THIS HEADER HAS A THIRD
+            // LINE AFTER ALL. "Up to date" above means this machine matches
+            // the checkout on disk. It says nothing about whether the checkout
+            // still matches origin, and that gap is a real one somebody walked
+            // into: merge two pull requests, press Check again, watch nothing
+            // happen -- correctly, because nothing on this machine had
+            // changed. A page called Updates that can only answer one of the
+            // two questions people mean by the word has to say which one.
+            Text {
+                width: parent.width
+
+                visible: text !== ""
+                text: {
+                    switch (InstallerState.originState) {
+                    case "synced":
+                        return "Up to date with origin";
+                    case "behind":
+                        return InstallerState.behindOrigin === 1
+                            ? "1 commit behind origin"
+                            : `${InstallerState.behindOrigin} commits behind origin`;
+                    // Ahead is not a problem and is not offered a fix. It is
+                    // this repository's ordinary state between opening a pull
+                    // request and its merge, and a page that nagged about it
+                    // would be nagging about work in progress.
+                    case "ahead":
+                        return InstallerState.aheadOfOrigin === 1
+                            ? "1 commit ahead of origin — nothing to pull"
+                            : `${InstallerState.aheadOfOrigin} commits ahead of origin — nothing to pull`;
+                    case "diverged":
+                        return `${InstallerState.behindOrigin} behind and `
+                            + `${InstallerState.aheadOfOrigin} ahead — a pull will not `
+                            + "fast-forward until that is sorted out";
+                    case "detached":
+                        return "Detached HEAD — no branch here to pull into";
+                    case "no-upstream":
+                        return "This branch tracks nothing, so there is no origin to compare with";
+                    case "unreachable":
+                        return "Could not reach origin, so the distance to it is unknown";
+                    default:
+                        return "";
+                    }
+                }
+                wrapMode: Text.WordWrap
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize - 2
+                // Yellow for the two states a person can do something about,
+                // and `missing`'s yellow rather than a colour of its own:
+                // being behind origin is the same kind of news as a unit not
+                // being installed yet.
+                color: InstallerState.originState === "behind"
+                    || InstallerState.originState === "diverged"
+                    ? Theme.warning : Theme.textOnSurfaceVariant
+                opacity: InstallerState.measuring ? 0.45 : 1
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
+
+                Behavior on opacity {
+                    NumberAnimation { duration: Theme.animDuration }
+                }
+            }
+
             Text {
                 width: parent.width
 
@@ -480,7 +538,8 @@ SettingsPage {
         Rectangle {
             id: checkButton
 
-            readonly property bool armed: InstallerState.repoKnown && !InstallerState.checking
+            readonly property bool armed: InstallerState.repoKnown
+                && !InstallerState.checking && !InstallerState.measuring
 
             anchors.right: parent.right
             anchors.rightMargin: Theme.groupPadding * 1.5
@@ -527,7 +586,7 @@ SettingsPage {
 
                     // "Check again" is a lie the first time, and the first
                     // time is the whole of every session until this runs.
-                    text: InstallerState.checking ? "Checking…"
+                    text: InstallerState.checking || InstallerState.measuring ? "Checking…"
                         : InstallerState.ready ? "Check again"
                         : "Check now"
                     font.family: Theme.fontFamily
@@ -548,25 +607,34 @@ SettingsPage {
                 enabled: checkButton.armed
                 hoverEnabled: checkButton.armed
                 cursorShape: Qt.PointingHandCursor
-                onClicked: InstallerState.check()
+
+                // ONE PRESS ANSWERS BOTH QUESTIONS. Somebody who merges
+                // something and comes here to press this means "is there
+                // anything new", not "re-run one of the two commands that
+                // could tell me". Leaving the fetch on a button of its own
+                // would be handing them the distinction as homework.
+                onClicked: {
+                    InstallerState.check();
+                    InstallerState.measureOrigin();
+                }
             }
         }
     }
 
     // ---------------- The table ----------------
 
-    // WHY ONE ROW HERE NEVER TURNS UP UNDER EITHER BUTTON. `etc` reports and
-    // never writes: system/ is diffed against /etc and the differences are
-    // printed with the command that would close them, because half those
-    // files describe one machine and pacman owns the rest. So it is the one
-    // unit that is always `na`, never counts as outstanding, and is left out
-    // of both apply lists -- see reportOnlyUnits in InstallerState.
+    // A ROW EXPLAINS ITSELF IN ITS OWN WORDS, which is why nothing here adds
+    // to it. Every unit writes its own note and this page prints that note
+    // unedited: the code that found the problem is the only thing that knows
+    // what the problem is.
     //
-    // That used to be a paragraph at the bottom of this page and it is a
-    // comment now, because the row already says it better than the paragraph
-    // did: `etc` prints its own note, and that note ends with the command
-    // that shows the differences. A unit explaining itself in its own words
-    // does not need this page to explain it a second time.
+    // This section briefly carried a paragraph about `etc`, the one unit that
+    // reported and never wrote -- always `na`, never outstanding, absent from
+    // both apply lists. That unit has since been dropped and system/ is
+    // documentation now, so the paragraph went with it. It is left recorded
+    // here only because "why is there a row nothing offers to fix" is a
+    // reasonable question to have about this table, and the answer today is
+    // that there is no such row.
     SettingsSection {
         width: parent.width
         glyph: Icons.packages
@@ -629,6 +697,57 @@ SettingsPage {
         // can carry, and it is not this page's to make either: it falls out
         // of the privilege split in InstallerState, whose own note lists the
         // six units and the grep that found them.
+        // THE ONE SOMEBODY ASKED FOR. The complaint that started all of this
+        // was having to reproduce the whole sequence by hand every time an
+        // update landed -- read the README, remember the pull, remember which
+        // mode of the installer was the right one. This is that sequence,
+        // behind one press.
+        //
+        // IT IS FIRST because it is the outer of the two loops: taking what
+        // origin has can change what the units below are even measured
+        // against, so a person working down this section in order does the
+        // thing that moves the checkout before the things that move the
+        // machine. The whole reasoning for why it must run in a terminal, why
+        // it is `update --pull`, and what waits for what afterwards is in
+        // InstallerState beside the script it builds.
+        ActionRow {
+            glyph: Icons.terminal
+            label: "Take what origin has"
+            description: {
+                switch (InstallerState.originState) {
+                case "synced":
+                    return "Nothing to pull — this checkout matches origin.";
+                case "ahead":
+                    return "Nothing to pull — this checkout is ahead of origin.";
+                case "detached":
+                    return "There is no branch checked out to pull into.";
+                case "no-upstream":
+                    return "This branch tracks no remote branch.";
+                default:
+                    // The command, as it will appear in that terminal, for the
+                    // same reason the two rows below print theirs: somebody
+                    // who would rather type it should not have to guess what
+                    // this window is about to run on their behalf.
+                    return "./install.sh update --pull, then a reload of the "
+                        + "compositor and a restart of this shell.";
+                }
+            }
+
+            actionText: "Open a terminal"
+            actionGlyph: Icons.terminal
+            // Offered in every state except the two where there is provably
+            // nothing to fetch. `diverged` is deliberately still offered: the
+            // pull will refuse, and it will say why in a terminal that stays
+            // open, which is a better answer than a button greyed out for
+            // reasons the page would then have to explain.
+            actionEnabled: InstallerState.repoKnown
+                && InstallerState.originState !== "synced"
+                && InstallerState.originState !== "ahead"
+                && InstallerState.originState !== "detached"
+                && InstallerState.originState !== "no-upstream"
+            onTriggered: InstallerState.takeUpdate()
+        }
+
         ActionRow {
             glyph: Icons.update
             label: "Catch up on what needs no password"
