@@ -203,7 +203,11 @@ Item {
 
     implicitWidth: root.edge * 2 + root.leftWidth + root.columnGap + root.rightWidth
 
-    // The art square, top left.
+    // The FLOOR under the media block, and the size of the art square when
+    // the column beside it needs no more than this. It is not the art's own
+    // size any more -- see artFrame, which fills the block's height the way
+    // end-4's does, so that the picture and the text beside it end level and
+    // there is no strip of empty ground under one of them.
     readonly property int artSize: 104
 
     // AND THE BLOCK IS AS TALL AS THE TALLER OF THE TWO THINGS IN IT, which
@@ -833,14 +837,27 @@ Item {
             height: root.mediaHeight
 
             // ---- The sharp copy of the ground ----
+            // AS TALL AS THE BLOCK, WHICH IS AS TALL AS THE COLUMN BESIDE
+            // IT. This was a fixed 104 square while the column came to 126,
+            // which left twenty-two pixels of empty ground under the picture
+            // and beside the transport -- the exact kind of hole this whole
+            // redesign started over. Filling the height is also what end-4's
+            // own card does: their art square is Layout.fillHeight with the
+            // width following, so the two sides of the block always end
+            // level.
+            //
+            // No loop: the width follows the height, and the height comes
+            // from the block, which is sized from the COLUMN's implicit
+            // height. The column's texts all elide rather than wrap, so their
+            // heights do not depend on the width this leaves them.
             ClippingRectangle {
                 id: artFrame
 
                 anchors.left: parent.left
                 anchors.top: parent.top
+                anchors.bottom: parent.bottom
 
-                width: root.artSize
-                height: root.artSize
+                width: height
                 radius: 10
 
                 // A tint of the ground rather than a grey hole, so a track
@@ -872,7 +889,7 @@ Item {
                     visible: !art.visible
                     text: Icons.music
                     font.family: Theme.fontFamily
-                    font.pointSize: Math.round(root.artSize * 0.26)
+                    font.pointSize: Math.round(artFrame.height * 0.26)
                     color: Qt.alpha(root.ink, 0.5)
                 }
             }
@@ -956,25 +973,45 @@ Item {
                     color: Qt.alpha(root.ink, 0.7)
                 }
 
+                // THE SLACK, AND IT SITS ABOVE THE TIMES RATHER THAN UNDER
+                // THEM.
+                //
+                // It was between the times and the transport, which put a
+                // greedy spacer between a CAPTION AND THE THING IT CAPTIONS.
+                // "1:13 / 3:29" describes the bar below it; separated from it
+                // by every spare pixel in the block, the times read as a
+                // small line orphaned under the artist and related to
+                // nothing, and the wave sat a gap away below.
+                //
+                // The times and the seek row are one group and move together.
+                // Everything between the artist and that group is what
+                // stretches, so the distance from the times to the bar is the
+                // layout's own spacing and NOTHING ELSE -- it cannot change
+                // however tall the block gets, which is the test this has to
+                // pass. Growing the panel can only ever open the gap above
+                // the group.
+                //
+                // Eight is a floor and not a target. The block is sized from
+                // this column, so in practice there is no slack at all and
+                // this is exactly eight; the fillHeight only matters if
+                // something else ever makes the block taller than its own
+                // content.
+                Item {
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 8
+                }
+
+                // The caption for the bar below it. No top margin: the gap
+                // above belongs to the spacer, and the gap below is the
+                // layout's spacing, which is what keeps the pair together.
                 Text {
                     Layout.alignment: Qt.AlignLeft
-                    Layout.topMargin: 4
 
                     visible: !!root.player
                     text: root.timeText
                     font.family: Theme.fontFamily
                     font.pointSize: root.timeSize
                     color: Qt.alpha(root.ink, 0.55)
-                }
-
-                // THE SLACK, AND THE FLOOR UNDER IT. Whatever the block has
-                // spare lands here, so the text sits at the top and the
-                // transport at the bottom exactly as before -- but never less
-                // than eight pixels, which is what makes the two ends unable
-                // to meet however the type grows.
-                Item {
-                    Layout.fillHeight: true
-                    Layout.minimumHeight: 8
                 }
 
                 // ---- The seek wave and the transport, on one row ----
