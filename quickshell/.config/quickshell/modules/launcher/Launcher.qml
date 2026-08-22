@@ -511,6 +511,41 @@ PanelWindow {
                     anchors.right: parent.right
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
+
+                    // THREE AND NOT THE DEFAULT SEVEN, which is the same
+                    // correction the settings rail carries and is made for the
+                    // same reason its own note gives: the margin is only free
+                    // where the bar has empty room on BOTH sides, and this one
+                    // has an application on one side and the grid's clip on
+                    // the other.
+                    //
+                    // The margin widens the press target in both directions,
+                    // but only one of them exists here. Measured offscreen on
+                    // this geometry -- three columns of 260, rows of 60, the
+                    // bar hard against the right edge, pressing a row of the
+                    // third column across the last pixels of its width, with
+                    // the grid's own left edge at x=0 and its right at x=779:
+                    //
+                    //   grabMargin  the app hears the press  the bar takes it
+                    //   7           up to x=768             769 to 779
+                    //   3           up to x=772             773 to 779
+                    //   0           up to x=775             776 to 779
+                    //
+                    // Which is eleven pixels down the right-hand edge of every
+                    // third-column row where clicking an application scrolls
+                    // the grid instead of launching it. The outward half buys
+                    // nothing to set against that: `clip: true` on the grid
+                    // ends the target at its own edge, so everything past the
+                    // bar is discarded and the whole of the margin is taken
+                    // out of the column.
+                    //
+                    // NOT ZERO, because four pixels is the width to look at
+                    // and an unfair thing to ask anyone to hit -- which is the
+                    // reason the margin exists at all. Three is what the rail
+                    // settled on for a bar in the same position, and one
+                    // answer for "the bar is over something clickable" is
+                    // better than two.
+                    grabMargin: 3
                 }
 
                 delegate: Item {
