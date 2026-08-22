@@ -148,24 +148,27 @@ Only niri picks the changes up reliably on its own — it holds no inotify watch
 and polls its config every 500 ms, so nothing a pull or a relink does to the
 file gets past it. Hyprland manages too in every case that was tried, but its
 watch dies for good, and silently, if the file is ever unlinked with a gap
-before it comes back, so it is worth telling. The shell has to be asked:
+before it comes back, so it is worth telling. The shell has to be told too:
 
 ```sh
 hyprctl reload && hyprctl configerrors    # Hyprland, and only if hypr/ moved
-
-: > ~/.config/quickshell/.reload-nudge \
-  && rm -f ~/.config/quickshell/.reload-nudge          # Quickshell
+qs kill && qs -d --no-duplicate           # Quickshell
 ```
 
-The shell is **nudged, not restarted**, and the difference is the whole point.
-A reload that cannot parse the new tree leaves the shell up and running the
-code it already had; a cold start on that same tree exits and leaves no bar, no
-island and no launcher at all. The nudge works because Quickshell watches the
-config **directory** as well as the files in it, and a `git pull` replaces file
-inodes but never the directory's — so creating a file in `~/.config/quickshell`
-and deleting it again is heard at the exact moment every file watch is dead.
-Appending a newline to a `.qml` file does the same thing *only* on a file the
-pull did not touch, and nothing at all, silently, on one it did.
+The shell has to be **restarted and not reloaded**, and there is no gentler
+option — this was measured, after a cleverer-looking one had already shipped
+and turned out to be a no-op. Quickshell reloads when the *content* of a `.qml`
+file it is watching changes, which is what makes editing one feel live. A
+`git pull` does not change content, it replaces inodes, and the watches die
+with them: live file watches go from 122 to **zero**, nothing is logged, and
+after that no filesystem operation reaches the shell at all — not touching a
+file, not `chmod`, not creating or deleting one in the watched directories, not
+even `stow -R`. Starting the process again is the only thing that works, and
+one successful load re-registers every watch.
+
+Know the asymmetry before automating it: a *reload* that cannot parse the tree
+leaves the shell up on the code it already had, while a *start* on that same
+tree exits 255 and leaves no bar, no island and no launcher until it is fixed.
 
 `hyprctl reload` always answers `ok` and exits 0 — and so does `hyprctl
 configerrors`, on a syntax error, on an unknown key and on a clean config
