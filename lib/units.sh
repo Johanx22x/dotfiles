@@ -67,6 +67,45 @@ unit_register() {
 
 unit_exists() { [[ -n ${UNIT_SEEN[${1:-}]:-} ]]; }
 
+# ---------------------------------------------------------------------------
+# THE CONTRACT AT THE TOP OF THIS FILE, ASSERTED RATHER THAN ASSUMED.
+#
+# unit_register only ever asked whether two units answered to the same id, so
+# the other half of registration -- that the unit actually defines the five
+# functions everything below calls -- was left to be discovered by calling one
+# of them. A missing `<id>_check` failed as `command not found`, which
+# unit_state turns into `drift:the check itself failed`: the same row, in the
+# same red, as a machine whose configuration has genuinely been changed under
+# it. The reader is told to go and look at a machine that is fine.
+#
+# CHEAP ENOUGH TO DO ON EVERY RUN. Five `declare -F` per unit is a few dozen
+# lookups in the shell's own function table -- no file is opened and no unit
+# function is called -- and it happens once, at startup, before any mode has
+# decided anything. That buys the same answer for all four modes, which is the
+# point: a unit file that is short of a function is a defect in this repository
+# and every mode should say so in the same words rather than three of them
+# limping on and the fourth blaming the machine.
+#
+# _post IS NOT IN THE LIST because it is documented as optional, and
+# unit_apply asks `declare -F` before queueing it for exactly that reason.
+UNIT_CONTRACT_FNS=(meta requires available check apply)
+
+unit_assert_contract() {
+  local id fn missing=0
+  for id in "${UNIT_IDS[@]}"; do
+    for fn in "${UNIT_CONTRACT_FNS[@]}"; do
+      declare -F "${id}_${fn}" >/dev/null && continue
+      ui_bad "unit '$id' does not define ${id}_${fn}" >&2
+      missing=1
+    done
+  done
+  (( missing )) && {
+    ui_say "Every lib/units/NN-<id>.sh must define all of: ${UNIT_CONTRACT_FNS[*]}" >&2
+    exit 1
+  }
+  return 0
+}
+
 # _meta is called once per unit and cached. It is called for every unit on
 # every run -- the help text lists them all -- so it must stay two `echo`s and
 # never look at the machine.

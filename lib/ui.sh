@@ -104,6 +104,23 @@ ui_confirm() {
 #
 # A bare Enter, or no terminal, takes the default -- never a loop that cannot
 # end, which is what the compositor question used to be.
+#
+# THE SAME THREE BRANCHES ui_confirm HAS, AND THEY STAY IN STEP BY BEING THE
+# SAME THREE. This one had only the last of them, so a mode that had switched
+# questions off still stopped dead at the `read` below wherever there was a
+# terminal to stop at. `update` on a machine that has never opened the menu --
+# no compositor recorded and none installed, no gpu.vendor written down --
+# reaches both of the callers of this function and sat there until something
+# killed it, and --yes did not help because it was not looked at either. That
+# is the mode documented as "No questions" blocking on a question, on exactly
+# the machine it exists for.
+#
+# WHAT --yes MEANS FOR A LIST rather than for a yes/no: the default. There is
+# no "yes" among four options, and the default is what the question was going
+# to take on its own; anything else would be this script choosing something
+# nobody asked for. It is said out loud, in the same shape ui_confirm says it,
+# so a log reads as a decision rather than as a gap where a prompt should have
+# been.
 ui_choose_one() {
   local default="$1"; shift
   local options=("$@") reply i
@@ -115,6 +132,22 @@ ui_choose_one() {
       printf '   %d) %s\n' "$(( i + 1 ))" "${options[i]}" >&2
     fi
   done
+
+  # WHICH ANSWER WAS TAKEN GOES TO STDERR, for the reason at the top of this
+  # function: stdout carries the answer and nothing else.
+  if (( ${ASSUME_YES:-0} )); then
+    printf '%s==> %s%s %s(--yes)%s\n' \
+      "$C_YELLOW" "${options[$(( default - 1 ))]}" "$C_RESET" "$C_DIM" "$C_RESET" >&2
+    printf '%s\n' "${options[$(( default - 1 ))]}"
+    return 0
+  fi
+
+  if (( ${UI_ASK:-1} == 0 )); then
+    printf '%s==> %s (not asking)%s\n' \
+      "$C_DIM" "${options[$(( default - 1 ))]}" "$C_RESET" >&2
+    printf '%s\n' "${options[$(( default - 1 ))]}"
+    return 0
+  fi
 
   if ! ui_has_tty; then
     ui_no_tty_notice >&2
@@ -199,6 +232,25 @@ ui_csv_lines() {
 ui_multi_select() {
   local header="$1" preselected="$2"; shift 2
   local labels=("$@")
+
+  # QUESTIONS SWITCHED OFF IS THE SAME ANSWER AS NOBODY AT THE KEYBOARD, and it
+  # is a branch of its own so that "UI_ASK=0 never blocks" is a property of this
+  # file rather than of which of its functions today's modes happen to call.
+  # ui_confirm, ui_choose_one and pkg_noconfirm all read UI_ASK; a tick-box menu
+  # that did not would be the one place left where `update` could stop. Nothing
+  # reaches it that way today -- the boxes belong to the menu, and the menu is
+  # the mode that asks.
+  #
+  # --yes IS DELIBERATELY NOT A BRANCH HERE. "Yes to everything" has no meaning
+  # for a list of boxes: ticking all of them would install every optional pack
+  # on the strength of a flag that means "do not ask me". So the preselection
+  # stands, and the caller with something better to say about --yes says it
+  # itself -- see tui_optional in install.sh.
+  if (( ${UI_ASK:-1} == 0 )); then
+    ui_dim "   $header: keeping the boxes as they are (not asking)" >&2
+    ui_csv_lines "$preselected"
+    return 0
+  fi
 
   if ! ui_has_tty; then
     ui_no_tty_notice >&2

@@ -194,6 +194,31 @@ menu "three wrong answers fall back to the default rather than looping" \
      'x\ny\nz\n' 'hyprland' \
      'ui_choose_one 1 hyprland niri both'
 
+# QUESTIONS SWITCHED OFF IS NOT THE SAME STATE AS NO TERMINAL, and this
+# function knew only the second one. `update` sets UI_ASK=0 and calls itself
+# "No questions" in --help, but the branch that honoured it lived in
+# ui_confirm alone -- so with a terminal present the fallback below never
+# fired and the `read` blocked, on the compositor question of a machine with
+# neither compositor installed and on the gpu question of one with no
+# gpu.vendor written down. That is the machine `update` exists for: the one
+# that has never opened the menu. --yes did not save it either, because it was
+# not looked at.
+#
+# A KEYSTROKE IS SENT AND MUST BE LEFT UNREAD, which is what makes these two
+# assertions say something. Sending nothing would not: with no keystroke the
+# pipe feeding the terminal closes at once, `read` gets end of file, and the
+# version WITHOUT the branches answers `hyprland` as well -- a pass for the
+# wrong reason, which is exactly what happened when they were first written
+# that way. `2` is niri, so a function that reaches its `read` at all answers
+# with the wrong compositor and says so.
+menu "questions switched off take the default without reading a key" \
+     '2\n' 'hyprland' \
+     'UI_ASK=0; ui_choose_one 1 hyprland niri both'
+
+menu "--yes takes the default without reading a key" \
+     '2\n' 'hyprland' \
+     'ASSUME_YES=1; ui_choose_one 1 hyprland niri both'
+
 # ---------------------------------------------------------------------------
 say "the gum menu -- the one that had never run"
 

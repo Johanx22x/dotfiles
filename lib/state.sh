@@ -51,7 +51,18 @@ state_load() {
   # IFS is a literal tab, so a value may contain spaces -- which matters
   # already: nothing here does today, but a monitor description would, and the
   # format is shared with files that hold them.
-  while IFS=$'\t' read -r key value; do
+  #
+  # `|| [[ -n $key ]]` IS WHAT READS A LAST LINE WITH NO NEWLINE ON IT. `read`
+  # returns non-zero at end of file even when it has just filled the variables
+  # from a final unterminated line, so without this the loop exited before the
+  # body ran and the line was silently gone. state_save always terminates what
+  # it writes, so a file this script wrote could never show it -- but this file
+  # is documented as one to edit by hand, in as many words, at the end of a run
+  # ("edit $(state_path) to disagree"), and an editor that leaves off the final
+  # newline is an ordinary thing to have. What it lost was the quietest possible
+  # half of a profile: `unit.seeds<TAB>0` written last read as never having been
+  # said at all, and `update` went and applied the unit that had been told no.
+  while IFS=$'\t' read -r key value || [[ -n $key ]]; do
     [[ -z $key || $key == '#'* ]] && continue
     PROFILE["$key"]="$value"
   done < "$path"

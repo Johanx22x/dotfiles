@@ -30,6 +30,13 @@ PULL=0
 WITH_REQUIRES=0
 COMPOSITOR=""
 
+# THE FLAGS THAT MUST SURVIVE A RE-EXEC, kept as they were typed rather than
+# rebuilt from the variables they set. `update --pull` re-runs this script once
+# the pull has landed, and what it hands the new copy is the whole of what that
+# copy knows about the run: anything not in here is a flag the operator gave and
+# the second half of the run never saw. See mode_update.
+REEXEC_ARGS=()
+
 # Whether a question may be put on screen at all. `update` turns this off: it is
 # the mode meant to run from a script or out of a keybind, and a mode that is
 # non-interactive in principle and blocks on a prompt in practice is worse than
@@ -98,6 +105,15 @@ for unit_file in "$DOT"/lib/units/*.sh; do
   source "$unit_file"
 done
 unset unit_file
+
+# AND THEY ARE ASKED, ONCE, WHETHER THEY ARE UNITS AT ALL. A unit file short of
+# one of the five required functions used to be found out by calling it: a
+# missing `_check` came back as `drift:the check itself failed`, which is the
+# same row in the same red as a machine that has genuinely drifted, so the
+# reader was sent to look at a machine that was fine. It is a defect in this
+# repository and it now says so, in the same words, before any mode has decided
+# anything. See unit_assert_contract.
+unit_assert_contract
 
 # ---------------------------------------------------------------------------
 # THE COMPOSITOR decides which packages go in and which configuration gets
@@ -253,7 +269,7 @@ while (( $# )); do
       ;;
     --pull)        PULL=1 ;;
     --with-requires) WITH_REQUIRES=1 ;;
-    -y|--yes)      ASSUME_YES=1 ;;
+    -y|--yes)      ASSUME_YES=1; REEXEC_ARGS+=("$1") ;;
     -n|--dry-run)  DRY_RUN=1 ;;
     --json)        JSON=1 ;;
     --compositor=*)
@@ -262,10 +278,11 @@ while (( $# )); do
         hyprland|niri|both) ;;
         *) ui_bad "--compositor takes hyprland, niri or both, not '$COMPOSITOR'" >&2; exit 2 ;;
       esac
+      REEXEC_ARGS+=("$1")
       ;;
     --compositor)
       ui_bad "write it as --compositor=hyprland" >&2; exit 2 ;;
-    --profile=*)   PROFILE_PATH="${1#*=}" ;;
+    --profile=*)   PROFILE_PATH="${1#*=}"; REEXEC_ARGS+=("$1") ;;
     --profile)
       ui_bad "write it as --profile=/path/to/file" >&2; exit 2 ;;
     -h|--help)     usage; exit 0 ;;
@@ -411,6 +428,31 @@ run_units() {
 mode_check() {
   local id state kind ok=0 bad=0 na=0
 
+  # AND THE DEPENDENCY GRAPH IS PART OF WHAT IT CHECKS, over every unit there
+  # is and not only over the ones some mode is about to run.
+  #
+  # WHY HERE. lib/units.sh has two guards -- a cycle, and a requirement naming a
+  # unit that does not exist -- and both live in unit_visit, which only
+  # `update` and `apply` ever reached. So a malformed `_requires` merged green
+  # through CI, which runs `check`, and stopped the machine that ran `update`:
+  # the mode whose whole job is to say what is wrong was the one mode that could
+  # not see it. A cycle was worse still, because `apply <one unit>` cannot see
+  # it either -- unit_order_within does not follow a requirement outside the set
+  # it was given -- so the full walk below is the only place in this script that
+  # asks the question at all.
+  #
+  # IT COSTS `check` NOTHING IT DOES NOT ALREADY SPEND, and breaks none of its
+  # promises: `_requires` prints ids and is documented to do nothing else, so
+  # this walk writes nothing, needs no root, and asks the machine no questions.
+  #
+  # IT STOPS THE RUN RATHER THAN FILLING A COLUMN, which is unit_visit's own
+  # behaviour and is right for what this is: a broken graph is a bug in these
+  # files, not a state of this machine, and there is no row it belongs on. Under
+  # --json that means an error on stderr and a non-zero exit instead of an
+  # array -- which is what a reader piping this into jq should get, rather than
+  # well-formed JSON reporting on a registry that cannot be ordered.
+  unit_order "${UNIT_IDS[@]}"
+
   compositor_resolve check
   stow_packages_resolve
 
@@ -546,10 +588,26 @@ mode_update() {
     # half in effect -- the new unit files on disk, the old ones in memory.
     # Re-exec with the same arguments minus the pull and let what arrived do the
     # work. Skipped under --dry-run, where nothing was pulled to re-read.
+    #
+    # AND WITH THE FLAGS IT WAS GIVEN, which it was not. The line that rebuilt
+    # this said `again=(update)` plus --yes and dropped everything else, so
+    # `update --pull --compositor=hyprland` re-ran as a bare `update` and the
+    # second half of the run resolved the compositor from the profile or from
+    # what happened to be installed -- on this machine that stowed BOTH
+    # compositor packages, linking configuration nobody had asked for, in the
+    # mode meant for a cron job and a keybind. --profile went the same way,
+    # which is worse in kind: the run reads and writes a different file after
+    # the pull from the one it read before it.
+    #
+    # --pull IS THE ONE FLAG DELIBERATELY LEFT OUT, because it has already
+    # happened and passing it on would pull again on every re-exec. Of what is
+    # left, --json and a unit id are refused for this mode by the argument
+    # parser, --dry-run never reaches this line, and --with-requires belongs to
+    # `apply` and is read nowhere in this mode -- so the three flags recorded
+    # in REEXEC_ARGS are the whole of what an `update` can be told.
     if (( ! DRY_RUN )); then
       ui_dim "  re-running with what the pull brought in"
-      again=(update)
-      (( ASSUME_YES )) && again+=(--yes)
+      again=(update "${REEXEC_ARGS[@]}")
       exec "$DOT/install.sh" "${again[@]}"
     fi
   fi
