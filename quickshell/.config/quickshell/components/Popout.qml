@@ -31,6 +31,24 @@ PanelWindow {
 
     property bool isOpen: false
 
+    // Whether what is showing was ASKED FOR -- a keybind, an IPC call -- rather
+    // than clicked on. Set by the two request functions below and cleared by
+    // everything else; the only thing that reads it is the rule further down
+    // that takes a requested panel away when this stops being the bar a request
+    // means.
+    property bool byRequest: false
+
+    // IS THIS THE POPOUT A REQUEST MEANS?
+    //
+    // There is one of these per bar, which is right for a menu belonging to the
+    // icon that was clicked and wrong for a panel summoned by a key: the
+    // keybind reaches every bar at once, and every bar opening its own copy is
+    // one panel drawn on every monitor. Screens.panelScreen names the single
+    // bar that answers -- see the long note there for why it is grabScreens
+    // that decides, so this and the launcher cannot land on different monitors.
+    readonly property bool answersRequests: !!Screens.panelScreen
+        && Screens.panelScreen.name === (root.screen?.name ?? "")
+
     // What to show. Swapping the component is what makes one window serve
     // every widget; it is destroyed when closed, so a popout never keeps
     // stale state from the last time it was open.
@@ -78,15 +96,20 @@ PanelWindow {
         && !Compositor.hasFullscreenOn(root.screen?.name ?? "")
 
 
+    // THE CLICK DOORS. A click names the bar it landed on, so these open on
+    // this popout and ask nobody: the tray menu belongs to the icon that was
+    // clicked, on the monitor it was clicked on.
     function openAt(x: real, component: Component): void {
         anchorX = x;
         contentComponent = component;
+        byRequest = false;
         isOpen = true;
     }
 
     function close(): void {
         isOpen = false;
         contentComponent = null;
+        byRequest = false;
     }
 
     // Opening the same popout twice in a row closes it, which is what a
@@ -97,6 +120,63 @@ PanelWindow {
         else
             openAt(x, component);
     }
+
+    // THE REQUEST DOORS -- what a keybind or an IPC call comes through, which
+    // is every bar at once. Only the bar that answers opens anything.
+    //
+    // The other bars are not silent, they TIDY UP: one holding this same panel
+    // puts it away, so a request can never leave two copies of one panel on two
+    // monitors. That is the case where the panel was clicked open on one bar --
+    // legitimately, a click names its own bar -- and the key is then pressed
+    // while another bar has the focus.
+    function requestOpenAt(x: real, component: Component): void {
+        if (!root.answersRequests) {
+            if (root.isOpen && root.contentComponent === component)
+                root.close();
+            return;
+        }
+
+        root.openAt(x, component);
+        root.byRequest = true;
+    }
+
+    // Toggling closes wherever it is showing, answering bar or not: a key
+    // pressed a second time has to put the panel away from any monitor, or the
+    // fix for opening in the wrong place becomes a panel that cannot be closed.
+    function requestToggleAt(x: real, component: Component): void {
+        if (root.isOpen && root.contentComponent === component) {
+            root.close();
+            return;
+        }
+
+        root.requestOpenAt(x, component);
+    }
+
+    // THE FOCUS MOVES WHILE THE PANEL IS UP, and something has to happen. Three
+    // answers were possible and this one CLOSES it.
+    //
+    // Following the focus is what the launcher does -- it is built from
+    // Variants over grabScreens, so it is destroyed and rebuilt on the newly
+    // focused monitor while its open flag rides across in a singleton. That is
+    // right for a surface holding an exclusive keyboard grab, because nothing
+    // else can be reached while it is up so the focus cannot wander by
+    // accident. This panel holds no grab at all, and where the compositor
+    // moves the focus with the pointer -- which is how this session is set up
+    // -- following would mean the dashboard teleporting from one monitor to
+    // the other as the pointer crossed between them.
+    //
+    // Staying put leaves a panel open on a monitor that no longer has the
+    // focus, and leaves the keybind toggling against a copy the user is not
+    // looking at.
+    //
+    // So it goes away, which is also what the very next click anywhere outside
+    // it would have done through FocusGrab: leaving the screen is the same
+    // intent arriving a moment earlier. Only what was REQUESTED is taken away
+    // -- a tray menu that was clicked open belongs to its own bar and stays
+    // there, which also keeps it alive on a bar whose monitor has no focused
+    // window to give it the focus.
+    onAnswersRequestsChanged: if (!root.answersRequests && root.byRequest)
+        root.close()
 
     screen: modelData
     visible: isOpen
