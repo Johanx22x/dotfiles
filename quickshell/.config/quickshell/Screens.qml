@@ -37,6 +37,7 @@
 
 pragma Singleton
 
+import QtQuick
 import Quickshell
 import "root:/"
 
@@ -138,8 +139,8 @@ Singleton {
         return focused ? [focused] : root.mainOnly;
     }
 
-    // WHICH BAR ANSWERS A PANEL THAT WAS ASKED FOR RATHER THAN CLICKED ON --
-    // the island's dashboard and the notification history.
+    // WHICH BAR SHOWS A PANEL THAT WAS ASKED FOR RATHER THAN CLICKED ON -- the
+    // island's dashboard and the notification history.
     //
     // Both are CONTENT inside the bar's shared popout, and that popout is per
     // bar because the bar is (see barScreens below). So SUPER + D reached every
@@ -161,6 +162,11 @@ Singleton {
     // with no bar, so the keybind would land nowhere and read as broken. It
     // falls back to the main bar, and to the first bar when the main screen is
     // not one of the screens carrying one.
+    //
+    // THIS IS ALSO WHERE AN OPEN PANEL MOVES TO. It answers "which bar" at
+    // every moment and not only at the moment of opening, so a panel that is
+    // already up follows it across -- see settledPanelScreen just below for the
+    // part that keeps a travelling pointer from dragging the panel with it.
     readonly property var panelScreen: {
         const bars = root.barScreens;
 
@@ -174,6 +180,49 @@ Singleton {
 
         return bars.find(screen => screen.name === root.mainName) ?? bars[0];
     }
+
+    // THE SAME ANSWER, HELD STILL WHILE THE POINTER IS TRAVELLING.
+    //
+    // A panel that is already open follows panelScreen, and following it costs
+    // a REBUILD: the popout on the old bar destroys its content and the popout
+    // on the new bar builds it again, because a layer surface belongs to one
+    // output and there is no moving one across. That is the same price Variants
+    // pays for the launcher and it is fine once. It is not fine several times a
+    // second, which is what a focus that follows the mouse hands out while a
+    // pointer crosses a monitor edge, or sweeps over a screen in the middle of
+    // three.
+    //
+    // So the MOVE reads this and the OPEN reads panelScreen directly. Opening
+    // has to land on the monitor being looked at right now; moving can afford
+    // to wait for the focus to mean it. A sweep straight across never moves the
+    // panel at all, because by the time this settles the focus is back where it
+    // started and the value has not changed.
+    //
+    // NOT A BINDING, deliberately: a binding would track panelScreen exactly
+    // and there would be nothing settled about it. It is assigned by the timer.
+    property var settledPanelScreen: null
+
+    // Long enough that crossing a monitor to reach something on the other side
+    // does not drag the panel along on the way, short enough that a deliberate
+    // move does not read as the shell being slow to notice. It is a rebuild
+    // being debounced, not an animation, so it is not one of Theme's durations.
+    readonly property int panelSettleDelay: 250
+
+    onPanelScreenChanged: settle.restart()
+
+    Timer {
+        id: settle
+
+        interval: root.panelSettleDelay
+        onTriggered: root.settledPanelScreen = root.panelScreen
+    }
+
+    // The first settle costs no delay. Waiting a quarter of a second at startup
+    // for a value nothing is reading yet would be harmless, but it would also
+    // leave settledPanelScreen null for that long, and a null that only ever
+    // appears in the first instants of a session is the kind of state nothing
+    // gets tested against.
+    Component.onCompleted: root.settledPanelScreen = root.panelScreen
 
     // The main screen's key, for the settings window and for anything that has
     // to say "this one" in the same spelling Config stores.
