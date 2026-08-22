@@ -80,6 +80,25 @@ Item {
     // Horizontal breathing room inside the capsule.
     readonly property int pad: 14
 
+    // WHERE THE DASHBOARD COMES OUT, under the middle of this capsule.
+    //
+    // mapToItem(null, ...) gives coordinates in the bar's window, and the bar
+    // starts at x = 0 of the screen, so this is already a screen x.
+    //
+    // The fallback is for the bar where the island is switched OFF -- SUPER + D
+    // still opens the dashboard there, which is the whole reason that switch is
+    // allowed to exist. A Row does not lay out an invisible child, so this
+    // item's own x has never been set and says nothing; the centre of the
+    // screen is where the island would have been, and Popout's own clamp keeps
+    // the panel inside the edges from there. The same reading, and the same
+    // reason for it, as NotificationButton.anchorX.
+    function anchorX(): real {
+        if (root.visible)
+            return root.mapToItem(null, root.width / 2, 0).x;
+
+        return (root.popout.screen?.width ?? 0) / 2;
+    }
+
     // ---------------- The ladder ----------------
     readonly property string mode: {
         // OUR OWN recording is a rung, above media: it was started from the
@@ -400,17 +419,28 @@ Item {
                 return;
             }
 
-            // mapToItem(null, ...) gives coordinates in the bar's window, and
-            // the bar starts at x = 0 of the screen, so this is already a
-            // screen x.
-            root.popout.toggleAt(root.mapToItem(null, root.width / 2, 0).x, dashboardComponent);
+            // toggleAt and not requestToggleAt: a click names the bar it
+            // landed on, so it opens here whichever monitor has the focus.
+            root.popout.toggleAt(root.anchorX(), dashboardComponent);
         }
     }
 
-    // SUPER + D, through IslandState's IpcHandler. Deliberately the SAME call
-    // the click makes, so the keybind and the pointer cannot drift apart: one
-    // of them opening what the other closes is the kind of bug that only
-    // shows up months later.
+    // SUPER + D, through IslandState's IpcHandler. The same anchor the click
+    // uses, so the keybind and the pointer cannot drift apart about WHERE the
+    // panel comes out: one of them opening what the other closes is the kind of
+    // bug that only shows up months later.
+    //
+    // WHERE IT DIFFERS IS WHICH BAR ANSWERS, and it has to. This signal reaches
+    // every Island there is -- one per bar -- and the plain toggleAt below made
+    // each of them open its own copy, so the dashboard appeared on every
+    // monitor carrying a bar at once. requestToggleAt is the same toggle asked
+    // of the one bar Screens.panelScreen names, with the others putting away a
+    // dashboard they happen to be holding rather than opening a second one.
+    //
+    // The CLOSE stays unconditional on purpose. It exists so that a selection
+    // tool started from inside the panel is not launched behind a focus grab,
+    // and for that the panel has to be gone from every monitor it could be on
+    // -- there is nothing to be careful about in closing what is already shut.
     Connections {
         target: IslandState
 
@@ -419,7 +449,7 @@ Item {
         }
 
         function onDashboardRequested(): void {
-            root.popout.toggleAt(root.mapToItem(null, root.width / 2, 0).x, dashboardComponent);
+            root.popout.requestToggleAt(root.anchorX(), dashboardComponent);
         }
 
         // An onDashboardOpenRequested was here, opening rather than toggling
