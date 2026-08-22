@@ -106,6 +106,15 @@ for unit_file in "$DOT"/lib/units/*.sh; do
 done
 unset unit_file
 
+# AND THEY ARE ASKED, ONCE, WHETHER THEY ARE UNITS AT ALL. A unit file short of
+# one of the five required functions used to be found out by calling it: a
+# missing `_check` came back as `drift:the check itself failed`, which is the
+# same row in the same red as a machine that has genuinely drifted, so the
+# reader was sent to look at a machine that was fine. It is a defect in this
+# repository and it now says so, in the same words, before any mode has decided
+# anything. See unit_assert_contract.
+unit_assert_contract
+
 # ---------------------------------------------------------------------------
 # THE COMPOSITOR decides which packages go in and which configuration gets
 # linked, so it has to be settled before any unit is asked anything.
@@ -411,6 +420,31 @@ run_units() {
 # twice.
 mode_check() {
   local id state kind ok=0 bad=0 na=0
+
+  # AND THE DEPENDENCY GRAPH IS PART OF WHAT IT CHECKS, over every unit there
+  # is and not only over the ones some mode is about to run.
+  #
+  # WHY HERE. lib/units.sh has two guards -- a cycle, and a requirement naming a
+  # unit that does not exist -- and both live in unit_visit, which only
+  # `update` and `apply` ever reached. So a malformed `_requires` merged green
+  # through CI, which runs `check`, and stopped the machine that ran `update`:
+  # the mode whose whole job is to say what is wrong was the one mode that could
+  # not see it. A cycle was worse still, because `apply <one unit>` cannot see
+  # it either -- unit_order_within does not follow a requirement outside the set
+  # it was given -- so the full walk below is the only place in this script that
+  # asks the question at all.
+  #
+  # IT COSTS `check` NOTHING IT DOES NOT ALREADY SPEND, and breaks none of its
+  # promises: `_requires` prints ids and is documented to do nothing else, so
+  # this walk writes nothing, needs no root, and asks the machine no questions.
+  #
+  # IT STOPS THE RUN RATHER THAN FILLING A COLUMN, which is unit_visit's own
+  # behaviour and is right for what this is: a broken graph is a bug in these
+  # files, not a state of this machine, and there is no row it belongs on. Under
+  # --json that means an error on stderr and a non-zero exit instead of an
+  # array -- which is what a reader piping this into jq should get, rather than
+  # well-formed JSON reporting on a registry that cannot be ordered.
+  unit_order "${UNIT_IDS[@]}"
 
   compositor_resolve check
   stow_packages_resolve
