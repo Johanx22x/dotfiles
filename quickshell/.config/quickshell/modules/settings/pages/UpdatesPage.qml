@@ -38,7 +38,6 @@
 // screen. The reasoning is worth keeping and the wall of text was not, so it
 // moved to where the person who needs it is already reading.
 
-import Quickshell
 import QtQuick
 import qs
 import qs.components

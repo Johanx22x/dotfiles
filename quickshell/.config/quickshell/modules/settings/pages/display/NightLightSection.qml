@@ -11,7 +11,6 @@
 // only draws them. See its header for why the schedule is the shell's job
 // and the filter is not.
 
-import Quickshell
 import Quickshell.Io
 import QtQuick
 import qs

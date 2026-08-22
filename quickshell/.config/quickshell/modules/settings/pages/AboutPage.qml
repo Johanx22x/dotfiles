@@ -13,7 +13,6 @@
 // enumerating what "everything" is rather than a list somebody remembers to
 // extend, and it needs its writes spaced out; neither exists yet.
 
-import Quickshell
 import QtQuick
 import qs
 import qs.components

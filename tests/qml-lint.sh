@@ -14,7 +14,7 @@
 #
 # The tree now imports by module name -- `import qs.components` -- which is the
 # same directories under the name Quickshell registers them as. qmllint can
-# follow that, given a qmldir per directory. The same sweep is now 326.
+# follow that, given a qmldir per directory. The same sweep is now 307.
 #
 # WHERE THE qmldir FILES COME FROM, AND WHY THEY ARE NOT IN THE REPOSITORY.
 # Quickshell synthesizes one per directory at startup -- it scans each file for
@@ -52,7 +52,7 @@
 # TURNED IT RED, and that is measured here rather than supposed. Reverting
 # 279c1d3 -- the launcher fix, where a scrollbar's grab margin ate eleven pixels
 # off every third-column row, so a click launched nothing -- and sweeping the
-# tree again gives 326 warnings. The fixed tree gives 326. The same number, from
+# tree again gives 307 warnings. The fixed tree gives 307. The same number, from
 # the same files, with the bug in and with the bug out.
 #
 # That is not a gap to be closed by adding rules. A linter reads types and
@@ -65,17 +65,18 @@
 # WHAT IT DOES CATCH is a different class and a much larger one, over a body of
 # code where nothing has ever looked: names that resolve to nothing, members
 # that do not exist on the type they are read from, imports nothing uses, and
-# duplicated bindings. It found a second `Behavior on color` on the same
-# ClippingRectangle in modules/island/Island.qml on its first run.
+# duplicated bindings. On its first run it found a second `Behavior on color` on
+# the same ClippingRectangle in modules/island/Island.qml, and fifteen imports
+# no file used. Both are fixed, which is why those two lines read 0 below.
 # ---------------------------------------------------------------------------
 #
-# THE BASELINE, AND WHY IT IS NOT ZERO. 326 is not a target anybody reached; it
-# is where the tree sits the first time a linter was able to read it. Gating at
-# zero would mean gating at a number nobody can reach today, so this gates at
-# what is there and refuses to let it grow. The table below is the whole of it,
-# and the shape matters more than the total:
+# THE BASELINE, AND WHY IT IS NOT ZERO. The tree measured 326 the first time a
+# linter could read it; 19 of those were cheap and are gone, so it is 307.
+# Gating at zero would mean gating at a number nobody can reach today, so this
+# gates at what is there and refuses to let it grow. The table below is the
+# whole of it, and the shape matters more than the total:
 #
-#   249  unqualified                243 of them are one thing -- a delegate
+#   246  unqualified                243 of them are one thing -- a delegate
 #                                   naming an id from the component outside it,
 #                                   which qmllint answers with "set pragma
 #                                   ComponentBehavior: Bound". That pragma is a
@@ -86,7 +87,9 @@
 #                                   loads, which is exactly the evidence that
 #                                   cannot tell a bound delegate from a broken
 #                                   one. It is left alone deliberately. The
-#                                   other 6 are ordinary unqualified reads.
+#                                   other 3 are ordinary unqualified reads, in
+#                                   files where fixing them was a one-word
+#                                   change; Compositor.qml's three are gone.
 #    19  missing-property           reads through a `var`, and PathView
 #                                   attached properties declared by
 #                                   PathAttribute, which qmllint cannot see.
@@ -95,8 +98,6 @@
 #                                   onExited handler. Quickshell exposes a Qt
 #                                   private enum there; nothing in this
 #                                   repository can fix it.
-#    15  unused-imports             real, and cheap -- see the commit that
-#                                   removes them.
 #    14  unresolved-type            Quickshell C++ types not exposed
 #                                   declaratively: Toplevel, UntypedObjectModel,
 #                                   FileViewAdapter, DBusMenuHandle. Not ours.
@@ -104,9 +105,18 @@
 #                                   false -- the whole shell is PanelWindows. An
 #                                   artefact of how Quickshell registers it.
 #     1  incompatible-type          Loader.item assigned to a typed property.
-#     1  duplicate-property-binding the Island finding above.
+#     1  redundant-optional-chaining `?.` on a QVariantMap, in the Hyprland
+#                                   backend. LEFT ALONE ON PURPOSE, and it is
+#                                   the clearest example of where cheap stops:
+#                                   the edit is one character, but the only
+#                                   check that could confirm it runs under
+#                                   labwc, where there is no Hyprland and that
+#                                   branch is never reached. A one-character fix
+#                                   nothing can verify is not cheap.
+#     0  unused-imports             were 15, all removed.
+#     0  duplicate-property-binding was the Island finding above.
 #
-# So 60 of the 326 -- signal-handler-parameters, unresolved-type,
+# So 60 of the 307 -- signal-handler-parameters, unresolved-type,
 # uncreatable-type -- are Quickshell's type information rather than this
 # repository's code, and no change here can move them. They are counted anyway,
 # because a baseline that quietly excludes things is a baseline nobody can
@@ -129,16 +139,19 @@ QMLLINT=/usr/lib/qt6/bin/qmllint
 
 # What the tree measured at when a linter could first read it, by category.
 # Lower a number when a change earns it; the run says so when one drops.
+# Zero entries are kept rather than deleted: the category is spelled out so a
+# new one is reported against a number this file states, instead of appearing
+# from nowhere and being compared against an implicit zero nobody wrote down.
 declare -A BASELINE=(
-    [unqualified]=249
+    [unqualified]=246
     [missing-property]=19
     [signal-handler-parameters]=17
-    [unused-imports]=15
     [unresolved-type]=14
     [uncreatable-type]=9
     [incompatible-type]=1
-    [duplicate-property-binding]=1
     [redundant-optional-chaining]=1
+    [unused-imports]=0
+    [duplicate-property-binding]=0
 )
 
 failed=0

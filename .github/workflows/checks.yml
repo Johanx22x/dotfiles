@@ -189,7 +189,7 @@ jobs:
       #
       # The tree now imports by module name -- `import qs.components` -- which
       # is what Quickshell registers those directories as, and the same sweep is
-      # 326. The script builds the qmldirs qmllint needs into a copy under
+      # 307. The script builds the qmldirs qmllint needs into a copy under
       # mktemp, because a committed qmldir would turn Quickshell's own
       # synthesis off and become a second place every component has to be
       # registered. It gates per category at what the tree measured rather than
@@ -197,7 +197,7 @@ jobs:
       #
       # AND IT WOULD NOT HAVE CAUGHT EITHER OF THIS WEEK'S TWO BREAKAGES, which
       # is measured in the script rather than assumed: with the launcher fix of
-      # 279c1d3 reverted the sweep gives 326, and with it in place, 326. It sees
+      # 279c1d3 reverted the sweep gives 307, and with it in place, 307. It sees
       # names and types, not what any of it does on a screen. The header says so
       # at length, and it belongs there rather than only here.
       - name: The QML tree passes qmllint
@@ -293,7 +293,8 @@ jobs:
       # resolve, and it synthesizes a qmldir per directory at startup -- which
       # is both the proof that the mapping is well-defined and the specification
       # the script's generator was checked against. The rewrite was mechanical
-      # and the sweep went from 4,074 warnings to 326.
+      # and the sweep went from 4,074 warnings to 326, and to 307 once the
+      # cheap half of those was cleared.
       #
       # WHAT REMAINS TRUE OF tests/shell-load.sh, and it is the more important
       # half. It answers a different question rather than a smaller one:

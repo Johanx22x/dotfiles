@@ -644,10 +644,6 @@ Item {
             }
         }
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
-
         // ---------------- Machine in trouble ----------------
         // Critical throughout, and it pulses. The other states are read when
         // the eye happens to pass over the centre of the bar; this one has to

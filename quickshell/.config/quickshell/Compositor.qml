@@ -126,11 +126,11 @@ Singleton {
         sourceComponent: {
             switch (root.flavor) {
             case "niri":
-                return niriBackend;
+                return root.niriBackend;
             case "hyprland":
-                return hyprlandBackend;
+                return root.hyprlandBackend;
             default:
-                return nullBackend;
+                return root.nullBackend;
             }
         }
     }

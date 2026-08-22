@@ -19,7 +19,6 @@
 // where a display manager looks too, so the picture is the account's and not
 // just this shell's.
 
-import Quickshell
 import Quickshell.Io
 import QtQuick
 import qs

@@ -9,7 +9,6 @@
 // dismissing tells the sending application the user closed it deliberately,
 // which is what lets apps like Discord stop re-sending the same thing.
 
-import Quickshell
 import Quickshell.Services.Notifications
 import QtQuick
 import qs

@@ -20,7 +20,6 @@
 // came from. A Loader with a `source` string does not resolve the file until it
 // is actually needed, so the Hyprland import never happens anywhere else.
 
-import Quickshell
 import QtQuick
 import qs
 

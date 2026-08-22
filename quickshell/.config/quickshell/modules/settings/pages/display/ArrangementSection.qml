@@ -33,7 +33,6 @@
 // thing that reads or writes an arrangement, and there is no second view of it
 // to keep in step, where the mode draft is read by one card per monitor.
 
-import Quickshell
 import Quickshell.Io
 import QtQuick
 import qs
