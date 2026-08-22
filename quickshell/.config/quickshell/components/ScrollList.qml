@@ -31,13 +31,31 @@
 // ever wheeled and clicked, it means the first click after every scroll is
 // thrown away.
 //
-// Measured on Qt 6.11.1, offscreen, against the settings rail's real
-// geometry: through a plain Flickable a click 0 ms, 100 ms and 300 ms after
-// one wheel notch was lost every time, and only the one at 600 ms landed.
-// Through this component all four landed, and dragging still scrolls. It cost
-// a real complaint first -- the settings rail's Updates entry is the only one
+// THE WHEEL WAS HALF OF IT, and shipping that half alone did not fix the
+// complaint. A DRAG puts the view into the same state and the handler below
+// does nothing about it: press the list, pull it up, let go, and the
+// Flickable is still `moving` for the best part of a second afterwards --
+// during which its child event filter takes every press away from the rows
+// inside it, exactly as the wheel animation did. So dragging is off; see
+// `interactive` below for what that costs and what it does not.
+//
+// MEASURED, Qt 6.11.2, offscreen, against the settings rail's real geometry
+// -- an 820x580 window, a 452px list over 530px of entries -- by scrolling to
+// the bottom and clicking the entry that is only reachable that way, at four
+// delays after the gesture:
+//
+//                                  0 ms   100 ms  300 ms  600 ms
+//     plain Flickable, wheel        lost    lost    lost   lands
+//     this, wheel                  lands   lands   lands   lands
+//     this, drag or flick, before   lost    lost    lost   lands
+//     this, drag or flick, after   the gesture is gone, so there is no
+//                                  click left to lose
+//
+// It cost two rounds. The rail's Updates and About entries are the only two
 // anybody reaches by scrolling, so a window-wide effect was reported, and
-// hunted, as one page refusing to open on the first click.
+// hunted twice, as two pages refusing to open on the first click -- the first
+// time it was blamed on the wheel alone, on a bench that only ever sent wheel
+// events.
 
 import QtQuick
 import "root:/"
@@ -49,6 +67,39 @@ Flickable {
     contentWidth: width
     clip: true
     boundsBehavior: Flickable.StopAtBounds
+
+    // NOT DRAGGABLE, AND THAT IS THE POINT. `interactive` is what turns a
+    // press-and-pull into a scroll, and it is the same switch that makes
+    // QQuickFlickable filter the presses of everything inside it: while
+    // `moving` is true -- which it stays for the best part of a second AFTER
+    // a drag ends, not merely during it -- each press is taken from the row
+    // underneath so that the gesture can be continued instead of interrupted.
+    // That is the right call for a finger and the wrong one for a mouse, and
+    // this shell is only ever driven by a mouse: there is no touchscreen, and
+    // InputPage says in its own header that there is no touchpad on this
+    // machine either.
+    //
+    // WHAT IS LOST is grabbing a list and pulling it. WHAT IS KEPT is
+    // everything that actually moves these views: the wheel, through the
+    // handler below, which does not go through `interactive` at all; and the
+    // scrollbar, which writes contentY straight in from a MouseArea that
+    // lives outside the view. Both were driven at the rail at 0, 100, 300 and
+    // 600 ms after the scroll, and the click lands every time.
+    //
+    // THE HAND-BACK IS UNCHANGED, which is what this file exists for and so
+    // the thing to check hardest. Wheeling over a capped list that can still
+    // move moves the list and leaves the page under it alone; wheeling over
+    // one that cannot move moves the page instead. Both measured either side
+    // of this line, and both give the same numbers -- with dragging off, the
+    // wheel event a disabled handler declines is declined by the Flickable
+    // too, and reaches the page the same way it did before.
+    //
+    // IF A TOUCH DEVICE EVER ARRIVES this is the line to revisit, and the
+    // answer then is not simply to delete it: the wheel handler below only
+    // accepts a real mouse (WheelHandler defaults to acceptedDevices: Mouse
+    // and drops anything Qt marks as synthesized), so a touchpad already
+    // falls through to the Flickable and would need that widened first.
+    interactive: false
 
     // `visible: height > 0` ON ONE OF THESE IS A QUESTION ABOUT WHERE THE
     // HEIGHT COMES FROM, and that answer is the whole of it. This header used
