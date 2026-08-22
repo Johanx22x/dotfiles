@@ -114,6 +114,18 @@ ShellRoot {
         Component.onCompleted: Track.armed
     }
 
+    // THE ONE-SURFACE-AT-A-TIME RULE IS AWAKE FROM LOGIN, and this line is what
+    // lets it, for the same reason as the five above. modules/Surfaces.qml is an
+    // arbiter: it listens to the singletons behind the launcher, the power menu,
+    // the cheatsheet, the carousel and the bars' popouts, and closes whichever
+    // of them did not just ask for the screen. Nothing READS it except the bars,
+    // so left lazy it would come into being the first time a bar was built and
+    // the half of the rule that has nothing to do with bars would silently
+    // depend on there being one.
+    Scope {
+        Component.onCompleted: Surfaces.armed
+    }
+
     // A Bar on each screen that is meant to have one -- the main screen alone
     // until the Bar page says otherwise. See Screens.qml for how the main one
     // is chosen and why it is no longer a model name written out five times.

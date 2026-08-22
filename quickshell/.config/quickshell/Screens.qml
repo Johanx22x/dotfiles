@@ -114,9 +114,9 @@ Singleton {
 
     // WHERE THE GRABBING SURFACES GO -- the launcher, the power menu, the
     // cheatsheet and the wallpaper carousel. One of them at a time, always --
-    // each of those singletons closes the others -- and the only question is
-    // which screen it appears on, which depends on the compositor rather than
-    // on taste.
+    // that rule is modules/Surfaces.qml, which also counts the bar's popout
+    // among them -- and the only question here is which screen the one that is
+    // up appears on, which depends on the compositor rather than on taste.
     //
     // Where the keyboard grab is session-wide, a fixed screen is right: the
     // surface is heard wherever the user happens to be looking, and pinning it

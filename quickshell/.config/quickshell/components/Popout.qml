@@ -13,6 +13,22 @@
 // It closes on a click anywhere outside itself, through FocusGrab, which picks
 // the best mechanism the running compositor offers -- an input grab where there
 // is one, a transparent full-screen catcher where there is not.
+//
+// AND IT CLOSES WHEN THE SHELL RAISES A SURFACE OF ITS OWN, which is the case
+// no click covers: the launcher, the power menu, the cheatsheet and the
+// carousel all arrive by keybind without a pointer going anywhere, and the
+// settings window arrives by a click ON the bar, which is the one strip the
+// catcher deliberately leaves alone. That rule is modules/Surfaces.qml and the
+// bar hands it this window; see the Connections there.
+//
+// IT REACHES A TRAY MENU TOO, and that is the point of dismissing the WINDOW
+// rather than the panels inside it. The dashboard and the notification history
+// have singletons that can be told to let go, so they could be closed by name.
+// A tray menu and the peripheral-battery detail have no state outside this
+// window, no IpcHandler and no key -- nothing can name them, and nothing can
+// reopen one behind a sheet -- but one that was ALREADY up when the sheet
+// arrives is left on the Overlay layer with it, where stacking is creation
+// order, which is exactly what the note further down says not to rely on.
 
 import Quickshell
 import Quickshell.Wayland
@@ -126,6 +142,13 @@ PanelWindow {
     // arrives on its own and can wait its turn. Stacking within one layer is
     // decided by creation order, which is not something to rely on, so the
     // two are kept in different layers instead.
+    //
+    // THE SHEETS ARE ON THIS LAYER, and they are not separated the same way
+    // because they must not be: a fullscreen sheet has to cover this window,
+    // and one layer up would be one layer nothing else could reach past. What
+    // keeps them apart is time rather than depth -- they are never both up, by
+    // the rule in modules/Surfaces.qml -- so the creation order between them is
+    // never asked.
     WlrLayershell.layer: WlrLayer.Overlay
     // NONE, AND THE REASON IS THE POINTER, NOT THE KEYBOARD.
     //

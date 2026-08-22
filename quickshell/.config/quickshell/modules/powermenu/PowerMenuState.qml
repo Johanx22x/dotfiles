@@ -14,6 +14,18 @@
 //
 // See the SUPER + SHIFT + ESCAPE bind in hyprland.lua.
 //
+// MUTUAL EXCLUSION, WHICH THIS FILE USED TO BE THE ONE SURFACE WITHOUT. The
+// power menu is one of the five that may not share the screen -- a fullscreen
+// sheet on the Overlay layer holding an exclusive keyboard grab -- and until
+// the rule was written in one place it was the only member nothing had wired
+// up in both directions. Two sheets each carried a clause closing it, and
+// nothing anywhere closed the bar's popout for it: SUPER + SHIFT + ESCAPE over
+// an open dashboard left the panel up behind the menu, and left the string
+// naming its bar set, so the follow-the-focus rule kept rebuilding it on each
+// monitor the pointer crossed. That gap was older than either sheet. It is
+// modules/Surfaces.qml now, and this file says nothing about it beyond the
+// boolean below.
+//
 // DO NOT name an IPC function `show`. `qs ipc show` is a subcommand of the
 // CLI, and `qs ipc call powermenu show` is swallowed by it: the listing of
 // handlers is printed, the function is never called, and the exit status is
