@@ -191,7 +191,8 @@ QtObject {
     //
     // ALREADY IN CHIPS, not in the compositor's own spelling: each entry is
     //   { keys: ["SUPER","SHIFT","S"], category: "Capture",
-    //     description: "...", described: true }
+    //     description: "...", described: true, submap: "",
+    //     nonConsuming: false, release: false }
     // because the two compositors describe a chord in completely different
     // terms -- one hands over an X11 modifier bitmask and an xkb keysym, the
     // other a string like "Mod+Shift+S" -- and a cheatsheet should not have to
@@ -200,6 +201,14 @@ QtObject {
     //
     // The category is the part before ": " in the description, which is the
     // convention both flavors already write their descriptions in.
+    //
+    // `release` SAYS WHICH EDGE OF THE KEY the bind answers, and it is here for
+    // one consumer: the keybinds page, which would otherwise read a hold-to-
+    // talk key -- one bind on the way down, one on the way up -- as two binds
+    // fighting over the same keystroke. It is a property of the keystroke and
+    // not of what happens afterwards, which is why it earned a place here when
+    // `locked` and `repeat` did not. Where a flavor has no such thing, it is
+    // false rather than absent.
     //
     // EVERY BIND IS LISTED, described or not, and `described` says which. The
     // two consumers want different halves: the cheatsheet shows only what

@@ -437,6 +437,20 @@ Singleton {
     readonly property string chevronDown: String.fromCodePoint(0xF0140)  // nf-md-chevron_down
 
     // ---------------- Cheatsheet ----------------
+    // The sheet ITSELF first, and then one glyph per category heading inside
+    // it. `cheatsheet` is what points AT the sheet from somewhere else -- the
+    // button on the keybinds page -- so it cannot be `keyboard`, which that
+    // page is already wearing as its own title glyph. An open book is the
+    // thing you go and look something up in, which is the whole job.
+    //
+    // Codepoint read out of the installed font's cmap, the rule the entries
+    // below learned the hard way:
+    //
+    //   python3 -c "from fontTools.ttLib import TTFont; \
+    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
+    //       .getBestCmap()[0xF05DA])"
+    readonly property string cheatsheet: String.fromCodePoint(0xF05DA)    // nf-md-book_open_page_variant
+
     // One per category heading. The names on the LEFT are the categories as
     // they are spelled in the descriptions in hyprland.lua -- that is the join
     // between the two files, so renaming a category there means renaming it

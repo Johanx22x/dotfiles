@@ -170,7 +170,25 @@ PanelWindow {
 
     readonly property int count: root.entries.length
 
-    function rebuild(): void {
+    // What the last accepted `entries` was built from, as one string: every
+    // path in listing order, NUL-separated so a filename cannot fake a
+    // boundary. It is a guard and not a cache -- see rebuild().
+    property string listing: ""
+
+    // Rebuild `entries` from the folder, and say whether that changed
+    // anything. FALSE MEANS THE CALLER SHOULD DO NOTHING ELSE: no thumbnail
+    // run, no re-reveal.
+    //
+    // THE GUARD IS THE POINT, not a saving. The signal this is driven from
+    // fires for events that leave the listing exactly as it was -- `touch` on
+    // a wallpaper, a rename of some unrelated file that the filters do not
+    // even match -- and assigning `entries` is the expensive, visible thing
+    // described above: a PathView handed an array it considers different
+    // destroys every delegate, re-decodes every picture, and drops
+    // currentIndex and offset to 0. Measured on Qt 6.11.2 over one directory:
+    // startup plus five real changes rebuild six times with this in place,
+    // and a `touch` rebuilds not at all.
+    function rebuild(): bool {
         const out = [];
         for (let i = 0; i < folder.count; i++) {
             const path = folder.get(i, "filePath");
@@ -201,7 +219,14 @@ PanelWindow {
                 fullUrl: Config.isWallpaperVideo(path) ? "" : Config.wallpaperFullUrl(path)
             });
         }
+
+        const listing = out.map(entry => entry.path).join("\u0000");
+        if (listing === root.listing)
+            return false;
+
+        root.listing = listing;
         root.entries = out;
+        return true;
     }
 
     FolderListModel {
@@ -215,20 +240,41 @@ PanelWindow {
         showDirs: false
         sortField: FolderListModel.Name
 
-        // The model fills asynchronously, so the array is built when it reports
-        // how many files it found rather than at construction.
+        // FROM `status` AND NOT FROM `count`, and the difference is a whole
+        // class of bug rather than a preference.
         //
-        // A changed count is also how a file dropped into the folder while the
-        // shell is running gets its cached thumbnail: it has none until ffmpeg
-        // has been past it, and this is the moment we learn it is there.
+        // The model fills asynchronously, so the array cannot be built at
+        // construction; something has to say when the listing is ready. Count
+        // was that something, and it is blind in exactly one direction: a
+        // RENAME changes every path in the folder and leaves the number of
+        // files alone, so `countChanged` never fires. The list kept the old
+        // name and never learned the new one, and the card for the old name
+        // went blank -- the thumbnail run below sweeps the cache entry for a
+        // file that is no longer there, and the fallback to the original is a
+        // path that no longer exists either. Adding or deleting anything at
+        // all put it right, which is a fine description of a bug and no way to
+        // use a picture folder.
         //
-        // A RENAME IS THE HOLE IN THAT, and it is worth knowing about rather
-        // than rediscovering: renaming a wallpaper leaves the count where it
-        // was, so nothing here fires, the card falls back to decoding the 4K
-        // original, and the old cache entries survive until some other change
-        // sweeps them. Adding or removing anything puts it right.
-        onCountChanged: {
-            root.rebuild();
+        // Measured on Qt 6.11.2, every mutation of the directory -- rename,
+        // add, remove, a file renamed out of the filters -- produces exactly
+        // one `Loading` -> `Ready` cycle, about a millisecond after the event,
+        // and the rows are fully up to date by the time `Ready` arrives.
+        // Renames emit `dataChanged` and nothing else; adds and removes emit
+        // a remove-all/insert-all PAIR, which is why the row signals are not
+        // used here either -- they would fire this twice for one change.
+        //
+        // `Ready` also arrives for events that changed nothing visible, and
+        // rebuild()'s guard is what absorbs those. See it for why assigning
+        // `entries` for nothing is not free.
+        onStatusChanged: {
+            if (folder.status !== FolderListModel.Ready)
+                return;
+            if (!root.rebuild())
+                return;
+
+            // Only now, and not on every `Ready`: this spawns ffmpeg over the
+            // whole collection to give a new file the cached thumbnail it has
+            // none of yet, and to sweep the entries of files that have gone.
             Config.refreshWallpaperThumbs();
             if (WallpaperState.isOpen)
                 Qt.callLater(root.revealCurrent);

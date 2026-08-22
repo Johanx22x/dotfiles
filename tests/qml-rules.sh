@@ -127,6 +127,115 @@ else
     note "all $handlers WheelHandler(s) declare acceptedDevices"
 fi
 
+# --- a FolderListModel whose rows are read watches `status` ------------------
+#
+# `count` is the obvious thing to drive a folder listing from and it is blind
+# in one direction: a RENAME changes every path in the directory and leaves the
+# number of files alone, so `onCountChanged` never fires. Measured on Qt
+# 6.11.2 -- a rename emits `dataChanged` and a `Loading` -> `Ready` cycle, and
+# no count signal of any kind.
+#
+# That cost the wallpaper carousel a real bug and a confusing one: renaming a
+# picture left its OLD name in the selector with no thumbnail -- the thumbnail
+# run sweeps the cache entry of a file that is not there any more, and the
+# fallback to the original is a path that is gone too -- while the new name
+# never appeared at all. Adding or deleting any other file put it right, which
+# is most of what made it look like anything but what it was.
+#
+# NARROW ON PURPOSE, TWICE OVER.
+#
+# It asks only about models whose ROWS are read, `<id>.get(` somewhere in the
+# file. A FolderListModel used for its `count` alone -- the wallpaper settings
+# page counts images and draws none of them -- is correct on a rename, because
+# the count really has not changed, and a rule that made that page carry a
+# handler it has no use for would be the rule shaping the code.
+#
+# And it looks for the handler INSIDE the model's own block, by brace
+# counting, not in the file. The first version of this rule grepped the whole
+# file, and it passed a carousel whose FolderListModel had been put back on
+# `onCountChanged` -- because three Images further down have `onStatusChanged`
+# of their own and a file-wide grep cannot tell whose handler it found. It was
+# checked by breaking the fix and watching the rule not notice.
+readers=0
+countonly=()
+for file in "${qml_files[@]}"; do
+    while IFS= read -r finding; do
+        case $finding in
+            found) readers=$(( readers + 1 )) ;;
+            missing:*) readers=$(( readers + 1 ))
+                       countonly+=("${file#"$REPO"/}:${finding#missing:}") ;;
+        esac
+    done < <(awk '
+        # Comments off first, the same rule and for the same reason as the
+        # WheelHandler sweep above: the paragraphs around a FolderListModel in
+        # this tree name every identifier this is looking for.
+        {
+            line = $0
+            if (inblock) {
+                if (match(line, /\*\//)) {
+                    line = substr(line, RSTART + RLENGTH); inblock = 0
+                } else next
+            }
+            while (match(line, /\/\*/)) {
+                head = substr(line, 1, RSTART - 1)
+                rest = substr(line, RSTART + 2)
+                if (match(rest, /\*\//)) {
+                    line = head substr(rest, RSTART + RLENGTH)
+                } else { line = head; inblock = 1; break }
+            }
+            sub(/\/\/.*$/, "", line)
+            $0 = line
+        }
+        # Two passes over one file: the first records the block, the second
+        # answers whether anything reads its rows. awk has the whole file only
+        # if it keeps it, so it keeps it.
+        { text[NR] = $0 }
+        /(^|[^A-Za-z0-9_])FolderListModel[[:space:]]*\{/ && depth == 0 {
+            depth = 0; start = NR; watches = 0; id = ""
+        }
+        start {
+            if ($0 ~ /^[[:space:]]*id:[[:space:]]*[A-Za-z_][A-Za-z0-9_]*/) {
+                id = $0
+                sub(/^[[:space:]]*id:[[:space:]]*/, "", id)
+                sub(/[^A-Za-z0-9_].*$/, "", id)
+            }
+            if ($0 ~ /onStatusChanged/) watches = 1
+            n = gsub(/\{/, "{"); depth += n
+            n = gsub(/\}/, "}"); depth -= n
+            if (depth <= 0) {
+                blocks[++found] = start "\t" watches "\t" id
+                start = 0; depth = 0
+            }
+        }
+        END {
+            for (i = 1; i <= found; i++) {
+                split(blocks[i], part, "\t")
+                # An unnamed model cannot be read from anywhere else, so the
+                # only rows anybody could get() are the ones this rule is not
+                # about. Nothing to say.
+                if (part[3] == "") continue
+
+                read = 0
+                for (n = 1; n <= NR; n++)
+                    if (index(text[n], part[3] ".get(")) { read = 1; break }
+                if (!read) continue
+
+                print (part[2] ? "found" : "missing:" part[1])
+            }
+        }
+    ' "$file")
+done
+
+if (( readers == 0 )); then
+    fail "found no FolderListModel whose rows are read -- has the rule outlived its subject?"
+elif (( ${#countonly[@]} > 0 )); then
+    fail "${#countonly[@]} FolderListModel(s) have their rows read without watching status:"
+    printf 'qml-rules:   %s\n' "${countonly[@]}" >&2
+    echo "qml-rules: a rename changes every path and leaves count alone" >&2
+else
+    note "all $readers FolderListModel(s) whose rows are read watch status"
+fi
+
 if [[ $failed -eq 0 ]]; then
     note "the QML tree keeps to its rules"
 fi

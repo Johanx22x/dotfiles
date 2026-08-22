@@ -35,6 +35,8 @@
 import QtQuick
 import qs
 import qs.components
+// The sheet's singleton, for the button on the Binds heading.
+import qs.modules.cheatsheet
 // SettingsPage lives one directory UP, and QML's implicit import covers a
 // file's own directory only.
 import qs.modules.settings
@@ -301,6 +303,15 @@ SettingsPage {
     //                and not for overlap, which is how the compositor matches
     //                them: SUPER and SUPER + SHIFT are two different
     //                keystrokes and not a near miss.
+    //   release   -- the way DOWN and the way UP of one key are two different
+    //                events, so a bind on each is a pair and not a clash.
+    //                Push-to-talk is exactly that shape -- desktop-tweak
+    //                writes `mic open` on the press and `mic close` on the
+    //                release of the same key -- and it was the one false
+    //                positive this page produced, red, on every Hyprland
+    //                machine with `ptt=1`. The flag was not in the facade and
+    //                is now; `hyprctl binds -j` had been reporting it all
+    //                along.
     //
     // OUT, because they change what a bind DOES once it has already been
     // reached, which is not the question:
@@ -314,17 +325,8 @@ SettingsPage {
     //   repeat, mouse -- how it is held or which device pressed it, both
     //                    already implied by the key.
     //
-    // THREE BLIND SPOTS, and naming them is part of being able to trust the
+    // TWO BLIND SPOTS, and naming them is part of being able to trust the
     // green line this page prints when it finds nothing:
-    //
-    //   PRESS AGAINST RELEASE. A bind on the way down and a bind on the way up
-    //   of the same chord are a pair and not a clash, and this cannot tell
-    //   them apart: the facade carries the chord, the submap and the
-    //   description, and not the release flag -- nor the keycode or the raw
-    //   modmask that the fields above would want. Push-to-talk is exactly that
-    //   shape, so with `ptt=1` under Hyprland its key is listed here as a
-    //   conflict. Seeing that pair is the price of seeing every real one;
-    //   widening the facade for one line of this page is not.
     //
     //   MODIFIER ORDER. The facade hands the modifiers over already spelled
     //   out -- in a fixed order from Hyprland's modmask, in the order the file
@@ -364,6 +366,7 @@ SettingsPage {
         described: bind.described,
         submap: bind.submap,
         nonConsuming: bind.nonConsuming,
+        release: bind.release,
         // A KEY THAT IS MEANT TO COLLIDE, which is the opposite of what a row
         // id usually is and why it is not called one: the conflict list below
         // buckets by it, so two binds that answer the same keystroke have to
@@ -372,8 +375,12 @@ SettingsPage {
         // permanently empty. See the rule above for what is compared here.
         //
         // NUL as the separator, so a submap named after a chord cannot fake a
-        // match across the field boundary.
-        chordId: `${bind.submap}\u0000${bind.keys.join("+").toLowerCase()}`,
+        // match across the field boundary. The release flag rides inside the
+        // same string rather than being compared separately, because "the same
+        // keystroke" is ONE value: split it across two comparisons and the next
+        // field to join gets remembered in one of them and forgotten in the
+        // other.
+        chordId: `${bind.submap}\u0000${bind.release ? "up" : "down"}\u0000${bind.keys.join("+").toLowerCase()}`,
         search: `${bind.keys.join(" ")} ${bind.category} ${bind.description}`.toLowerCase()
     }))
 
@@ -694,12 +701,11 @@ SettingsPage {
             // the kind of local reasoning that broke the moment a row further
             // down wanted a note.
             Tooltip {
-                text: "Same submap, same modifiers, same key. Whether a bind is "
-                    + "locked or non-consuming is not part of it: those change what "
-                    + "it does after it fires, not whether it fires. Press against "
-                    + "release is not part of it either, because the compositor does "
-                    + "not report it here — so a hold-to-talk key, which is bound on "
-                    + "both, is listed."
+                text: "Same submap, same modifiers, same key, same edge. Whether a "
+                    + "bind is locked or non-consuming is not part of it: those change "
+                    + "what it does after it fires, not whether it fires. The way down "
+                    + "and the way up of a key are two events, so a hold-to-talk key, "
+                    + "bound on both, is a pair and not a clash."
                 shown: ruleMouse.containsMouse
 
                 x: Theme.groupPadding
@@ -774,6 +780,32 @@ SettingsPage {
         width: parent.width
         title: "Binds"
         glyph: Icons.keyboard
+
+        // THE OTHER HALF OF THE ANSWER, one click away. This list says what is
+        // bound; the cheatsheet says what those binds are FOR, laid out by
+        // category and readable at a glance. Somebody scrolling this page is
+        // already asking the question the sheet answers better.
+        //
+        // AND IT IS THE ONLY DOOR THAT IS NOT A KEY. Until this button the
+        // cheatsheet could be reached one way only -- a chord -- which is a
+        // poor arrangement for the one surface whose job is to tell you what
+        // the chords are: lose the key and you have lost the way to look it
+        // up. That is not hypothetical, it is what happened to the bind on a
+        // Spanish layout.
+        //
+        // CheatsheetState.toggle() and not `qs ipc call`, which is the rule
+        // everywhere in this shell: the compositor shells out because it is
+        // outside, and everything inside calls the singleton. The exact call
+        // the keybind makes, so the button and the key cannot drift.
+        //
+        // What it costs, written down because it looks like a bug otherwise:
+        // the sheet is an overlay layer with exclusive keyboard focus, so it
+        // covers this window and takes the keyboard until Escape. The settings
+        // window is left open underneath -- it is not one of the surfaces that
+        // close each other -- and comes back exactly as it was.
+        actionText: "Cheatsheet"
+        actionGlyph: Icons.cheatsheet
+        onActionTriggered: CheatsheetState.toggle()
 
         SectionNote {
             visible: root.query !== "" && root.groups.length === 0
