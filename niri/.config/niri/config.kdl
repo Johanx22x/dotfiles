@@ -28,13 +28,27 @@
 //  niri's config file watcher to notice the changes". Nothing in this
 //  repository calls it, and that is a separate decision from whether it
 //  exists -- niri needs no telling. Measured in a nested instance: it holds no
-//  inotify watch at all and polls instead, so it survives both the inode
-//  replacement a `git pull` does to this file and the symlink retargeting
-//  stow does on top of that, where Hyprland survives neither. On a config it
-//  cannot parse it keeps the last good one, warns, and picks the fixed file up
-//  unaided. Hyprland is the one that has to be told, and only when the pull
-//  moved hypr/ -- see the update chain in
+//  inotify watch at all and POLLS, every 500 ms off a timerfd, which is why it
+//  survives everything a pull can do to this file. An in-place edit landed in
+//  406-505 ms over six trials, an `mv` over the file in 174-506 ms, an
+//  `ln -sfn` retarget in 175 ms, and removing the file and putting it back
+//  four seconds later -- the case that permanently blinds Hyprland's inotify
+//  watch -- in 93 ms. On a config it cannot parse it keeps the last good one,
+//  stays up, warns once rather than every tick, and applied the fix 205 ms
+//  after it was saved with nobody asking.
+//
+//  So Hyprland is the one that has to be told, and only when a pull moved
+//  hypr/. It is not that Hyprland fails to see a renamed file -- it re-arms
+//  its watch and sees it fine -- it is that stow can unlink a link before
+//  making it again, and an unlink with a gap leaves Hyprland holding zero
+//  watches for the rest of the session, silently. See the update chain in
 //  quickshell/.config/quickshell/modules/installer/InstallerState.qml.
+//
+//  ONE THING NIRI DOES SHARE with Hyprland: a config that stops SETTING an
+//  option resets it to the compiled-in default rather than keeping what was
+//  there. Emptying this file drops the layout list back to a bare `us`. That
+//  is not a bug in either of them, but it is the reason `niri validate` is
+//  worth running on a file you have been cutting things out of.
 // =============================================================================
 
 

@@ -664,37 +664,75 @@ Singleton {
     // this could do at that point is take it away. It prints the nudge
     // instead, to be run again once the configuration parses.
 
-    // WHAT ELSE HAS TO BE TOLD, AND WHAT DOES NOT.
+    // WHAT ELSE HAS TO BE TOLD, AND WHAT DOES NOT. Both compositors were put
+    // in a nested headless instance of their own -- own runtime dir, own HOME,
+    // own minimal config -- and asked, because what stood here was wrong in
+    // both directions.
     //
-    // HYPRLAND IS THE FRAGILE ONE, and it is the only one. It keeps a single
-    // IN_CLOSE_WRITE inotify watch on the config INODE, so git's unlink and
-    // create leaves it watching a file that is gone; and it does not merely
-    // fail to notice the new one, it falls back to its COMPILED-IN DEFAULTS
-    // and loses the value it was already running with. `hyprctl reload` after
-    // a pull that touched hypr/ is therefore not a courtesy, it is the thing
-    // that stops a pull from silently undoing the compositor.
+    // HYPRLAND IS NOT AS FRAGILE AS THIS USED TO SAY. The watch is
+    // IN_CLOSE_WRITE on the config file's inode -- and through a stow symlink
+    // it is TWO watches, one on the link and one on the target -- but it is
+    // RE-ARMED on every event, so a file renamed over the old one is picked up
+    // and the watch follows it onto the new inode. An in-place edit, an `mv`
+    // over the config, an `ln -sfn` retarget and a `git checkout` through the
+    // stow link were every one of them picked up unaided, and nothing was
+    // lost doing it: a value the new config still set stayed set. "A pull
+    // drops Hyprland back to its compiled-in defaults" does not survive being
+    // tried, and this comment should not have said it.
     //
-    // NIRI NEEDS NOTHING AT ALL. It holds no inotify fd -- it polls -- so it
-    // survives both the inode replacement and the symlink retargeting stow
-    // does to it, and on a config it cannot parse it keeps the last good one,
-    // says so, and picks the fixed file up unaided. `niri msg action
-    // load-config-file` does exist, and is not called here because there is
-    // nothing for it to do. The header of niri/.config/niri/config.kdl used
-    // to say no such command existed; it has been corrected.
+    // WHAT DOES KILL THE WATCH is an unlink with a GAP before the file comes
+    // back. Remove the config, wait, put it back: the inotify fds survive
+    // holding ZERO watches and never re-arm. The recreated config was ignored,
+    // a later in-place write to it was ignored as well, and `rm` with an
+    // immediate recreate in the same command missed the change 3 of 3. Nothing
+    // is logged either way. `hyprctl reload` is the only thing that brings the
+    // watch back -- and THAT is why it is still in this chain, because what
+    // runs between the pull and here is `stow`, and an unlink followed by a
+    // link is exactly the shape that costs the session every future reload
+    // without saying so.
+    //
+    // NIRI NEEDS NOTHING AT ALL, for a better reason than "it live-reloads on
+    // save": it holds no inotify fd whatsoever and POLLS, every 500 ms, off
+    // its own timerfd. An in-place edit landed in 406-505 ms over six trials,
+    // an `mv` over the file in 174-506 ms 3 of 3, an `ln -sfn` retarget in
+    // 175 ms, and the remove-wait-recreate that blinds Hyprland for good was
+    // picked up 93 ms after the file came back. On a config it cannot parse it
+    // keeps the last good one, stays up, warns ONCE rather than every tick,
+    // and applied the fix 205 ms after it was saved with nobody asking.
+    //
+    // `niri msg action load-config-file` DOES EXIST -- 5-6 ms against this
+    // repository's own 70 KB config, which is less than `niri --version`
+    // costs, so the figure is the CLI binary starting and the reload itself
+    // does not show up at all. It is not called here because there is nothing
+    // for it to do. The header of niri/.config/niri/config.kdl used to say no
+    // such command existed; it has been corrected.
+    //
+    // ONE THING BOTH DO, and it belongs to neither: a config that stops
+    // SETTING an option resets that option to the compiled-in default,
+    // silently. Emptying hyprland.lua took a gap from 7 back to 20 with
+    // `hyprctl configerrors` reporting nothing at all, and emptying config.kdl
+    // dropped niri's layout list back to a bare `us`. That is what "the config
+    // no longer says it" means in both, and not a weakness of either.
     //
     // ONLY WHEN hypr/ ACTUALLY MOVED, which is why the diff is taken across
     // the pull rather than the reload being unconditional. `hyprctl reload`
     // re-runs hyprland.lua from the top and throws away everything
     // desktop-tweak has eval'd into the running compositor since login --
-    // gaps, rounding, borders, the pointer -- which is documented at length in
-    // that script and is a real cost to pay for nothing. Counted on this
-    // history: 1 of the last 20 merges touched hypr/, so 19 of them would
-    // have paid it.
+    // gaps, rounding, borders, the pointer -- which that script documents at
+    // length and is a real cost to pay for nothing. Counted on this history:
+    // 1 of the last 20 merges touched hypr/, so 19 of them would have paid it.
+    // When the pull DID move hypr/ the cost is not avoidable anyway: whichever
+    // of the two re-reads the config, the compositor's own watch or this line,
+    // re-runs the same file from the top.
     //
-    // AND THEN configerrors, because `hyprctl reload` answers "ok" and exits
-    // 0 whether or not what it just read is full of errors. That is the same
-    // trap hyprland.lua warns about beside the window-rule opacity field, and
-    // `hyprctl configerrors` is the only thing that will say.
+    // AND THEN configerrors, because `hyprctl reload` answers "ok" and exits 0
+    // whether or not what it just read is full of errors -- the same trap
+    // hyprland.lua warns about beside the window-rule opacity field. AND
+    // configerrors EXITS 0 TOO: measured on a Lua syntax error, on an unknown
+    // config key and on a clean config alike, and on a clean one it prints two
+    // blank lines. Neither command's status means anything, so the only signal
+    // there is is whether configerrors has a non-blank line to show, which is
+    // what `grep .` below asks it.
     //
     // `compositor is hyprland` is this repository's own probe and it reads the
     // compositor's socket rather than XDG_CURRENT_DESKTOP, so it is right
@@ -724,8 +762,11 @@ Singleton {
 
         sleep ${root.settleSeconds}
 
-        if [ -n "$head_before" ] && ! git diff --quiet "$head_before" HEAD -- hypr/; then
-            compositor is hyprland && hyprctl reload && hyprctl configerrors
+        if [ -n "$head_before" ] && ! git diff --quiet "$head_before" HEAD -- hypr/ &&
+           compositor is hyprland; then
+            hyprctl reload
+            hyprctl configerrors | grep . &&
+                echo '^ hyprctl said "ok" anyway; it always does'
         fi
 
         last_load() {

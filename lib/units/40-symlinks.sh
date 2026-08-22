@@ -293,9 +293,20 @@ symlinks_move_aside() {
 # the settings window drives, are in
 # quickshell/.config/quickshell/modules/installer/InstallerState.qml.
 #
-# niri is not printed at all any more. It polls its config rather than watching
-# it, so it survives the inode replacement and the retargeted symlink stow
-# leaves behind, and there is nothing for a person to run.
+# niri is not printed at all any more. It holds no inotify watch and polls its
+# config every 500 ms instead, so it survives every shape of relink this unit
+# can leave behind -- measured, including the remove-and-recreate that leaves
+# Hyprland holding zero watches for the rest of the session. There is nothing
+# for a person to run.
+#
+# Hyprland is printed because of that last case and not because it cannot see a
+# renamed file: it re-arms its watch on every event and picks up an `mv` over
+# the config, a retargeted symlink and a `git checkout` unaided. What it does
+# not survive is an unlink with a gap before the file comes back, which is a
+# shape stow is entitled to produce, and `hyprctl reload` is the only thing
+# that re-arms it. It answers "ok" and exits 0 whatever it just read, and so
+# does `hyprctl configerrors` -- so the errors are the output, never the
+# status.
 symlinks_post() {
   run systemctl --user daemon-reload 2>/dev/null || true
 
