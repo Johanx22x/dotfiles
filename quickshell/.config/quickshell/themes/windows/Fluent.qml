@@ -100,23 +100,57 @@ QtObject {
     // wonder whether the tooltip was simply missed.
     readonly property int tooltipRadius: root.controlRadius
 
-    // --- TYPE: offsets from the user's size, absolute value at the default ---
+    // --- TYPE: RATIOS of the user's size, and the units are not the same ---
     //
+    // THIS BLOCK USED TO ADD AND IT WAS WRONG TWICE OVER. It read
+    // `captionSize: Theme.fontSize - 2` with "12 at the default" beside it,
+    // on two assumptions that do not hold:
+    //
+    //   1. that Theme.fontSize is 14. It is Config.fontSize, whose default is
+    //      ELEVEN (Config.qml), so every "absolute value at the default"
+    //      written here named a number the file never computed.
+    //   2. that an offset preserves a ratio. It does not. Windows' ramp is
+    //      12 / 14 / 18 / 20 / 28, which is multiplicative; a fixed offset
+    //      tracks it at the small end and drifts badly at the large one. The
+    //      old titleSize came out 19% short.
+    //
+    // Ratios fix both, and they are ratios of BODY because that is what
+    // Windows' ramp is a ramp of.
+    //
+    // AND THE UNITS ARE NOT THE SAME, WHICH IS THE PART THAT BITES. Windows
+    // publishes its ramp in epx, which are pixels at 96 DPI. Theme.fontSize is
+    // a POINT size, because it is shared with kitty. 11 pt is 14.67 epx, which
+    // is why Body lands close to Windows' 14 without anybody arranging it.
+    // So: everything named *Size below is POINTS and goes to font.pointSize,
+    // and everything named *Line is PIXELS and goes to a height or to
+    // lineHeight with Text.FixedHeight. Mixing them silently sets a line box
+    // three quarters the size of the glyphs in it.
+    readonly property real captionSize: Theme.fontSize * 12 / 14
+    readonly property real bodySize: Theme.fontSize
+    readonly property real bodyLargeSize: Theme.fontSize * 18 / 14
+    readonly property real subtitleSize: Theme.fontSize * 20 / 14
+    readonly property real titleSize: Theme.fontSize * 2          // 28 / 14
+
     // Windows sets NO line heights. The *TextBlockStyle styles carry family,
     // size and weight and nothing else; the published line heights are what
-    // Segoe's own metrics produce. With any substitute face they have to be set
-    // explicitly or the vertical rhythm drifts, which is why they are here.
-    readonly property real captionSize: Theme.fontSize - 2      // 12 at the default
-    readonly property real bodySize: Theme.fontSize             // 14
-    readonly property real bodyLargeSize: Theme.fontSize + 4    // 18
-    readonly property real subtitleSize: Theme.fontSize + 6     // 20
-    readonly property real titleSize: Theme.fontSize + 14       // 28
+    // Segoe's own metrics produce. With any substitute face they have to be
+    // set explicitly or the vertical rhythm drifts, which is why they are here.
+    //
+    // The 4/3 is points to pixels. Prefer the *Ratio properties below where a
+    // Text will take them: a ratio has no unit and so cannot be got wrong.
+    readonly property real captionLine: Math.round(root.captionSize * 16 / 12 * 4 / 3)
+    readonly property real bodyLine: Math.round(root.bodySize * 20 / 14 * 4 / 3)
+    readonly property real bodyLargeLine: Math.round(root.bodyLargeSize * 24 / 18 * 4 / 3)
+    readonly property real subtitleLine: Math.round(root.subtitleSize * 28 / 20 * 4 / 3)
+    readonly property real titleLine: Math.round(root.titleSize * 36 / 28 * 4 / 3)
 
-    readonly property real captionLine: Math.round(root.captionSize * 16 / 12)
-    readonly property real bodyLine: Math.round(root.bodySize * 20 / 14)
-    readonly property real bodyLargeLine: Math.round(root.bodyLargeSize * 24 / 18)
-    readonly property real subtitleLine: Math.round(root.subtitleSize * 28 / 20)
-    readonly property real titleLine: Math.round(root.titleSize * 36 / 28)
+    // The same five as unit-free multipliers, for
+    // `lineHeightMode: Text.ProportionalHeight`.
+    readonly property real captionLineRatio: 16 / 12
+    readonly property real bodyLineRatio: 20 / 14
+    readonly property real bodyLargeLineRatio: 24 / 18
+    readonly property real subtitleLineRatio: 28 / 20
+    readonly property real titleLineRatio: 36 / 28
 
     // Semibold and NEVER Bold: that is Windows 11's typography rule in as many
     // words. Theme.fontWeight is the theme's own token and windows/theme.json
@@ -261,6 +295,12 @@ QtObject {
     readonly property int cardIconMax: 20
     readonly property int cardIconGap: 20
     readonly property int cardActionGutter: 24
+
+    // SettingsCardContentMinWidth. Applied to every Slider, ComboBox and
+    // TextBox a card holds, so that a stack of cards lines its controls up
+    // down the right-hand edge instead of each one ending where its content
+    // happens to.
+    readonly property int cardContentMinWidth: 120
     readonly property int expanderChildHeight: 52
     readonly property int expanderChildIndent: 58
 
