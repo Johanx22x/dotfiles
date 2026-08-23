@@ -186,9 +186,44 @@ jobs:
       # wrong screen both loaded cleanly, resolved every name and logged
       # nothing. These are a floor under the tree, not a statement that it
       # works.
-      - name: The shell loads in a headless compositor
+      # NOW ONCE PER THEME, AND THE SECOND THEME IS A FIXTURE. It used to start
+      # the shell once, on whatever theme Config.qml defaults to, which
+      # answered a question about genesis rather than about the tree. It copies
+      # the shell tree into a sandbox, drops tests/fixtures/theme-probe/ in as
+      # a second theme, and cold-starts the shell on each -- then changes the
+      # theme under a running shell and asserts that the surfaces came back and
+      # that "Configuration Loaded" was printed exactly once.
+      #
+      # THAT LAST PHASE NAMES A BUG THAT WAS ALREADY PAID FOR.
+      # modules/ThemeSurface.qml's header records that a BoundComponent fixes
+      # its source at creation -- "BoundComponent.url cannot be set after
+      # creation" -- so the theme changed and THE OLD ONE STAYED ON SCREEN.
+      # Found by hand, on a desktop; nothing in tests/ could have found it,
+      # because the shell comes up, every name resolves and the six log strings
+      # stay silent.
+      - name: The shell loads in a headless compositor, on every theme
         if: ${{ !cancelled() }}
         run: tests/shell-load.sh
+
+      # THE OTHER HALF OF THE SAME PROBLEM, and it is the cheap half: a theme
+      # is loaded by URL, so a file missing from one is not a load failure at
+      # all. themes/genesis/components/README.md is explicit that there is no
+      # per-file fallback -- a theme missing components/ToggleRow.qml gets a
+      # Loader in Loader.Error and one warning per row, the settings window
+      # still opens, and it draws twenty-eight rows of nothing. The step above
+      # comes up green on that: none of its six strings is what a Loader that
+      # cannot find a file prints.
+      #
+      # It derives the list of files from the HOST -- shell.qml's ThemeSurface
+      # paths and every Themes.surface("...") call site -- rather than keeping
+      # one. A hand-written list was the obvious alternative and there is
+      # direct evidence against it in this branch: the "Nineteen components"
+      # list at the top of themes/genesis/components/README.md was one short
+      # before it was a day old, because ScrollBar was split after it was
+      # written.
+      - name: Every theme implements the whole interface
+        if: ${{ !cancelled() }}
+        run: tests/theme-interface.py
 
       - name: The QML tree keeps to its rules
         if: ${{ !cancelled() }}

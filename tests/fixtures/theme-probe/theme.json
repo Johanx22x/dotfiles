@@ -1,0 +1,16 @@
+{
+    "barHeight": 30,
+    "barPadding": 0,
+    "itemSpacing": 4,
+    "groupSpacing": 4,
+    "groupPadding": 4,
+    "cardRadius": 0,
+
+    "notificationWidth": 300,
+    "notificationRadius": 0,
+
+    "screenCornerRadius": 8,
+
+    "animDuration": 0,
+    "recolorDuration": 0
+}
