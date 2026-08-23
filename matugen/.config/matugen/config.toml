@@ -1,15 +1,32 @@
-# matugen - generates the accent palette from the current wallpaper
+# matugen - renders every generated colour file on the desktop
 #
-# Triggered by ~/.local/bin/wallpaper-switch. Only ACCENTS are derived:
-# backgrounds and text colour stay fixed in every app to guarantee contrast
-# no matter which wallpaper comes up.
+# Triggered by ~/.local/bin/wallpaper-switch. Only the ACCENTS are derived from
+# the image. The BASE -- surfaces, text, outlines, the sixteen ANSI slots, the
+# alert colours -- comes from the scheme file `desktop-scheme` hands the same
+# render through `--import-json`, so what guarantees contrast is a palette
+# checked once, by hand, when the scheme is written, rather than a base nobody
+# could change. Both halves reach every template out of one render.
 #
 # Waybar, wofi and dunst were here. All three are gone: the shell draws the
 # bar, the launcher and the notifications now, and it reads the palette live
 # from colors.json instead of having files regenerated for it.
 #
 # Template syntax: {{colors.<role>.default.hex}}
-# Useful roles: primary, secondary, tertiary, source_color, error, outline
+#
+# A render offers 128 roles and they come from the two halves above -- measured
+# on 4.2.0 by dumping one:
+#
+#   $ matugen color hex '#7aa2f7' -j hex --dry-run --mode dark \
+#       --import-json schemes/tokyo-night.json | jq '.colors | keys | length'
+#
+# 50 of them are the unprefixed Material 3 roles matugen derives from the
+# accent -- primary, secondary, tertiary, source_color, error, outline and the
+# containers and `on_` partners around them -- and 78 are the prefixed ones the
+# scheme file carries: ui_* for surfaces and text, term_* for the terminal,
+# sem_* for the alerts, fb_* for the accent a fresh clone falls back to.
+# schemes/README.md is the authority on what each of those 78 means; a template
+# that wants one it does not name is a template asking for a role no scheme has
+# to fill.
 
 # [config] IS EMPTY AND MUST STILL BE HERE. Every option that used to live
 # under it is gone (see the block below), but matugen deserialises the file
@@ -39,7 +56,7 @@
 #
 #   $ git grep -E 'colors\.(cpu|ram|gpu)'    -> nothing, in the whole tree
 #
-# None of the eleven templates below reads them, so matugen was computing
+# None of the fourteen templates below reads them, so matugen was computing
 # three harmonised hues per wallpaper and writing them into no file at all.
 # The one thing that looks like a hit is not one: templates/
 # fastfetch-config.jsonc contains "type": "cpu", which names a fastfetch
@@ -51,12 +68,21 @@
 # would be two more things to keep in step for no gain.
 #
 # WHAT THE BLOCK WAS RIGHT ABOUT stays true and is now stated where it
-# applies: an ALERT is never harmonised. warning (#e0af68) and critical
-# (#f7768e) have to look the same over a red wallpaper as over a blue one,
-# because for those two the colour IS the meaning. That is why they are
-# hardcoded in Theme.qml and in both GTK templates rather than derived from
-# the image, and why quickshell-colors.json does not pass M3's `error` role
-# through at all.
+# applies: an ALERT is never harmonised. A warning has to read as "watch out"
+# and a critical as "something is wrong" over a red wallpaper as over a blue
+# one, because for those two the colour IS the meaning.
+#
+# WHAT THAT MEANT WAS "NOT THE IMAGE", AND IT WAS READ AS "HARDCODED". The two
+# were the same thing while Tokyo Night's #e0af68 and #f7768e were literals in
+# Theme.qml and in both GTK templates; they stopped being the same thing when
+# the scheme arrived. A scheme is not a wallpaper -- it is picked by hand and
+# moves only when the user moves it -- so an alert taken from one is as fixed
+# as anything on screen. Every alert on the desktop now comes from the scheme's
+# sem_* roles: sem_warning / sem_critical and their `on_` partners, read by the
+# GTK templates, zathura, qt6ct, cship and (through colors.json) Theme.qml.
+# What has NOT changed is the reason M3's `error` role is still refused --
+# quickshell-colors.json passes neither error nor on_error, because that one IS
+# derived per image and would tint a critical the hue of the picture.
 
 # ---- Quickshell (the shell: bar, notifications, launcher, dashboard) ----
 # JSON and not a generated .qml on purpose: Quickshell reloads the WHOLE
@@ -193,7 +219,7 @@ output_path = '~/.config/zathura/zathurarc'
 # repository holding a second copy of those sixteen values.
 #
 # No post_hook: ranger is not a daemon. It reads the file when it opens,
-# same as wofi and fastfetch.
+# same as fastfetch and cship.
 [templates.ranger]
 input_path = '~/.config/matugen/templates/ranger-accent'
 output_path = '~/.config/ranger/accent'
@@ -207,7 +233,7 @@ output_path = '~/.config/ranger/accent'
 #
 # No post_hook on purpose: GTK does not reload user CSS live and there is no
 # signal to send it. Apps pick up the new palette when they open, same as
-# wofi, ranger and fastfetch.
+# ranger, fastfetch and cship.
 #
 # WHY A SELECTOR IN EITHER OF THESE FILES IS DANGEROUS, and it is not about
 # taste. Both are written to ~/.config, which GTK loads at priority USER
@@ -281,16 +307,19 @@ input_path = '~/.config/matugen/templates/zen-colors.css'
 output_path = '~/.zen/rice/chrome/colors.css'
 
 # ---- Fastfetch ----
-# Same case as dunst: fastfetch does not support "include", so the template
-# IS the entire config. To touch modules, icons or the logo edit
+# Same case as zathura and cship: fastfetch does not support "include", so the
+# template IS the entire config. To touch modules, icons or the logo edit
 # templates/fastfetch-config.jsonc, not ~/.config/fastfetch.
 #
-# Only the title (primary) and the keys (tertiary) are derived. The VALUES
-# stay on kitty.conf's foreground: they are the text you actually read and
-# cannot depend on how light the wallpaper accent comes out.
+# Only the title (primary) and the keys (tertiary) are derived. The VALUES are
+# the scheme's `ui_text`: they are the text you actually read and cannot depend
+# on how light the wallpaper accent comes out. That role used to be spelled as
+# kitty.conf's foreground, back when the foreground was a literal there; both
+# now come out of the scheme, so the two still match without either file
+# holding a copy of the other's hex.
 #
 # No post_hook: fastfetch is not a daemon, it re-reads the config on every
-# run (same as wofi).
+# run (same as ranger and cship).
 [templates.fastfetch]
 input_path = '~/.config/matugen/templates/fastfetch-config.jsonc'
 output_path = '~/.config/fastfetch/config.jsonc'

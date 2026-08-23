@@ -2,9 +2,9 @@
 // Template: ~/.config/matugen/templates/fastfetch-config.jsonc
 // Wallpaper: {{image}}
 //
-// fastfetch does not support "include" (same as dunst), so the whole file is
-// regenerated. To change modules, icons or the logo edit the TEMPLATE, not
-// this file.
+// fastfetch does not support "include" (same as zathura and cship), so the
+// whole file is regenerated. To change modules, icons or the logo edit the
+// TEMPLATE, not this file.
 //
 // Theme: a port of "remfetch" from Chick2D/neofetch-themes.
 // Requires a Nerd Font (JetBrainsMono Nerd Font).
@@ -36,13 +36,16 @@
     "display": {
         "separator": " ",
         "color": {
-            // Wallpaper accents, same roles as kitty and waybar:
-            // primary for the title, tertiary for the keys.
+            // Wallpaper accents, the same two roles kitty's colors.conf
+            // takes: primary for the title, tertiary for the keys.
             "title": "{{colors.primary.default.hex}}",
             "keys": "{{colors.tertiary.default.hex}}",
-            // The VALUES are not derived: they are the text you actually
-            // read. Pinned to kitty.conf's foreground so they do not depend
-            // on how light the current wallpaper accent comes out.
+            // The VALUES are not derived from the image: they are the text you
+            // actually read, so they take the scheme's ui_text and do not
+            // depend on how light the current wallpaper accent comes out.
+            // That is the same colour the terminal draws its own foreground
+            // in -- every scheme fills ui_text and term_fg with one value --
+            // which is what this line used to say by naming kitty.conf.
             "output": "{{colors.ui_text.default.hex}}"
         }
     },

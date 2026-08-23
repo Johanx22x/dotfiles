@@ -2,8 +2,9 @@
    Template: ~/.config/matugen/templates/zen-colors.css
    Wallpaper: {{image}}
 
-   Accents only. Backgrounds and text are fixed in userChrome.css, which
-   imports this file as its first line.
+   Accents only. The backgrounds are the other half, zen-scheme.css, generated
+   from the colour scheme rather than the image; userChrome.css imports both and
+   is now the imports and the reasoning rather than any colour of its own.
 
    ONE variable on purpose. Zen builds its whole palette out of
    --zen-primary-color with color-mix (selected tab, hover, borders, focus

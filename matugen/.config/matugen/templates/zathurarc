@@ -6,7 +6,10 @@
 # include another file from zathurarc, so "config" and "colours" cannot be
 # split in two. That is why zathura has no stow package.
 #
-# Fixed Tokyo Night base, matugen accent. Same roles as everywhere else:
+# The scheme's base, the wallpaper's accent -- the same two halves every other
+# application here is painted from. The base is the `ui_*` and `sem_*` roles out
+# of the scheme file (it was a fixed Tokyo Night written out in hex until the
+# schemes existed), and the accents are the same roles as everywhere else:
 # primary for the active thing, tertiary for the secondary one.
 
 # ---- Document ----
