@@ -245,7 +245,13 @@ Item {
                             tileGlyph: Icons.bellOff
                             caption: "Do not disturb"
                             on: NotificationState.dnd
-                            onToggled: NotificationState.dnd = !NotificationState.dnd
+                            // toggle() and not `dnd = !dnd`: `dnd` is a
+                            // readonly alias onto the persisted store, so the
+                            // assignment is refused at runtime and the tile
+                            // does nothing. Every other tile here calls a
+                            // function for the same reason -- the singleton
+                            // owns when it writes, this only asks.
+                            onToggled: NotificationState.toggle()
                         }
 
                         QuickTile {

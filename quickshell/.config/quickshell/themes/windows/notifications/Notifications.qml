@@ -45,11 +45,15 @@ PanelWindow {
 
     required property var modelData
 
-    // OURS, measured off toast-minimal-outlook.png at 1:1: the card sits about
-    // seventeen pixels in from the screen edge. Twelve is what the launcher
-    // already uses for its own gap above the taskbar, and one gap for both is
-    // better than two numbers four pixels apart.
-    readonly property int edgeGap: 12
+    // THE SAME GAP EVERY FLYOUT UNDER THIS THEME LEAVES, and it is
+    // components/Popout.qml's number rather than one of this file's:
+    // Fluent.flyoutInset is the twelve that holds Quick Settings and the
+    // notification centre off the taskbar and off the screen edge. Measured
+    // off toast-minimal-outlook.png at 1:1 a toast sits about seventeen
+    // pixels in, which is the same gap to within the error of reading it off
+    // a photograph -- and a second constant four pixels away from an existing
+    // one is how a theme drifts.
+    readonly property int edgeGap: Fluent.flyoutInset
 
     screen: modelData
     visible: NotificationDaemon.count > 0
