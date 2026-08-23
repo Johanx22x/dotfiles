@@ -9,7 +9,7 @@ scheme, and the whole desktop wears it.
 
 <br>
 
-<img src="assets/preview-1.png" width="70%" alt="Desktop on a pink wallpaper: fastfetch in kitty, the island open on its Performance tab, Neovim and zathura">
+<img src="assets/preview-1.png" width="70%" alt="Desktop on a purple wallpaper: the settings panel on its Appearance tab, the island open with the music player and calendar, the dotfiles repo in the browser, Celluloid, Neovim and zathura">
 
 <sub>Every accent above comes from the image behind it.</sub>
 
