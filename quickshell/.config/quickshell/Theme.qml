@@ -347,7 +347,38 @@ Singleton {
     //
     // NOT A TOKEN for exactly that reason: four programs share this number and
     // only one of them can read a theme. A theme.json that names it is ignored.
-    readonly property real glassAlpha: Config.opacity
+    // AND A THEME MAY NOW OVERRIDE IT, WHICH THE PARAGRAPH ABOVE SAYS IT MAY
+    // NOT. The paragraph is kept because its argument is sound and it is still
+    // sound; what it does not survive is a theme whose whole look is a
+    // transparency.
+    //
+    // The number is shared by four programs and only one of them can read a
+    // theme -- true, and the four are kitty, Zen, Nautilus and this shell. The
+    // first three are WINDOWS: the dial exists so the terminal can be seen
+    // through, and it belongs to the person at the keyboard. The fourth is not
+    // a window, it is the desktop's own chrome, and it was inheriting the
+    // terminal's number by accident rather than by anybody's decision.
+    //
+    // WHAT MADE IT MATTER. Config.opacity is 0.95 on the machine this was
+    // written on, so every glass surface the shell drew was 95% opaque. A
+    // Windows 11 taskbar over a wallpaper carries the wallpaper's colour
+    // plainly; ours came out flat near-black, and no amount of correct drawing
+    // could have fixed it. That was found by photographing the shell over a
+    // picture instead of over the compositor's void.
+    //
+    // A PERCENTAGE BECAUSE token() TAKES A NUMBER. `"surfaceAlpha": 78` is
+    // 0.78. A theme that names nothing gets Config.opacity exactly as before,
+    // which is what keeps genesis where it is.
+    //
+    // AND IT IS THE SAME BARGAIN AS `pinned`: a theme that fixes its own
+    // transparency has taken the dial away for as long as it is drawn, and the
+    // Transparency section of the appearance page says so rather than offering
+    // a slider that does nothing.
+    readonly property real glassAlpha: root.themeSurfaceAlpha > 0
+        ? root.themeSurfaceAlpha / 100
+        : Config.opacity
+
+    readonly property int themeSurfaceAlpha: root.token("surfaceAlpha", 0)
 
     function glass(colour: color): color {
         return Qt.alpha(colour, root.glassAlpha);

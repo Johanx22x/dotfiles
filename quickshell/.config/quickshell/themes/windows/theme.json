@@ -35,6 +35,9 @@
     "_corners": "0 because Windows rounds WINDOWS, not the screen. This is what makes CornerWedge the empty implementation the interface explicitly supports -- the four ScreenCorner windows still exist, reserve nothing and take no input.",
     "screenCornerRadius": 0,
 
+    "_alpha": "OURS, and it is the number the whole theme leans on. Windows' acrylic is a 30px blur under a #2C2C2C tint at 15% tint opacity and 96% luminosity opacity, which no single alpha reproduces -- what a single alpha can do is let the wallpaper's colour through the way the real taskbar does. 78 is a starting point to be tuned against a photograph, not a measurement.",
+    "surfaceAlpha": 78,
+
     "_motion": "ControlFastAnimationDuration. WinUI ships exactly three durations -- 83, 167, 250 -- and one easing spline, ControlFastOutSlowInKeySpline = 0,0,0,1. Note that hover is NOT among the things that animate: Windows swaps the brush on a DiscreteObjectKeyFrame at time zero.",
     "animDuration": 167,
     "recolorDuration": 0
