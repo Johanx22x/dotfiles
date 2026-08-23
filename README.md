@@ -4,7 +4,8 @@
 
 **Arch Linux · Hyprland or niri · Quickshell**
 
-The accent palette is generated from the wallpaper.
+The accent is generated from the wallpaper. Every other colour comes from a
+scheme, and the whole desktop wears it.
 
 <br>
 
@@ -24,7 +25,7 @@ The accent palette is generated from the wallpaper.
 | **Browser** | Zen |
 | **Files** | Nautilus · ranger |
 | **Media** | Celluloid · Loupe · zathura |
-| **Color** | matugen |
+| **Colour** | matugen, over a swappable scheme — Tokyo Night, Catppuccin Mocha or Gruvbox |
 | **Session** | SDDM · GRUB · btrfs snapshots with snapper |
 
 </div>
@@ -388,7 +389,7 @@ gtk   media   openrgb     systemd     bin     ranger   icons   zen
 gaming        backup
 ```
 
-Seven are not, and the difference matters:
+Eight are not, and the difference matters:
 
 | | |
 |---|---|
@@ -397,6 +398,7 @@ Seven are not, and the difference matters:
 | `packages/` | the package lists, grouped by what they are for |
 | `schemes/` | the colour schemes and the vocabulary that names their roles. Read out of the checkout by `desktop-scheme`, not linked anywhere — they are repository content, not machine state |
 | `lib/` | the installer's own code: the unit registry and one file per unit |
+| `docs/adr/` | the decisions that have no single file to live beside — why the desktop is split into a host, a theme and a scheme, why the accent is not a setting, and why one word gets one definition. Everything else is argued in a header next to the code it constrains |
 | `tests/` | the checks CI runs — every one of them on every pull request, except `xwayland-satellite-watch.sh`, which is a weekly cron asking whether the patched package can be deleted yet |
 | `assets/` | the screenshots at the top of this file |
 
@@ -419,26 +421,37 @@ driven from a terminal and the settings window follows.
 `bin/.local/bin/compositor` is how those scripts find out what they are running
 under.
 
-## Wallpapers and color
+## Wallpapers, colour and themes
 
-**This repository ships no wallpapers.** The whole palette is generated from
-the one that is set, so the collection is the one thing a clone cannot bring
-with it: pick your own. The default collection is `~/Pictures/wallpapers` — the
+What this desktop looks like is three separate decisions, and keeping them apart
+is what lets any one of them change without the other two:
+
+| | |
+|---|---|
+| the **wallpaper** | picks the accent — the one colour the image gets a say in |
+| the **scheme** | is every other colour: surfaces, text, outlines, the sixteen ANSI slots, the alert colours — on the whole machine, not just the shell |
+| the **theme** | is the drawing: shape, layout and motion, and no colour at all |
+
+Where those lines are drawn, what each layer owns and what the split cost is in
+[`docs/adr/0001-split-the-desktop-into-a-host-a-theme-and-a-scheme.md`](docs/adr/0001-split-the-desktop-into-a-host-a-theme-and-a-scheme.md).
+
+### The wallpaper
+
+**This repository ships no wallpapers.** The whole palette is generated from the
+one that is set, so the collection is the one thing a clone cannot bring with
+it: pick your own. The default collection is `~/Pictures/wallpapers` — the
 installer creates it and then fails that step, by name, if nothing is in it —
 and the settings window can point it somewhere else.
 
 `wallpaper-switch` sets the wallpaper and runs matugen, which renders fourteen
-untracked files for kitty, GTK 3/4, Hyprland, **niri**, Qt, zathura, ranger,
-fastfetch, Zen, cship and the shell. Only the **accents** come from the image,
-so contrast never depends on which wallpaper is set.
-
-The other half — surfaces, text, outlines, the sixteen ANSI slots, the alert
-colours — is a **scheme**, and `desktop-scheme` is the dial for it. A scheme is
-a JSON file in `schemes/`; matugen is handed it alongside the wallpaper and
-merges the two into one render, which is why one command re-themes everything
-at once. `schemes/README.md` names all 78 colour roles and is the authority on
-what each one means — read it before writing a scheme or touching a template.
-Tokyo Night is what ships and what a fresh clone gets.
+untracked files: two for kitty, one each for GTK 3 and GTK 4, Hyprland,
+**niri**, Qt, zathura, ranger, fastfetch, cship and the shell, and two for Zen.
+**One render carries both halves.** The scheme file is merged into it with
+`--import-json`, so a wallpaper change and a scheme change are the same
+operation and no application is ever left holding half a palette. It is
+all-or-nothing too: matugen writes *none* of the fourteen if one role fails to
+resolve, so a broken scheme is a failed render and a notification rather than a
+desktop with one application quietly out of step.
 
 **Zen needs one thing done by hand.** Its theming reads out of a profile with a
 fixed name, `~/.zen/rice`: a stable path is the only thing stow and matugen can
@@ -452,32 +465,217 @@ A wallpaper can also be a video: `mp4` `webm` `mkv` play through mpvpaper with
 hardware decoding, pausing when covered or when anything goes fullscreen, while
 stills and animated GIFs go through awww.
 
-You pick one by looking at it. **SUPER + SHIFT + W** opens a fullscreen
-carousel of the collection — five cards at a time, the middle one large and, if
-it is a live wallpaper, playing. Enter applies, Escape leaves the desktop as it
-was. The settings window keeps what is around the collection: which folder it
-is, how often it rotates by itself, and which wallpaper is on the desktop now.
+You pick one by looking at it. **SUPER + SHIFT + W** opens a fullscreen carousel
+of the collection — five cards at a time, the middle one large and, if it is a
+live wallpaper, playing. Enter applies, Escape leaves the desktop as it was. The
+settings window keeps what is around the collection: which folder it is, how
+often it rotates by itself, and which wallpaper is on the desktop now.
 
 ```sh
 wallpaper-switch next | prev | random | reapply
 wallpaper-switch set ~/Pictures/wallpapers/loop.mp4
-wallpaper-switch dir pick            # move the collection somewhere else
-wallpaper-switch still               # freeze a live wallpaper where it is
-wallpaper-switch thumbs              # rebuild the caches the carousel draws
+wallpaper-switch dir                     # print the collection folder
+wallpaper-switch dir ~/Pictures/walls    # move it
+wallpaper-switch dir pick                # move it, with a folder chooser
+wallpaper-switch still                   # freeze a live wallpaper where it is
+wallpaper-switch thumbs                  # rebuild the caches the carousel draws
 ```
 
-Those caches are three, under `~/.cache`: a 960 px thumbnail of every
-wallpaper, because decoding a 4K PNG to fill a card costs a fifth of a second;
-a still frame of every video, because nothing else can draw one; and, per
-video, a directory of numbered JPEGs — six seconds at 15 fps, 960 px wide —
-which is what the carousel flips through. **It no longer decodes video at
-all.** A short clip and a media player were the previous design and the player
-was the cost: on this hardware it holds a CUDA context and 412 MB of VRAM for
-as long as it exists and takes a quarter of a second to build, which is what
-made stepping through the fan stick. The measurements are in
-`bin/.local/bin/wallpaper-switch`, beside the numbers they justify. All three
+Those caches are four, under `~/.cache`, one entry each per wallpaper: a 960 px
+thumbnail of every one of them, because decoding a 4K PNG to fill a card costs a
+fifth of a second; and, for the videos, a still frame — because nothing else can
+draw one — a directory of numbered JPEGs, six seconds at 15 fps and 960 px wide,
+which is what the carousel flips through, and a playback copy scaled to what the
+monitors actually ask for. That last one is only ever scaled **down**: there is
+no quality hiding in pixels the source never had, so a 4K clip stays 4K on the
+day a 4K monitor arrives and shrinks again if it leaves. **The carousel no
+longer decodes video at all.** A short clip and a media player were the previous
+design and the player was the cost: on this hardware it holds a CUDA context and
+412 MB of VRAM for as long as it exists and takes a quarter of a second to
+build, which is what made stepping through the fan stick. The measurements are
+in `bin/.local/bin/wallpaper-switch`, beside the numbers they justify. All four
 are built in the background, skipped when they are already newer than their
 source, and swept when a wallpaper goes away.
+
+### The accent, and why it is not a setting
+
+The wallpaper chooses **which** accent the desktop wears. The scheme decides
+**what** that accent is, and those are two different questions.
+
+matugen is asked what colour the image is and nothing else — a dry run that
+writes no file — and that colour is then **snapped onto the nearest of the
+twelve chromatics the scheme publishes**. So a blue picture gives `#7aa2f7`
+under Tokyo Night, `#458588` under Gruvbox and `#89b4fa` under Catppuccin, and
+the accent can never be a colour the scheme would not print. Checked over the
+whole collection, 66 wallpapers against 3 schemes: 198 accents, none of them
+from outside the scheme file it came from.
+
+**And it keeps the scheme's tonality and not only its hue**, which is the half
+snapping alone did not fix. Hand matugen a seed and it re-derives the Material 3
+family from it, keeping the hue and replacing the lightness and the chroma with
+Material 3's own — which puts every scheme's primary at L\* 80 whatever the seed
+was, so Gruvbox's muted `#83a598` reached the screen as a mint and a restrained
+palette came out as loud as a loud one. So the nine accent roles the templates
+actually read are built here, out of the scheme's own colours, and matugen is
+given them rather than asked for them. Nothing invents a colour: the
+accent is the snapped colour unaltered, the other roles are the scheme's own
+chromatics a turn round the wheel from it, or its own surfaces and text, or a
+mix of two of them.
+
+**There is no accent picker, and there used to be.** A control offering
+*Wallpaper / Scheme / a hex you type* was built, shipped and removed: the accent
+is the picture's contribution to the desktop, and an accent the picture had no
+part in is a second scheme sitting on top of the first. The whole of that
+reversal — including the two real faults the extra sources were papering over,
+and what confining the accent costs a low-contrast palette like Gruvbox — is in
+[`docs/adr/0002-take-the-accent-from-the-wallpaper-through-the-scheme.md`](docs/adr/0002-take-the-accent-from-the-wallpaper-through-the-scheme.md).
+The algorithm, the candidate set and the measurement behind the distance metric
+are in `bin/.local/lib/scheme-accent.py`.
+
+### The colour scheme
+
+**A scheme is a file.** `schemes/` holds three: `tokyo-night.json`,
+`catppuccin-mocha.json` and `gruvbox-dark.json` — Tokyo Night, Catppuccin Mocha
+and Gruvbox Dark Medium. Tokyo Night is what ships and what a fresh clone gets.
+`desktop-scheme` is the dial:
+
+```sh
+desktop-scheme                    # the scheme in effect
+desktop-scheme list               # name<TAB>label, one per line
+desktop-scheme gruvbox-dark       # set it — `set gruvbox-dark` spelled out
+desktop-scheme show               # every field this script keeps
+desktop-scheme path               # where the scheme file is
+```
+
+Nothing in that script renders a colour. Setting a scheme ends in
+`wallpaper-switch reapply`, so the fourteen files are written again and every
+consumer picks the change up exactly as it does on a wallpaper change — kitty by
+signal, niri by watching its include, GTK and Zen at the next start.
+
+**Adding one is dropping a file in `schemes/`, and there is no `stow` step.**
+`schemes/` is not a stow package: it holds no dotfile, nothing is linked into
+`~/.config`, and the files are read out of the checkout — so a scheme saved into
+that directory is offered by `desktop-scheme list` and by the settings window
+straight away. That is the opposite of how a theme behaves, and it is deliberate:
+these are repository content, not machine state.
+
+What a scheme has to contain is **78 colour roles**, and
+**`schemes/README.md` is the authority on what each one means** — read it before
+writing a scheme or touching a template. The shape is matugen's own and not a
+flat map:
+
+```json
+{
+  "_meta": { "label": "Tokyo Night", "variant": "dark", "source": "…" },
+  "colors": { "ui_bg": { "default": { "color": "#1a1b26" } } }
+}
+```
+
+The filename is the scheme's identity — there is no `name` field that could
+disagree with it — and `_meta.label` is the only thing a person sees. Everything
+matugen must not read goes under `_meta`, because matugen puts every top-level
+key into one flat template context and each new one is another name that could
+collide with a role. The `ui_` / `term_` / `sem_` / `fb_` prefixes are
+load-bearing for the same reason: an unprefixed `surface` or `outline` in a
+scheme file would silently override the Material 3 role of the same name that
+the wallpaper derived.
+
+```sh
+tests/scheme-roles.py
+```
+
+is what keeps the vocabulary and the files from drifting. It parses the role
+tables out of `schemes/README.md`, checks every scheme against them, and re-runs
+`jq -S` to fail a file that is not already in sorted canonical form — so the
+layout is mechanical rather than maintained. Run it after writing one. A role a
+scheme leaves unfilled is not a wrong colour on screen; it is no colour at all,
+because the render writes nothing.
+
+### The theme
+
+**A theme is a directory**, under `quickshell/.config/quickshell/themes/`, and
+what makes it one is a `manifest.json` inside it. `genesis` is the first, and it
+is the look this desktop has always had under a name. A theme owns shape, layout
+and motion — the bar's height, the pill radius, the shape of a notification
+card, in `theme.json` — and it owns no colour at all, which is why it is not
+named after one: genesis under Gruvbox and genesis under Tokyo Night are further
+apart than two wallpapers ever made it, and both are still genesis.
+
+Copying one is the whole of making one, and the last command is the one that is
+easy to miss:
+
+```sh
+cd quickshell/.config/quickshell/themes
+cp -r genesis tokyo                  # nothing inside it needs renaming
+$EDITOR tokyo/manifest.json          # "name" and "title"
+cd -
+./install.sh apply symlinks          # link the new directory into ~/.config
+```
+
+**That last command is not optional and skipping it fails silently**, which is
+the one thing here worth reading twice. The shell reads
+`~/.config/quickshell/themes`, which `stow --no-folding` fills with one symlink
+per file, and it has no way to see this checkout — a directory that exists only
+in the repository has nothing at all on the other side. So an unstowed theme is
+not a greyed-out row carrying a reason. It is **no row**: the picker still lists
+one theme, nothing is logged, and nothing on screen says why. The installer is
+the only part of this that can see the checkout and `$HOME` at once, and it is
+the only one that says so. Measured in a scratch home with a second theme
+dropped into the repository and not stowed, `./install.sh check` reports:
+
+```
+missing  symlinks  Symlinks -- 30 not linked under ~/.config/quickshell/themes/probe
+```
+
+`apply symlinks` is what fixes it. See [Layout](#layout) for why the links are
+per file in the first place.
+
+A theme whose manifest *can* be read but asks for an interface this shell does
+not speak is the opposite case and is handled the opposite way: it is listed,
+greyed out, with the reason where "use" would be. Hiding it would be the same
+silence one step earlier, and the person it happens to is whoever just dropped a
+theme in and came to the settings window to find out why nothing changed.
+
+Set `theme` to `tokyo` — in the settings window, or in `config.json` — and the
+shell draws the copy. The seven surfaces are torn down and rebuilt out of the
+new directory with no config reload, and what a swap looks like on screen is
+about an eighth of a second in which the shell is simply absent, waiting on the
+new layer surfaces to be configured and painted. Nothing crossfades, and that is
+on purpose: the swaps *without* that gap are the ones with a fault in them, where
+the old bar and the new bar are on the screen at once.
+
+**A theme may pin a scheme.** `"palette": {"source": "pinned", "scheme":
+"gruvbox-dark"}` in its manifest means the whole desktop wears Gruvbox while
+that theme is drawn — terminal included, not just the shell — and the scheme you
+picked for yourself comes back when you leave it. It is emphatically not a
+palette only the shell reads; `Theme.qml`'s palette section is where that
+contract is written down, and
+[`docs/adr/0003-one-definition-for-a-word-that-crosses-a-language-boundary.md`](docs/adr/0003-one-definition-for-a-word-that-crosses-a-language-boundary.md)
+is why it has exactly one definition.
+
+Two documents carry the rest, and they are the ones to read before writing a
+theme rather than copying one: `themes/genesis/README.md` is the seam — what the
+host owns, what the theme owns, and what deliberately did not move — and
+`themes/genesis/components/README.md` is the shared-widget half: the mechanism,
+the seven rules a theme implementation lives by, and what each one costs.
+`tests/theme-interface.py` is what checks a theme, and it derives the list of
+files a theme must provide from the host's own call sites rather than from a list
+anybody maintains.
+
+### Where all of it is in the settings window
+
+**Appearance** opens with **Theme** — one row per theme it can see, greyed out
+with a reason if the shell cannot draw it — and then **Colour**, one row per
+scheme. That second list says "Applying…" on the row that was clicked and takes
+no clicks anywhere until the render lands, because applying a scheme is fourteen
+files and several applications signalled, and three clicks in a row would be
+three renders with the last to *finish* winning rather than the last one asked
+for. Below those sit transparency, the window numbers, the pointer and the type,
+which all move a number. There is no accent control, deliberately.
+
+**Wallpaper** keeps what is around the collection — which folder, how often it
+rotates by itself, and which wallpaper is on the desktop now. It is not a picker:
+picking happens in the carousel, on **SUPER + SHIFT + W**.
 
 ## Backups
 
