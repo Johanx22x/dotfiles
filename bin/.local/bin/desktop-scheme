@@ -241,12 +241,40 @@ accent_args() {
     [[ "$snapped" =~ ^#[0-9a-fA-F]{6}$ ]] \
         || die "the accent snapped to '$snapped', which is not a colour"
 
+    # AND THE FAMILY, WHICH IS THE HALF SNAPPING DID NOT FIX. The snapped
+    # colour is still handed over as the seed, because `source_color` and the
+    # `{{image}}` line should go on naming where the accent came from -- but
+    # matugen's own answer to what to DERIVE from that seed keeps only its hue
+    # and replaces its lightness and its chroma with Material 3's, which is
+    # how Gruvbox's muted #83a598 used to reach the screen as the mint
+    # #87d6bc. `accent` builds the nine roles the templates actually read out
+    # of the scheme's own colours, and an imported role beats a derived one,
+    # so what it says is what lands. The argument is in scheme-accent.py.
+    #
+    # ITS OWN STEP AND ITS OWN `die`, rather than folded into the snap above.
+    # The two answer different questions -- which colour, and what family
+    # round it -- and a failure in either has to name which one it was. It
+    # costs one more python process, which snaps a second time on the way to
+    # the family: measured at 19 ms against the 491 ms the matugen dry-run
+    # above already spends reading the image, so the clearer failure is worth
+    # more than the four percent.
+    accent="$(python3 "$BIN_DIR/../lib/scheme-accent.py" accent "$scheme" "$source_color")" \
+        || die "could not build the accent family for $snapped from $(basename "$scheme")"
+    [[ "$accent" == \{*\} ]] \
+        || die "the accent family came back as '$accent', which is not an import"
+
     # ONE WORD PER LINE, and `jq -n --arg` builds the import so that a filename
     # carrying a quote, a backslash or a newline comes out as valid JSON on a
     # single line -- `mapfile` on the other side splits on newlines, so an
     # argument that contained one would arrive as two.
+    #
+    # ONE IMPORT CARRIES BOTH, and it has to be one: matugen takes a single
+    # `--import-json-string`, so the image and the family are merged here
+    # rather than passed twice. They cannot collide -- `image` is a key of the
+    # top level and the roles live under `colors`.
     printf 'color\nhex\n%s\n--import-json-string\n' "$snapped"
-    jq -cn --arg image "$image" '{$image}'
+    jq -cn --arg image "$image" --argjson accent "$accent" '{$image} + $accent' \
+        || die "could not build the accent import for $(basename "$image")"
 }
 
 # ---------------------------------------------------------------------------
