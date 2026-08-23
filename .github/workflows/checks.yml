@@ -225,6 +225,17 @@ jobs:
         if: ${{ !cancelled() }}
         run: tests/theme-interface.py
 
+      # AND IT READS THE THEMES TOO, WHICH IT DID NOT USED TO. It swept
+      # quickshell/.config/quickshell and nothing else, so genesis was read
+      # because of where it sits and tests/fixtures/theme-probe -- a theme by
+      # the same definition, 27 .qml files -- was read by nothing.
+      #
+      # BOTH ITS RULES HAVE THEIR SUBJECT INSIDE A THEME, which is the evidence
+      # that this was the wrong scope rather than merely a narrow one. One of
+      # the repository's two WheelHandlers and the ONLY FolderListModel whose
+      # rows are read both live in themes/genesis/wallpaper/WallpaperCarousel.qml;
+      # move genesis out from under quickshell/ and this step does not lose
+      # coverage quietly, it fails with "has the rule outlived its subject?".
       - name: The QML tree keeps to its rules
         if: ${{ !cancelled() }}
         run: tests/qml-rules.sh
@@ -243,6 +254,23 @@ jobs:
       # synthesis off and become a second place every component has to be
       # registered. It gates per category at what the tree measured rather than
       # at zero, which nobody can reach today.
+      #
+      # PER SCOPE AS WELL AS PER CATEGORY, AND A THEME IS A SCOPE. It used to
+      # hold one total for one directory, so a theme was linted only if it
+      # happened to live inside that directory -- genesis did, the fixture did
+      # not. That is not an ordinary gap: rule 1 of
+      # themes/genesis/components/README.md ("required property <Facade> row",
+      # never "property var row") is justified entirely by a measurement taken
+      # with this script, and it was being measured on one theme. Three
+      # misspelled reads were put into the fixture and the old sweep answered
+      # "306 warnings, none of them new" and exited 0.
+      #
+      # Now a theme is any directory with a manifest.json, it is dropped into
+      # the sandbox where genesis already sits so it gets identical qmldirs and
+      # identical imports, and it carries its own budget. A theme nobody has
+      # budgeted is compared against zero, so a theme added to this repository
+      # cannot fold its warnings into a number written about the shell -- it
+      # turns the run red under its own name.
       #
       # AND IT WOULD NOT HAVE CAUGHT EITHER OF THIS WEEK'S TWO BREAKAGES, which
       # is measured in the script rather than assumed: with the launcher fix of
