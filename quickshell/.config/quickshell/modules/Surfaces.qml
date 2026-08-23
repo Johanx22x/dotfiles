@@ -227,6 +227,49 @@ Singleton {
                 member.close();
     }
 
+    // THE SAME RULE WITH NOTHING KEPT, for the one moment when no member may
+    // stay: the THEME IS CHANGING, and every surface a member is drawn on is
+    // about to be destroyed. modules/ThemeSurface.qml is the caller, and the
+    // header there is where the whole account of the swap lives.
+    //
+    // NOT keep("") -- that would do the same thing, and it would read as a
+    // surface named the empty string claiming the screen. This is not the rule
+    // arbitrating between two surfaces that both want it. It is the moment
+    // there is no screen to want.
+    //
+    // WHY THIS FILE DOES NOT WATCH FOR IT ITSELF, which is the shape it wants
+    // to have and cannot. The obvious version is a Connections on Themes right
+    // beside the five at the bottom, and it is WRONG BY ORDERING: every
+    // ThemeSurface derives its url from Themes.name and is connected to it when
+    // the Variants build it, while this singleton is armed from a
+    // Component.onCompleted in shell.qml, which runs after the whole tree
+    // exists. Measured in a headless compositor -- the Connections version
+    // logged closeAll AFTER all seven setSource calls, so every member was
+    // closed against surfaces that had already been destroyed and the incoming
+    // theme's carousel came up open and shut itself a step later. Closing a
+    // member has to reach a window that is still alive: dismiss() puts a popout
+    // away through a signal, and a signal to a destroyed window is nothing.
+    //
+    // IT IS IDEMPOTENT, which is what lets the caller be seven objects rather
+    // than one. Every line here assigns false or the empty string, so the first
+    // of the seven does the work and the other six are a walk over a list --
+    // the same argument the note above keep() makes about reentrancy.
+    //
+    // AND popoutOpen IS CLEARED HERE RATHER THAN LEFT TO THE BAR. Every other
+    // false it takes arrives from a bar reacting to its own popout closing,
+    // which is what the property is: a report. Destroying the bar destroys the
+    // only thing that could ever report again, so a swap over an open popout
+    // left the flag true against a shell that had no popout on it -- and the
+    // next real popout then raised no edge, never called keep(), and the
+    // one-surface rule failed once, arbitrarily long after the swap that broke
+    // it. This is the only place that knows the report is void.
+    function closeAll(): void {
+        for (const member of root.members)
+            member.close();
+
+        root.popoutOpen = false;
+    }
+
     // The five call sites, in one place so the membership can be read off them.
     // Each acts on the RISING edge: a surface closing is not a claim on the
     // screen, and treating it as one would have every close reach into four
