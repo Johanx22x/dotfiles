@@ -20,7 +20,7 @@
 # hypr/.config, zsh/.zshrc. It is not the list in install.sh, on purpose --
 # install.sh links one compositor or the other, and the question here is whether
 # ALL of them can coexist, including the two that are never installed together.
-# assets/, lib/, packages/, schemes/, seeds/, system/ and tests/ hold no
+# assets/, docs/, lib/, packages/, schemes/, seeds/, system/ and tests/ hold no
 # dotfiles and drop out of the list on their own -- eight of the repository's
 # twenty-five top-level directories, leaving seventeen packages. The run says
 # how many it found, so read that rather than this sentence: nothing checks the
