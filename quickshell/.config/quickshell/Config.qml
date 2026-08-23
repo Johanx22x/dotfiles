@@ -416,108 +416,83 @@ Singleton {
             root.fontFamily = family;
     }
 
-    // ---------------- The colour scheme, and where its accent comes from ----
+    // ---------------- The colour scheme ------------------------------------
     //
-    // TWO SETTINGS, ONE STORE, AND NEITHER OF THEM IS KEPT HERE. The rule is
-    // the one WallpaperPage.qml's header states: a value that already has an
-    // owner outside the shell must not get a copy in this file, or the two
-    // disagree the first time it is changed from somewhere else. `desktop-scheme`
-    // is that owner -- it writes ~/.local/state/desktop-scheme and it is what a
-    // keybind, a terminal and a theme all go through -- so the properties below
-    // are a READ of its file and the setters below are a PUSH into its script.
-    // Nothing here is declared on the JsonAdapter.
+    // ONE SETTING, ONE STORE, AND IT IS NOT KEPT HERE. The rule is the one
+    // WallpaperPage.qml's header states: a value that already has an owner
+    // outside the shell must not get a copy in this file, or the two disagree
+    // the first time it is changed from somewhere else. `desktop-scheme` is
+    // that owner -- it writes ~/.local/state/desktop-scheme and it is what a
+    // keybind, a terminal and a theme all go through -- so `scheme` below is a
+    // READ of its file and `setScheme` is a PUSH into its script. Nothing here
+    // is declared on the JsonAdapter.
     //
-    // WHAT THE TWO ARE. The scheme is the BASE: surfaces, text, the sixteen
-    // ANSI slots. The accent source is where the seventeen Material 3 roles
-    // come from -- the wallpaper, as it always has been, or the scheme's own
-    // accent, or a colour picked by hand. They are separate because they are
-    // separate questions: a scheme with the wallpaper's accent is what this
-    // desktop looked like before either control existed.
+    // WHAT IT IS. The scheme is the BASE: surfaces, text, the sixteen ANSI
+    // slots every terminal in the session inherits. The ACCENTS are the
+    // wallpaper's and are not a setting -- there were briefly two more sources
+    // and a colour field beside them, and the note above `accent_args` in
+    // bin/desktop-scheme is where their removal is argued.
     //
-    // The defaults repeated here are the script's own (`DEFAULT_SCHEME` and
-    // `DEFAULT_ACCENT` in bin/desktop-scheme). A fresh machine has no state
-    // file at all, and both sides have to answer the same thing about it.
+    // The default repeated here is the script's own (`DEFAULT_SCHEME` in
+    // bin/desktop-scheme). A fresh machine has no state file at all, and both
+    // sides have to answer the same thing about it.
     readonly property string schemeDefault: "tokyo-night"
-    readonly property string accentSourceDefault: "wallpaper"
 
+    // A READING AND NOT A PREDICTION. It follows the state file, which
+    // `desktop-scheme set` writes once it has accepted the name -- so it does
+    // not move for a name the script refused, which is the case where being
+    // right matters. Same rule, and the same wording, as `currentPath` in
+    // WallpaperPage.qml: moving it on the click would be quicker and would be
+    // a lie exactly when the truth is worth having.
     property string scheme: root.schemeDefault
-    property string accentSource: root.accentSourceDefault
-    // Empty until somebody picks one, which is what the script stores too. It
-    // is kept across a switch away from `hex` and back, so the settings window
-    // can show the colour that would return rather than a blank field.
-    property string accentSeed: ""
 
-    // ONE SETTER EACH AND NEVER A BARE ASSIGNMENT FROM A PAGE, for the reason
-    // written out at length above `saveTimer`: two property writes in one
-    // synchronous turn lose the first one, silently, in memory and on disk.
-    // `setAccent` moves the source and the seed together for exactly that
-    // reason -- a row that assigned both would be that bug.
+    // WHICH SCHEME IS BEING APPLIED RIGHT NOW, or "" when none is. Applying one
+    // ends in `wallpaper-switch reapply` -- a full matugen render over fourteen
+    // files, plus the applications that have to be signalled afterwards -- so
+    // there is a second or more between the click and the desktop changing, and
+    // the settings window has to be able to say so on the row that was clicked.
+    //
+    // BOUND TO THE PROCESS AND NEVER TO A TIMER. What ends the wait is the
+    // script exiting, whatever it took: the render may get slower or faster,
+    // and a duration guessed here would either free the rows early or hold them
+    // after the work was done. A crash or a `die` ends it too, which is what
+    // keeps the picker from staying stuck on a scheme that failed.
+    readonly property string schemeApplying: schemeApply.running
+        ? root.schemeRequested : ""
+
+    // What was asked for. Only meaningful while `schemeApply` is running, which
+    // is why `schemeApplying` above is what the rest of the shell reads.
+    property string schemeRequested: ""
+
     // NO "IT IS ALREADY THAT ONE" GUARD, deliberately. `desktop-scheme set`
     // writes two keys -- what renders and what the PERSON chose -- and the
     // second one is the answer a theme's `unpin` comes back to, so picking the
     // scheme already in effect is a real thing to record. The script is what
     // decides whether anything needs re-rendering, and it already declines when
     // nothing moved.
-    function setScheme(name: string): void {
-        if (name === "")
-            return;
-
-        root.scheme = name;
-        root.schemePending = true;
-        schemePushTimer.restart();
-    }
-
-    // `seed` is only meaningful for `hex`, and an empty one there means "the
-    // colour already stored" -- which is what the script does with a bare
-    // `desktop-scheme accent hex`, so the two agree without this having to
-    // know whether one exists.
-    function setAccent(source: string, seed: string): void {
-        if (source === "")
-            return;
-
-        root.accentSource = source;
-        if (seed !== "")
-            root.accentSeed = seed;
-        root.accentPending = true;
-        schemePushTimer.restart();
-    }
-
-    property bool schemePending: false
-    property bool accentPending: false
-
-    // ONE PUSH PER FIRE, AND THE SECOND ONE WAITS FOR THE NEXT. Both commands
-    // end in `wallpaper-switch reapply`, which is a full matugen render over
-    // the same fourteen generated files; two of them started in the same turn
-    // would be two renders racing, and the one that happened to finish last
-    // would be the one holding a value the other had not written yet. Sent one
-    // after the other, the second reads a store the first has already updated
-    // and is therefore the render that has both answers in it.
     //
-    // It only ever comes up if the scheme and the accent are both changed
-    // inside the same 150ms, which is two different controls in two different
-    // sections of one page. Cheap to be right about anyway.
-    Timer {
-        id: schemePushTimer
+    // THE ONE GUARD THERE IS refuses a second apply while the first is still
+    // running. Two of these overlapping are two matugen renders writing the
+    // same fourteen files, and the one that finishes last wins -- which need
+    // not be the one the person asked for second. The settings window stops
+    // the click before it gets here; this is the backstop for every other
+    // caller, and the reason it can exist at all is that the push is a Process
+    // rather than an `execDetached`. WallpaperPage.qml makes the same trade for
+    // the same reason at its `picker`.
+    function setScheme(name: string): void {
+        if (name === "" || schemeApply.running)
+            return;
 
-        interval: 150
-        onTriggered: {
-            if (root.schemePending) {
-                root.schemePending = false;
-                Quickshell.execDetached(["desktop-scheme", "set", root.scheme]);
+        root.schemeRequested = name;
+        schemeApply.command = ["desktop-scheme", "set", name];
+        schemeApply.running = true;
+    }
 
-                if (root.accentPending)
-                    schemePushTimer.restart();
-
-                return;
-            }
-
-            if (root.accentPending) {
-                root.accentPending = false;
-                Quickshell.execDetached(root.accentSource === "hex"
-                    ? ["desktop-scheme", "accent", "hex", root.accentSeed]
-                    : ["desktop-scheme", "accent", root.accentSource]);
-            }
-        }
+    // Deliberately no onExited handler. `scheme` above follows the state file,
+    // which the script has already written by the time it returns, and the
+    // failure case is a file that never changed rather than one to read again.
+    Process {
+        id: schemeApply
     }
 
     FileView {
@@ -538,10 +513,16 @@ Singleton {
     // file is what the script wrote, the script already refused a name it had
     // no file for, and a shell that second-guessed it would be a settings
     // window disagreeing with the terminal about what is on screen.
+    //
+    // NOTHING IS HELD BACK WHILE A PUSH IS IN FLIGHT ANY MORE. There used to be
+    // an early return here for exactly that, and it was there to defend an
+    // optimistic value: `setScheme` wrote `scheme` on the click and this would
+    // otherwise have overwritten it with the store the script had not reached
+    // yet. There is no such value now -- the click starts a process and nothing
+    // else -- so the newest thing on disk is always the better answer, and a
+    // reader that declined to take it would be the settings window arguing with
+    // the file it is showing.
     function adoptScheme(): void {
-        if (schemePushTimer.running)
-            return;
-
         const parsed = ({});
 
         for (const line of (schemeFile.text() || "").split("\n")) {
@@ -553,8 +534,6 @@ Singleton {
         }
 
         root.scheme = parsed["scheme"] || root.schemeDefault;
-        root.accentSource = parsed["accent"] || root.accentSourceDefault;
-        root.accentSeed = parsed["accent-hex"] || "";
     }
 
     // ---------------- What the compositor is told ----------------

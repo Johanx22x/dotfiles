@@ -2,16 +2,14 @@
 # =============================================================
 #  desktop-scheme — which base palette the desktop wears
 #
-#  The colour of this desktop has two halves that move independently. The
-#  ACCENTS -- three of them, plus the Material 3 roles around them -- were
-#  derived from the wallpaper on every change and from nothing else. The BASE --
-#  surfaces, text, outlines, the sixteen ANSI slots, the alert colours -- was
+#  The colour of this desktop has two halves. The ACCENTS -- three of them, plus
+#  the Material 3 roles around them -- are derived from the wallpaper. The BASE
+#  -- surfaces, text, outlines, the sixteen ANSI slots, the alert colours -- was
 #  Tokyo Night written out as 227 hex literals across ten files, and could not
 #  be changed without editing all of them.
 #
-#  This script is the dial for both halves: WHICH scheme supplies the base, and
-#  WHERE the accents come from -- still the wallpaper unless told otherwise, or
-#  the scheme's own accent, or a colour picked by hand.
+#  This script is the dial for the base: WHICH scheme supplies it. The accents
+#  are not a dial, and the note above `accent_args` says why.
 #
 #      desktop-scheme                 print the scheme in effect
 #      desktop-scheme tokyo-night     set it
@@ -19,9 +17,7 @@
 #      desktop-scheme list            NAME<TAB>Label, one per line
 #      desktop-scheme show            every field this script keeps
 #      desktop-scheme path [NAME]     where the scheme file is
-#      desktop-scheme accent [SOURCE] where the ACCENTS come from
-#      desktop-scheme accent hex HEX  ... and the colour, when it is a seed
-#      desktop-scheme accent-args IMG how matugen is called for that
+#      desktop-scheme accent-args IMG the words that open the render
 #      desktop-scheme pin NAME        set it WITHOUT changing the user's choice
 #      desktop-scheme unpin           go back to the user's choice
 #
@@ -38,8 +34,9 @@
 #    everything else INDIRECTLY, and this is the whole design. Nothing here
 #                    renders a colour. `wallpaper-switch` asks this script two
 #                    questions -- `path` for the scheme file and `accent-args`
-#                    for where the accents come from -- and hands both answers
-#                    to matugen, which is what writes the generated files.
+#                    for the words that open the render -- and hands both
+#                    answers to matugen, which is what writes the generated
+#                    files.
 #                    So setting a scheme ends in `wallpaper-switch reapply` and
 #                    every consumer picks it up exactly as it does on a
 #                    wallpaper change -- kitty by signal, niri by watching its
@@ -81,36 +78,6 @@ REPO_DIR="$(cd "$BIN_DIR/../../.." && pwd)" \
 SCHEME_DIR="$REPO_DIR/schemes"
 
 DEFAULT_SCHEME="tokyo-night"
-
-# WHERE THE ACCENTS COME FROM, which is the other axis and is deliberately not
-# the same setting: a scheme says what the desktop is made of, this says which
-# of the two halves is allowed to move with the picture behind it.
-#
-#   wallpaper  the image on the desktop. The default, and what this desktop has
-#              always done.
-#   scheme     the scheme's own `fb_*` block, which mirrors the 17 Material 3
-#              roles one for one (schemes/README.md section 1.4). Those values
-#              are the half of a scheme that nothing used to read: the base was
-#              applied and the accent was not, which is why Tokyo Night looked
-#              like every other wallpaper's blue rather than like #7aa2f7.
-#   hex        a colour picked by hand. matugen derives a whole Material 3
-#              palette from a seed with `matugen color hex`, which takes the
-#              same flags as `matugen image` -- checked against 4.2.0, `--mode`,
-#              `--prefer`, `--quiet`, `--import-json` and `--import-json-string`
-#              are all on both -- so the wallpaper simply stops being the source.
-#
-# THE BASE IS UNTOUCHED BY ALL THREE. It comes from the scheme's `ui_`, `term_`
-# and `sem_` roles, imported exactly as before; only the 17 M3 roles move. So
-# `accent hex` is not "a scheme made of one colour", it is this scheme with a
-# different accent in it.
-#
-# ONE MECHANISM, NOT THREE. matugen's imported JSON wins over what matugen
-# derived -- measured, and written out in schemes/README.md -- so `scheme` is a
-# matter of what goes into the import and nothing else. `hex` is the one that
-# also changes the subcommand, which is why `accent-args` below hands back the
-# whole opening of the matugen command line rather than a flag to append.
-DEFAULT_ACCENT="wallpaper"
-ACCENT_SOURCES=(wallpaper scheme hex)
 
 # ---------------------------------------------------------------------------
 # Reading
@@ -170,105 +137,31 @@ chosen() {
     printf '%s\n' "${value:-$(current)}"
 }
 
-accent_source() {
-    local value
-    value="$(state_get "$STATE_FILE" accent)"
-    printf '%s\n' "${value:-$DEFAULT_ACCENT}"
-}
-
-# The seed `hex` renders from, empty until somebody picks one. ITS OWN KEY and
-# not part of `accent`, for the same reason `chosen` is kept apart from `scheme`
-# further up: going to the wallpaper and back has to return the colour that was
-# there, not ask for it again.
-accent_seed() {
-    state_get "$STATE_FILE" accent-hex
-}
-
-# `#rrggbb`, lower case, and the `#` is optional coming in. Every colour picker
-# on the machine copies with one, and an unquoted argument that starts with one
-# is a comment as far as the shell is concerned -- so both spellings arrive here
-# and only one is ever stored.
-normalise_hex() {
-    local value="${1#\#}"
-    [[ "$value" =~ ^[0-9a-fA-F]{6}$ ]] || return 1
-    printf '#%s\n' "${value,,}"
-}
-
-# The 17 Material 3 roles, out of the scheme's `fb_*` block, in the shape
-# matugen imports.
+# THE WORDS THAT OPEN THE matugen COMMAND LINE, one per line, for
+# `wallpaper-switch` to read into an array. Everything after them -- the mode,
+# the preference, the scheme import -- stays at that call site.
 #
-# THE MAPPING IS THE PREFIX AND NOTHING ELSE. The block mirrors the M3 names one
-# for one by construction, so a list of the seventeen written out here would be
-# a second copy of schemes/README.md section 1.4 to keep in step -- and the day
-# they disagreed, the render would still succeed and simply leave a role on the
-# wallpaper's colour. tests/scheme-roles.py is what guarantees the set is
-# complete; the only thing worth refusing here is an EMPTY one, because that is
-# the case where `accent scheme` would quietly mean `accent wallpaper`.
+# WHERE THE ACCENTS COME FROM IS NOT A SETTING. It was one briefly: the picker
+# offered the scheme's own `fb_*` roles and a colour typed by hand as two
+# further sources, and both are gone. The accent is the wallpaper's
+# contribution -- a blue picture gives a blue desktop -- while the scheme says
+# what the desktop is MADE of; an accent the picture had no part in is a second
+# scheme sitting on top of the first, which is a thing to configure rather than
+# a thing to look at. The `fb_*` roles stay in the scheme files: they answer
+# the different question a clone with no wallpaper yet asks.
 #
-# `jq -c` so the whole payload is one line: `accent-args` is read a line at a
-# time by its caller, and a pretty-printed object would arrive as forty
-# arguments.
-scheme_accent_payload() {
-    local file="$1" payload
-    payload="$(jq -c '{colors: (.colors
-            | with_entries(select(.key | startswith("fb_"))
-            | .key |= sub("^fb_"; "")))}' "$file")" \
-        || die "could not read the accent roles out of $file"
-
-    if [[ "$payload" == '{"colors":{}}' ]]; then
-        die "the scheme at $file defines no fb_* roles, so it has no accent to give"
-    fi
-
-    printf '%s\n' "$payload"
-}
-
-# THE WHOLE OPENING OF THE matugen COMMAND LINE, one word per line, for
-# `wallpaper-switch` to read into an array. Everything after it -- the mode, the
-# preference, the scheme import -- is the same for all three sources and stays
-# at that call site.
-#
-# WHY THE WORDS AND NOT A FLAG. Two of the three answers are `matugen image
-# <wallpaper>` with something extra imported; the third is `matugen color hex
-# <seed>`, a different subcommand with a different argument in place of the
-# image. A seam that could only append could not express the third, and a
-# `wallpaper-switch` that branched on the accent source itself would be the
-# second reader of this store -- the thing the note above `rerender` exists to
-# avoid.
+# STILL ASKED FOR RATHER THAN SPELLED OUT AT THE CALL SITE, with one answer to
+# give today. The division of labour is what earns it: this script is the one
+# that knows what the scheme is, and `wallpaper-switch` is the one that knows
+# WHICH image to colour from -- a video is coloured from a cached frame, which
+# is twenty lines over there. Which words open the render is therefore this
+# side's question, and this is the seam anything with a say in the accent
+# reaches it through.
 #
 # A PURE READ, so there is no loop: `set` calls `wallpaper-switch reapply`,
 # `reapply` calls this, and this returns. Same contract as `path`.
 accent_args() {
-    local image="$1" source_name seed
-    source_name="$(accent_source)"
-
-    case "$source_name" in
-        wallpaper)
-            # Byte for byte what the call site used to spell out itself.
-            printf 'image\n%s\n' "$image"
-            ;;
-        scheme)
-            printf 'image\n%s\n--import-json-string\n%s\n' \
-                "$image" "$(scheme_accent_payload "$(scheme_file "$(current)")")"
-            ;;
-        hex)
-            seed="$(accent_seed)"
-            [[ -n "$seed" ]] \
-                || die "the accent source is 'hex' but no colour is set (try: desktop-scheme accent hex '#7aa2f7')"
-            # `image` IS OVERRIDDEN ON PURPOSE, and it is the one name outside
-            # `colors` this repository ever overrides. Twelve of the fourteen
-            # templates open with `Wallpaper: {{image}}` as provenance -- every
-            # one except ranger-accent and zathurarc. `matugen color hex` has
-            # no image to put there and renders the word `Null`, which is not
-            # "no wallpaper" but a lie about a desktop that has one. jq builds
-            # the string so a path carrying a quote cannot break the JSON.
-            printf 'color\nhex\n%s\n--import-json-string\n%s\n' "$seed" \
-                "$(jq -cn --arg image "$image" --arg seed "$seed" \
-                    '{image: ($image + " (accents seeded from " + $seed + ")")}')"
-            ;;
-        *)
-            die "not an accent source: '$source_name' (have: ${ACCENT_SOURCES[*]})"
-            ;;
-    esac
+    printf 'image\n%s\n' "$1"
 }
 
 # ---------------------------------------------------------------------------
@@ -301,6 +194,33 @@ rerender() {
     fi
 }
 
+# Keys this script used to keep and no longer does. `accent` said where the
+# Material 3 roles came from and `accent-hex` held the colour for the one source
+# that needed one; the accent is the wallpaper's, and neither key has a reader
+# left anywhere. A machine that used the picker before this still has both rows
+# in its store, and a row nothing reads is worse than no row at all: `show` does
+# not print it, so the only way to meet one is to open the file -- where it
+# reads exactly like a setting that still does something.
+#
+# DROPPED ON THE WAY PAST rather than by a command of its own, so there is
+# nothing to remember to run: the first `set` after an upgrade clears them.
+#
+# PRESENCE AND NOT VALUE is the test, because an empty value is a value -- the
+# same distinction `state_unset` is documented with in desktop-lib.sh. Writing
+# only when there is something to drop is what keeps this off the common path:
+# on a store that never had these keys it is one read and no rewrite.
+prune_retired_keys() {
+    local -A store=()
+    local key
+
+    state_load "$STATE_FILE" store
+    for key in accent accent-hex; do
+        if [[ -v "store[$key]" ]]; then
+            state_unset "$STATE_FILE" "$key"
+        fi
+    done
+}
+
 # Write the keys, then re-render only if what renders actually moved. The state
 # is written either way: `set` on the scheme already in effect still has to
 # record it as the person's own choice, which is the case that matters the day
@@ -326,6 +246,8 @@ set_scheme() {
     [[ -r "$(scheme_file "$name")" ]] \
         || die "no such scheme: '$name' (try: $(names_inline))"
 
+    prune_retired_keys
+
     before="$(current)"
     state_set "$STATE_FILE" scheme "$name"
     # An `if` and not `[[ ... ]] && ...`: a failed test at the end of a && list
@@ -337,62 +259,6 @@ set_scheme() {
 
     printf 'Desktop scheme: %s\n' "$(label_of "$name")"
     commit "$before"
-}
-
-# The other axis. Same shape as set_scheme: validate, write, say so, re-render
-# only if what renders actually moved.
-#
-# THE SEED COUNTS AS PART OF "MOVED". `accent hex '#ff0000'` while already on
-# `hex` changes every accent on the desktop and does not change the source, so
-# comparing the source alone would leave the person looking at the old colour
-# and a message saying the new one was applied.
-set_accent() {
-    local source_name="$1" seed_arg="${2-}"
-    local allowed found=0 seed="" before after
-
-    for allowed in "${ACCENT_SOURCES[@]}"; do
-        if [[ "$source_name" == "$allowed" ]]; then
-            found=1
-            break
-        fi
-    done
-    (( found )) \
-        || die "not an accent source: '$source_name' (have: ${ACCENT_SOURCES[*]})"
-
-    if [[ "$source_name" == hex ]]; then
-        if [[ -n "$seed_arg" ]]; then
-            seed="$(normalise_hex "$seed_arg")" \
-                || die "not a colour: '$seed_arg' (expected #rrggbb)"
-        else
-            # No colour given and one already stored is `accent hex` meaning
-            # "go back to the seed I picked", which is the same courtesy
-            # `unpin` does for the scheme.
-            seed="$(accent_seed)"
-            [[ -n "$seed" ]] \
-                || die "which colour? (try: desktop-scheme accent hex '#7aa2f7')"
-        fi
-    elif [[ -n "$seed_arg" ]]; then
-        die "only 'hex' takes a colour; '$source_name' does not"
-    fi
-
-    before="$(accent_source) $(accent_seed)"
-    state_set "$STATE_FILE" accent "$source_name"
-    if [[ -n "$seed" ]]; then
-        state_set "$STATE_FILE" accent-hex "$seed"
-    fi
-    after="$(accent_source) $(accent_seed)"
-
-    if [[ "$source_name" == hex ]]; then
-        printf 'Desktop accent source: %s (%s)\n' "$source_name" "$seed"
-    else
-        printf 'Desktop accent source: %s\n' "$source_name"
-    fi
-
-    if [[ "$before" == "$after" ]]; then
-        note "already in effect, nothing to re-render"
-    else
-        rerender
-    fi
 }
 
 MODE="${1:-}"
@@ -413,11 +279,6 @@ case "$MODE" in
     show)
         printf 'scheme\t%s\n' "$(current)"
         printf 'chosen\t%s\n' "$(chosen)"
-        printf 'accent\t%s\n' "$(accent_source)"
-        # Printed even when the source is not `hex`, because it is kept even
-        # then: an empty value here means nobody has ever picked a colour, and
-        # that is a different answer from "the accents come from the wallpaper".
-        printf 'accent-hex\t%s\n' "$(accent_seed)"
         ;;
 
     path)
@@ -428,17 +289,6 @@ case "$MODE" in
         file="$(scheme_file "$name")"
         [[ -r "$file" ]] || die "no such scheme: '$name'"
         printf '%s\n' "$file"
-        ;;
-
-    accent)
-        # Bare, it answers with ONE WORD and never the colour: this is what the
-        # settings window reads to light up a segment, and `show` below is where
-        # the whole answer lives.
-        if (( $# < 2 )); then
-            accent_source
-            exit 0
-        fi
-        set_accent "$2" "${3-}"
         ;;
 
     accent-args)
