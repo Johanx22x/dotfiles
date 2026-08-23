@@ -481,17 +481,28 @@ SettingsPage {
                     //
                     // WHAT CAN is that the theme's own key is not this cap.
                     // Left unset, themes/genesis draws one with the BUTTON's
-                    // padding -- `Math.round(groupPadding * 2)`, 24 against 14
-                    // -- and picks its face out of
-                    // `Qt.font({pointSize: Theme.fontSize - 1.5})`, which comes
-                    // back 9 and not 9.5 because Qt.font() takes an int.
-                    // Measured offscreen against the Rectangle that used to be
-                    // here: handed over, this chord is 83.30 px wide and every
-                    // cap matches the old one to the pixel; left at the theme's
-                    // defaults it is 97.58. Fourteen pixels is a row whose
-                    // layout name elides sooner, in a picker where nothing else
-                    // changed -- and two adjacent pages drawing SUPER + K in
-                    // two different caps.
+                    // padding: `Math.round(groupPadding * 2)`, 24 against 14.
+                    //
+                    // IT USED TO GET THE FACE WRONG AS WELL, out of a
+                    // `Qt.font({pointSize: Theme.fontSize - 1.5})` that came
+                    // back 9 and not 9.5 because Qt.font() takes an int point
+                    // size. That is gone: components/Chip.qml in that theme
+                    // writes the same size through the font group properties
+                    // now, and they keep the half point.
+                    //
+                    // SO THE REMAINING GAP IS PADDING ALONE, AND IT IS WIDER
+                    // THAN THE ONE THIS COMMENT USED TO DESCRIBE. Measured
+                    // offscreen against the Rectangle that used to be here:
+                    // handed over, this chord is 83.30 px wide and every cap
+                    // matches the old one to the pixel; left at the theme's
+                    // defaults it is 103.29. The caps are drawn in an
+                    // IDENTICAL face on both sides -- measured, same family,
+                    // same point size, same weight, each label the same width
+                    // to four decimals -- so every one of those twenty pixels
+                    // is the ten per chip that the padding adds, and none of
+                    // it is a face that came back short. Twenty pixels is a
+                    // row whose layout name elides sooner, in a picker where
+                    // nothing else changed.
                     Row {
                         visible: cycleEntry.isNext
                         anchors.verticalCenter: parent.verticalCenter
@@ -532,9 +543,15 @@ SettingsPage {
                                 // measures anything with it, which is what
                                 // makes it look like the wrong tool. It is the
                                 // spelling that KEEPS THE HALF POINT: font
-                                // group properties carry 9.5, Qt.font() takes
-                                // an int and hands back 9, and the caps next
-                                // door are 9.5.
+                                // group properties carry 9.5, where Qt.font()
+                                // takes an int point size and would hand back
+                                // 9. The theme's own default is that same 9.5
+                                // now, so this is no longer standing in for a
+                                // face that came back short -- it is what
+                                // makes the face drawn here provably the face
+                                // this page chose, rather than two files that
+                                // spell Theme.fontSize - 1.5 the same way
+                                // today.
                                 //
                                 // Inside the delegate because a Repeater
                                 // delegate is its own component, and an id

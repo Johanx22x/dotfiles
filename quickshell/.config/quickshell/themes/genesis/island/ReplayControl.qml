@@ -91,40 +91,104 @@ Item {
     // Measured rather than guessed at, because the widest of the three is not
     // the one with the most characters at every font: "Replay elsewhere" is
     // sixteen and "Save last 120s" is fourteen, and which draws wider depends
-    // on the face. TextMetrics answers with the font actually in use.
+    // on the face.
     //
     // THE SECONDS ARE PART OF THE CANDIDATE SET, so the reservation follows a
     // change to the configured buffer length. That is a settings change made
     // twice a year rather than a switch flipped daily, and it is the one case
     // where the panel is allowed to resize.
-    readonly property font labelFont: Qt.font({
-        family: Theme.fontFamily,
-        pointSize: Theme.fontSize * 0.85,
-        weight: Font.Bold
-    })
+    //
+    // THROUGH THE GROUP PROPERTIES AND NOT Qt.font(), WHICH TAKES AN INT POINT
+    // SIZE AND THIS ONE IS NOT AN INT. `Theme.fontSize * 0.85` is 9.35 at the
+    // shipped size of 11 and 11.9 at 14, and the error moved with the setting.
+    // Measured offscreen against this theme's own tokens, this face came back
+    // 9.0 through Qt.font() and comes back 9.35 through the spelling below --
+    // the one a FontMetrics uses, the one components/Chip.qml in this theme
+    // argues for at length, and the one mNoScreen further down has always had.
+    //
+    // THAT TRUNCATION WAS SELF-CONSISTENT, which is why it survived three
+    // passes over this file: the same 9.0 fed the reservation and the label,
+    // so nothing ever drifted and nothing ever clipped. It was silently not
+    // what this line asked for rather than a layout that was wrong.
+    //
+    // NOT `readonly`, which grouped syntax does not allow, and which is the
+    // one thing given up here. Nothing outside writes it -- Dashboard.qml
+    // instantiates this control with six colours and nothing else -- and the
+    // three lines below are the only bindings on it, live in the same way the
+    // single Qt.font() binding was.
+    property font labelFont
+    labelFont.family: Theme.fontFamily
+    labelFont.pointSize: Theme.fontSize * 0.85
+    labelFont.weight: Font.Bold
 
-    TextMetrics {
+    // ---- AND THE RESERVATION IS MEASURED BY THE THING THAT DRAWS ----
+    //
+    // These were three TextMetrics and had to stop being, because a
+    // TextMetrics AND A Text DISAGREE ABOUT THE SAME FONT at a fractional
+    // point size, and the size above became fractional the moment Qt.font()
+    // went. That is not a subtlety about bounding boxes against advances; it
+    // is a whole pixel size apart. Measured offscreen against this theme's own
+    // tokens, "Replay elsewhere" in this face:
+    //
+    //   pointSize 9.0    TextMetrics 115.00   Text 115.00   ink 113 px
+    //   pointSize 9.35   TextMetrics 115.00   Text 124.75   ink 123 px
+    //
+    // The ink is the row that settles it -- the string rendered onto a white
+    // ground and the painted pixels counted -- and it follows the Text. A
+    // TextMetrics quantises 9.35 back onto the very face it uses for 9.0, to
+    // the hundredth of a pixel; the Text lays out on a larger one and paints
+    // ten pixels wider. The gap is not monotonic either, so it cannot be
+    // corrected with a factor: at 10.2 the TextMetrics is the one that reads
+    // HIGH, 134.25 against the Text's 124.75.
+    //
+    // So the reservation would have gone on reporting 115.00 while the widest
+    // state painted 124.75 into it -- the button's padding falling from 13 px
+    // a side to 8.1 in that one state, with the whole point of this block
+    // being that the reserved width IS the drawn width. Three hidden Texts
+    // cannot have that fault: the object that measures is the object that
+    // draws, at any size, whatever Qt does with the face underneath.
+    //
+    // THE CONNECTOR PAIR FURTHER DOWN IS STILL A TextMetrics, and that is not
+    // an oversight: its face, `Theme.fontSize * 0.78`, is one the two sides do
+    // agree on -- 59.34 both ways for "no screen". It has a DIFFERENT fault,
+    // older than this change and not fixed by it: `connectorReserve` is built
+    // from `.width`, the bounding box, where the label draws to the ADVANCE.
+    // Measured, "no screen" wants 59.34 in a reservation of 58.00 and the
+    // readout's `elide: Text.ElideRight` fires -- `truncated` comes back true.
+    // That is the fallback string eliding inside a box sized for it, and it
+    // wants its own change rather than a ride on this one.
+    //
+    // `visible: false` and nothing else. They are children of this Item and
+    // not of the Row below, so they are outside the layout, and an invisible
+    // item is not drawn. It still lays its string out: measured here, all
+    // three answer implicitWidth -- 101.36, 124.75 and 77.97 at the shipped
+    // font size -- with nothing on screen.
+    Text {
         id: mSave
 
+        visible: false
         font: root.labelFont
         text: `Save last ${ReplayState.seconds}s`
     }
 
-    TextMetrics {
+    Text {
         id: mElsewhere
 
+        visible: false
         font: root.labelFont
         text: "Replay elsewhere"
     }
 
-    TextMetrics {
+    Text {
         id: mOff
 
+        visible: false
         font: root.labelFont
         text: "Replay off"
     }
 
-    readonly property real widestLabel: Math.max(mSave.width, mElsewhere.width, mOff.width)
+    readonly property real widestLabel: Math.max(mSave.implicitWidth,
+        mElsewhere.implicitWidth, mOff.implicitWidth)
 
     // The connector readout is the other one, and it cannot reserve its own
     // widest form because a connector name is whatever the kernel says.

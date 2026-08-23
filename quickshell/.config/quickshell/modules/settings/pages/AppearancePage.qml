@@ -135,8 +135,9 @@ SettingsPage {
                 glyph: Icons.widgets
                 // The manifest's title and not the directory name, the same
                 // call the scheme rows make about their identifiers: `genesis`
-                // is what `Config.theme` holds and what themes/README.md
-                // documents, and a settings window is not where it belongs.
+                // is what `Config.theme` holds and what
+                // themes/genesis/README.md documents, and a settings window is
+                // not where it belongs.
                 label: modelData.title
 
                 // WHAT IS DRAWN AND NOT WHAT IS CONFIGURED, which is the rule
