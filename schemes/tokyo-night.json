@@ -1,7 +1,7 @@
 {
   "_meta": {
     "label": "Tokyo Night",
-    "source": "folke/tokyonight.nvim, the tokyonight-night (storm-dark) palette",
+    "source": "folke/tokyonight.nvim, the tokyonight-night variant: lua/tokyonight/colors/storm.lua + lua/tokyonight/colors/night.lua for the palette, lua/tokyonight/colors/init.lua for the derived tones, and extras/kitty/tokyonight_night.conf for the sixteen ANSI slots",
     "variant": "dark"
   },
   "colors": {
@@ -77,7 +77,7 @@
     },
     "fb_surface_container_high": {
       "default": {
-        "color": "#343a52"
+        "color": "#353b55"
       }
     },
     "fb_surface_container_highest": {
@@ -87,7 +87,7 @@
     },
     "fb_tertiary": {
       "default": {
-        "color": "#e0bbdd"
+        "color": "#73daca"
       }
     },
     "sem_critical": {
@@ -147,7 +147,7 @@
     },
     "term_border_inactive": {
       "default": {
-        "color": "#3b4261"
+        "color": "#292e42"
       }
     },
     "term_bright_black": {
@@ -157,27 +157,27 @@
     },
     "term_bright_blue": {
       "default": {
-        "color": "#7aa2f7"
+        "color": "#8db0ff"
       }
     },
     "term_bright_cyan": {
       "default": {
-        "color": "#7dcfff"
+        "color": "#a4daff"
       }
     },
     "term_bright_green": {
       "default": {
-        "color": "#9ece6a"
+        "color": "#9fe044"
       }
     },
     "term_bright_magenta": {
       "default": {
-        "color": "#bb9af7"
+        "color": "#c7a9ff"
       }
     },
     "term_bright_red": {
       "default": {
-        "color": "#f7768e"
+        "color": "#ff899d"
       }
     },
     "term_bright_white": {
@@ -187,7 +187,7 @@
     },
     "term_bright_yellow": {
       "default": {
-        "color": "#e0af68"
+        "color": "#faba4a"
       }
     },
     "term_cursor": {
@@ -227,12 +227,12 @@
     },
     "term_selection_bg": {
       "default": {
-        "color": "#33467c"
+        "color": "#283457"
       }
     },
     "term_selection_fg": {
       "default": {
-        "color": "#1a1b26"
+        "color": "#c0caf5"
       }
     },
     "term_tab_bg": {
@@ -267,12 +267,12 @@
     },
     "ui_bevel_mid": {
       "default": {
-        "color": "#1f2335"
+        "color": "#1a1b26"
       }
     },
     "ui_bevel_midlight": {
       "default": {
-        "color": "#363b54"
+        "color": "#353b55"
       }
     },
     "ui_bg": {
@@ -297,7 +297,7 @@
     },
     "ui_bg_control": {
       "default": {
-        "color": "#24283b"
+        "color": "#222534"
       }
     },
     "ui_bg_dim": {
@@ -317,12 +317,12 @@
     },
     "ui_bg_shadow": {
       "default": {
-        "color": "#0d0e14"
+        "color": "#0c0e14"
       }
     },
     "ui_bg_view": {
       "default": {
-        "color": "#101119"
+        "color": "#0c0e14"
       }
     },
     "ui_border": {
