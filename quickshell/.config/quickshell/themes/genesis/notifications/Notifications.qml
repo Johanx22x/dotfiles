@@ -1,10 +1,13 @@
-// The notification daemon and the panel it draws, top right.
+// The panel the notifications are stacked in, top right.
 //
-// This IS the daemon: NotificationServer takes org.freedesktop.Notifications
-// on the session bus, which means dunst has to be gone before this runs --
-// two processes cannot own the same bus name, and the second one to ask
-// simply does not get it. Worse, dunst is D-Bus activated: kill it and the
-// next notification starts it again if this shell is not up to answer first.
+// IT IS NOT THE DAEMON ANY MORE, and that is the one thing worth knowing before
+// reading the rest. What owns org.freedesktop.Notifications -- the bus name,
+// the stack tags, what the mute swallows, the claim that decides whether a
+// notification exists at all -- is modules/notifications/NotificationDaemon.qml
+// in the host, where there is one copy of it whatever happens to be drawing.
+// This file reads two properties off it, `tracked` and `count`, and draws them.
+// It used to be both halves, and ../README.md carried a paragraph saying that
+// was the wrong side of the seam.
 //
 // SHAPE
 // Not one floating card per notification: a single surface that hangs off
@@ -25,6 +28,11 @@
 
 import Quickshell
 import Quickshell.Wayland
+// THE ONE LINE OF THE PROTOCOL STILL IN HERE, and it is a type name rather than
+// a behaviour: the Repeater's delegate declares what a row of the model IS, so
+// that the assignment to the card's `notification` is a checked one. A theme
+// that would rather not name the type can write `var` there and drop this
+// import. What it must not do is answer the bus.
 import Quickshell.Services.Notifications
 import QtQuick
 import qs
@@ -37,7 +45,7 @@ PanelWindow {
 
     required property var modelData
 
-    readonly property int count: server.trackedNotifications.values.length
+    readonly property int count: NotificationDaemon.count
 
     // Whether the bar is actually behind this panel right now.
     //
@@ -69,121 +77,6 @@ PanelWindow {
     readonly property bool undocked: root.barCovered || !Screens.hasBar(root.modelData)
 
     screen: modelData
-
-    NotificationServer {
-        id: server
-
-        // Declare what the shell can actually render, so senders do not
-        // downgrade their notifications for nothing.
-        bodySupported: true
-        bodyMarkupSupported: true
-        imageSupported: true
-        actionsSupported: true
-
-        // Notifications survive a config reload instead of vanishing every
-        // time a .qml is saved.
-        keepOnReload: true
-
-        // STACK TAGS, and why they have to be named here.
-        //
-        // A sender that fires the same notification over and over -- a volume
-        // key, a brightness key, ~/.local/bin/capture-card-audio -- does not
-        // want six of them piling up; it wants the previous one replaced. The
-        // spec has no hint for that, so daemons invented their own, and a
-        // notification carrying one is asking to be grouped.
-        //
-        // `hints` only ever contains the hints the spec defines PLUS the ones
-        // listed here. Anything else is dropped before it reaches QML, so
-        // without this line the tag simply is not there to read and the
-        // grouping below would silently never fire.
-        //
-        // Both names are accepted because senders are split between them:
-        // x-dunst-stack-tag is dunst's, which is what the scripts on this
-        // machine were written against, and x-canonical-private-synchronous is
-        // the older notify-osd one that GNOME-era software still emits.
-        extraHints: ["x-dunst-stack-tag", "x-canonical-private-synchronous"]
-
-        // The tag a notification is asking to be grouped under, or "" for the
-        // ordinary kind that should just stack.
-        function stackTag(notification: var): string {
-            return notification.hints?.["x-dunst-stack-tag"]
-                ?? notification.hints?.["x-canonical-private-synchronous"]
-                ?? "";
-        }
-
-        // WITHOUT THIS NOTHING IS EVER SHOWN.
-        // Quickshell does not keep notifications by default: one arrives, the
-        // signal fires, and unless someone claims it the object is dropped
-        // and trackedNotifications stays empty. Verified the hard way -- the
-        // daemon owned the bus name and received every message with
-        // `tracked: false`, so no window was ever built.
-        //
-        // Claiming it here means "this shell is displaying it"; releasing it
-        // is what dismiss() and expire() do.
-        // Music notifications are handled elsewhere in the shell, so they are
-        // deliberately NOT claimed here: leaving one untracked is what drops
-        // it. ~/.local/bin/mpris-notify is what sends them (dunstify -a
-        // "mpris-notify"), fired by the browser changing track.
-        readonly property var ignoredApps: ["mpris-notify"]
-
-        onNotification: notification => {
-            if (ignoredApps.includes(notification.appName))
-                return;
-
-            // Do not disturb. Not claiming it is what drops it -- the same
-            // mechanism the ignored apps above go through. Critical is let
-            // through on purpose; the reasoning for both is in
-            // NotificationState.qml.
-            const silenced = NotificationState.dnd && notification.urgency !== NotificationUrgency.Critical;
-
-            // Written down BEFORE the decision to show it, and regardless of
-            // which way that goes: the history is what arrived here, not what
-            // made it to the screen. Recorded here rather than deeper in, so
-            // there is exactly one line in this file where a notification
-            // enters the shell and one place that can forget to log it.
-            NotificationState.record(notification, silenced);
-
-            if (silenced)
-                return;
-
-            // Retire whatever is already on screen under the same tag, so the
-            // panel shows the LATEST state of that thing rather than its
-            // history. Nudging the capture card's volume five times leaves one
-            // card reading the final value, not five cards counting up.
-            const tag = server.stackTag(notification);
-            if (tag) {
-                // Collected first and dismissed after: dismiss() removes the
-                // entry from the very model being walked, and mutating a list
-                // mid-iteration skips elements.
-                const stale = server.trackedNotifications.values.filter(existing => server.stackTag(existing) === tag);
-                for (const existing of stale)
-                    existing.dismiss();
-            }
-
-            notification.tracked = true;
-        }
-    }
-
-    // Switching do-not-disturb ON clears what is already up.
-    //
-    // The gesture is "shut up", and a panel that keeps three cards on screen
-    // after it has been muted has half-obeyed. They are dismissed rather than
-    // expired: dismiss() is the deliberate close, which is what tells an
-    // application like Discord to stop re-sending the same thing.
-    //
-    // Collected into a plain array first, because dismiss() removes the entry
-    // from the very model being walked and mutating a list mid-iteration skips
-    // elements -- the same trap the stack-tag code above documents.
-    Connections {
-        target: NotificationState
-
-        function onDndChanged(): void {
-            if (!NotificationState.dnd)
-                return;
-            for (const existing of server.trackedNotifications.values.slice())
-                existing.dismiss();
-        }
-    }
 
     WlrLayershell.namespace: "quickshell-notifications"
 
@@ -334,7 +227,7 @@ PanelWindow {
         spacing: Theme.notificationGap
 
         Repeater {
-            model: server.trackedNotifications
+            model: NotificationDaemon.tracked
 
             NotificationCard {
                 required property Notification modelData

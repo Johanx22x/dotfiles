@@ -1,11 +1,17 @@
 // Do not disturb, and the history of what has been through here.
 //
-// The daemon in Notifications.qml still ANSWERS the bus while the mute is on --
-// it has to, it owns org.freedesktop.Notifications and refusing to answer
-// would make senders think the desktop has no notification support at all.
-// What changes is what happens next: the notification is not claimed, so
+// The daemon next door still ANSWERS the bus while the mute is on -- it has to,
+// NotificationDaemon.qml owns org.freedesktop.Notifications and refusing to
+// answer would make senders think the desktop has no notification support at
+// all. What changes is what happens next: the notification is not claimed, so
 // Quickshell drops it and no card is ever built. See the header of
-// Notifications.qml for why claiming is what puts one on screen.
+// NotificationDaemon.qml for why claiming is what puts one on screen.
+//
+// THE TWO FILES ARE ONE DIRECTORY AND TWO JOBS. This one is the store and the
+// switches -- what is remembered, what the bar draws a badge from, what `qs ipc`
+// can set. That one is the protocol. The dependency runs one way: the daemon
+// reads `dnd` and calls `record()`, and nothing here knows the daemon exists
+// beyond the sentence above.
 //
 // CRITICAL STILL GETS THROUGH. Urgency 2 is not what applications reach for
 // to be noticed -- browsers and chat clients use Normal -- it is what system
