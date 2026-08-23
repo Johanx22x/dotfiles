@@ -37,6 +37,7 @@ import Quickshell.Services.Notifications
 import QtQuick
 import qs
 import qs.components
+import qs.modules
 import qs.modules.notifications
 import qs.themes.windows
 
@@ -56,7 +57,31 @@ PanelWindow {
     readonly property int edgeGap: Fluent.flyoutInset
 
     screen: modelData
+
+    // NOT WHILE A FLYOUT IS UP ON THIS SCREEN. With the notification centre
+    // open, Windows raises no toast at all: the notification lands directly
+    // in the centre's list, which this shell already does for free -- the
+    // centre's list is bound to NotificationState.history and history takes
+    // every arrival as it happens. What this shell did WRONG was raise the
+    // toast anyway, on the Top layer, under a popout on Overlay: half a card
+    // sticking out from behind the panel, reported by Johan as exactly that.
+    //
+    // The rule covers EVERY flyout of this bar's, not only the centre,
+    // because they all hang over the same corner the toasts rise from --
+    // Quick Settings and the tray flyouts included. Whether real Windows
+    // suppresses a toast while Quick Settings is open is not something a
+    // screenshot can settle after the fact, and it is not worth a wrong
+    // guess: a suppressed toast still lands in history and still puts its
+    // count on the clock's unread badge, and half a toast behind a panel is
+    // worse on this desktop than a deferred one whichever way Windows calls
+    // it.
+    //
+    // The window and not the cards, so the suppressed toast keeps its timer:
+    // one with time left when the flyout closes shows for the remainder,
+    // which is the closest a surface that cannot replay can come to not
+    // having hidden it.
     visible: NotificationDaemon.count > 0
+        && !(Surfaces.popoutScreens[root.modelData?.name ?? ""] ?? false)
 
     WlrLayershell.namespace: "quickshell-notifications"
     WlrLayershell.layer: WlrLayer.Top

@@ -172,6 +172,17 @@ PanelWindow {
     screen: modelData
     visible: isOpen
 
+    // The per-screen report Surfaces keeps -- see popoutScreens there for who
+    // asks and why. Filed here because this window is the one object that
+    // knows both its screen and its openness; onDestruction so a window torn
+    // down while open (a theme swap) does not leave its screen marked busy
+    // forever.
+    onIsOpenChanged: Surfaces.reportPopout(root.modelData?.name ?? "", root.isOpen)
+    Component.onDestruction: {
+        if (root.isOpen)
+            Surfaces.reportPopout(root.modelData?.name ?? "", false);
+    }
+
     WlrLayershell.namespace: "quickshell-popout"
     // Overlay, above the notification panel on Top. A menu is something the
     // user opened on purpose and is looking at right now; a notification
