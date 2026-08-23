@@ -1569,15 +1569,16 @@ fi
 SCHEME_FILE="$("$WS_BIN_DIR/desktop-scheme" path)" \
     || die "could not work out which colour scheme to use"
 
-# ---- And the FIRST half, which does not always come from the image either ----
+# ---- And the FIRST half, which is the one the image supplies ----------------
 #
-# `desktop-scheme accent` is the other axis: the accents can come from the
-# wallpaper (the default, and what this desktop has always done), from the
-# scheme's own `fb_*` roles, or from a colour picked by hand. Two of the three
-# still render from the image and the third does not, which is why what comes
-# back is the OPENING WORDS OF THE COMMAND -- `image <file>` or `color hex
-# <seed>`, plus whatever has to be imported over the top -- rather than a flag
-# to append.
+# The accents come from the wallpaper. `desktop-scheme accent-args` is asked
+# which words open the render rather than being told, and what comes back is the
+# OPENING OF THE COMMAND -- `image <file>` today -- rather than a flag to
+# append, so a source that needed a different subcommand or something imported
+# over the top could still be expressed without this call site learning about
+# it. It briefly did: `accent` was a setting with two further answers, and both
+# were removed as controls over a question nobody was asking. The note above
+# `accent_args` in that script is where that is argued.
 #
 # ASKED FOR RATHER THAN COMPUTED HERE, exactly as the scheme file above is and
 # for the same reason: one script owns that store, and a second reader of it is
@@ -1592,31 +1593,25 @@ ACCENT_ARGS_TEXT="$("$WS_BIN_DIR/desktop-scheme" accent-args "$PALETTE_SOURCE")"
 mapfile -t ACCENT_ARGS <<< "$ACCENT_ARGS_TEXT"
 
 # --prefer is mandatory: with no interactive terminal matugen cannot tell
-# which colour to pick when the image has several candidates.
-# saturation gives accents with more character than darkness/lightness. It is
-# accepted by `matugen color hex` too, where there is only ever one candidate
-# and it therefore decides nothing -- which is why it can stay here, outside the
-# words the accent source chooses, instead of being repeated in two of them.
+# which colour to pick when the image has several candidates. saturation gives
+# accents with more character than darkness/lightness. It sits here rather than
+# among the words `accent-args` hands back because it is true of the render and
+# not of where the accents came from.
 #
 # --import-json MERGES THE SCHEME INTO THE PALETTE MATUGEN JUST DERIVED, so the
-# 17 Material 3 roles come from whatever the accent source above chose and the
-# 74 named in schemes/README.md come from the file, and every template sees all
-# of them in one render. It is one process rather than two because it can be:
-# dumping the palette with `-j hex --dry-run`, merging it with jq and rendering
-# with `matugen json` was measured against all 56 stills in the collection and
-# produced byte-identical output, for an extra process and an extra temporary
-# file.
+# 17 Material 3 roles are the image's and the 74 named in schemes/README.md come
+# from the file, and every template sees all of them in one render. It is one
+# process rather than two because it can be: dumping the palette with
+# `-j hex --dry-run`, merging it with jq and rendering with `matugen json` was
+# measured against all 56 stills in the collection and produced byte-identical
+# output, for an extra process and an extra temporary file.
 #
 # THE IMPORTED FILE WINS ON A NAME CLASH -- measured -- which is why every role
 # in a scheme carries a `ui_` / `term_` / `sem_` / `fb_` prefix and why nothing
-# in one may be called `primary`. It is also the door the accent source walks
-# through: what `accent-args` adds above is a second import carrying exactly
-# those seventeen names, so the scheme's own accent lands on top of the one
-# matugen just derived from the picture.
-#
-# THE ORDER OF THE TWO IMPORTS DOES NOT MATTER because they cannot collide: the
-# scheme file only ever carries prefixed names and the accent overlay only ever
-# carries unprefixed M3 ones.
+# in one may be called `primary`. The prefixes are what let the two halves share
+# one render without either overwriting the other: the scheme file only ever
+# carries prefixed names, and the roles matugen derives are the unprefixed M3
+# ones.
 #
 # Still `die`, and now it covers one more thing. A missing scheme file, one that
 # is not valid JSON, one of the wrong shape and one missing a role a template

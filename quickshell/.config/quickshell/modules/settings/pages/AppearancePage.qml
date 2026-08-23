@@ -27,7 +27,7 @@ SettingsPage {
     keywords: ["opacity", "transparency", "glass", "font", "type", "size",
         "gaps", "spacing", "rounding", "corners", "border", "cursor",
         "pointer", "mouse pointer", "colour", "color", "scheme", "palette",
-        "accent", "theme", "tokyo night", "catppuccin", "gruvbox"]
+        "theme", "tokyo night", "catppuccin", "gruvbox"]
 
     // The installed cursor themes, asked for once when the page is
     // looked at. `desktop-tweak themes` lists the icon themes that have a
@@ -85,12 +85,13 @@ SettingsPage {
     // FIRST ON THE PAGE because it is the largest thing on it: everything
     // below moves a number, and this decides what the desktop is made of.
     //
-    // TWO CONTROLS AND THEY ARE NOT THE SAME QUESTION. The scheme is the BASE
-    // -- surfaces, text, the sixteen ANSI slots every terminal in the session
-    // inherits. The accent source is where the seventeen Material 3 roles come
-    // from. Setting only the first is what this desktop did until now, and it
-    // is why a scheme whose base already looked familiar seemed to do nothing:
-    // its accent was on disk and nothing read it.
+    // ONE CONTROL, AND IT USED TO BE TWO. Beside this list there was an
+    // "Accent from" row -- wallpaper, scheme, or a colour typed into a field
+    // underneath -- and it is gone rather than hidden. The accent is the
+    // wallpaper's contribution to the desktop, a blue picture giving a blue
+    // desktop; the scheme is what the desktop is MADE of. Neither of the other
+    // two sources was answering a question anybody had. What came out with it
+    // is in bin/desktop-scheme, above `accent_args`.
     SettingsSection {
         width: parent.width
         glyph: Icons.palette
@@ -119,56 +120,28 @@ SettingsPage {
                 required property var modelData
 
                 label: modelData.label
-                // The name is what `desktop-scheme <name>` takes in a terminal,
-                // so showing it is the difference between a settings window and
-                // a settings window you can act on somewhere else.
-                detail: modelData.name
                 picked: Config.scheme === modelData.name
+
+                // THE ROW THAT WAS CLICKED IS THE ROW THAT SAYS SO. A spinner
+                // at the top of the section would be true and useless: it
+                // cannot answer the only question there is while the desktop is
+                // mid-change, which is whether it took the one that was pressed.
+                applying: Config.schemeApplying === modelData.name
+
+                // AND EVERY ROW GOES QUIET, not only that one. Applying ends in
+                // `wallpaper-switch reapply` -- a full matugen render over
+                // fourteen files and several applications signalled afterwards
+                // -- so there is a second or more in which three clicks in a row
+                // are three renders writing the same files, with the last to
+                // FINISH winning rather than the last to be asked for.
+                // Config.setScheme refuses the second one as well; this is what
+                // makes the refusal visible instead of silent. `enabled` is
+                // Item's own, so it reaches the MouseArea below it without
+                // being passed: no hover highlight, no "use", no click.
+                enabled: Config.schemeApplying === ""
+
                 onChosen: Config.setScheme(modelData.name)
             }
-        }
-
-        ChoiceRow {
-            glyph: Icons.tune
-            label: "Accent from"
-            options: [
-                { label: "Wallpaper", value: "wallpaper" },
-                { label: "Scheme", value: "scheme" },
-                { label: "Custom", value: "hex" }
-            ]
-            value: Config.accentSource
-            // ONE CALL AND NOT TWO ASSIGNMENTS. Config cannot take two property
-            // writes in one synchronous turn -- see the note above `saveTimer`
-            // in Config.qml -- so the source and the colour move together
-            // through one setter. An empty seed here means "the one already
-            // stored", which is what the script does with a bare `accent hex`.
-            onChosen: value => Config.setAccent(value, "")
-
-            hint: "Wallpaper is how this desktop has always worked. Scheme "
-                + "uses the accent the scheme was written with — that is what "
-                + "makes one look like itself rather than like the picture "
-                + "behind it."
-        }
-
-        // ONLY WHEN IT IS THE ANSWER. A colour field standing next to a
-        // wallpaper-driven accent is a control that changes nothing, which is
-        // the same fault as a segment nobody can hit.
-        SeedRow {
-            visible: Config.accentSource === "hex"
-
-            label: "Accent colour"
-            stored: Config.accentSeed
-            onCommitted: value => Config.setAccent("hex", value)
-        }
-
-        InfoRow {
-            visible: Config.accentSource !== "wallpaper"
-
-            glyph: Icons.image
-            label: "The wallpaper still sets itself"
-            description: "Only the accent stops following it. The picture, the "
-                + "rotation and the pointer are unchanged — and the base "
-                + "palette comes from the scheme either way."
         }
     }
 
@@ -406,17 +379,30 @@ SettingsPage {
         id: pick
 
         property string label: ""
-        // The name the script takes. Muted, under the label.
-        property string detail: ""
         property bool picked: false
+        // This row's scheme is the one being applied right now. NOT the
+        // opposite of `picked` and not exclusive with it: `desktop-scheme`
+        // writes its state file before it starts the render, so a row becomes
+        // the one in use a moment before it stops being the one being applied.
+        property bool applying: false
 
         signal chosen
 
         width: parent ? parent.width : 320
-        implicitHeight: Math.max(32, column.implicitHeight + 12)
+        implicitHeight: Math.max(32, schemeLabel.implicitHeight + 12)
 
         radius: Theme.groupRadius
         color: pickMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+
+        // THE ROWS THAT ARE NOT HAPPENING STEP BACK, and the one that is stays
+        // where it was. Disabling on its own is invisible until the pointer is
+        // over a row and nothing lights up, which is feedback that arrives
+        // after the click rather than before it.
+        opacity: pick.enabled || pick.applying ? 1 : 0.5
+
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.animDuration }
+        }
 
         Behavior on color {
             ColorAnimation { duration: Theme.animDuration }
@@ -427,8 +413,7 @@ SettingsPage {
 
             anchors.left: parent.left
             anchors.leftMargin: Theme.groupPadding
-            anchors.top: column.top
-            anchors.topMargin: 1
+            anchors.verticalCenter: parent.verticalCenter
 
             text: Icons.palette
             font.family: Theme.fontFamily
@@ -442,46 +427,43 @@ SettingsPage {
             }
         }
 
-        Column {
-            id: column
+        // THE NAME, AND NOTHING UNDER IT. There was a second line here
+        // carrying the scheme's identifier -- `tokyo-night` beneath `Tokyo
+        // Night` -- and it was a filename shown to somebody choosing a colour.
+        // The identifier has not gone anywhere: it is still what
+        // `desktop-scheme <name>` takes in a terminal and schemes/README.md
+        // still documents it. A settings window is not where it belongs.
+        Text {
+            id: schemeLabel
 
             anchors.left: pickGlyph.right
             anchors.leftMargin: Theme.itemSpacing
             anchors.right: mark.left
             anchors.rightMargin: Theme.itemSpacing
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
 
-            Text {
-                width: parent.width
-                text: pick.label
-                elide: Text.ElideRight
+            text: pick.label
+            elide: Text.ElideRight
 
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                font.weight: pick.picked ? Font.Bold : Theme.fontWeight
-                color: pick.picked ? Theme.primary : Theme.textOnSurface
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize
+            font.weight: pick.picked ? Font.Bold : Theme.fontWeight
+            color: pick.picked ? Theme.primary : Theme.textOnSurface
 
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
+            Behavior on color {
+                ColorAnimation { duration: Theme.animDuration }
             }
+        }
 
-            Text {
-                width: parent.width
-                visible: pick.detail !== ""
+        // WIDE ENOUGH FOR THE LONGEST OF THE WORDS, always, so the name beside
+        // it is not re-elided at the instant of the click -- the same call
+        // WallpaperPage.qml's "Change" chip makes and for the same reason: this
+        // is right-anchored, so growing eats leftwards into the label.
+        TextMetrics {
+            id: markMetrics
 
-                text: pick.detail
-                elide: Text.ElideRight
-
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 2
-                color: Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
+            font: mark.font
+            text: "Applying…"
         }
 
         Text {
@@ -491,10 +473,18 @@ SettingsPage {
             anchors.rightMargin: Theme.groupPadding
             anchors.verticalCenter: parent.verticalCenter
 
-            text: pick.picked ? "in use" : pickMouse.containsMouse ? "use" : ""
+            width: markMetrics.width
+            horizontalAlignment: Text.AlignRight
+
+            // APPLYING BEATS IN USE while both are true, because it is the one
+            // about to stop being true. `use` is only the hover affordance, and
+            // it disappears on its own: a disabled row takes no hover events.
+            text: pick.applying ? markMetrics.text
+                : pick.picked ? "in use"
+                : pickMouse.containsMouse ? "use" : ""
             font.family: Theme.fontFamily
             font.pointSize: Theme.fontSize - 2
-            color: Theme.outline
+            color: pick.applying ? Theme.primary : Theme.outline
 
             Behavior on color {
                 ColorAnimation { duration: Theme.recolorDuration }
@@ -508,205 +498,6 @@ SettingsPage {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: pick.chosen()
-        }
-    }
-
-    // ---------------- A colour, typed ----------------
-    //
-    // The same bare TextInput in a pill the recording page's PathRow is, and
-    // for the reason it gives: nothing in this shell imports QtQuick.Controls,
-    // and one widget that did would arrive with its own palette and metrics.
-    //
-    // COMMITTED ON ENTER OR ON LEAVING THE FIELD, never per keystroke. Every
-    // write here ends in a full palette re-render, and a colour committed
-    // letter by letter would be six of them for `#7aa2f7`.
-    //
-    // THE SWATCH IS THE GLYPH. It sits where every other row on this page puts
-    // an icon, and it is the only thing in this window that shows a colour
-    // rather than being painted in one -- which is what a field of six hex
-    // digits needs beside it to be readable at all. It follows what is being
-    // typed rather than what is stored, so an unfinished value simply keeps
-    // the last colour that parsed.
-    component SeedRow: Item {
-        id: seed
-
-        property string label: ""
-        // What the script has. Empty means nobody has ever picked one.
-        property string stored: ""
-
-        signal committed(string value)
-
-        // The text being edited. It follows `stored` until somebody types,
-        // which breaks the binding -- so onStoredChanged puts it back, and a
-        // colour set from a terminal shows up here instead of leaving the
-        // field on a value nothing uses.
-        property string draft: seed.stored
-
-        onStoredChanged: seed.draft = seed.stored
-
-        // `#rrggbb`, and the `#` is optional exactly as it is on the command
-        // line: it is what every colour picker copies with, and typing it is
-        // the thing people forget. Empty is legal and means "leave it alone",
-        // which is what an untouched field has to mean.
-        readonly property string resolved: {
-            const text = seed.draft.trim().replace(/^#/, "");
-            return /^[0-9a-fA-F]{6}$/.test(text) ? `#${text.toLowerCase()}` : "";
-        }
-
-        readonly property bool valid: seed.draft.trim() === "" || seed.resolved !== ""
-
-        function commit(): void {
-            if (seed.resolved !== "" && seed.resolved !== seed.stored)
-                seed.committed(seed.resolved);
-        }
-
-        width: parent ? parent.width : implicitWidth
-        implicitWidth: 320
-        implicitHeight: Theme.groupHeight + 30
-
-        Row {
-            id: labelRow
-
-            anchors.top: parent.top
-            anchors.topMargin: 8
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.groupPadding
-            spacing: Theme.itemSpacing
-
-            Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-
-                width: Theme.iconSize
-                height: Theme.iconSize
-                radius: width / 2
-
-                color: seed.resolved !== "" ? seed.resolved : Theme.surfaceContainerHighest
-                border.width: 1
-                border.color: Theme.outlineVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: seed.label
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                font.weight: Theme.fontWeight
-                color: Theme.textOnSurface
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-        }
-
-        Rectangle {
-            anchors.top: labelRow.bottom
-            anchors.topMargin: 6
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.leftMargin: Theme.groupPadding
-            anchors.rightMargin: Theme.groupPadding
-
-            height: 28
-            radius: height / 2
-
-            color: Theme.surfaceContainerHighest
-            border.width: 1
-            border.color: !seed.valid ? Theme.critical
-                : field.activeFocus ? Theme.primary : Theme.outlineVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
-
-            Behavior on border.color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-
-            TextInput {
-                id: field
-
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                anchors.verticalCenter: parent.verticalCenter
-
-                text: seed.draft
-                onTextEdited: seed.draft = text
-
-                // Six hex digits are not a sentence: an autocapitalised first
-                // letter is a colour that will not parse.
-                inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
-
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 1
-                color: Theme.textOnSurface
-                selectionColor: Theme.primary
-                selectedTextColor: Theme.textOnPrimary
-                selectByMouse: true
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-
-                onAccepted: seed.commit()
-
-                // LEAVING THE FIELD COMMITS IT: this window has no Save button
-                // and nothing else on this page has one either.
-                onActiveFocusChanged: {
-                    if (!field.activeFocus)
-                        seed.commit();
-                }
-
-                // ESCAPE HAS TO BE SWALLOWED. The settings window's FocusScope
-                // closes the whole window on Escape, so without accepting the
-                // event, abandoning an edit would put the window away instead
-                // of the edit.
-                Keys.onEscapePressed: event => {
-                    seed.draft = seed.stored;
-                    event.accepted = true;
-                }
-
-                // TextInput has no placeholderText -- that belongs to
-                // TextField, which is Controls. Drawn underneath instead.
-                Text {
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    visible: seed.draft === ""
-                    text: "#7aa2f7"
-                    width: parent.width
-
-                    font.family: Theme.fontFamily
-                    font.pointSize: Theme.fontSize - 1
-                    color: Theme.outline
-
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.recolorDuration }
-                    }
-                }
-            }
-        }
-
-        Text {
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.groupPadding + 12
-
-            visible: !seed.valid
-            text: "Six hex digits, with or without the #"
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 3
-            color: Theme.critical
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
         }
     }
 }
