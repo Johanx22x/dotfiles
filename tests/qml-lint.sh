@@ -89,11 +89,21 @@
 #              log it was not reading. That string has since been added to the
 #              four it does read, so these are caught there now too.
 #    3 of 126  nothing anywhere said anything: components/ClickCatcher.qml,
-#              ConfirmButton.qml and HyprlandGrab.qml are named only from
-#              inside a delegate of a document that is itself loaded by URL, so
-#              the type is never resolved and the engine has no occasion to
-#              complain. A green shell, an empty log, and a file that does not
-#              parse.
+#              ConfirmButton.qml and HyprlandGrab.qml. A green shell, an empty
+#              log, and a file that does not parse.
+#
+#              TWO OF THE THREE FOR THE REASON GIVEN HERE, and the third for
+#              one this got wrong, which is worth leaving in rather than
+#              quietly correcting. ClickCatcher and HyprlandGrab are named only
+#              from inside a delegate of a document that is itself loaded by
+#              URL -- components/FocusGrab.qml setSources both -- so the type
+#              is never resolved and the engine has no occasion to complain.
+#              ConfirmButton was named from NOWHERE: its one call site, a
+#              Restore defaults on the about page, had been deleted the day
+#              before this was measured, and its silence was the silence of a
+#              file nothing in the tree reached. Reading that as the same fault
+#              is how it survived the audit that found it. It has since been
+#              deleted, so the three are two.
 # The 46 that came up green are all 32 files under themes/ and 14 under
 # components/. That set grows with every surface moved behind a Loader and with
 # every theme added, and the log assertion next door cannot follow it, because
@@ -147,14 +157,14 @@
 # The split is measured, not apportioned by eye:
 #
 #          shell  genesis  probe
-#   146      146        -      -   the shell tree, 97 files
+#   145      145        -      -   the shell tree, 96 files
 #   160        -      160      -   genesis, 50 files
 #     6        -        -      6   theme-probe, 27 files
 #
 # and by category, which is the shape that matters more than the total:
 #
-#   246  unqualified                116 shell + 130 genesis. 243 of them are
-#                                   one thing -- 115 and 128 -- a delegate
+#   245  unqualified                115 shell + 130 genesis. 242 of them are
+#                                   one thing -- 114 and 128 -- a delegate
 #                                   naming an id from the component outside it,
 #                                   which qmllint answers with "set pragma
 #                                   ComponentBehavior: Bound". That pragma is a
@@ -213,7 +223,7 @@
 #     0  unused-imports             were 15, all removed.
 #     0  duplicate-property-binding was the Island finding above.
 #
-# So 45 of the 312 -- signal-handler-parameters 17, unresolved-type 13,
+# So 45 of the 311 -- signal-handler-parameters 17, unresolved-type 13,
 # uncreatable-type 15 -- are Quickshell's type information rather than this
 # repository's code, and no change here can move them. They are counted anyway,
 # because a baseline that quietly excludes things is a baseline nobody can
@@ -260,8 +270,8 @@ QMLLINT=/usr/lib/qt6/bin/qmllint
 # comparison, so that the way it stops failing a run is that the file is fixed
 # and not that a number was written here.
 declare -A BASELINE=(
-    # --- the shell tree, themes excluded: 97 files, 146 warnings -------------
-    [shell:unqualified]=116
+    # --- the shell tree, themes excluded: 96 files, 145 warnings -------------
+    [shell:unqualified]=115
     [shell:signal-handler-parameters]=16
     [shell:unresolved-type]=7
     [shell:uncreatable-type]=3
@@ -345,7 +355,7 @@ while IFS= read -r manifest; do
     theme_names+=("${dir##*/}")
 done < <(cd "$REPO" && git ls-files -- '*manifest.json' | sort)
 
-# THE FLOOR THE COUNT ABOVE CANNOT PROVIDE. The shell tree is 97 files with
+# THE FLOOR THE COUNT ABOVE CANNOT PROVIDE. The shell tree is 96 files with
 # every theme taken out, so it clears the 50 on its own: a theme discovery that
 # silently matched nothing would leave `qml_count` untouched and this script
 # would go green having linted the shell and no theme whatsoever. That is the

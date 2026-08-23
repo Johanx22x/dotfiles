@@ -128,10 +128,12 @@
 # by breaking all 126 .qml files in the tree one at a time and running this
 # check against each: it caught 80, and of the 46 it did not, 43 at least left
 # a "Syntax error" in the log for the fifth string above to find. The other
-# three -- components/ClickCatcher.qml, ConfirmButton.qml and HyprlandGrab.qml,
-# each named only from inside a delegate of a document that is itself loaded by
-# URL -- produced a green run over an empty log with an unparseable file on
-# disk. No string added here can fix that, because there is no line to match:
+# three -- components/ClickCatcher.qml, ConfirmButton.qml and HyprlandGrab.qml
+# -- produced a green run over an empty log with an unparseable file on disk.
+# The first and third are named only from inside a delegate of a document that
+# is itself loaded by URL; ConfirmButton was named from nowhere at all, which
+# tests/qml-lint.sh's own note now records and which is why that file is gone.
+# No string added here can fix any of it, because there is no line to match:
 # a linter that reads every file whether or not anything runs it is the only
 # instrument that answers, and that is tests/qml-lint.sh.
 #

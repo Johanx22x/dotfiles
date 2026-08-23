@@ -45,23 +45,6 @@ SettingsPage {
     keywords: ["wallpaper", "background", "rotation", "timer", "random",
         "shuffle", "image", "folder", "directory", "collection"]
 
-    // NOT IN Icons.qml, and not because it does not belong there -- that file
-    // is off limits to this change. It was read out of the installed font's
-    // cmap rather than off the Nerd Fonts chart, which is the rule Icons.qml
-    // itself spells out after three glyphs turned out to draw a music box, a
-    // shield and a bluetooth speaker:
-    //
-    //   python -c "from fontTools.ttLib import TTFont; \
-    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
-    //       .getBestCmap()[0xF024F])"
-    //
-    // 0xF024F answers md-folder_image.
-    //
-    // ITS COMPANION 0xF0770 (md-folder_open) WAS DELETED WITH THE PILL IT SAT
-    // IN. The footer's action is a bare word now; a glyph at both ends of one
-    // muted line is the kind of furniture this page was carrying too much of.
-    readonly property string folderGlyph: String.fromCodePoint(0xF024F)
-
     // ---------------- What is applied right now ----------------
     //
     // IT IS A READING, NOT A CONTROL. The row below follows this property,
@@ -473,10 +456,14 @@ SettingsPage {
         width: parent.width
         title: "Wallpaper"
 
-        // NOT a ConfirmButton, wherever it lives. That component is for the
-        // click you should not be able to take by accident, and this one is
-        // undone by browsing to the picture you had -- arming it would be
-        // ceremony around a change that costs a second to reverse.
+        // NOT AN ARM-THEN-CONFIRM BUTTON. There was a ConfirmButton in
+        // components/ when this note was written and there is not one now --
+        // its only call site had gone and it was deleted after it -- but the
+        // shape is the point and the shape outlives the file: a control that
+        // arms on the first click and acts on the second is for the click you
+        // should not be able to take by accident, and this one is undone by
+        // browsing to the picture you had. Arming it would be ceremony around
+        // a change that costs a second to reverse.
         actionText: "Random"
         actionGlyph: Icons.shuffle
 
@@ -578,7 +565,7 @@ SettingsPage {
                 anchors.leftMargin: Theme.groupPadding
                 anchors.verticalCenter: originText.verticalCenter
 
-                text: root.folderGlyph
+                text: Icons.folderImage
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.iconSize - 2
                 color: Theme.textOnSurfaceVariant

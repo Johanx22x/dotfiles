@@ -57,28 +57,6 @@ SettingsPage {
         "keyboard", "bind", "chord", "conflict", "hyprland", "niri"
     ]
 
-    // ---------------- Glyphs that are not in Icons yet ----------------
-    //
-    // TEMPORARY, and they belong in Icons.qml -- they are here only because
-    // that file is not mine to edit right now. Move them when it is free;
-    // nothing about them should change on the way.
-    //
-    // All three codepoints were read out of the installed font's cmap rather
-    // than looked up by name, which is the rule Icons.qml's own comments set
-    // after two of its entries turned out to be a bluetooth speaker and a
-    // shower head:
-    //
-    //   python3 -c "from fontTools.ttLib import TTFont; \
-    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
-    //       .getBestCmap()[0xF0026])"
-    //
-    // Icons.thermometerAlert is the shell's other alert mark and is wrong
-    // here: it is a temperature that has gone too high, not a warning in
-    // general.
-    readonly property string alert: String.fromCodePoint(0xF0026)        // nf-md-alert
-    readonly property string allClear: String.fromCodePoint(0xF05E1)     // nf-md-check_circle_outline
-    readonly property string unlabelled: String.fromCodePoint(0xF0625)   // nf-md-help_circle_outline
-
     // ---------------- Geometry ----------------
 
     // The chord sits in a fixed-width gutter so every description in the list
@@ -424,7 +402,7 @@ SettingsPage {
     }
 
     function groupGlyph(name: string): string {
-        return name === "Undescribed" ? root.unlabelled : Icons.category(name);
+        return name === "Undescribed" ? Icons.unlabelled : Icons.category(name);
     }
 
     readonly property var groups: {
@@ -637,7 +615,7 @@ SettingsPage {
         title: "Conflicts"
         // The heading itself carries the verdict, so the answer is legible
         // before a word of it is read.
-        glyph: root.conflicts.length > 0 ? root.alert : root.allClear
+        glyph: root.conflicts.length > 0 ? Icons.alert : Icons.allClear
 
         Item {
             width: parent.width

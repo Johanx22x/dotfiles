@@ -478,19 +478,51 @@ SettingsPage {
 
     // ---------------- One thing, offered ----------------
     //
-    // AN INLINE COMPONENT AND NOT A FILE IN components/, still, and the reason
-    // has moved. It used to be that this was used once: it was SchemeRow, the
-    // recording page has a PickRow of its own, and the note here said that a
-    // THIRD list of this shape would be the moment to lift it out. The theme
-    // picker at the top of this page is that third list -- and what it argues
-    // for is not three copies but two, because the two on THIS page share a
-    // component and the recording page's does not.
+    // AN INLINE COMPONENT AND NOT components/ListRow.qml, AND THIS IS NO
+    // LONGER A DEFERRAL. The note here used to say that a THIRD list of this
+    // shape would be the moment to lift it out, and that the lifting was the
+    // next change rather than that one. Both halves have since happened. The
+    // theme picker at the top of this page was the third list; ListRow is
+    // where four other lists went -- the sound page's DeviceRow, the recording
+    // page's own PickRow, and the updates page's UnitRow and PkgRow -- and the
+    // recording page no longer has a copy of anything, it draws ListRows. So
+    // the question was finally asked properly, and the answer is no.
     //
-    // Lifting all three into components/ is the next step and it is
-    // deliberately not this change's: a shared component is read by every page
-    // and by every theme that redraws one, and this change is a picker. What
-    // is here is one component serving both lists on one page, which is the
-    // whole of the duplication this change could have added and did not.
+    // MEASURED, NOT ARGUED. Both rows were built side by side in one process,
+    // under one Theme, at one width -- genesis, 420 px, fontSize 11 -- and
+    // this row was compared against the obvious translation of it,
+    // `ListRow { selected: picked; mark: applying ? applyingLabel : "";
+    // interactive: !busy }`:
+    //
+    //                       PickRow                  ListRow translation
+    //   applying, height    32.00                    36.00
+    //   applying, the word  "Applying…", 64.7 px,    NOTHING DRAWN
+    //                       Theme.primary
+    //   "in use", the word  64.7 px, right-aligned   43.1 px, left-aligned in
+    //                       in a fixed gutter        a column that collapses
+    //   an inert sibling    opacity 0.50             opacity 1.00
+    //
+    // THE WORD IS THE ONE THAT DECIDES IT. ListRow's mark is gated on
+    // `selected` -- themes/genesis/components/ListRow.qml draws
+    // `selected ? mark : hovered ? hoverMark : ""` -- and `applying` is
+    // deliberately not `picked`, for the reason the property below gives. In
+    // the only window that matters, after the click and before the state file
+    // catches up, the row is NOT selected, so the word does not draw at all
+    // and the row says nothing while it is the one thing happening.
+    //
+    // The height is the second fault, and it is the lever rather than the
+    // component: `interactive: false` in ListRow does not mean disabled, it
+    // selects the READING SHAPE, so a busy row grows four pixels and reflows
+    // the section under the pointer at the instant of the click. `enabled` is
+    // the right lever and is what this row uses -- but ListRow has no opacity
+    // treatment at all, so the siblings would not step back either.
+    //
+    // CLOSING THE GAP TAKES FOUR CHANGES AND NOT ONE: a mark rank that
+    // outranks `selected`, an accent colour for it, a reserved gutter, and a
+    // dim while disabled. Three of the four change how the nine ListRows on
+    // the sound, recording and updates pages already draw. Four sources were
+    // absorbed into that component deliberately; a fifth that only fits once
+    // it has grown a second personality is a fifth that should stay out.
     //
     // WHAT WAS SCHEME-SHAPED AND IS NOW A PROPERTY: the glyph, which was
     // Icons.palette in the file; the word shown while something is being

@@ -292,6 +292,30 @@ Singleton {
 
     // ---------------- Bluetooth ----------------
     readonly property string bluetooth: root.glyph("bluetooth", 0xF00AF)  // nf-md-bluetooth
+    // Discoverability, and the one device type this file did not already have.
+    // Both came from modules/settings/pages/BluetoothPage.qml, which held them
+    // while this file was being edited elsewhere; NOT ONE CODEPOINT CHANGED ON
+    // THE WAY.
+    //
+    // THAT BLOCK NAMED FIVE AND ONLY TWO ARRIVE, which is worth recording
+    // because the other three were never missing: `mouse`, `speaker` and
+    // `laptop` were already above at 0xF037D, 0xF04C3 and 0xF0322 -- the very
+    // codepoints the page declared -- so its block was a second copy of three
+    // entries rather than a gap in this one. The page reads the entries that
+    // were always there and the copies are gone; nothing on screen changes.
+    //
+    // Solid eye, not md-eye_outline (0xF06D0). It sits in the same card as the
+    // bluetooth mark on the row above it, and an outlined glyph next to a solid
+    // one reads as the disabled version of it rather than as a different thing
+    // -- the call `settings` above already makes, for the same reason.
+    //
+    // Both read out of the installed font's cmap rather than looked up by name:
+    //
+    //   python3 -c "from fontTools.ttLib import TTFont; \
+    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
+    //       .getBestCmap()[0xF0208])"
+    readonly property string eye: root.glyph("eye", 0xF0208)              // nf-md-eye
+    readonly property string cellphone: root.glyph("cellphone", 0xF011C)  // nf-md-cellphone
 
     // ---------------- Screen recording ----------------
     // The three targets the recorder offers, plus its stop button.
@@ -319,6 +343,36 @@ Singleton {
     readonly property string wifiOff: root.glyph("wifiOff", 0xF092D)     // nf-md-wifi_strength_off_outline
     readonly property string ethernet: root.glyph("ethernet", 0xF0201)   // nf-md-ethernet_cable
     readonly property string ethernetOff: root.glyph("ethernetOff", 0xF0202) // nf-md-ethernet_cable_off
+    // The rest of the strength ladder, and the padlock that marks a secured
+    // name. They lived in modules/settings/pages/NetworkPage.qml because this
+    // file was being edited elsewhere at the time; that block said to move them
+    // here once it was free, and this is that move. NOT ONE CODEPOINT CHANGED
+    // ON THE WAY.
+    //
+    // They come up here for the reason the display page's seven did, plus one
+    // this file did not have then: a theme reaches the host with `import qs`,
+    // so it can see this file, and since every name below is an entry in the
+    // overlay at the bottom, a glyph kept in a page's own block is a glyph a
+    // theme cannot override AT ALL.
+    //
+    // THE LADDER IS NOT CONTIGUOUS and none of it can be computed from `wifi`
+    // above: the alert and lock variants are interleaved between the rungs,
+    // which is exactly the kind of shortcut that produces a wrong glyph here.
+    // All five were read out of the installed font's cmap rather than looked up
+    // by name:
+    //
+    //   python3 -c "from fontTools.ttLib import TTFont; \
+    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
+    //       .getBestCmap()[0xF091F])"
+    readonly property string wifi1: root.glyph("wifi1", 0xF091F)         // nf-md-wifi_strength_1
+    readonly property string wifi2: root.glyph("wifi2", 0xF0922)         // nf-md-wifi_strength_2
+    readonly property string wifi3: root.glyph("wifi3", 0xF0925)         // nf-md-wifi_strength_3
+    readonly property string wifiFaint: root.glyph("wifiFaint", 0xF092F) // nf-md-wifi_strength_outline
+    // Solid, not md-lock_outline (0xF0341). This sits at label size next to a
+    // network name, and at that size an outlined padlock is four grey strokes
+    // that read as a smudge. Same call `settings` above makes, for the same
+    // reason.
+    readonly property string lock: root.glyph("lock", 0xF033E)           // nf-md-lock
 
     // ---------------- Media ----------------
     readonly property string music: root.glyph("music", 0xF075A)         // nf-md-music
@@ -454,6 +508,30 @@ Singleton {
     //     print(TTFont('<font>.ttf').getBestCmap()[0xF03D8])"
     readonly property string palette: root.glyph("palette", 0xF03D8)      // nf-md-palette
 
+    // ---------------- Wallpaper page ----------------
+    // The folder the wallpapers come out of. It was in
+    // modules/settings/pages/WallpaperPage.qml, whose note said it was there
+    // only because this file was off limits to that change, and it arrives with
+    // ITS CODEPOINT UNCHANGED.
+    //
+    // THE NAME IS THE ONE THING THAT DID CHANGE, from `folderGlyph`, and the
+    // rule at the top of this file is why: the names here follow the Nerd
+    // Fonts ones so any of them can be looked up on the cheat sheet, and
+    // md-folder_image is `folderImage`. A `...Glyph` suffix is what a page
+    // calls a string it keeps to itself -- inside this file every name is a
+    // glyph, so the suffix says nothing and no other entry carries one.
+    //
+    // Its companion 0xF0770 (md-folder_open) does not arrive at all: that one
+    // was deleted with the pill it sat in, and a glyph nothing draws is not
+    // worth a name.
+    //
+    // Read out of the installed font's cmap rather than off the chart:
+    //
+    //   python3 -c "from fontTools.ttLib import TTFont; \
+    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
+    //       .getBestCmap()[0xF024F])"
+    readonly property string folderImage: root.glyph("folderImage", 0xF024F) // nf-md-folder_image
+
     // ---------------- Notifications ----------------
     // BOTH OF THESE WERE WRONG, and silently: the codepoints below used to be
     // 0xF09A2 and 0xF09A1, which the comments called bell_outline and
@@ -560,6 +638,24 @@ Singleton {
         }
     }
 
+    // ---------------- Keybinds page ----------------
+    // The three that page kept to itself while this file was being edited
+    // elsewhere. NOT ONE CODEPOINT CHANGED ON THE WAY, and all three were read
+    // out of the installed font's cmap rather than looked up by name:
+    //
+    //   python3 -c "from fontTools.ttLib import TTFont; \
+    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
+    //       .getBestCmap()[0xF0026])"
+    //
+    // `alert` is the general warning and `thermometerAlert` above is NOT a
+    // substitute for it: that one is a temperature that has gone too high,
+    // not a warning in general. `unlabelled` is what the page draws in place of
+    // a category glyph for a bind whose description nobody wrote, which is why
+    // it is not the neutral fallback inside category() above.
+    readonly property string alert: root.glyph("alert", 0xF0026)          // nf-md-alert
+    readonly property string allClear: root.glyph("allClear", 0xF05E1)    // nf-md-check_circle_outline
+    readonly property string unlabelled: root.glyph("unlabelled", 0xF0625) // nf-md-help_circle_outline
+
     // ---------------- What a theme puts against these names ----------------
     //
     // themes/<name>/icons.json, the same shape of file as the palette and the
@@ -578,10 +674,11 @@ Singleton {
     //
     // A replacement is simpler to describe -- a theme hands over the whole set
     // or gets this one -- and it fails at the only moment it matters. There are
-    // ninety-four names here; a theme that writes ninety-three has a BLANK where
-    // the ninety-fourth is drawn, and a blank is exactly the fault the top of
-    // this file exists to prevent: it does not error, it renders as nothing, and
-    // it reads as a layout bug rather than as a missing character. It would also
+    // a hundred and five names here; a theme that writes a hundred and four has
+    // a BLANK where the hundred and fifth is drawn, and a blank is exactly the
+    // fault the top of this file exists to prevent: it does not error, it
+    // renders as nothing, and it reads as a layout bug rather than as a missing
+    // character. It would also
     // make every theme restate codepoints it has no opinion about, and restate
     // them without the thing that makes them trustworthy -- the cmap checks
     // recorded against a dozen entries above, which are what caught a bluetooth
@@ -653,8 +750,8 @@ Singleton {
 
         // CHECKED HERE AND NOT IN glyph(), which is what keeps the guard off the
         // path that is walked: this runs once per read of the file, glyph() runs
-        // in ninety-four bindings, and what is left behind holds nothing but
-        // strings that are safe to draw.
+        // in a hundred and five bindings, and what is left behind holds
+        // nothing but strings that are safe to draw.
         const accepted = {};
         for (const name in parsed) {
             const character = root.character(name, parsed[name]);
@@ -693,9 +790,9 @@ Singleton {
     // ONE NAME, WITH ITS CODEPOINT WRITTEN AT THE SITE THAT USES IT, which is
     // what keeps every glyph above next to the note and the cmap check that
     // produced it. The same shape as Theme.token(), and live for the same
-    // reason: reading root.overrides in here makes it a dependency of all
-    // ninety-four properties, so a theme switch moves the whole vocabulary at
-    // once and none of them is read at construction time.
+    // reason: reading root.overrides in here makes it a dependency of all a
+    // hundred and five properties, so a theme switch moves the whole vocabulary
+    // at once and none of them is read at construction time.
     //
     // `??` and no second check, because overrides holds only what character()
     // above already accepted -- there is no empty string in it to fall through.
