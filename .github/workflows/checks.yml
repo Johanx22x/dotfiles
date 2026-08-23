@@ -198,23 +198,33 @@ jobs:
       # WHAT IT IS FOR is the other half of the two keys `desktop-scheme`
       # keeps. `scheme` is what renders and `chosen` is what the person picked;
       # the second exists so that a theme can pin a scheme for as long as it is
-      # on and leaving it gives the person theirs back. The header of that
-      # script ends "Nothing pins anything today and the keys cost two lines",
-      # which is a code path with no caller -- the argument that has kept other
-      # things out of this repository. tests/fixtures/theme-probe's manifest
-      # now pins gruvbox-dark, and this check enters and leaves it.
+      # on and leaving it gives the person theirs back.
+      # tests/fixtures/theme-probe's manifest pins gruvbox-dark, and this check
+      # enters and leaves that theme.
+      #
+      # AND IT ENTERS IT THE WAY A PERSON DOES, which is what changed when the
+      # wiring was built. It starts a real shell in the headless compositor two
+      # steps down and writes `theme` into the config.json that shell is
+      # watching; Theme.qml reads the pin off the manifest of the theme being
+      # drawn and Config.qml spawns the script. So the transitions are the
+      # shell's, not the check's -- it used to run `pin` and `unpin` itself and
+      # carry a tripwire waiting for the wiring, and that tripwire now points the
+      # other way: it fails if the shell stops being the thing that pins.
       #
       # IT ASSERTS ON THE RENDERED FILE AND NOT ON THE STATE FILE, and it
       # deletes that file before every transition, because the failure worth
       # guarding against here is a step that records a name, renders nothing,
       # and passes against whatever the previous step left on disk. It also
-      # runs the same round trip against two deliberately broken copies of
-      # `desktop-scheme` and requires both to be caught.
+      # runs the same phases against three deliberately broken copies of
+      # `desktop-scheme` and requires all three to be caught.
       #
-      # IT DOES NOT PROVE THAT THE SHELL PINS ANYTHING, because the shell
-      # cannot: nothing reads a manifest's pinned scheme and nothing calls
-      # `desktop-scheme pin`. The file says so at length and carries a tripwire
-      # that goes red the day that changes.
+      # THE THIRD OF THOSE IS A FRESH INSTALL, which is the one case the round
+      # trip cannot reach: it starts with the person picking a scheme, and a
+      # machine that has never picked one is every fresh clone. A `pin` there
+      # used to record ITSELF as the person's own choice.
+      #
+      # SO IT NEEDS quickshell AND labwc as well as matugen, all three of which
+      # are installed above for the shell steps further down.
       - name: A theme that pins a scheme gives the desktop back
         if: ${{ !cancelled() }}
         run: tests/scheme-pinning.sh

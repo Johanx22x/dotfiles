@@ -168,6 +168,12 @@
 # writes its state and its logs; all of it lands in the sandbox and is deleted
 # on the way out.
 #
+# AND $PATH IS PART OF THAT, which it did not need to be until the shell learned
+# to pin a scheme. A theme's manifest can name one, the probe below does, and
+# the shell reaches `desktop-scheme` by name -- so this run would otherwise
+# spawn the real script and, through it, a real matugen render. The stub beside
+# the environment above is what makes that impossible rather than unlikely.
+#
 # The warnings it prints in here are about the sandbox, not about the code:
 # there is no DBus, no PipeWire, no UPower, no ~/.face and no niri config, so
 # the services that want them say so. They are not assertions. The assertions
@@ -272,6 +278,39 @@ unset WAYLAND_DISPLAY DISPLAY DBUS_SESSION_BUS_ADDRESS
 export WLR_BACKENDS=headless
 export WLR_RENDERER=pixman
 export WLR_LIBINPUT_NO_DEVICES=1
+
+# AND THE SHELL IS NOT ALLOWED TO REACH THE REAL `desktop-scheme`. This became
+# a real risk rather than a theoretical one when the shell learned to pin: the
+# probe's manifest declares `"palette": {"source": "pinned", ...}`, so a run
+# that loads it has Config.qml spawn `desktop-scheme pin gruvbox-dark` -- by
+# name, through $PATH, which on the desktop this check is for resolves to
+# ~/.local/bin and from there to the real script. That script ends in
+# `wallpaper-switch reapply`: a full matugen render over fourteen files and the
+# applications signalled afterwards. The sandbox already redirects everything it
+# READS -- HOME and the whole XDG set are in mktemp -- so it would most likely
+# die on a missing config rather than repaint anything, and "most likely" is not
+# the standard for a check somebody runs on their own desktop.
+#
+# A RECORDER AND NOT AN EMPTY FILE, so that a run can be asked afterwards what
+# the shell tried to do. Nothing here asserts on it -- tests/scheme-pinning.sh
+# is what drives that round trip and asserts on the colour that lands -- but a
+# log of the calls is what turns "the shell pinned something" from a guess into
+# a line to read.
+mkdir -p "$sandbox/stub"
+cat > "$sandbox/stub/desktop-scheme" <<EOF
+#!/usr/bin/env bash
+# Stand-in written by tests/shell-load.sh. The real one re-renders the desktop.
+printf '%s\n' "\$*" >> "$sandbox/desktop-scheme-calls"
+exit 0
+EOF
+chmod +x "$sandbox/stub/desktop-scheme"
+export PATH="$sandbox/stub:$PATH"
+
+[[ "$(command -v desktop-scheme)" == "$sandbox/stub/desktop-scheme" ]] || {
+    echo "shell-load: the desktop-scheme stub is not the one on PATH" >&2
+    echo "shell-load: refusing to run a shell that could re-render this desktop" >&2
+    exit 1
+}
 
 # --- the compositor ---------------------------------------------------------
 note "starting labwc headless"
