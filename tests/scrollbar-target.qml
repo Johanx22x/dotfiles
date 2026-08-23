@@ -154,7 +154,14 @@ Item {
             // what usually eats it. So the bench turns this off once.
             clip: Case.viewClips
 
-            interactive: false
+            // Interactive when the case says so. The press-target sweeps set
+            // it false -- a press is not a drag and an inert view keeps the
+            // bands clean -- but the drag-steal row needs the view ARMED,
+            // because a Flickable that cannot flick cannot steal and the row
+            // would pass over nothing. The launcher's real list is
+            // interactive whenever it overflows, which is whenever the bar
+            // exists at all.
+            interactive: Case.viewInteractive ?? false
             model: 40
 
             delegate: MouseArea {
