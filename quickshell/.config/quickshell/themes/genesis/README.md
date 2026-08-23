@@ -36,17 +36,22 @@ themes/genesis/notifications/                 this theme's half: the daemon
 
 The dependency only ever runs one way. A theme file imports `qs.modules.<name>`
 to reach the state it draws; **no file under `modules/` imports anything under
-`themes/`**, and **nothing in the tree names a theme at all** -- not even
-`shell.qml`, which loads its surfaces out of whatever directory `Config.theme`
-points at. That asymmetry is the seam -- if it ever stops being true, the split
-has stopped meaning anything.
+`themes/`**, and **nothing in the tree instantiates a theme's types** -- not
+even `shell.qml`, which loads its surfaces out of whatever directory
+`Config.theme` points at. That asymmetry is the seam -- if it ever stops being
+true, the split has stopped meaning anything.
+
+`shell.qml` does *name* this directory, in eight import lines, and that is not
+the same thing. The imports exist so Quickshell watches these files and an edit
+in here reloads the shell; they build nothing. The header there says which half
+is which.
 
 A theme reaches its own parts by **relative path** and never by its own name:
-`import "../island"`, not `import qs.themes.genesis.island`. That is partly a
-rule and mostly a fact -- a theme is loaded out of its directory rather than
-imported as a module, so the module form would not resolve from in here -- and
-it is what makes this directory copyable. `cp -r genesis tokyo`, edit
-`manifest.json`, set `theme` to `tokyo`, and the shell draws the copy.
+`import "../island"`, not `import qs.themes.genesis.island`. It is a rule, and
+now only a rule -- the module form does resolve again, and it was tried -- but
+the relative form is what makes this directory copyable. `cp -r genesis tokyo`,
+edit `manifest.json`, set `theme` to `tokyo`, and the shell draws the copy;
+spell your own name in here and the copy draws the original's island instead.
 
 ## WHAT IS DELIBERATELY NOT IN HERE
 
@@ -67,10 +72,10 @@ launcher can do. None of them puts a pixel anywhere, and each stayed in
 `modules/` next to the state it belongs with.
 
 `BatteryAlerts` is the one of those the host itself never touches, and a module
-nothing on the host side imports is a module Quickshell's startup scan never
-reaches -- so `modules/Themes.qml` names it in `keptInScope` to keep
-`qs.modules.bar` importable from in here. The next host module that only a
-theme reaches for belongs on that line too.
+nothing on the host side imports is a module Quickshell's startup scan reaches
+only by accident -- so `modules/Themes.qml` names it in `keptInScope` to keep
+`qs.modules.bar` importable from in here whatever any theme happens to import.
+The next host module that only a theme reaches for belongs on that line too.
 
 ## HOW A THEME IS LOADED
 
@@ -92,12 +97,13 @@ older shape. `name` is a label; the directory is what the shell loads from.
 
 `Config.theme` names the directory. `modules/Themes.qml` turns that name into
 URLs and reads the manifest; `modules/ThemeSurface.qml` loads one file out of
-the current theme; `shell.qml` builds seven of those and names no theme. The
-name can change while the shell is up: the surfaces are rebuilt and the old
-ones destroyed, with no config reload. A theme whose manifest cannot be read,
-or which claims an interface this shell does not speak, falls back to the one
-that ships with it -- an empty desktop has no way back to the setting that
-emptied it.
+the current theme; `shell.qml` builds seven of those and hands none of them a
+theme name. The name can change while the shell is up: the surfaces are rebuilt
+and the old ones destroyed, with no config reload -- true of a theme on
+`shell.qml`'s import list and of one that is not. A theme whose manifest cannot
+be read, or which claims an interface this shell does not speak, falls back to
+the one that ships with it -- an empty desktop has no way back to the setting
+that emptied it.
 
 ## THE HONEST LIMIT
 
@@ -107,13 +113,24 @@ same seven surfaces whatever the theme is, from a list of paths written in
 with a surface of its own has no way to offer one. `modules/Surfaces.qml` will
 already take an extra member through `register()`; nothing hands it one.
 
-**Editing a theme no longer hot-reloads the shell.** Quickshell watches the
-files it reached by following imports out of `shell.qml`, and nothing imports a
-theme any more -- so a change under here needs
-`qs kill && qs -d --no-duplicate` where a change under `modules/` still lands
-by itself. It was measured three ways and it is the price of loading by name,
-not of the primitive that does the loading; the long note at the top of
+**A theme is only watched if `shell.qml` names it.** Quickshell watches the
+files it reached by following imports out of `shell.qml`, so the eight import
+lines there are what make an edit in here reload the shell. A theme dropped
+into `themes/` by hand still runs -- it is loaded by URL and `Config.theme` is
+all it needs -- but nothing watches it, so editing it needs
+`qs kill && qs -d --no-duplicate` until its directories are on that list. Add
+them when a theme joins the repository. The long note at the top of
 `modules/Themes.qml` has the whole account.
+
+The imports do **not** make a broken theme everyone's problem, which is what it
+looks like they would and is the reason it was measured instead of reasoned
+about. QML compiles a type when something uses it, so importing a directory
+lists its files without parsing them: a theme file that will not parse costs
+nothing at all while another theme is drawing, and costs the widget that uses
+it plus a warning while this one is. `tests/shell-load.sh` loads the whole tree
+in CI, and it is worth knowing where its floor is -- it asserts on
+`ReferenceError`, `TypeError`, `Unable to assign` and `is not a type`, none of
+which a bare syntax error in a theme file produces.
 
 **There is no facade in front of `components/`.** A theme draws with the
 shell's buttons, rows, scrollbars and popout, and cannot replace them.
