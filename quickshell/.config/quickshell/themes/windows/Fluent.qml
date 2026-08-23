@@ -401,6 +401,26 @@ QtObject {
     readonly property int resultIcon: 24
     readonly property int resultBestIcon: 32
     readonly property int previewIcon: 64
+
+    // ---- QUICK SETTINGS ----
+    //
+    // OURS, measured off a photograph. Microsoft publishes nothing about this
+    // panel, and the shape it publishes elsewhere would have led the wrong
+    // way: a tile is a WIDE RECTANGLE with its label OUTSIDE it, not a square
+    // with the word inside.
+    readonly property int quickWidth: 360
+    readonly property int quickPadding: 16
+    readonly property int quickCardGap: 8
+    readonly property int quickTileGap: 8
+    readonly property int quickTileHeight: 48
+    readonly property int quickTileLabelGap: 6
+    readonly property int quickTileChevron: 40
+    readonly property int quickSliderHeight: 52
+    readonly property int quickFooterHeight: 48
+    readonly property int quickMediaHeight: 156
+
+    // The hidden-icons flyout behind the corner's chevron. OURS.
+    readonly property int trayOverflowCell: 44
     // CORRECTED AGAINST A PHOTOGRAPH. These were 6 and 16 and 3, taken from a
     // Windhawk mod's source -- and every published width for this indicator
     // comes from a mod that REDESIGNS it into a pill or a bubble. A close-up
@@ -411,4 +431,65 @@ QtObject {
     readonly property int indicatorFocusedWidth: 16
     readonly property int indicatorThickness: 3
     readonly property int indicatorBottomGap: 3
+
+    // ---- A MODAL PAGE OVER THE DESKTOP -------------------------------------
+    //
+    // OURS. Microsoft publishes no margin between a window and the edge of the
+    // screen, and these two windows are not ones anybody can drag: the
+    // cheatsheet and the wallpaper picker are Settings-shaped pages laid over
+    // the desktop with the smoke behind them. 60 is the breathing room that
+    // makes such a page read as a window ON the desktop rather than as a new
+    // desktop.
+    //
+    // IN HERE BECAUSE TWO SURFACES READ IT. It was written twice, once in each
+    // of them, with a comment in each saying it agreed with the other -- which
+    // is the arrangement this file exists to end.
+    readonly property int sheetMargin: 60
+
+    // A SETTINGS PAGE IS CAPPED, AND THE NUMBER IS PUBLISHED. The Community
+    // Toolkit's SettingsPageExample.xaml -- the sample the official docs point
+    // at -- wraps the whole page in MaxWidth="1000", which is why a Settings
+    // window maximised on a 2560-wide monitor still lays its cards out down the
+    // left. It is why the cheatsheet's one column does not become a line length
+    // nobody can track back from.
+    readonly property int pageMaxWidth: 1000
+
+    // SettingsSectionHeaderTextBlockStyle, verbatim from the same file:
+    // BodyStrong with Margin="1,30,0,6". The 30 above and the 6 below are the
+    // whole of the rhythm of a Settings page -- what separates one group from
+    // the next without a rule, a tint or a box.
+    readonly property int sectionHeaderAbove: 30
+    readonly property int sectionHeaderBelow: 6
+
+    // ---- A LINE OF TEXT THAT IS NOT IN A CONTROL ---------------------------
+    //
+    // OURS, and a decision rather than a measurement, so it says so. The
+    // definition list on the About page -- "Edition / Windows 11 Home Single
+    // Language" -- runs at a pitch of about 1.75 line boxes in
+    // settings-system-about.jpg. That is right for the five rows an expander
+    // holds and wrong for the eleven a monitor card stacks: at 1.75 that card
+    // runs past four hundred pixels before the first control on it. So this is
+    // the tighter option -- four pixels above the line box and four below --
+    // and the pitch that follows is about 1.2 boxes.
+    //
+    // A two-line search result gets the same leading for the same reason, and
+    // it is the number that has to land inside resultRowHeight above.
+    readonly property int textLeading: 4
+
+    // ---- THE FRAMED STRIP WINDOWS CALLS AN InfoBar -------------------------
+    //
+    // OURS. WinUI ships an InfoBar and none of the sources listed at the top of
+    // this file was read for these two numbers -- its resource dictionary is
+    // not among them -- so they are a design decision and are marked as one.
+    // What they aim at is the shape every framed strip in the Settings
+    // photographs has: a one-pixel frame at the control radius, a tinted fill
+    // of the strip's own colour, and the glyph, the sentence and the buttons on
+    // one line inside it.
+    //
+    // The four-pixel inset the frame is pulled in by is NOT here. That one is
+    // the host's, and modules/settings/pages/display/PendingBanner.qml is both
+    // where it is written down and where it says the inset is the theme's to
+    // draw.
+    readonly property int bannerPadding: 8
+    readonly property real bannerTint: 0.12
 }

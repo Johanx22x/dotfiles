@@ -177,9 +177,8 @@ PanelWindow {
     Component {
         id: trayMenu
 
-        Item {
-            implicitWidth: Theme.popoutMinWidth
-            implicitHeight: Theme.popoutMinWidth
+        TrayOverflow {
+            onDismissRequested: barPopout.close()
         }
     }
 
