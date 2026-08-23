@@ -1,11 +1,29 @@
-// The cheatsheet: every keybind that carries a description, by category.
+// The cheatsheet: every keybind that carries a description, drawn as a Settings
+// page.
+//
+// WINDOWS HAS NO KEYBOARD-SHORTCUT OVERLAY AT ALL, so there is nothing to
+// recreate and the question is which Windows shape this content belongs in. It
+// is a long list of labelled rows grouped under headings, which is a Settings
+// page and nothing else: a page title in Title type, section headers in Body
+// Strong with the Community Toolkit's own spacing around them, and the rows
+// underneath. The card the page sits in is a window -- Mica ground, overlay
+// radius, one-pixel stroke -- rather than a dialog.
+//
+// WHAT WENT WITH GENESIS'S SHAPE, and it is worth naming because it was good.
+// genesis packs the categories into up to three columns shortest-first so they
+// end at roughly the same height, and sizes both the columns and the sheet off
+// the screen. Windows Settings pages are ONE column with a published maximum
+// width and everything below the fold reached by scrolling, so the packing had
+// nothing left to pack and it is gone. What survives is the arithmetic that is
+// about the CONTENT rather than the layout: the key gutter added up from the
+// chords, and the column width measured off the longest description.
 //
 // WHERE THE LIST COMES FROM, AND WHY IT CANNOT GO STALE
-// `hyprctl binds`, asked fresh on every open. Not a list written here, and not
-// hyprland.lua parsed by hand: the compositor is the only thing that knows
-// what is bound RIGHT NOW, including whatever a reload changed a minute ago.
-// Adding a bind to hyprland.lua with a description is the whole of what it
-// takes to make it appear here.
+// The compositor, asked fresh on every open. Not a list written here, and not
+// hyprland.lua parsed by hand: the compositor is the only thing that knows what
+// is bound RIGHT NOW, including whatever a reload changed a minute ago. Adding
+// a bind with a description is the whole of what it takes to make it appear
+// here.
 //
 // The one thing the compositor cannot tell us is what a bind DOES. The config
 // is in Lua, so `hyprctl binds` reports every dispatcher as "__lua" with an
@@ -18,39 +36,28 @@
 // through SUPER + 0, and it is why the loops in hyprland.lua describe only
 // their first iteration.
 //
-// LAYOUT
-// Columns, filled shortest-first rather than in order, so they end at roughly
-// the same height instead of leaving one long and two stubby. That packing is
-// the part of this layout worth keeping and none of what follows changes it.
-//
-// HOW MANY COLUMNS IS THE SCREEN'S ANSWER AND NOT THIS FILE'S. It used to be
-// three, and three of a fixed 540 plus the gaps and the padding is a card 1740
-// pixels wide -- which is comfortable on the 2560-wide monitor it was written
-// on and 660 pixels wider than the 1080-wide portrait one beside it. On that
-// screen whole columns ran off both edges, and since nothing here scrolled
-// there was no way to reach them. So the count comes from the width that is
-// actually there, and on a screen with room for one column it is one.
-//
-// AND THE COLUMN IS AS WIDE AS ITS WIDEST ROW. 540 was a number too, and it
-// was too NARROW: a chord gutter of 227 leaves about 300 pixels for the
-// description, and "fake fullscreen (for games that minimise)" wants more, so
-// it came out as "fake fullscreen (for games that ...". The width is measured
-// off the descriptions now, the same way the gutter is measured off the
-// chords.
-//
-// AND IT SCROLLS WHEN IT STILL DOES NOT FIT, which one column of fifty-two
-// binds does not. The card is capped at the screen it opens on and the columns
-// sit in a ScrollList inside it; the header and "Esc to close" stay put above
-// them, because a heading that scrolls away on a reference sheet is a heading
-// nobody can use.
+// ON LINE HEIGHTS, AND WHY Fluent'S ARE NOT USED HERE. Fluent.qml expresses
+// Windows' type ramp as offsets from the user's own size, which this shell
+// carries in POINTS -- `font.pointSize: Theme.fontSize` is how every text in
+// the tree is written. Its line heights are in that same unit, and
+// Text.lineHeight with lineHeightMode FixedHeight is in PIXELS, so the two are
+// not interchangeable and there is no conversion here that would not be a DPI
+// assumption invented at this line. Every text on this surface is a single
+// line, where the face's own leading is the right answer anyway; the one
+// paragraph that wraps is the empty state, and it wants ordinary body leading.
+// The sizes and the weights are Fluent's, which is where the Windows look
+// actually lives.
 
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import qs
-// ScrollList, which the columns sit in.
+// ScrollList, which the sections sit in, and the ScrollBar and BindRow facades.
 import qs.components
 import qs.modules.cheatsheet
+// Fluent lives one directory up, and without this line the failure is at
+// runtime, per read: "ReferenceError: Fluent is not defined".
+import ".."
 
 PanelWindow {
     id: root
@@ -58,26 +65,40 @@ PanelWindow {
     // The ShellScreen this sheet belongs to, from Variants in shell.qml.
     required property var modelData
 
-    // ---------------- How big the sheet is allowed to be ----------------
+    // ---------------- How big the page is allowed to be ----------------
     //
-    // EVERY NUMBER BELOW IS DERIVED FROM THE SCREEN except this one, which is
-    // the breathing room a modal wants around itself so that it reads as a
-    // sheet laid over the desktop rather than as a new desktop. It is the only
-    // place a constant belongs in this section: it is a look, and the rest are
-    // consequences.
+    // OURS: Microsoft publishes no margin between a window and the screen, and
+    // this window is not one the user can drag. 60 is the breathing room a
+    // sheet wants around itself so that it reads as a window laid over the
+    // desktop rather than as a new desktop, and it is the only constant in this
+    // section -- the rest are consequences of it and of the screen.
     readonly property int screenMargin: 60
 
     readonly property int availableWidth: Math.max(0, (root.modelData?.width ?? 0) - root.screenMargin * 2)
     readonly property int availableHeight: Math.max(0, (root.modelData?.height ?? 0) - root.screenMargin * 2)
 
-    // What is left for the columns once the card has had its padding.
+    // OURS, and only in the sense that Microsoft publishes no page inset for a
+    // Settings page. 16 is SettingsCardPadding, which is the closest published
+    // figure and is what every card on such a page already keeps inside itself,
+    // so the page frame and the cards on it agree.
+    readonly property int cardPadding: Fluent.cardPadding
+
+    // What is left for the content once the card has had its padding.
     readonly property int contentRoom: Math.max(0, root.availableWidth - root.cardPadding * 2)
 
-    // HOW WIDE A COLUMN WANTS TO BE: the chord gutter, the gap after it, and
+    // A SETTINGS PAGE IS CAPPED, AND THE NUMBER IS PUBLISHED. The Community
+    // Toolkit's SettingsPageExample.xaml -- the sample the official docs point
+    // at -- wraps the whole page in `MaxWidth="1000"`, which is why a Settings
+    // window maximised on a 2560-wide monitor still lays its cards out down the
+    // left. Without it a wide screen would give one column of fifty-two binds a
+    // line length nobody can track back from.
+    readonly property int contentMaxWidth: 1000
+
+    // HOW WIDE THE COLUMN WANTS TO BE: the chord gutter, the gap after it, and
     // the longest description in the sheet. Measured off the text for the same
     // reason keyGutter is -- a number written down here is a number that goes
-    // stale the first time somebody writes a longer description, and the way
-    // it goes stale is a row that quietly ends in an ellipsis.
+    // stale the first time somebody writes a longer description, and the way it
+    // goes stale is a row that quietly ends in an ellipsis.
     readonly property int naturalColumnWidth: {
         // See keyGutter: advanceWidth() is a function call, so the font has to
         // be READ here or this never recomputes when the type size moves.
@@ -92,34 +113,13 @@ PanelWindow {
         return root.keyGutter + root.rowGap + Math.ceil(widest);
     }
 
-    // ...capped by what there is. On a screen too narrow even for one full
-    // column the descriptions elide, which is the old behaviour and the honest
-    // one: there is no width at which they both fit and stay this size.
-    readonly property int columnWidth: Math.min(root.naturalColumnWidth, root.contentRoom)
-
-    // Three is a ceiling and not a count. It is what the sheet was designed
-    // around and what the widest monitor here has room for; a fourth column
-    // would be a different sheet rather than the same one on a bigger screen.
-    readonly property int columnCountMax: 3
-
-    // As many as fit side by side, and never fewer than one -- a sheet with
-    // zero columns is a blank card, and a screen too narrow for a column still
-    // gets the column, elided, which is more use than nothing.
-    readonly property int columnCount: {
-        if (root.columnWidth <= 0)
-            return 1;
-
-        const fit = Math.floor((root.contentRoom + root.columnGap)
-                             / (root.columnWidth + root.columnGap));
-        return Math.max(1, Math.min(root.columnCountMax, fit));
-    }
-
-    // The columns and the gaps between them, which is what the header spans
-    // and what the card is built around.
-    readonly property int contentWidth: root.columnCount * root.columnWidth
-        + (root.columnCount - 1) * root.columnGap
-
-    readonly property int columnGap: 30
+    // ...capped by the page's maximum and by what there is. On a screen too
+    // narrow even for one full column the descriptions elide, which is the
+    // honest outcome: there is no width at which they both fit and stay this
+    // size.
+    readonly property int contentWidth: Math.min(root.naturalColumnWidth,
+                                                 root.contentMaxWidth,
+                                                 root.contentRoom)
 
     // The space between a chord and its description, in BindRow. Here because
     // naturalColumnWidth above adds it up; see chipPadding for the same
@@ -132,13 +132,13 @@ PanelWindow {
         id: bodyMetrics
 
         font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize
-        font.weight: Theme.fontWeight
+        font.pointSize: Fluent.bodySize
+        font.weight: Fluent.normalWeight
     }
 
     // The keys sit in a fixed-width gutter and are flush with its right edge,
     // so the actual key is always the chip nearest its own description and
-    // every description in a column starts at the same x.
+    // every description starts at the same x.
     //
     // MEASURED, NOT GUESSED, and that changed the day this had to serve two
     // compositors. It was 150, taken off the widest chord Hyprland bound --
@@ -149,22 +149,19 @@ PanelWindow {
     // The first answer to that was to ask the ROWS how wide they had come out
     // and keep the largest. It fixed the overflow and it left a defect of its
     // own: a running maximum can only ever grow. It holds the widest thing it
-    // has ever seen, so it is right until something gets SMALLER and then it
-    // is stuck. Measured, on this machine's fifty-two described binds: the
-    // sheet opens with a gutter of 226, the type size is taken to 16pt and it
-    // becomes 298, the type size is put back to 11pt -- and the widest chord
-    // is 226 again while the gutter stays at 298, which is seventy-two pixels
-    // of nothing in front of every description in all three columns, for the
-    // rest of the session.
+    // has ever seen, so it is right until something gets SMALLER and then it is
+    // stuck. Measured, on this machine's fifty-two described binds: the sheet
+    // opens with a gutter of 226, the type size is taken to 16pt and it becomes
+    // 298, the type size is put back to 11pt -- and the widest chord is 226
+    // again while the gutter stays at 298, which is seventy-two pixels of
+    // nothing in front of every description, for the rest of the session.
     //
     // So the gutter is added up from the chords instead of collected from the
-    // rows: the label's advance width plus the chip padding for each chip,
-    // plus the spacing between them, over every chord the sheet is showing.
-    // It is an ordinary binding, so it goes down as readily as up, and it is
-    // still correct for whatever the compositor turns out to bind -- including
-    // a fifth modifier nobody has thought of yet. The same shape as the
-    // keybinds settings page, which had the opposite half of this bug: a
-    // gutter that was a constant and could not move at all.
+    // rows: the label's advance width plus the chip padding for each chip, plus
+    // the spacing between them, over every chord the sheet is showing. It is an
+    // ordinary binding, so it goes down as readily as up, and it is still
+    // correct for whatever the compositor turns out to bind -- including a
+    // fifth modifier nobody has thought of yet.
     readonly property int keyGutter: {
         // THE FONT IS NAMED HERE and not only inside chipMetrics below. A
         // binding re-runs when a property it READ changes, not when a property
@@ -204,33 +201,43 @@ PanelWindow {
     // it is what the gutter reads as before the compositor has answered.
     readonly property int keyGutterFloor: 150
 
-    // The chip's own geometry, HERE AND NOT AS LITERALS IN BindRow, because
-    // the gutter above is an arithmetic model of a chip: a model that does not
-    // add up the numbers the chip is drawn with is a model that drifts, and it
+    // The chip's own geometry, HERE AND NOT AS LITERALS IN BindRow, because the
+    // gutter above is an arithmetic model of a chip: a model that does not add
+    // up the numbers the chip is drawn with is a model that drifts, and it
     // drifts silently -- the chords would simply start hanging off the edge
     // again. Handed to BindRow, which is where they are used.
-    readonly property int chipPadding: 14
-    readonly property int chipSpacing: 5
+    //
+    // Fluent.controlPaddingH is MenuFlyoutItemThemePadding's and Button's own
+    // 11, which is the nearest published horizontal inset Windows gives a small
+    // labelled control; doubled, it is the padding a chip keeps around its key
+    // name. The spacing between two chips in a chord is OURS -- Windows draws
+    // no key chips anywhere.
+    readonly property int chipPadding: Fluent.controlPaddingH * 2
+    readonly property int chipSpacing: 4
 
     // The chip label's font, so advanceWidth() measures the text with the face
-    // it will actually be drawn in.
-    //
-    // IT NO LONGER HAS TO BE KEPT IN STEP BY HAND. It did, and this comment
-    // used to say so: the Text inside BindRow spelled out `Theme.fontSize - 1.5`
-    // for itself and the two were the same face only for as long as somebody
-    // remembered to change both. With the cap drawn by components/Chip.qml the
-    // font travels -- this one, whole, through BindRow's `chipFont` to the
-    // chip's `labelFont` -- so the face that is measured and the face that is
-    // drawn are one value. The same arrangement the keybinds settings page
-    // arrived at, and its header carries the longer argument.
+    // it will actually be drawn in. It travels -- this value, whole, through
+    // BindRow's `chipFont` to the chip's `labelFont` -- so the face that is
+    // measured and the face that is drawn are one value rather than two
+    // spellings that agree today. Caption is the Windows ramp's smallest step
+    // and the one a key cap belongs on.
     FontMetrics {
         id: chipMetrics
 
         font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize - 1.5
-        font.weight: Theme.fontWeight
+        font.pointSize: Fluent.captionSize
+        font.weight: Fluent.strongWeight
     }
-    readonly property int cardPadding: 30
+
+    // ---------------- The page's own spacing ----------------
+    //
+    // SettingsSectionHeaderTextBlockStyle, verbatim from the Community
+    // Toolkit's SettingsPageExample.xaml: BodyStrong with Margin="1,30,0,6".
+    // The 30 above and the 6 below are the whole of the rhythm of a Settings
+    // page -- it is what separates one group of cards from the next without a
+    // rule, a tint or a box.
+    readonly property int sectionHeaderAbove: 30
+    readonly property int sectionHeaderBelow: 6
 
     // Shape: [ { name: "Apps", binds: [ { keys: [...], text: "..." } ] } ]
     // Derived from Compositor.binds, at the bottom of this file.
@@ -238,16 +245,16 @@ PanelWindow {
 
     // The order categories are shown in: roughly how often you reach for them,
     // with the shell's own controls last. A category not named here still
-    // appears -- at the end, in the order hyprctl reported it -- so a new one
-    // is never silently dropped.
+    // appears -- at the end, in the order the compositor reported it -- so a new
+    // one is never silently dropped.
     readonly property var categoryOrder: [
         "Apps", "Windows", "Workspaces", "Capture", "Look", "Media", "Shell"
     ]
 
     // ---------------- Turning a bind into something readable ----------------
 
-    // Hyprland's key names are xkb keysyms and mouse codes. Left alone they
-    // read like config, not like the key under your finger.
+    // Hyprland's key names are xkb keysyms and mouse codes. Left alone they read
+    // like config, not like the key under your finger.
     readonly property var keyNames: ({
         "RETURN": "Enter",
         "SPACE": "Space",
@@ -280,38 +287,6 @@ PanelWindow {
         return root.keyNames[key] ?? (key.startsWith("XF86") ? key.slice(4) : key);
     }
 
-    // Shortest-first packing. Categories keep their order within a column, and
-    // each goes to whichever column is currently shortest -- measured in rows
-    // plus two for the heading, so a heading is not free.
-    //
-    // It takes the count from root.columnCount, which is now the screen's
-    // answer rather than a three written down. Nothing else about it changes:
-    // one column is the same algorithm with one bucket, and the categories
-    // come out in order because every one of them is the shortest column.
-    function pack(groups: var): var {
-        const columns = [];
-        const heights = [];
-
-        for (let i = 0; i < root.columnCount; i++) {
-            columns.push([]);
-            heights.push(0);
-        }
-
-        for (const group of groups) {
-            let shortest = 0;
-            for (let i = 1; i < heights.length; i++)
-                if (heights[i] < heights[shortest])
-                    shortest = i;
-
-            columns[shortest].push(group);
-            heights[shortest] += group.binds.length + 2;
-        }
-
-        return columns;
-    }
-
-    readonly property var columns: root.pack(root.groups)
-
     screen: modelData
     visible: CheatsheetState.isOpen
 
@@ -326,8 +301,8 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
     // Anchors say WHERE, implicitWidth/implicitHeight say HOW BIG. Anchoring
-    // all four edges stretches the layer surface instead, and then the size
-    // the compositor picked is not one QML ever sees.
+    // all four edges stretches the layer surface instead, and then the size the
+    // compositor picked is not one QML ever sees.
     anchors {
         top: true
         left: true
@@ -337,7 +312,7 @@ PanelWindow {
     implicitHeight: root.modelData?.height ?? 0
 
     // Never reserve space, and never be pushed down by the bar's reservation:
-    // the sheet covers the bar rather than starting below it.
+    // the sheet covers the taskbar rather than starting above it.
     exclusionMode: ExclusionMode.Ignore
 
     color: "transparent"
@@ -372,24 +347,24 @@ PanelWindow {
         width: root.modelData?.width ?? 0
         height: root.modelData?.height ?? 0
 
-        // The shell's standard glass, and that is not decoration: the
-        // blur-quickshell rule in hyprland.lua sets ignore_alpha just under
-        // Theme.glassAlpha, so an alpha picked by hand here would fall out of
-        // the blur entirely and the sheet would go from frosted wallpaper to a
-        // flat tint over perfectly sharp windows.
-        color: Theme.glass(Theme.surface)
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
+        // SmokeFillColorDefault -- see PowerMenu.qml for the source and for why
+        // this is the one hex literal in the theme. It is here for the same
+        // reason it is there: while this surface is up the desktop behind it is
+        // not taking input, and dimming is the only thing Windows does to say
+        // so. A page drawn as though it were an ordinary window would be
+        // lying about that.
+        //
+        // 0x4D is 0.30, under the compositor's 0.84 ignore_alpha, so this fill
+        // is left out of the blur and what shows through is a dimmed but sharp
+        // desktop -- which is the point of it.
+        color: "#4D000000"
 
         focus: true
 
         Keys.onEscapePressed: CheatsheetState.close()
         // The key that opened it also closes it, without the modifier: while
-        // the sheet holds the keyboard, the SUPER + / bind still fires from
-        // the compositor, but a bare / is the reflex once you are looking at
-        // it.
+        // the sheet holds the keyboard, the SUPER + / bind still fires from the
+        // compositor, but a bare / is the reflex once you are looking at it.
         Keys.onPressed: event => {
             if (event.key === Qt.Key_Slash || event.key === Qt.Key_Question)
                 CheatsheetState.close();
@@ -411,37 +386,61 @@ PanelWindow {
 
             anchors.centerIn: parent
 
-            // BUILT AROUND THE CONTENT WIDTH RATHER THAN AROUND THE COLUMN'S
-            // OWN IDEA OF IT. `layout.implicitWidth` was the widest child, and
-            // the widest child was a Row of three fixed columns -- so the card
-            // was as wide as the columns happened to be and the screen never
-            // came into it. root.contentWidth is the columns AFTER the screen
-            // has had its say, so this can no longer come out wider than what
-            // it is drawn on.
             implicitWidth: root.contentWidth + root.cardPadding * 2
 
-            // The height is still the content's, and it is bounded because the
-            // list inside it is: see `list.height`. Capped here as well, so
-            // that a header taller than the whole screen -- which is not a
-            // real case, but is the sort of thing that makes a modal
-            // unclosable -- still cannot push the card off its own screen.
+            // The height is the content's, and it is bounded because the list
+            // inside it is: see `list.height`. Capped here as well, so that a
+            // header taller than the whole screen -- which is not a real case,
+            // but is the sort of thing that makes a modal unclosable -- still
+            // cannot push the card off its own screen.
             implicitHeight: Math.min(layout.implicitHeight + root.cardPadding * 2,
                                      root.availableHeight)
-            radius: Theme.cardRadius
 
-            color: Theme.glass(Theme.surfaceContainer)
+            // A WINDOW AND NOT A DIALOG: OverlayCornerRadius, which is the 8
+            // Windows gives windows, flyouts and dialogs alike.
+            radius: Fluent.overlayRadius
 
-            // Opening move: a short rise into place. Small on purpose -- this
-            // is a reference you want to be able to read, not an entrance.
+            // MICA, WHICH IS THE ONE WINDOWS MATERIAL THIS SHELL GETS FOR FREE.
+            // Mica samples the wallpaper once and is static, and the
+            // blur-quickshell rule in hyprland.lua is xray -- it samples the
+            // wallpaper and not the windows in front of it. The two are a close
+            // match by accident. Its documented fallback is
+            // SolidBackgroundFillColorBase #202020, which is exactly
+            // windows-11-dark's ui_surface, so Theme.surface is the tint.
+            //
+            // Theme.glass() and not an alpha chosen here: the rule ignores
+            // anything under 0.84 and Theme.glassAlpha is the number just above
+            // it, so a hand-picked value falls out of the blur entirely and the
+            // card goes from Mica to a flat tint over a sharp desktop.
+            color: Theme.glass(Theme.surface)
+
+            // A one-pixel stroke, which every Windows surface with a corner
+            // radius carries. No scheme role holds a black overlay, so this
+            // reads the divider role -- the one role that is a hairline over a
+            // surface rather than a fill.
+            border.width: 1
+            border.color: Theme.outlineVariant
+            antialiasing: true
+
+            // Dialog show, from the motion table: scale 1.05 -> 1.0 over 250ms
+            // on the one spline WinUI ships, opacity linear over 83. The scale
+            // comes DOWN rather than up -- a Windows surface arrives by
+            // settling, not by growing.
             opacity: CheatsheetState.isOpen ? 1 : 0
-            scale: CheatsheetState.isOpen ? 1 : 0.97
+            scale: CheatsheetState.isOpen ? 1 : 1.05
 
             Behavior on opacity {
-                NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
+                NumberAnimation { duration: Fluent.fasterMs; easing.type: Easing.Linear }
             }
+
             Behavior on scale {
-                NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
+                NumberAnimation {
+                    duration: Fluent.normalMs
+                    easing.type: Easing.Bezier
+                    easing.bezierCurve: Fluent.easeOut
+                }
             }
+
             Behavior on color {
                 ColorAnimation { duration: Theme.recolorDuration }
             }
@@ -454,26 +453,18 @@ PanelWindow {
 
             // ---------------- Scroll indicator ----------------
             //
-            // IT ANSWERS "IS THERE MORE", which the sheet cannot answer on its
+            // IT ANSWERS "IS THERE MORE", which the page cannot answer on its
             // own: a row cut off by the bottom of the card looks exactly like a
-            // row that happens to end there, and on the portrait screen there
-            // are around six hundred pixels of binds below the fold. It also
-            // says how far down you are, which a list of similar-looking rows
-            // otherwise does not.
+            // row that happens to end there, and one column of fifty-two binds
+            // does not fit on any screen here. It also says how far down you
+            // are, which a list of similar-looking rows otherwise does not.
             //
-            // components/ScrollBar.qml now. This file drew the second copy of
-            // it and said a third caller was what should lift it into
-            // components/; the third was every capped list in the settings
-            // window, so the drawing left and the placement stayed.
-            //
-            // IN THE CARD'S OWN PADDING, so it costs no width: the card keeps
-            // thirty pixels of padding on each side and four pixels of bar
-            // centred in the right-hand thirty overlaps nothing. Which is also
-            // why the list is told not to draw its own -- ScrollList's sits
-            // just inside the right edge of the list, and the columns in here
-            // are of a fixed width rather than bound to it, so those four
-            // pixels would land on the last column's key names instead of on
-            // padding.
+            // components/ScrollBar.qml draws it, and this file only places it.
+            // IN THE CARD'S OWN PADDING, so it costs no width: Windows' bar is
+            // a 12px gutter and the card keeps 16 on each side, so four pixels
+            // of margin either side of it overlap nothing. Which is also why
+            // the list is told not to draw its own -- ScrollList's sits just
+            // inside the right edge of the list, where the descriptions are.
             //
             // POSITIONED AND NOT ANCHORED TO THE LIST, because the list is a
             // grandchild of this card and anchors only reach a parent or a
@@ -495,61 +486,54 @@ PanelWindow {
 
                 anchors.centerIn: parent
                 width: root.contentWidth
-                spacing: 22
 
-                // ---------------- Header ----------------
+                // ZERO, and that is the section header style doing its job: its
+                // own 30 above is what separates the first section from the
+                // title, and every later one from the rows before it. A spacing
+                // here as well would be that gap counted twice.
+                spacing: 0
+
+                // ---------------- The page title ----------------
                 Item {
                     id: header
 
                     // The content width and not the Column's implicit one: the
-                    // columns live in a Flickable now, and a Flickable's
-                    // implicit width is not its content's -- so "as wide as my
-                    // widest sibling" would have quietly become "as wide as the
-                    // title", taking "Esc to close" with it.
+                    // sections live in a Flickable, and a Flickable's implicit
+                    // width is not its content's -- so "as wide as my widest
+                    // sibling" would quietly have become "as wide as the title",
+                    // taking "Esc to close" with it.
                     width: root.contentWidth
-                    height: title.implicitHeight
+                    height: pageTitle.implicitHeight
 
-                    Row {
-                        id: title
+                    // Title, 28 semibold. No icon beside it: a Settings page
+                    // title is text, and the icon lives in the navigation entry
+                    // that got you there.
+                    Text {
+                        id: pageTitle
 
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: 10
 
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: Icons.keyboard
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.iconSize + 4
-                            color: Theme.primary
+                        text: "Keyboard shortcuts"
+                        font.family: Theme.fontFamily
+                        font.pointSize: Fluent.titleSize
+                        font.weight: Fluent.strongWeight
+                        color: Theme.textOnSurface
 
-                            Behavior on color {
-                                ColorAnimation { duration: Theme.recolorDuration }
-                            }
-                        }
-
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "Keybindings"
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize + 4
-                            font.weight: Font.Bold
-                            color: Theme.textOnSurface
-
-                            Behavior on color {
-                                ColorAnimation { duration: Theme.recolorDuration }
-                            }
+                        Behavior on color {
+                            ColorAnimation { duration: Theme.recolorDuration }
                         }
                     }
 
                     Text {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
+
                         text: "Esc to close"
                         font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize - 1
-                        font.weight: Theme.fontWeight
-                        color: Theme.outline
+                        font.pointSize: Fluent.captionSize
+                        font.weight: Fluent.normalWeight
+                        color: Theme.textOnSurfaceVariant
 
                         Behavior on color {
                             ColorAnimation { duration: Theme.recolorDuration }
@@ -561,20 +545,21 @@ PanelWindow {
                 //
                 // A sheet whose whole job is to explain the keys, opened on a
                 // compositor that cannot be asked what is bound, must not come
-                // up blank: an empty panel reads as a broken shell rather than
-                // as a missing feature. It says which it is.
+                // up blank: an empty page reads as a broken shell rather than as
+                // a missing feature. It says which it is.
                 Text {
                     visible: !Compositor.can("bindsIntrospection")
                     width: parent.width
+                    topPadding: root.sectionHeaderAbove
 
                     text: "This compositor cannot report what is bound to what.\n\n"
                         + "The bindings are still there -- they are in the compositor's own\n"
                         + "configuration file, which is where they were written."
-                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
 
                     font.family: Theme.fontFamily
-                    font.pointSize: Theme.fontSize
-                    font.weight: Theme.fontWeight
+                    font.pointSize: Fluent.bodySize
+                    font.weight: Fluent.normalWeight
                     color: Theme.textOnSurfaceVariant
 
                     Behavior on color {
@@ -582,139 +567,104 @@ PanelWindow {
                     }
                 }
 
-                // ---------------- The columns ----------------
+                // ---------------- The sections ----------------
                 //
-                // IN A ScrollList AND NOT LOOSE IN THE CARD, because one
-                // column of fifty-two binds is taller than a 1920-pixel screen
-                // and there was no way at all to reach the bottom of it. The
-                // component is components/ScrollList.qml as it stands: it
-                // clips, it stops at its bounds, and it takes the wheel only
-                // while there is somewhere to go -- which is the behaviour
-                // wanted here too, since the sheet is a modal and there is
-                // nothing behind it that should be scrolling instead.
+                // IN A ScrollList AND NOT LOOSE IN THE CARD, because one column
+                // of fifty-two binds is taller than any screen here and there
+                // would be no way at all to reach the bottom of it. The
+                // component is components/ScrollList.qml as it stands: it clips,
+                // it stops at its bounds, and it takes the wheel only while
+                // there is somewhere to go -- which is the behaviour wanted
+                // here too, since the sheet is a modal and there is nothing
+                // behind it that should be scrolling instead.
                 //
-                // ONLY THE COLUMNS SCROLL. The header and "Esc to close" are
+                // ONLY THE SECTIONS SCROLL. The title and "Esc to close" are
                 // above this and stay where they are: the one thing somebody
-                // opening a sheet they cannot read needs to keep in sight is
-                // how to shut it.
+                // opening a sheet they cannot read needs to keep in sight is how
+                // to shut it.
                 ScrollList {
                     id: list
 
                     visible: Compositor.can("bindsIntrospection")
                     width: root.contentWidth
-                    contentHeight: columnsRow.implicitHeight
+                    contentHeight: sections.implicitHeight
 
-                    // The bar for this one is up in the card, in padding that
-                    // is empty anyway -- see the note beside it for why here is
-                    // the wrong place for it.
+                    // The bar for this one is up in the card, in padding that is
+                    // empty anyway -- see the note beside it for why here is the
+                    // wrong place for it.
                     showScrollBar: false
 
-                    // AS TALL AS THE COLUMNS WANT, UP TO WHAT IS LEFT. What is
-                    // left is the screen, less the margin around the sheet,
-                    // less the card's own padding, less the header and the
-                    // space under it. Where the columns are shorter than that
-                    // -- which is every landscape screen here -- this is their
-                    // own height, the card shrinks to them as it always did,
-                    // and nothing scrolls.
-                    height: Math.min(columnsRow.implicitHeight,
+                    // AS TALL AS THE SECTIONS WANT, UP TO WHAT IS LEFT. What is
+                    // left is the screen, less the margin around the sheet, less
+                    // the card's own padding, less the title. Where the sections
+                    // are shorter than that this is their own height, the card
+                    // shrinks to them, and nothing scrolls.
+                    height: Math.min(sections.implicitHeight,
                                      root.availableHeight - root.cardPadding * 2
-                                         - header.height - layout.spacing)
+                                         - header.height)
 
-                    Row {
-                        id: columnsRow
+                    Column {
+                        id: sections
 
-                        spacing: root.columnGap
+                        width: root.contentWidth
+                        spacing: 0
 
                         Repeater {
-                            model: root.columns
+                            model: root.groups
 
                             Column {
-                                id: column
+                                id: group
 
                                 required property var modelData
 
-                                width: root.columnWidth
-                                spacing: 18
+                                // From the Column above, which is given an
+                                // explicit width -- a read of `parent` rather
+                                // than of an id outside this delegate.
+                                width: parent.width
+                                spacing: 0
 
+                                // ---- Section header ----
+                                //
+                                // Body Strong with the Toolkit's own 30 above
+                                // and 6 below. No rule under it, no accent and
+                                // no glyph: a Settings section header is
+                                // TextFillColorPrimary text and the space around
+                                // it, and anything more is a divider Windows
+                                // does not draw.
+                                Text {
+                                    text: group.modelData.name
+                                    topPadding: root.sectionHeaderAbove
+                                    bottomPadding: root.sectionHeaderBelow
+
+                                    font.family: Theme.fontFamily
+                                    font.pointSize: Fluent.bodySize
+                                    font.weight: Fluent.strongWeight
+                                    color: Theme.textOnSurface
+
+                                    Behavior on color {
+                                        ColorAnimation { duration: Theme.recolorDuration }
+                                    }
+                                }
+
+                                // ---- The binds ----
                                 Repeater {
-                                    model: column.modelData
+                                    model: group.modelData.binds
 
-                                    Column {
-                                        id: group
-
+                                    BindRow {
                                         required property var modelData
 
-                                        width: column.width
-                                        spacing: 6
+                                        width: group.width
+                                        keys: modelData.keys
+                                        label: modelData.text
+                                        gutterWidth: root.keyGutter
+                                        gap: root.rowGap
+                                        chipPadding: root.chipPadding
+                                        chipSpacing: root.chipSpacing
 
-                                        // ---- Category heading ----
-                                        Row {
-                                            spacing: 8
-
-                                            Text {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                text: Icons.category(group.modelData.name)
-                                                font.family: Theme.fontFamily
-                                                font.pointSize: Theme.iconSize - 1
-                                                color: Theme.primary
-
-                                                Behavior on color {
-                                                    ColorAnimation { duration: Theme.recolorDuration }
-                                                }
-                                            }
-
-                                            Text {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                text: group.modelData.name
-                                                font.family: Theme.fontFamily
-                                                font.pointSize: Theme.fontSize
-                                                font.weight: Font.Bold
-                                                // Letterspaced and in the accent:
-                                                // the headings are signposts, and
-                                                // at this size weight alone does
-                                                // not separate them enough from
-                                                // the rows under them.
-                                                font.letterSpacing: 0.8
-                                                color: Theme.primary
-
-                                                Behavior on color {
-                                                    ColorAnimation { duration: Theme.recolorDuration }
-                                                }
-                                            }
-                                        }
-
-                                        Rectangle {
-                                            width: column.width
-                                            height: 1
-                                            color: Theme.outlineVariant
-
-                                            Behavior on color {
-                                                ColorAnimation { duration: Theme.recolorDuration }
-                                            }
-                                        }
-
-                                        // ---- The binds ----
-                                        Repeater {
-                                            model: group.modelData.binds
-
-                                            BindRow {
-                                                required property var modelData
-
-                                                width: column.width
-                                                keys: modelData.keys
-                                                label: modelData.text
-                                                gutterWidth: root.keyGutter
-                                                gap: root.rowGap
-                                                chipPadding: root.chipPadding
-                                                chipSpacing: root.chipSpacing
-
-                                                // The face the gutter above
-                                                // was measured in, handed to
-                                                // the chip that is drawn in
-                                                // it. See chipMetrics.
-                                                chipFont: chipMetrics.font
-                                            }
-                                        }
+                                        // The face the gutter above was measured
+                                        // in, handed to the chip that is drawn
+                                        // in it. See chipMetrics.
+                                        chipFont: chipMetrics.font
                                     }
                                 }
                             }
@@ -725,11 +675,11 @@ PanelWindow {
         }
     }
 
-    // WHERE THE LIST COMES FROM. Nothing here runs a command any more: each
-    // compositor backend produces the same shape -- keys already in chips, a
-    // category and a description -- from whatever source it has, which is a
-    // socket on one flavor and the config file on the other. This module only
-    // groups them and draws.
+    // WHERE THE LIST COMES FROM. Nothing here runs a command: each compositor
+    // backend produces the same shape -- keys already in chips, a category and a
+    // description -- from whatever source it has, which is a socket on one
+    // flavour and the config file on the other. This surface only groups them
+    // and draws.
     //
     // Categories are collected in ARRIVAL order, which is the order they are
     // written in the config, and only then sorted into categoryOrder. That is

@@ -1,105 +1,51 @@
-// The wallpaper carousel: one fullscreen sheet with the whole collection on a
-// curve, the one you would apply in the middle of it.
+// The wallpaper picker: Personalisation, Background -- a grid of thumbnails
+// over a dimmed desktop.
 //
-// IT REPLACES THREE THINGS AT ONCE, and that is the point of it. There used to
-// be two keybinds that changed the wallpaper without showing it -- SUPER +
-// SHIFT + W for the next one alphabetically, SUPER + SHIFT + A for a random
-// one -- and a strip of small thumbnails inside the launcher, reached by
-// typing ">" and picking "Wallpaper". Three entry points, none of which let
-// you SEE the picture at the size it is about to be shown at. A wallpaper is
-// chosen by looking; this is the surface that lets you look.
+// A GRID AND NOT A COVERFLOW, WHICH IS THE WHOLE OF THE REDRAW. genesis puts
+// the collection on a curve with the candidate blown up in the middle, and
+// argues for it: a carousel answers "what do I want next", one picture at a
+// time. That is a good answer to a different question than the one Windows
+// asks. Windows' Background page is a grid of small, equal thumbnails with the
+// applied one ringed in the accent -- it answers "which of these is on my
+// desktop, and which do I want instead" in one look, and every tile is the same
+// size because none of them is privileged until you pick it.
 //
-// THE SHAPE IS A COVERFLOW and not a grid, which is the other obvious answer
-// and is the one the settings window used to carry. A grid answers "which of
-// these fifty is applied" -- it shows many small pictures at once. This
-// answers "what do I want next", which is a question you take one picture at a
-// time: the centred card is as large as the sheet can afford, its neighbours
-// are legible enough to aim at, and the rest of the collection is implied by
-// the fan running off both edges.
+// SO THE FAN IS GONE, AND SO IS EVERYTHING THAT EXISTED TO SERVE IT: the
+// PathView and its seven PathAttribute nodes, the scale ramp, the stacking
+// order, the two off-screen slots a delegate was created and destroyed in, and
+// the click that meant "bring this one to the middle" rather than "use this
+// one". In a grid a click means apply, which is what a click on a Windows
+// thumbnail means.
 //
-// WHAT IT COSTS TO HAVE OPEN, because the answer was not obvious and is worth
-// keeping. Nearly all of the work that used to be here was self-inflicted --
-// decoding 4K originals to fill card-sized thumbnails, a live layer per card
-// feeding the corner mask, and playing the 4K wallpaper itself. See the
-// thumbnail cache in Config and the shared mask below.
+// AND THE LIVE PREVIEW WENT WITH IT, which is the one loss worth arguing rather
+// than announcing. genesis flips through numbered JPEGs on every card showing a
+// video wallpaper, and its header carries the measurements that justified it:
+// five cards flipping cost 29.8% of a core against 5.1% for five stills, which
+// is affordable when there are five cards. A grid shows twenty or more at once
+// and the cost is per card, so the same design here is a picker that spends a
+// core and a half to animate thumbnails the size of a business card. Windows'
+// own Recent-images grid is still frames. The frame sequences wallpaper-switch
+// writes are not wasted -- genesis still plays them, and this file still points
+// its tiles at the same cached still frame ffmpeg pulled out of each video.
 //
-// EVERY CARD YOU CAN SEE MOVES, by flipping through JPEGs, and that is the one
-// design decision here that was settled by measurement rather than by argument,
-// so the measurements stay. It used to be a QtMultimedia MediaPlayer playing a
-// small h264 copy of the wallpaper -- on the centred card alone, because a
-// second player was unaffordable -- and stepping through the fan was not
-// fluid.
+// WHAT DID NOT CHANGE, and must not:
 //
-// Measured on THIS machine -- an RTX 5070 on driver 610.57.04, where
-// qt6-multimedia-ffmpeg decodes through NVDEC -- against the wallpapers in this
-// collection. Five cards at 819x461 on a 2560x1440 surface, the fan under a
-// continuous animation, frame pacing from a FrameAnimation, CPU from /proc:
+//   - `wallpaper-switch set <path>`, spawned as a list and never through a
+//     shell. The script is what also regenerates the palette and pushes the new
+//     accent into the compositor; awww alone would change the picture and
+//     nothing else.
+//   - The reset-on-open block. A theme swap does not replay it, so opening on
+//     the applied wallpaper, and asking for thumbnails a new file has none of
+//     yet, have to be right in this file.
+//   - The folder listing's guard, and that it is driven from `status` rather
+//     than `count`. A rename changes every path and leaves the count alone;
+//     tests/qml-rules.sh has a rule about it and this is the file that rule was
+//     written for.
 //
-//   five still cards, nothing moving        5.1% of a core   306 MB
-//   one MediaPlayer, 960x540 at 24 fps      9.8%             622 MB
-//   one MediaPlayer, 480x270 at 15 fps      9.9%             594 MB
-//   five MediaPlayers, 960x540              19.6%            954 MB
-//   one card flipping JPEGs at 15 fps       9.7%             311 MB
-//   five cards flipping JPEGs               29.8%            320 MB
-//
-// and, stepping to the next card every 500 ms, which is the gesture the whole
-// complaint was about:
-//
-//   MediaPlayer built and torn down per step   65.0%   p99 frame 249 ms, 6.7% late
-//   one MediaPlayer, source re-pointed          66.2%   p99 frame 332 ms, 6.8% late
-//   JPEG sequences, sources rotating            31.3%   p99 frame  19 ms, 0.3% late
-//
-// THE COST WAS NEVER THE DECODING. A MediaPlayer costs the same whatever you
-// feed it -- the two rows above differ by a tenth of a point across a 4x
-// difference in pixels -- because the bill is a CUDA context: two
-// `cuda-EvtHandlr` threads burning a flat 3.2% of a core doing nothing, and
-// 412 MB of VRAM, for as long as a player exists. On Intel or AMD that would be
-// VA-API and those threads would not be there; this tax is specific to this
-// machine. What made the fan stutter was CONSTRUCTION: building or destroying a
-// player costs 250 to 466 ms with a third of it on the GUI thread, and
-// re-pointing an existing one at another file is just as expensive, because Qt
-// rebuilds the decoder either way. Five players kept permanently alive were
-// perfectly fluid. There was simply no way to change WHICH video was playing
-// without paying a quarter of a second for it.
-//
-// So nothing here decodes video any more, and everything that existed to hide
-// that quarter of a second went with it: the pause-while-moving gate, the
-// settle timer, the warmup delay before a player was allowed to exist, and the
-// crossfade that covered the swap from still to video. A frame flip costs
-// nothing to start or stop, so none of them have anything left to protect.
-//
-// AND THE ONE-CARD RULE WENT WITH THEM, which took a second pass to notice. It
-// was never a statement about what a wallpaper picker should look like -- it
-// was rationing. A player was 9.8% of a core and 300 MB whether it was showing
-// you anything or not, so five of them were unthinkable and the centre got the
-// only one. Frames cost what they draw: five cards flipping is 29.8% of a core
-// against one card's 9.7%, but 320 MB of RSS against 311, and the rows above
-// say plainly that nothing arrives late either way -- five cards flipping WHILE
-// stepping through the fan was 0.26% late frames and a p99 of 19 ms. A picker
-// whose four other pictures are frozen is answering the question worse than it
-// needs to, and it is no longer paying for the privilege.
-//
-// The carousel answers "what will my desktop look like", and for a live
-// wallpaper the answer moves. It should move on every card that is showing one.
-//
-// THE NUMBERS ARE FROM A 60 Hz HEADLESS RIG, not from this desktop's 165 Hz
-// screen, and not from this file -- they come from a harness that reproduced
-// the card geometry, the masking and the media path and nothing else. Read them
-// as ratios between the rows rather than as what the shell draws. The per-frame
-// costs are the same at any refresh rate; there are simply 2.75x more frames
-// here.
-//
-// A PathView AND NOT A HAND-ROLLED ROW OF TRANSFORMS. The scale, the stacking
-// order, the fade at the ends and the drop along the arc are all one
-// interpolation along a path, which is what PathAttribute is for. Doing it by
-// hand means writing that interpolation again, badly, in five bindings per
-// card.
-//
-// GLASS, LIKE THE POWER MENU AND THE CHEATSHEET. Theme.glass() and not an
-// alpha picked here: the blur rule in the compositor config ignores anything
-// below Theme.glassAlpha, so a hand-picked value falls out of the blur
-// entirely and the sheet goes from frosted wallpaper to a flat tint over
-// perfectly sharp windows.
+// NO qs.components AT ALL, and that stays true. This surface draws its own
+// scrolling -- a GridView, which clips and flicks on its own -- rather than
+// reaching for ScrollList, and there is no scroll bar over a grid of pictures
+// because the pictures themselves are the position indicator.
 
 import Quickshell
 import Quickshell.Io
@@ -109,35 +55,71 @@ import Qt.labs.folderlistmodel
 import QtQuick.Effects
 import qs
 import qs.modules.wallpaper
+// Fluent lives one directory up, and without this line the failure is at
+// runtime, per read: "ReferenceError: Fluent is not defined".
+import ".."
 
 PanelWindow {
     id: root
 
-    // The ShellScreen this carousel belongs to, from Variants in shell.qml.
+    // The ShellScreen this picker belongs to, from Variants in shell.qml.
     required property var modelData
 
-    // ---------------- The card ----------------
+    // ---------------- How big the page is allowed to be ----------------
     //
-    // A CARD IS A SCALE MODEL OF THE MONITOR, so its aspect comes from the
-    // screen rather than from a number here. The reference this was built from
-    // showed portrait phone wallpapers; cropping a 16:9 desktop wallpaper into
-    // a portrait card would be showing you a picture that is not the one you
-    // are choosing.
+    // OURS, and the same 60 the cheatsheet keeps for the same reason: it is the
+    // breathing room a window wants around itself so that it reads as laid over
+    // the desktop rather than as a new desktop.
+    readonly property int screenMargin: 60
+
+    readonly property int availableWidth: Math.max(0, (root.modelData?.width ?? 0) - root.screenMargin * 2)
+    readonly property int availableHeight: Math.max(0, (root.modelData?.height ?? 0) - root.screenMargin * 2)
+
+    // SettingsCardPadding, the same page inset the cheatsheet takes.
+    readonly property int cardPadding: Fluent.cardPadding
+
+    readonly property int contentRoom: Math.max(0, root.availableWidth - root.cardPadding * 2)
+
+    // NO MaxWidth HERE, unlike the cheatsheet, and the difference is deliberate.
+    // The Toolkit's 1000 is what keeps a page of TEXT to a line length somebody
+    // can track back from; a grid of pictures has no line to track and capping
+    // it would throw away the columns a wide monitor is for.
+
+    // ---------------- A tile ----------------
+    //
+    // A TILE IS A SCALE MODEL OF THE MONITOR, so its aspect comes from the
+    // screen rather than from a number here. Cropping a 16:9 desktop wallpaper
+    // into a squarer tile would be showing a picture that is not the one being
+    // chosen.
     readonly property real screenAspect: (root.modelData?.width ?? 16) / (root.modelData?.height ?? 9)
 
-    // Height-driven, then capped against the width. The height is what leaves
-    // room for the name under the fan; the cap is what keeps an ultrawide
-    // monitor from producing a centre card so wide that its neighbours are
-    // pushed off screen.
-    readonly property int cardWidth: Math.round(Math.min(
-        (root.modelData?.height ?? 1080) * 0.32 * root.screenAspect,
-        (root.modelData?.width ?? 1920) * 0.34))
-    readonly property int cardHeight: Math.round(root.cardWidth / root.screenAspect)
+    // OURS. Microsoft publishes no tile size for the Personalisation grid. A
+    // sixth of the screen's width is what puts five tiles across the 2560-wide
+    // monitor this was drawn on -- which is what that page shows -- and fewer,
+    // rather than narrower ones, on the portrait screen beside it.
+    readonly property int tileTarget: Math.round((root.modelData?.width ?? 1920) * 0.16)
 
-    // How much is cut off each corner. On the carousel and not on the card,
-    // because the mask that does the cutting is shared by every card -- see
-    // cardMask below.
-    readonly property int cardRadius: Theme.cardRadius - 6
+    // SettingsCardSpacing: the gap Windows leaves between two cards, which is
+    // what a tile is. It is used as the tile's INSET inside its cell, so the gap
+    // between two pictures is twice it and the backplate that lights up on hover
+    // is the frame it leaves around each one.
+    readonly property int tileInset: Theme.groupSpacing
+
+    readonly property int columns: {
+        if (root.contentRoom <= 0)
+            return 1;
+        return Math.max(1, Math.floor(root.contentRoom / root.tileTarget));
+    }
+
+    readonly property int cellWidth: Math.floor(root.contentRoom / root.columns)
+    readonly property int thumbWidth: Math.max(1, root.cellWidth - root.tileInset * 2)
+    readonly property int thumbHeight: Math.max(1, Math.round(root.thumbWidth / root.screenAspect))
+    readonly property int cellHeight: root.thumbHeight + root.tileInset * 2
+
+    // ONE READ INSTEAD OF TWO, for the delegate. Every read of an id from
+    // outside a delegate is a read qmllint cannot check, so the two numbers a
+    // tile needs to decode its picture at travel as one value.
+    readonly property size thumbSize: Qt.size(root.thumbWidth, root.thumbHeight)
 
     // ---------------- The collection ----------------
     //
@@ -145,50 +127,48 @@ PanelWindow {
     // shelling out to `ls` for something the toolkit already does would be a
     // process and a parser for no gain.
     //
-    // Copied out into an array rather than fed to the view directly, because
-    // the entries carry a thumbnail URL that FolderListModel knows nothing
-    // about -- see rebuild() -- and because finding the applied wallpaper's
-    // index means walking the list.
+    // Copied out into an array rather than fed to the view directly, because the
+    // entries carry a thumbnail URL that FolderListModel knows nothing about --
+    // see rebuild() -- and because finding the applied wallpaper's index means
+    // walking the list.
     //
     // EVERY FIELD IS A PURE FUNCTION OF THE PATH, and it has to stay that way.
     // An entry describes a wallpaper; it must not describe the state of the
-    // thumbnail cache, however convenient that is for getting a card to look
-    // at a file again. Assigning this array is not free and is not quiet: a
-    // PathView handed a model it considers different destroys and rebuilds
-    // every delegate, each of which re-decodes its picture, and it resets
-    // currentIndex and offset to 0 on the way.
+    // thumbnail cache, however convenient that is for getting a tile to look at
+    // a file again. Assigning this array is not free and is not quiet: a view
+    // handed a model it considers different destroys and rebuilds every
+    // delegate, each of which re-decodes its picture, and it resets the current
+    // index on the way.
     //
-    // Config.wallpaperThumbsRevision in here is the specific mistake, because
-    // it looks like it costs nothing and it bumps on EVERY opening -- the open
-    // calls refreshWallpaperThumbs() and the process bumps when it exits
-    // whether it wrote a file or not. Measured offscreen on Qt 6.11.2, on a
-    // fan of eight already up and settled: with the revision in the entry, the
-    // bump rebuilt 8 of 8 delegates and re-set 8 of 8 image sources, which is
-    // a flash on screen every time the carousel is opened. Without it, 0 and
-    // 0. The cache tells the CARDS it has changed, in the delegate's
-    // Connections on Config, and never the model.
+    // Config.wallpaperThumbsRevision in here is the specific mistake, because it
+    // looks like it costs nothing and it bumps on EVERY opening -- the open
+    // calls refreshWallpaperThumbs() and the process bumps when it exits whether
+    // it wrote a file or not. Measured offscreen on Qt 6.11.2, on a fan of eight
+    // already up and settled: with the revision in the entry, the bump rebuilt 8
+    // of 8 delegates and re-set 8 of 8 image sources, which is a flash on screen
+    // every time the picker is opened. Without it, 0 and 0. The cache tells the
+    // TILES it has changed, in the delegate's Connections on Config, and never
+    // the model.
     property var entries: []
 
     readonly property int count: root.entries.length
 
-    // What the last accepted `entries` was built from, as one string: every
-    // path in listing order, NUL-separated so a filename cannot fake a
-    // boundary. It is a guard and not a cache -- see rebuild().
+    // What the last accepted `entries` was built from, as one string: every path
+    // in listing order, NUL-separated so a filename cannot fake a boundary. It
+    // is a guard and not a cache -- see rebuild().
     property string listing: ""
 
-    // Rebuild `entries` from the folder, and say whether that changed
-    // anything. FALSE MEANS THE CALLER SHOULD DO NOTHING ELSE: no thumbnail
-    // run, no re-reveal.
+    // Rebuild `entries` from the folder, and say whether that changed anything.
+    // FALSE MEANS THE CALLER SHOULD DO NOTHING ELSE: no thumbnail run, no
+    // re-reveal.
     //
-    // THE GUARD IS THE POINT, not a saving. The signal this is driven from
-    // fires for events that leave the listing exactly as it was -- `touch` on
-    // a wallpaper, a rename of some unrelated file that the filters do not
-    // even match -- and assigning `entries` is the expensive, visible thing
-    // described above: a PathView handed an array it considers different
-    // destroys every delegate, re-decodes every picture, and drops
-    // currentIndex and offset to 0. Measured on Qt 6.11.2 over one directory:
-    // startup plus five real changes rebuild six times with this in place,
-    // and a `touch` rebuilds not at all.
+    // THE GUARD IS THE POINT, not a saving. The signal this is driven from fires
+    // for events that leave the listing exactly as it was -- `touch` on a
+    // wallpaper, a rename of some unrelated file that the filters do not even
+    // match -- and assigning `entries` is the expensive, visible thing described
+    // above. Measured on Qt 6.11.2 over one directory: startup plus five real
+    // changes rebuild six times with this in place, and a `touch` rebuilds not
+    // at all.
     function rebuild(): bool {
         const out = [];
         for (let i = 0; i < folder.count; i++) {
@@ -197,26 +177,15 @@ PanelWindow {
                 name: folder.get(i, "fileName").replace(/\.[^.]+$/, ""),
                 path: path,
                 video: Config.isWallpaperVideo(path),
-                // NOT THE WALLPAPER ITSELF but the DIRECTORY of small frames
-                // that wallpaper-switch keeps beside the still ones: 960 px
-                // JPEGs at 15 fps against a 4K original at up to 120.
-                //
-                // EMPTY FOR A STILL, and empty for nothing else: this is the
-                // name the directory WOULD have, worked out from the extension,
-                // and nothing here goes to disk to find out whether it is
-                // there. A video whose frames have not been built yet gets a
-                // card pointed at a file that does not exist, which is what
-                // card.framesMissing below is for.
-                previewUrl: Config.wallpaperPreviewUrl(path),
-                // NEVER the wallpaper itself either: a cached thumbnail for a
-                // still, the extracted frame for a video. See the note on
-                // Config.wallpaperThumb -- the short version is that decoding
-                // a 4K PNG to fill a card costs a fifth of a second.
+                // NEVER the wallpaper itself: a cached thumbnail for a still,
+                // the extracted frame for a video. See the note on
+                // Config.wallpaperThumb -- the short version is that decoding a
+                // 4K PNG to fill a tile costs a fifth of a second.
                 thumbUrl: Config.wallpaperThumbUrl(path),
                 // Where to go when that file is not there, which is any
-                // collection the script has not been over yet. Only for
-                // stills: an Image pointed at an mp4 fails just as hard as one
-                // pointed at nothing.
+                // collection the script has not been over yet. Only for stills:
+                // an Image pointed at an mp4 fails just as hard as one pointed
+                // at nothing.
                 fullUrl: Config.isWallpaperVideo(path) ? "" : Config.wallpaperFullUrl(path)
             });
         }
@@ -234,8 +203,8 @@ PanelWindow {
         id: folder
 
         // From Config and not a literal here: the folder is a setting, and the
-        // settings page lists the same collection. A copy of the path in each
-        // of them is how one of the two silently stops agreeing with the other.
+        // settings page lists the same collection. A copy of the path in each of
+        // them is how one of the two silently stops agreeing with the other.
         folder: `file://${Config.wallpaperDir}`
         nameFilters: Config.wallpaperNameFilters
         showDirs: false
@@ -246,27 +215,25 @@ PanelWindow {
         //
         // The model fills asynchronously, so the array cannot be built at
         // construction; something has to say when the listing is ready. Count
-        // was that something, and it is blind in exactly one direction: a
-        // RENAME changes every path in the folder and leaves the number of
-        // files alone, so `countChanged` never fires. The list kept the old
-        // name and never learned the new one, and the card for the old name
-        // went blank -- the thumbnail run below sweeps the cache entry for a
-        // file that is no longer there, and the fallback to the original is a
-        // path that no longer exists either. Adding or deleting anything at
-        // all put it right, which is a fine description of a bug and no way to
-        // use a picture folder.
+        // was that something, and it is blind in exactly one direction: a RENAME
+        // changes every path in the folder and leaves the number of files alone,
+        // so `countChanged` never fires. The list kept the old name and never
+        // learned the new one, and the tile for the old name went blank -- the
+        // thumbnail run sweeps the cache entry for a file that is no longer
+        // there, and the fallback to the original is a path that no longer
+        // exists either. Adding or deleting anything at all put it right, which
+        // is a fine description of a bug and no way to use a picture folder.
         //
-        // Measured on Qt 6.11.2, every mutation of the directory -- rename,
-        // add, remove, a file renamed out of the filters -- produces exactly
-        // one `Loading` -> `Ready` cycle, about a millisecond after the event,
-        // and the rows are fully up to date by the time `Ready` arrives.
-        // Renames emit `dataChanged` and nothing else; adds and removes emit
-        // a remove-all/insert-all PAIR, which is why the row signals are not
-        // used here either -- they would fire this twice for one change.
+        // Measured on Qt 6.11.2, every mutation of the directory -- rename, add,
+        // remove, a file renamed out of the filters -- produces exactly one
+        // `Loading` -> `Ready` cycle, about a millisecond after the event, and
+        // the rows are fully up to date by the time `Ready` arrives. Renames
+        // emit `dataChanged` and nothing else; adds and removes emit a
+        // remove-all/insert-all PAIR, which is why the row signals are not used
+        // here either -- they would fire this twice for one change.
         //
         // `Ready` also arrives for events that changed nothing visible, and
-        // rebuild()'s guard is what absorbs those. See it for why assigning
-        // `entries` for nothing is not free.
+        // rebuild()'s guard is what absorbs those.
         onStatusChanged: {
             if (folder.status !== FolderListModel.Ready)
                 return;
@@ -284,10 +251,10 @@ PanelWindow {
 
     // ---------------- What is applied right now ----------------
     //
-    // A READING, NOT A CONTROL -- the same one the settings page takes, from
-    // the same file. wallpaper-switch writes it after the backend has accepted
-    // the image, so the "Applied" line below lands about a crossfade after the
-    // click and does not move at all if the script failed.
+    // A READING, NOT A CONTROL -- the same one the settings page takes, from the
+    // same file. wallpaper-switch writes it after the backend has accepted the
+    // image, so the ring below lands about a crossfade after the click and does
+    // not move at all if the script failed.
     //
     // watchChanges only emits fileChanged(); reloading is the handler's job.
     // Without the reload this reads the file once at startup and then shows
@@ -300,59 +267,28 @@ PanelWindow {
         path: `${Quickshell.env("HOME")}/.cache/wallpaper-current`
         watchChanges: true
         onFileChanged: reload()
-        // A machine that has never changed its wallpaper has no state file.
-        // That is a first run, not an error to print on every launch.
+        // A machine that has never changed its wallpaper has no state file. That
+        // is a first run, not an error to print on every launch.
         printErrors: false
     }
 
-    // OPEN ON THE ONE THAT IS APPLIED. Without this the carousel opens wherever
-    // it was left, which for the common case -- open it, look, change your
-    // mind, Escape -- means it opens somewhere arbitrary and the first thing
-    // you have to do is find your way back.
+    // OPEN ON THE ONE THAT IS APPLIED. Without this the picker opens wherever it
+    // was left, which for the common case -- open it, look, change your mind,
+    // Escape -- means it opens somewhere arbitrary and the first thing you have
+    // to do is find your way back.
     //
-    // positionViewAtIndex and not `currentIndex = i`: the second animates the
-    // whole fan past you at open time, which is a lot of movement to say
-    // "nothing has changed yet".
+    // positionViewAtIndex and not a scroll: at open time there is nothing to
+    // animate past, and a grid that visibly scrolls itself into place is a lot
+    // of movement to say "nothing has changed yet".
     function revealCurrent(): void {
         if (root.currentPath === "")
             return;
 
         const i = root.entries.findIndex(e => e.path === root.currentPath);
-        if (i >= 0)
-            view.positionViewAtIndex(i, PathView.Center);
-    }
-
-    // ---------------- The clock every preview flips on ----------------
-    //
-    // ONE TIMER FOR THE WHOLE SHEET, and not one per card, which is the second
-    // way this could have been built and is worth saying why it was not.
-    //
-    // The tick is a RATE LIMIT, not a metronome. A card does not draw the frame
-    // the tick asked for -- it asks the hidden Image to load it and swaps when
-    // that reports Ready, which happens whenever the loader thread gets to it.
-    // So the cards are already out of phase with each other by however long
-    // their JPEGs took, and five timers would not make them any more organic
-    // than they already are. What five timers WOULD buy is five wakeups at
-    // fifteen hertz to do the work of one, on a surface that is trying to spend
-    // its budget on the fan.
-    //
-    // Gated on the window and nothing finer. A tick with no video on screen
-    // walks five delegates and returns, fifteen times a second, which is
-    // nothing next to a 2560x1440 sheet repainting at the refresh rate -- and
-    // the window is destroyed outright when the carousel is closed, so this
-    // does not exist at all for the part of the session that matters.
-    signal frameTick
-
-    Timer {
-        // From Config, which is where the number that has to agree with
-        // wallpaper-switch's WALLPAPER_PREVIEW_FPS lives. A disagreement there
-        // plays the loop fast or slow; it does not break it, which is why that
-        // one constant is allowed to be written down twice and the frame count
-        // is not.
-        interval: Math.round(1000 / Config.wallpaperPreviewFps)
-        repeat: true
-        running: root.visible
-        onTriggered: root.frameTick()
+        if (i >= 0) {
+            grid.currentIndex = i;
+            grid.positionViewAtIndex(i, GridView.Contain);
+        }
     }
 
     function apply(entry: var): void {
@@ -362,10 +298,10 @@ PanelWindow {
         // Close first, so the crossfade happens on the desktop rather than
         // behind a sheet that is on its way out.
         WallpaperState.close();
-        // wallpaper-switch and not awww: the script is what also regenerates
-        // the palette and pushes the new accent into the compositor. Applying
-        // the one already on screen is not a no-op either -- it reapplies,
-        // which is the way back after a matugen template has been edited.
+        // wallpaper-switch and not awww: the script is what also regenerates the
+        // palette and pushes the new accent into the compositor. Applying the one
+        // already on screen is not a no-op either -- it reapplies, which is the
+        // way back after a matugen template has been edited.
         Quickshell.execDetached(["wallpaper-switch", "set", entry.path]);
     }
 
@@ -373,16 +309,17 @@ PanelWindow {
     visible: WallpaperState.isOpen
 
     WlrLayershell.namespace: "quickshell-wallpaper"
-    // Overlay and not Top: this covers the bar and a fullscreen window alike.
+    // Overlay and not Top: this covers the taskbar and a fullscreen window
+    // alike.
     WlrLayershell.layer: WlrLayer.Overlay
-    // Exclusive, or the arrows, Enter and Escape never reach us: a layer
-    // surface that does not hold the keyboard is not sent a keystroke at all.
-    // Stated once and never flipped, like every other grabbing surface here --
+    // Exclusive, or the arrows, Enter and Escape never reach us: a layer surface
+    // that does not hold the keyboard is not sent a keystroke at all. Stated
+    // once and never flipped, like every other grabbing surface here --
     // `visible` already tears the whole surface down when the sheet is away.
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
-    // Anchors say WHERE, implicitWidth/implicitHeight say HOW BIG. Anchoring
-    // all four edges stretches the layer surface instead, and then the size the
+    // Anchors say WHERE, implicitWidth/implicitHeight say HOW BIG. Anchoring all
+    // four edges stretches the layer surface instead, and then the size the
     // compositor picked is not a size QML ever sees. Same as PowerMenu.
     anchors {
         top: true
@@ -393,13 +330,16 @@ PanelWindow {
     implicitHeight: root.modelData?.height ?? 0
 
     // Never reserve space, and never be pushed down by the bar's reservation:
-    // the sheet covers the bar rather than starting below it.
+    // the sheet covers the taskbar rather than starting above it.
     exclusionMode: ExclusionMode.Ignore
 
     color: "transparent"
 
     // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
 
+    // THE RESET-ON-OPEN BLOCK. A theme swap does not replay it, so everything an
+    // opening has to put right lives here rather than anywhere a swap could
+    // skip.
     Connections {
         target: WallpaperState
 
@@ -410,8 +350,8 @@ PanelWindow {
             sheet.forceActiveFocus();
             // A video added to the folder since the last look has no frame yet.
             Config.refreshWallpaperThumbs();
-            // Deferred: the view has just been made visible and has nothing
-            // laid out for positionViewAtIndex to position.
+            // Deferred: the view has just been made visible and has nothing laid
+            // out for positionViewAtIndex to position.
             Qt.callLater(root.revealCurrent);
         }
     }
@@ -425,29 +365,38 @@ PanelWindow {
         width: root.modelData?.width ?? 0
         height: root.modelData?.height ?? 0
 
-        color: Theme.glass(Theme.surface)
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
+        // SmokeFillColorDefault -- see PowerMenu.qml for the source and for why
+        // it is the one hex literal in this theme. 0x4D is 0.30, under the
+        // compositor's 0.84 ignore_alpha, so this fill is left out of the blur
+        // and the desktop behind it stays sharp. Which matters more here than
+        // anywhere else in the theme: the thing behind this sheet is the
+        // wallpaper you are about to replace, and blurring it would hide the one
+        // picture the surface exists to compare against.
+        color: "#4D000000"
 
         focus: true
 
         Keys.onEscapePressed: WallpaperState.close()
-        Keys.onLeftPressed: view.decrementCurrentIndex()
-        Keys.onRightPressed: view.incrementCurrentIndex()
-        Keys.onReturnPressed: root.apply(root.entries[view.currentIndex])
-        Keys.onEnterPressed: root.apply(root.entries[view.currentIndex])
+        Keys.onLeftPressed: grid.moveCurrentIndexLeft()
+        Keys.onRightPressed: grid.moveCurrentIndexRight()
+        Keys.onUpPressed: grid.moveCurrentIndexUp()
+        Keys.onDownPressed: grid.moveCurrentIndexDown()
+        Keys.onReturnPressed: root.apply(root.entries[grid.currentIndex])
+        Keys.onEnterPressed: root.apply(root.entries[grid.currentIndex])
         Keys.onPressed: event => {
-            // Home row for the same two moves, since the rest of the session is
-            // driven that way, and the key that opened it closes it -- a bare
-            // W, because while the sheet holds the keyboard the compositor bind
-            // still fires but the reflex once you are looking at it is the
-            // letter on its own. Same argument the cheatsheet makes for "/".
+            // Home row for the same four moves, since the rest of the session is
+            // driven that way, and the key that opened it closes it -- a bare W,
+            // because while the sheet holds the keyboard the compositor bind
+            // still fires but the reflex once you are looking at it is the letter
+            // on its own. Same argument the cheatsheet makes for "/".
             if (event.key === Qt.Key_H)
-                view.decrementCurrentIndex();
+                grid.moveCurrentIndexLeft();
             else if (event.key === Qt.Key_L)
-                view.incrementCurrentIndex();
+                grid.moveCurrentIndexRight();
+            else if (event.key === Qt.Key_K)
+                grid.moveCurrentIndexUp();
+            else if (event.key === Qt.Key_J)
+                grid.moveCurrentIndexDown();
             else if (event.key === Qt.Key_W)
                 WallpaperState.close();
             else
@@ -456,99 +405,42 @@ PanelWindow {
             event.accepted = true;
         }
 
-        // The empty space dismisses. It sits BELOW the fan in the file, so the
-        // cards' own MouseAreas take their clicks first.
+        // The empty space dismisses. It sits BELOW the card in the file, so the
+        // card takes its own clicks first.
         MouseArea {
             anchors.fill: parent
             onClicked: WallpaperState.close()
         }
 
-        // The wheel walks the fan. PathView has no wheel handling of its own
-        // -- it is the flicking, not the scrolling, that it implements -- and
-        // there is nothing underneath this to catch what it drops either: the
-        // view is `interactive: false` a few lines down, so there is no
-        // Flickable taking the events this handler does not. Whatever goes
-        // wrong here goes wrong in silence and in full.
-        //
-        // EVERY DEVICE, which is the lesson components/ScrollList.qml was
-        // written for and states at length. Naming device types fails by
-        // declining events without saying so, and qtbase types this machine's
-        // mouse as a TouchPad whenever the compositor advertises
-        // zwp_pointer_gestures_v1 -- which niri does. Mouse | TouchPad
-        // happens to cover that particular surprise; the point of AllDevices
-        // is that there is no device this surface wants to refuse, so there
-        // is nothing left to be surprised by.
-        //
-        // A NOTCH WITH NO ANGLE IN IT USED TO STEP BACKWARDS, and that is the
-        // bug this replaces. The test was `angleDelta.y < 0 ||
-        // angleDelta.x > 0` with `else` meaning "go back", so every wheel
-        // event carrying no angle at all took the else: measured with
-        // qmltestrunner, feeding the old handler a zero-delta wheel event
-        // moved the fan one card BACKWARDS. Those events are ordinary rather
-        // than theoretical -- a device that reports a continuous scroll fills
-        // in pixelDelta and leaves angleDelta at zero, and the phase events
-        // that begin and end a touchpad gesture carry no delta on either.
-        //
-        // So the angle is read first and the pixels stand in for it, exactly
-        // as ScrollList does, and a nonzero step is required in one direction
-        // or the other before the fan moves at all. Down or right is forward;
-        // the vertical axis decides when both report, which is the one thing
-        // here that differs from the old test -- it consulted the horizontal
-        // even when the vertical had already answered.
-        //
-        // ONE CARD PER EVENT and not per pixel: the step this drives is
-        // discrete, so what paces it is the stream of events rather than the
-        // size of any one of them. A device that reports a continuous scroll
-        // would therefore step per event, which is untested here because no
-        // device on this machine reports that way. An accumulator is the fix
-        // if it ever turns out to be too fast; it is not invented today for a
-        // device nobody has.
-        WheelHandler {
-            acceptedDevices: PointerDevice.AllDevices
-
-            onWheel: event => {
-                const y = event.angleDelta.y !== 0 ? event.angleDelta.y
-                    : event.pixelDelta.y;
-                const x = event.angleDelta.x !== 0 ? event.angleDelta.x
-                    : event.pixelDelta.x;
-                const step = y !== 0 ? -y : x;
-
-                if (step > 0)
-                    view.incrementCurrentIndex();
-                else if (step < 0)
-                    view.decrementCurrentIndex();
-            }
-        }
-
         // ---------------- One mask, rendered once ----------------
         //
-        // EVERY CARD IS THE SAME SIZE. The fan's perspective is a transform --
-        // scale, not geometry -- so the rounded rectangle that cuts the corners
-        // off a card is identical for all seven of them, and there is no reason
-        // for seven copies of it.
+        // EVERY TILE IS THE SAME SIZE, so the rounded rectangle that cuts the
+        // corners off a picture is identical for all of them and there is no
+        // reason for one copy per tile.
         //
-        // AND IT COST A GREAT DEAL MORE THAN SEVEN RECTANGLES. Measured with
-        // the carousel open and NOTHING moving: 24% of a core with a live
-        // layer per card, 7% -- the shell's idle -- without them. Two live
+        // AND IT COST A GREAT DEAL MORE THAN A FEW RECTANGLES. Measured with the
+        // carousel this replaces open and NOTHING moving: 24% of a core with a
+        // live layer per card, 7% -- the shell's idle -- without them. Two live
         // layers and an effect per card keep marking each other dirty, so the
-        // whole screen re-rendered at the refresh rate to draw a picture that
-        // was not changing.
+        // whole screen re-rendered at the refresh rate to draw pictures that were
+        // not changing. A grid has more tiles than that fan had cards, so the
+        // saving is larger here, not smaller.
         //
         // A ShaderEffectSource with live: false is what breaks that: it renders
-        // its source once, hands the same texture to all seven cards for ever
-        // after, and asks for nothing else until the geometry changes. The
-        // source Rectangle is hidden -- hideSource -- and the texture is the
-        // only thing that survives.
+        // its source once, hands the same texture to every tile for ever after,
+        // and asks for nothing else until the geometry changes.
         Item {
             id: maskShape
 
-            width: root.cardWidth
-            height: root.cardHeight
+            width: root.thumbWidth
+            height: root.thumbHeight
             visible: false
 
             Rectangle {
                 anchors.fill: parent
-                radius: root.cardRadius
+                // ControlCornerRadius: a thumbnail is an in-page element, and
+                // in-page elements are 4. The 8 is for the window it sits in.
+                radius: Fluent.controlRadius
                 antialiasing: true
                 color: "black"
             }
@@ -558,23 +450,23 @@ PanelWindow {
             id: cardMask
 
             sourceItem: maskShape
-            width: root.cardWidth
-            height: root.cardHeight
+            width: root.thumbWidth
+            height: root.thumbHeight
             hideSource: true
             live: false
             visible: false
 
             // RENDERED ONCE IS NOT RENDERED FOR EVER, and this is the bill for
-            // `live: false`. Hiding the sheet destroys its layer surface and
-            // with it the scene graph resources behind it -- this texture
-            // included -- and a source that is not live never asks for another
-            // one. The mask came back EMPTY on the second opening, and an
-            // empty mask means MultiEffect cuts away everything it is given:
-            // cards with a border and a name and no picture inside them.
+            // `live: false`. Hiding the sheet destroys its layer surface and with
+            // it the scene graph resources behind it -- this texture included --
+            // and a source that is not live never asks for another one. The mask
+            // came back EMPTY on the second opening, and an empty mask means
+            // MultiEffect cuts away everything it is given: tiles with a border
+            // and no picture inside them.
             //
             // So it is scheduled on every opening, and on the two other things
-            // that can change under it: a different monitor, and so a
-            // different card size.
+            // that can change under it: a different monitor, and so a different
+            // tile size.
             onWidthChanged: cardMask.scheduleUpdate()
             onHeightChanged: cardMask.scheduleUpdate()
             Component.onCompleted: cardMask.scheduleUpdate()
@@ -589,714 +481,335 @@ PanelWindow {
             }
         }
 
-        PathView {
-            id: view
+        // ---------------- The page ----------------
+        Rectangle {
+            id: card
 
-            anchors.fill: parent
-
-            model: root.entries
-            pathItemCount: 7
-            // The centre of the path is where the current item sits, always.
-            // StrictlyEnforceRange is what makes "current" and "in the middle"
-            // the same thing rather than two states that drift apart.
-            preferredHighlightBegin: 0.5
-            preferredHighlightEnd: 0.5
-            highlightRangeMode: PathView.StrictlyEnforceRange
-            movementDirection: PathView.Shortest
-
-            // NOT INTERACTIVE, and that is what keeps "click the empty space to
-            // dismiss" working. An interactive PathView takes the press over
-            // the whole sheet -- it fills it -- and the MouseArea underneath
-            // never hears the click that was meant to close the carousel. The
-            // wheel above and the arrow keys are the ways through the fan;
-            // dragging a row of pictures with the mouse is not one anybody
-            // reaches for on a desktop.
-            interactive: false
-
-            // Deliberately shorter than Theme.animDuration. The fan has to keep
-            // up with the key rather than accompany it: at the interface's
-            // standard 220 ms, holding an arrow down feels like dragging the
-            // carousel behind the cursor. The same number, and the same reason,
-            // as the strip this replaces.
-            highlightMoveDuration: 90
-
-            // The curve the cards ride: a shallow arc, widest in the middle,
-            // fading out at both ends.
-            //
-            // THE FADE AT THE ENDS IS NOT DECORATION. pathItemCount is 7, so a
-            // card has to be created and destroyed somewhere; at full opacity
-            // that happens as a pop. The two outermost nodes are at zero
-            // opacity AND past the edge of the screen, which spends two of the
-            // seven slots on making the appearance invisible and leaves five
-            // cards to look at.
-            //
-            // EVERY CARD YOU CAN SEE IS FULLY OPAQUE, and the five on screen
-            // are the whole of that. The first version faded the outer ones to
-            // 0.5 and 0.85 for depth, and what depth actually looked like was
-            // the card BEHIND showing through the card in front, because the
-            // cards overlap by design. Distance is said with size and with the
-            // stacking order; transparency in a stack of overlapping
-            // photographs only ever says "broken". The ramp to zero survives
-            // only in the segment that runs off the edge of the screen.
-            //
-            // PathPercent on every node because the segments are NOT the same
-            // length -- the fan is tighter at the edges than in the middle --
-            // and without it PathView spaces the cards by path length and they
-            // land between the nodes instead of on them.
-            //
-            // FIVE CARDS ON SCREEN AND BOTH ENDS OFF IT. The seven slots are
-            // five to look at plus two that live past the edge, where a card
-            // is created and destroyed out of sight instead of popping into
-            // existence in front of you. They were only just outside before,
-            // at -0.03 and 1.03, which on a portrait monitor -- where a card
-            // is a third of the width of the screen -- left a sliver of each
-            // one clipped against the frame: seven cards visible, two of them
-            // cut. -0.2 and 1.2 clears them on any shape of monitor.
-            //
-            // THE GAPS BETWEEN THE OTHER FIVE ARE MEASURED FROM THE CARDS, not
-            // chosen for the look of the numbers: each node sits far enough
-            // from its neighbour that the smaller card is covered by about a
-            // seventh of its width and no more, and the outermost pair sits
-            // far enough in to leave a clear margin down each side. The first
-            // attempt spaced the seven evenly and the cards either side of the
-            // centre came out a third hidden, which is a picture you cannot
-            // judge and a target you cannot aim at.
-            path: Path {
-                startX: view.width * -0.2
-                startY: view.height * 0.52
-
-                PathAttribute { name: "itemScale"; value: 0.34 }
-                PathAttribute { name: "itemOpacity"; value: 0.0 }
-                PathAttribute { name: "itemZ"; value: 0 }
-
-                PathLine { x: view.width * 0.10; y: view.height * 0.507 }
-                PathPercent { value: 1 / 6 }
-                PathAttribute { name: "itemScale"; value: 0.44 }
-                PathAttribute { name: "itemOpacity"; value: 1.0 }
-                PathAttribute { name: "itemZ"; value: 1 }
-
-                PathLine { x: view.width * 0.265; y: view.height * 0.487 }
-                PathPercent { value: 2 / 6 }
-                PathAttribute { name: "itemScale"; value: 0.66 }
-                PathAttribute { name: "itemOpacity"; value: 1.0 }
-                PathAttribute { name: "itemZ"; value: 2 }
-
-                PathLine { x: view.width * 0.5; y: view.height * 0.47 }
-                PathPercent { value: 3 / 6 }
-                PathAttribute { name: "itemScale"; value: 1.0 }
-                PathAttribute { name: "itemOpacity"; value: 1.0 }
-                PathAttribute { name: "itemZ"; value: 3 }
-
-                PathLine { x: view.width * 0.735; y: view.height * 0.487 }
-                PathPercent { value: 4 / 6 }
-                PathAttribute { name: "itemScale"; value: 0.66 }
-                PathAttribute { name: "itemOpacity"; value: 1.0 }
-                PathAttribute { name: "itemZ"; value: 2 }
-
-                PathLine { x: view.width * 0.90; y: view.height * 0.507 }
-                PathPercent { value: 5 / 6 }
-                PathAttribute { name: "itemScale"; value: 0.44 }
-                PathAttribute { name: "itemOpacity"; value: 1.0 }
-                PathAttribute { name: "itemZ"; value: 1 }
-
-                PathLine { x: view.width * 1.2; y: view.height * 0.52 }
-                PathPercent { value: 1 }
-                PathAttribute { name: "itemScale"; value: 0.34 }
-                PathAttribute { name: "itemOpacity"; value: 0.0 }
-                PathAttribute { name: "itemZ"; value: 0 }
-            }
-
-            delegate: Item {
-                id: card
-
-                required property int index
-                required property var modelData
-
-                readonly property bool centred: card.index === view.currentIndex
-
-                width: root.cardWidth
-                height: root.cardHeight
-
-                // The attached values are undefined for an item that has been
-                // pushed off the path, and an undefined scale is a card drawn
-                // at full size in the top left corner.
-                scale: card.PathView.onPath ? card.PathView.itemScale : 0
-                opacity: card.PathView.onPath ? card.PathView.itemOpacity : 0
-                z: card.PathView.onPath ? card.PathView.itemZ : 0
-                visible: card.PathView.onPath
-
-                // Set when the thumbnail turned out not to exist, which drops
-                // this card back to the wallpaper itself. Reset when the card
-                // is handed a different wallpaper: the delegates are recycled
-                // as the fan turns, and a card that inherited this flag would
-                // load a 4K original for a thumbnail that is perfectly fine.
-                property bool thumbMissing: false
-
-                // EVERYTHING LEARNT ABOUT THE OLD WALLPAPER GOES WITH IT. The
-                // same recycling that makes thumbMissing dangerous makes a
-                // remembered sequence length dangerous in a worse way: carried
-                // onto a shorter video it would loop past the end of it for
-                // ever, and onto a longer one it would show a third of it.
-                onModelDataChanged: {
-                    card.thumbMissing = false;
-                    card.frameCount = 0;
-                    card.frameShown = 0;
-                    card.framePending = 0;
-                    card.frontIsA = true;
-                    card.framesMissing = false;
-                }
-
-                // AND THE OTHER WAY A CARD LEARNS SOMETHING IT GOT WRONG: the
-                // file it asked for was not there at the time, and now it is.
-                //
-                // An Image pointed at a missing file reports Error and stops;
-                // both flags below latch that so the card does not spend the
-                // session asking. wallpaper-switch builds the thumbnails and
-                // the preview frames after the fact -- a wallpaper copied into
-                // the folder with the shell running is listed before ffmpeg has
-                // been near it -- and this bump is the shell being told that
-                // run has finished. Without it a card that latched stays blank,
-                // or stays on the 4K original, until the next restart.
-                //
-                // TO THE CARDS AND NOT TO THE MODEL, which is the whole point
-                // of doing it here. The version this replaces stamped the
-                // revision into every entry so that PathView would regenerate
-                // the delegates; it did clear the flags, by destroying the
-                // objects holding them, and it also rebuilt every card on
-                // screen on every opening -- a visible flash, reported from the
-                // desktop, for a cache that in the ordinary case had nothing
-                // new in it. See the note over `entries` for the measurement.
-                //
-                // COSTS NOTHING WHEN THERE IS NOTHING TO UNDO. Assigning false
-                // to a bool that is already false emits no change, so a card
-                // whose pictures were all there is untouched and nothing
-                // redraws. The retry is paid for only by the cards that failed,
-                // which is the one case where a redraw is what you want.
-                //
-                // A VIDEO'S STILL FRAME IS NOT RETRIED HERE, and that is not an
-                // oversight: fullUrl is empty for a video, so thumbMissing is
-                // never set for one and `picture` goes on pointing at the frame
-                // it could not load. The preview sequence covers it within a
-                // frame or two of restarting, which is the same run's other
-                // output, so there is nothing left to see underneath.
-                Connections {
-                    target: Config
-
-                    function onWallpaperThumbsRevisionChanged(): void {
-                        card.thumbMissing = false;
-                        card.framesMissing = false;
-                    }
-                }
-
-                Image {
-                    id: picture
-
-                    anchors.fill: parent
-                    source: card.thumbMissing
-                        ? card.modelData.fullUrl
-                        : card.modelData.thumbUrl
-
-                    onStatusChanged: {
-                        if (picture.status === Image.Error
-                            && !card.thumbMissing
-                            && card.modelData.fullUrl !== "")
-                            card.thumbMissing = true;
-                    }
-                    fillMode: Image.PreserveAspectCrop
-                    // Decoded at the size the CENTRE card is drawn at, and not
-                    // at the size this one happens to be: the scale is a
-                    // transform, so a card that shrinks and grows again would
-                    // otherwise re-decode a 4K photograph on every step of the
-                    // fan.
-                    sourceSize.width: root.cardWidth
-                    sourceSize.height: root.cardHeight
-                    asynchronous: true
-                    smooth: true
-
-                    // CACHED FOR A STILL AND NOT FOR A VIDEO, which is the
-                    // one place in this shell where that distinction is worth
-                    // making. It is about DECODING and nothing else, and the
-                    // rest of this note is the correction of what it used to
-                    // say.
-                    //
-                    // A FAILED LOAD IS NOT PINNED. This claimed that Qt
-                    // remembers a URL that failed and will not go back to disk
-                    // for it, so that a video listed before ffmpeg had pulled
-                    // a frame out of it would be blank for the rest of the
-                    // session unless the Image kept asking. If that were true
-                    // the retry above would repair nothing, so it was measured
-                    // rather than believed: offscreen on Qt 6.11.2, `cache:
-                    // true` and one sourceSize throughout, an Image asked for
-                    // a file that does not exist reports Error, and once the
-                    // file appears a NEW Image handed the same URL loads it --
-                    // at 360 ms and at 2 s after the failure, with the Image
-                    // that failed still alive beside it. What IS pinned is the
-                    // request, not the answer: an Image re-handed the source
-                    // it already holds emits nothing at all, which is a
-                    // different trap and the one advanceFrame guards below.
-                    //
-                    // So what is left is the decode. Caching is what keeps the
-                    // fan from decoding the same handful of stills over and
-                    // over as it turns -- measured at roughly half the cost of
-                    // the carousel with it on -- and a video's thumbnail is
-                    // the one picture on this sheet that is not worth a cache
-                    // entry, because the preview sequence covers it within a
-                    // frame or two of the card appearing and it is never asked
-                    // for again.
-                    cache: !card.modelData.video
-
-                    // NO `layer.enabled`, unlike every other masked image in
-                    // this shell. An Image is already a texture provider, so
-                    // MultiEffect can sample it directly; turning on a layer
-                    // wraps it in a SECOND texture that has to be re-rendered
-                    // from the image whenever the item is marked dirty, to draw
-                    // a picture that never changes. The pair of frames below
-                    // does take a layer, and that is not an inconsistency: two
-                    // Images cannot be one MultiEffect source without it.
-                    visible: false
-                }
-
-                MultiEffect {
-                    anchors.fill: parent
-                    source: picture
-                    maskEnabled: true
-                    maskSource: cardMask
-                    maskThresholdMin: 0.5
-                    maskSpreadAtMin: 1.0
-
-                    // OFF THE MOMENT A PREVIEW FRAME IS ON SCREEN, and there
-                    // is no fade between the two because there is nothing to
-                    // hide: 001.jpg is extracted at the same second as the
-                    // still frame, so the two are the same picture and the swap
-                    // is invisible. See preview_for in wallpaper-switch, which
-                    // seeks both to two seconds for exactly this reason.
-                    //
-                    // And it does come off, rather than being left to draw
-                    // under an opaque picture for ever: nothing in the scene
-                    // graph knows the sequence covers it, so without this the
-                    // card renders the still into a texture and runs the mask
-                    // shader over it again on every frame the sequence flips.
-                    visible: card.frameShown === 0
-                }
-
-                // ---- A LIVE WALLPAPER ACTUALLY MOVES HERE ----
-                //
-                // On every card that is showing one. Everywhere else in the
-                // shell a video wallpaper is the still frame ffmpeg pulled out
-                // of it, because an Image cannot decode an mp4. On this surface
-                // the still is a lie worth spending something on: the whole
-                // question the carousel answers is "what will my desktop look
-                // like", and for these files the answer moves.
-                //
-                // AND IT IS NOT THE WALLPAPER THAT MOVES. The collection is 4K
-                // -- one file is 4K at 120 fps -- so wallpaper-switch keeps a
-                // run of numbered 960 px JPEGs beside the still frames and this
-                // flips through them on the sheet's shared clock. See the
-                // header for why it is frames on a timer and not a video, and
-                // what that was measured against.
-                //
-                // ON SCREEN IS NOT THE SAME AS ON THE PATH, and that distinction
-                // is the whole of the condition below. pathItemCount is 7 but
-                // only FIVE cards are ever visible: the two outermost nodes sit
-                // past the edge of the sheet at zero opacity, which is where a
-                // delegate is created and destroyed out of sight. Those two are
-                // `PathView.onPath` and they are drawing nothing, so gating on
-                // onPath alone would quietly hand two invisible cards a JPEG
-                // decode apiece, fifteen times a second, for ever.
-                //
-                // The path already states which cards are visible -- that is
-                // what its itemOpacity ramp to zero IS -- so this reads the
-                // card's own opacity rather than inventing a second geometric
-                // test that could disagree with it. A card sliding in from the
-                // end node starts flipping a little before it has fully cleared
-                // the frame, which is the right way round: it is on screen by
-                // the time anyone can see it move.
-                readonly property bool hasFrames: card.modelData.previewUrl !== ""
-
-                readonly property bool playing: card.hasFrames
-                    && WallpaperState.isOpen
-                    && card.visible
-                    && card.opacity > 0
-
-                // ---- Where the sequence has got to ----
-                //
-                // HOW LONG THE SEQUENCE IS, DISCOVERED RATHER THAN TOLD. It
-                // depends on the video -- a clip shorter than the preview
-                // length yields fewer frames -- and on knobs that live in
-                // wallpaper-switch and can be overridden per run. A number
-                // written down here as well would be a second place for it to
-                // be, and the two would disagree the first time anyone touched
-                // either. So this asks for one frame past the last one that
-                // loaded, and the failure IS the answer: 0 means "not found
-                // yet", and it is filled in exactly once per card.
-                //
-                // That works only because a sequence directory is published
-                // whole -- wallpaper-switch writes into `.part` and moves it
-                // into place -- so a directory caught half built cannot teach
-                // this card a length that is too short and have it believe that
-                // for the rest of the card's life.
-                property int frameCount: 0
-
-                // What is on screen; 0 until the first frame has loaded, which
-                // is what keeps the still visible underneath until then.
-                property int frameShown: 0
-
-                // What is decoding, if anything. Also the "busy" flag: one load
-                // is in flight at a time, so a tick that arrives while the
-                // previous frame is still being decoded is dropped rather than
-                // queued. The preview runs a little slow on a slow disk instead
-                // of building a backlog.
-                property int framePending: 0
-
-                // Which of the two Images below is the one being shown.
-                property bool frontIsA: true
-
-                // Set when 001.jpg itself is not there, which is any video the
-                // script has not been over yet. Stops the clock rather than
-                // letting it ask for a file that does not exist fifteen times a
-                // second, and leaves the card on its still frame.
-                //
-                // TWO THINGS CLEAR IT and they are the two ways the answer can
-                // have changed: this card being handed a different wallpaper,
-                // and Config's thumbnail run finishing. Both are above.
-                // Clearing it is not quite enough on its own -- the hidden
-                // Image is still holding 001.jpg in its failed state, and an
-                // Image re-handed the source it already has says nothing --
-                // which is what advanceFrame clears for.
-                property bool framesMissing: false
-
-                // THE ONE FRAME AHEAD OF THE ONE ON SCREEN. Two Images and not
-                // one: an Image handed a new source has to decode it before it
-                // can draw it, and a single Image would be showing SOMETHING
-                // during that gap -- either the old frame, if Qt happens to
-                // keep it, or nothing, which at fifteen flips a second reads as
-                // a strobe. Loading into the hidden one and swapping when it
-                // reports Ready means the visible picture only ever changes
-                // from one finished frame to the next, and a slow decode costs
-                // a late preview frame rather than a blank card.
-                //
-                // THE TICK REACHES EVERY CARD, so the decision about whether
-                // this one should be moving is made HERE and only here. It used
-                // to be the `running` property of a Timer per card; folding it
-                // into the function is what let those five timers become one.
-                function advanceFrame(): void {
-                    if (!card.playing || card.framesMissing)
-                        return;
-
-                    // One load in flight at a time. A tick that arrives while
-                    // the previous frame is still decoding is dropped rather
-                    // than queued, so a slow disk plays the loop a little slow
-                    // instead of building a backlog it can never work off.
-                    if (card.framePending !== 0)
-                        return;
-
-                    const next = card.frameCount > 0
-                        ? (card.frameShown % card.frameCount) + 1
-                        : card.frameShown + 1;
-
-                    const url = Config.wallpaperPreviewFrameUrl(card.modelData.previewUrl, next);
-                    const back = card.frontIsA ? frameB : frameA;
-
-                    card.framePending = next;
-
-                    // THE FRAME WE WANT MAY ALREADY BE IN THE HIDDEN IMAGE, and
-                    // then nothing will ever tell us so. The two Images hold
-                    // frames two apart, so on a sequence of one or two frames
-                    // the wrap lands back on the one the hidden Image is still
-                    // carrying -- and assigning a source that has not changed
-                    // emits no status, so the card would simply stop. Rare
-                    // enough to be a fifth of a second of video, common enough
-                    // that "the preview froze" would be impossible to explain.
-                    if (back.source.toString() === url) {
-                        if (back.status === Image.Ready) {
-                            card.showPendingFrame();
-                            return;
-                        }
-
-                        // THE SAME SILENCE, FROM THE OTHER DIRECTION. This
-                        // Image is holding the answer it got when the file did
-                        // not exist, which is exactly the state framesMissing
-                        // was cleared out of a moment ago: the URL is the one
-                        // we want, the status is Error, and re-handing it the
-                        // source it already has emits nothing at all -- so
-                        // framePending would stay set and the card would never
-                        // ask again. Clearing it first is what makes the line
-                        // below a change. Measured: without this, a video whose
-                        // frames arrive mid-session stays frozen after the
-                        // retry; with it, the sequence starts.
-                        back.source = "";
-                    }
-
-                    back.source = url;
-                }
-
-                function showPendingFrame(): void {
-                    card.frameShown = card.framePending;
-                    card.framePending = 0;
-                    card.frontIsA = !card.frontIsA;
-                }
-
-                // A FRAME THAT IS NOT THERE MEANS ONE OF TWO THINGS, and they
-                // are told apart by whether anything has ever loaded. Past the
-                // first frame it is the end of the sequence, which is how the
-                // length is learnt. On the first frame it is a video the script
-                // has not built yet, and there is nothing to learn.
-                function endOfSequence(): void {
-                    card.framePending = 0;
-
-                    if (card.frameShown === 0) {
-                        card.framesMissing = true;
-                        return;
-                    }
-
-                    card.frameCount = card.frameShown;
-                }
-
-                Connections {
-                    target: root
-
-                    function onFrameTick(): void {
-                        card.advanceFrame();
-                    }
-                }
-
-                // NOTHING IS CREATED OR DESTROYED WHEN YOU STEP, which is the
-                // whole point of the design and the reason this is a plain Item
-                // rather than the Loader it used to be. Two Images and a Timer
-                // cost nothing to keep on a card that is not playing -- an
-                // Image with no source is not a picture -- so stepping is a
-                // property change and not a teardown.
-                Item {
-                    anchors.fill: parent
-
-                    // Not drawn at all until there is a frame to draw: the
-                    // still underneath is the picture until then.
-                    visible: card.frameShown > 0
-
-                    // The same mask as the still, over the same shared texture.
-                    // ON THE PAIR AND NOT ON EACH, because the two Images are
-                    // one picture that happens to be double buffered, and two
-                    // mask passes to draw one card would be the second one
-                    // running over a fully transparent image every flip.
-                    layer.enabled: true
-                    layer.effect: MultiEffect {
-                        maskEnabled: true
-                        maskSource: cardMask
-                        maskThresholdMin: 0.5
-                        maskSpreadAtMin: 1.0
-                    }
-
-                    Image {
-                        id: frameA
-
-                        anchors.fill: parent
-                        fillMode: Image.PreserveAspectCrop
-                        visible: card.frontIsA
-                        // Decoded off the GUI thread. Safe here in a way it is
-                        // not for a single Image, because nothing waits on it:
-                        // this one is hidden until it reports Ready.
-                        asynchronous: true
-                        smooth: true
-
-                        // NO sourceSize, unlike the still above. These frames
-                        // are already 960 px -- the script sized them for the
-                        // widest card a 1440p screen has -- so asking for a
-                        // card-sized decode buys a scale pass per frame to save
-                        // texture memory that is measured in kilobytes.
-                        //
-                        // AND NO CACHE. Qt remembers a URL that FAILED and will
-                        // not go back to disk for it, and 001.jpg not existing
-                        // is the ordinary state of a video added a moment ago:
-                        // a pinned failure there is a card that never animates
-                        // again for the rest of the session. The frames also
-                        // turn over faster than any cache of this size would
-                        // keep them, so there is little to give up.
-                        cache: false
-
-                        onStatusChanged: {
-                            if (card.framePending === 0)
-                                return;
-
-                            if (frameA.status === Image.Ready)
-                                card.showPendingFrame();
-                            else if (frameA.status === Image.Error)
-                                card.endOfSequence();
-                        }
-                    }
-
-                    Image {
-                        id: frameB
-
-                        anchors.fill: parent
-                        fillMode: Image.PreserveAspectCrop
-                        visible: !card.frontIsA
-                        asynchronous: true
-                        smooth: true
-                        cache: false
-
-                        onStatusChanged: {
-                            if (card.framePending === 0)
-                                return;
-
-                            if (frameB.status === Image.Ready)
-                                card.showPendingFrame();
-                            else if (frameB.status === Image.Error)
-                                card.endOfSequence();
-                        }
-                    }
-                }
-
-                // A CARD THAT LEAVES THE SCREEN LETS GO OF ITS FRAMES. The
-                // sources are what hold two decoded pictures alive, and the
-                // fan is a conveyor -- every step pushes one card off each end
-                // -- so without this the two parked slots would each sit on a
-                // pair of full-size pictures nobody can see. Coming back starts
-                // again from 001, which is also where the still frame is, so
-                // there is nothing to see in the restart.
-                onPlayingChanged: {
-                    // ASK FOR THE FIRST FRAME AT ONCE. The shared clock is up
-                    // to a fifteenth of a second away, and a card that slides
-                    // into the fan and then visibly waits before it starts is
-                    // the kind of hitch this whole design exists to remove.
-                    // This is what the per-card Timer's triggeredOnStart used
-                    // to do.
-                    if (card.playing) {
-                        card.advanceFrame();
-                        return;
-                    }
-
-                    // The pending load is dropped FIRST. Clearing a source
-                    // while one is in flight moves that Image to Null rather
-                    // than to Error, so nothing here would misread it -- but
-                    // the handlers below only have to be right about states
-                    // that can reach them, and this is what keeps that true.
-                    card.framePending = 0;
-                    card.frameShown = 0;
-                    card.frontIsA = true;
-                    frameA.source = "";
-                    frameB.source = "";
-                }
-
-                // The frame IS the selection: a thumbnail is already a picture,
-                // so tinting it would fight the image itself. Drawn OVER the
-                // masked image and at the same radius, so the ring sits exactly
-                // on the cut edge.
-                //
-                // Every card gets a hairline, and that is not decoration: a
-                // dark photograph over a blurred dark desktop has no edge at
-                // all without one.
-                Rectangle {
-                    anchors.fill: parent
-                    radius: root.cardRadius
-                    color: "transparent"
-                    antialiasing: true
-
-                    border.width: card.centred ? 3 : 1
-                    border.color: card.centred ? Theme.primary : Qt.alpha(Theme.outline, 0.6)
-
-                    Behavior on border.width {
-                        NumberAnimation { duration: Theme.animDuration }
-                    }
-
-                    Behavior on border.color {
-                        ColorAnimation { duration: Theme.animDuration }
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-
-                    // ONE CLICK MEANS TWO THINGS depending on where the card
-                    // is, and they are the same gesture people already use on a
-                    // carousel: clicking one off to the side brings it to the
-                    // middle, and clicking the one in the middle applies it.
-                    // The alternative -- apply whatever is clicked -- makes the
-                    // fan a minefield, since the neighbours are half covered by
-                    // the card you were aiming past.
-                    onClicked: {
-                        if (card.centred)
-                            root.apply(card.modelData);
-                        else
-                            view.currentIndex = card.index;
-                    }
-                }
-            }
-        }
-
-        // ---------------- What you are looking at ----------------
-        //
-        // Under the fan, and only for the centred card: the picture is the
-        // subject, and a name under every one of them would be a row of labels
-        // competing with the photographs for the eye. The name is here to tell
-        // two similar images apart and to be searchable in the folder later,
-        // nothing more.
-        Column {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.top: parent.top
-            anchors.topMargin: Math.round(sheet.height * 0.47 + root.cardHeight / 2 + 28)
-
-            spacing: 4
-            visible: root.count > 0
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-
-                text: root.entries[view.currentIndex]?.name ?? ""
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize + 2
-                font.weight: Font.Bold
-                color: Theme.textOnSurface
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-
-            // The one fact the fan cannot draw. Which wallpaper is on the
-            // desktop is not visible in a row of pictures -- the desktop is
-            // behind the sheet, blurred -- and it is the difference between
-            // "browse" and "go back to what I had".
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-
-                visible: root.entries[view.currentIndex]?.path === root.currentPath
-                text: "Applied"
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 1
-                color: Theme.primary
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-        }
-
-        // An empty folder gets a sentence rather than a blank screen. It names
-        // the folder because nothing else on this sheet does, and because the
-        // answer is almost always "the collection is somewhere else" -- which
-        // is a setting, in the window this line points at.
-        Column {
             anchors.centerIn: parent
-            spacing: 6
-            visible: root.count === 0
 
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: `No wallpapers in ${Config.wallpaperDir.replace(Quickshell.env("HOME"), "~")}`
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize + 2
-                font.weight: Font.Bold
-                color: Theme.textOnSurface
+            implicitWidth: root.contentRoom + root.cardPadding * 2
+            implicitHeight: Math.min(layout.implicitHeight + root.cardPadding * 2,
+                                     root.availableHeight)
+
+            // OverlayCornerRadius, which is the 8 Windows gives a window.
+            radius: Fluent.overlayRadius
+
+            // MICA. Its documented fallback is SolidBackgroundFillColorBase
+            // #202020, which is exactly windows-11-dark's ui_surface, and the
+            // blur-quickshell rule in hyprland.lua is xray -- it samples the
+            // wallpaper and not the windows in front of it, which is what Mica
+            // does. Theme.glass() and not an alpha chosen here: the rule ignores
+            // anything under 0.84.
+            color: Theme.glass(Theme.surface)
+
+            border.width: 1
+            border.color: Theme.outlineVariant
+            antialiasing: true
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
             }
 
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: "Point the collection somewhere else in Settings, Wallpaper"
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                color: Theme.textOnSurfaceVariant
+            // Swallows clicks that would otherwise reach the dismiss area behind
+            // the card.
+            MouseArea {
+                anchors.fill: parent
+            }
+
+            Column {
+                id: layout
+
+                anchors.centerIn: parent
+                width: root.contentRoom
+                spacing: root.cardPadding
+
+                // ---------------- The page title ----------------
+                Column {
+                    id: header
+
+                    width: parent.width
+                    spacing: 2
+
+                    Text {
+                        text: "Background"
+                        font.family: Theme.fontFamily
+                        font.pointSize: Fluent.titleSize
+                        font.weight: Fluent.strongWeight
+                        color: Theme.textOnSurface
+
+                        Behavior on color {
+                            ColorAnimation { duration: Theme.recolorDuration }
+                        }
+                    }
+
+                    // THE ONE FACT THE GRID CANNOT DRAW BY ITSELF: which picture
+                    // you are pointing at, by name. The tiles are deliberately
+                    // unlabelled -- a caption under every one of twenty
+                    // thumbnails is a wall of text competing with the pictures --
+                    // so the name of the highlighted one is said once, here,
+                    // where a Settings page puts its description.
+                    Row {
+                        spacing: 6
+                        visible: root.count > 0
+
+                        Text {
+                            text: root.entries[grid.currentIndex]?.name ?? ""
+                            font.family: Theme.fontFamily
+                            font.pointSize: Fluent.bodySize
+                            font.weight: Fluent.normalWeight
+                            color: Theme.textOnSurfaceVariant
+
+                            Behavior on color {
+                                ColorAnimation { duration: Theme.recolorDuration }
+                            }
+                        }
+
+                        Text {
+                            visible: root.entries[grid.currentIndex]?.path === root.currentPath
+                            text: "Applied"
+                            font.family: Theme.fontFamily
+                            font.pointSize: Fluent.bodySize
+                            font.weight: Fluent.strongWeight
+                            color: Theme.primary
+
+                            Behavior on color {
+                                ColorAnimation { duration: Theme.recolorDuration }
+                            }
+                        }
+                    }
+                }
+
+                // ---------------- The grid ----------------
+                GridView {
+                    id: grid
+
+                    visible: root.count > 0
+
+                    width: parent.width
+                    // As tall as the tiles want, up to what is left of the
+                    // screen once the card has had its padding and the title its
+                    // room. Where the collection is shorter than that, the card
+                    // shrinks to it and nothing scrolls.
+                    height: Math.min(grid.contentHeight,
+                                     root.availableHeight - root.cardPadding * 2
+                                         - header.height - layout.spacing)
+
+                    model: root.entries
+                    cellWidth: root.cellWidth
+                    cellHeight: root.cellHeight
+                    clip: true
+
+                    // The wheel and the drag are the view's own, which is the
+                    // reason this is a GridView rather than a Row of transforms:
+                    // a Flickable takes wheel events whatever device type the
+                    // seat reports, where a WheelHandler has to be told, and
+                    // there is no scroll bar to place because a grid of pictures
+                    // is its own position indicator.
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    delegate: Item {
+                        id: tile
+
+                        required property int index
+                        required property var modelData
+
+                        readonly property bool applied: tile.modelData.path === root.currentPath
+
+                        // Set when the thumbnail turned out not to exist, which
+                        // drops this tile back to the wallpaper itself. Reset
+                        // when the tile is handed a different wallpaper: the
+                        // delegates are recycled as the grid scrolls, and a tile
+                        // that inherited this flag would load a 4K original for a
+                        // thumbnail that is perfectly fine.
+                        property bool thumbMissing: false
+
+                        width: tile.GridView.view.cellWidth
+                        height: tile.GridView.view.cellHeight
+
+                        onModelDataChanged: tile.thumbMissing = false
+
+                        // AND THE OTHER WAY A TILE LEARNS SOMETHING IT GOT WRONG:
+                        // the file it asked for was not there at the time, and
+                        // now it is.
+                        //
+                        // An Image pointed at a missing file reports Error and
+                        // stops; the flag above latches that so the tile does not
+                        // spend the session asking. wallpaper-switch builds the
+                        // thumbnails after the fact -- a wallpaper copied into
+                        // the folder with the shell running is listed before
+                        // ffmpeg has been near it -- and this bump is the shell
+                        // being told that run has finished. Without it a tile
+                        // that latched stays on the 4K original until the next
+                        // restart.
+                        //
+                        // TO THE TILES AND NOT TO THE MODEL, which is the whole
+                        // point of doing it here. Stamping the revision into
+                        // every entry would clear the flags by destroying the
+                        // objects holding them, and would also rebuild every tile
+                        // on screen on every opening -- a visible flash for a
+                        // cache that in the ordinary case has nothing new in it.
+                        // See the note over `entries` for the measurement.
+                        //
+                        // COSTS NOTHING WHEN THERE IS NOTHING TO UNDO. Assigning
+                        // false to a bool that is already false emits no change,
+                        // so a tile whose picture was there is untouched and
+                        // nothing redraws.
+                        Connections {
+                            target: Config
+
+                            function onWallpaperThumbsRevisionChanged(): void {
+                                tile.thumbMissing = false;
+                            }
+                        }
+
+                        // The backplate. It is what lights up, and it is the
+                        // whole cell rather than the picture, so the highlight
+                        // reads as a frame around the thumbnail exactly the way a
+                        // Windows GridViewItem's does.
+                        //
+                        // HOVER BRIGHTENS, PRESS DIMS, AND NEITHER ANIMATES:
+                        // Fluent.hoverMs is 0 and there is deliberately no
+                        // Behavior here. Through Theme.glass() because the card
+                        // under it is glass -- an opaque fill would punch an
+                        // unblurred patch wherever the pointer is.
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: Fluent.controlRadius
+
+                            color: mouse.pressed ? Theme.glass(Fluent.fillPress)
+                                : (mouse.containsMouse || tile.GridView.isCurrentItem)
+                                    ? Theme.glass(Fluent.fillSubtleHover)
+                                    : "transparent"
+                        }
+
+                        Image {
+                            id: picture
+
+                            anchors.fill: parent
+                            anchors.margins: root.tileInset
+
+                            source: tile.thumbMissing
+                                ? tile.modelData.fullUrl
+                                : tile.modelData.thumbUrl
+
+                            onStatusChanged: {
+                                if (picture.status === Image.Error
+                                    && !tile.thumbMissing
+                                    && tile.modelData.fullUrl !== "")
+                                    tile.thumbMissing = true;
+                            }
+
+                            fillMode: Image.PreserveAspectCrop
+                            // Decoded at the size a tile is drawn at, and not at
+                            // the picture's own: a 4K PNG decoded to fill a
+                            // thumbnail costs a fifth of a second.
+                            sourceSize: root.thumbSize
+                            asynchronous: true
+                            smooth: true
+
+                            // CACHED FOR A STILL AND NOT FOR A VIDEO. It is about
+                            // DECODING and nothing else: caching keeps the grid
+                            // from decoding the same pictures again every time it
+                            // scrolls them back into view, and a video's
+                            // extracted frame is the one picture here that is
+                            // routinely asked for before it exists.
+                            cache: !tile.modelData.video
+
+                            // NO `layer.enabled`, unlike every other masked image
+                            // in this shell. An Image is already a texture
+                            // provider, so MultiEffect can sample it directly;
+                            // turning on a layer wraps it in a SECOND texture
+                            // that has to be re-rendered whenever the item is
+                            // marked dirty, to draw a picture that never changes.
+                            visible: false
+                        }
+
+                        MultiEffect {
+                            anchors.fill: picture
+                            source: picture
+                            maskEnabled: true
+                            maskSource: cardMask
+
+                            // WITHOUT THESE THE MASK IS A HARD THRESHOLD.
+                            // MultiEffect defaults to cutting the mask at a
+                            // single value with no spread, which throws away the
+                            // antialiased edge the rounded rectangle was drawn
+                            // for.
+                            maskThresholdMin: 0.5
+                            maskSpreadAtMin: 1.0
+                        }
+
+                        // SELECTION IS A RING AND NOT A FILL. A thumbnail is
+                        // already a picture, so tinting it would fight the image
+                        // itself -- and Windows marks the applied wallpaper on
+                        // this page with an accent border and nothing else.
+                        //
+                        // The hairline underneath it is not decoration either: a
+                        // card on a Settings page carries a one-pixel stroke, and
+                        // without one a dark photograph over a dark ground has no
+                        // edge at all.
+                        Rectangle {
+                            anchors.fill: picture
+                            radius: Fluent.controlRadius
+                            color: "transparent"
+                            antialiasing: true
+
+                            border.width: tile.applied ? 2 : 1
+                            border.color: tile.applied ? Theme.primary : Theme.outlineVariant
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: Theme.recolorDuration }
+                            }
+                        }
+
+                        MouseArea {
+                            id: mouse
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+
+                            // Pointing at a tile also arms it for the keyboard,
+                            // so the two never disagree about which one is next.
+                            onEntered: tile.GridView.view.currentIndex = tile.index
+
+                            // ONE CLICK APPLIES, which is what a click on a
+                            // thumbnail means on the Personalisation page. The
+                            // carousel this replaces needed two meanings for one
+                            // click because its neighbours were half hidden
+                            // behind the card you were aiming past; every tile in
+                            // a grid is fully visible and fully clickable, so
+                            // there is nothing left to disambiguate.
+                            onClicked: root.apply(tile.modelData)
+                        }
+                    }
+                }
+
+                // An empty folder gets a sentence rather than a blank page. It
+                // names the folder because nothing else here does, and because
+                // the answer is almost always "the collection is somewhere else"
+                // -- which is a setting, in the window this line points at.
+                Column {
+                    width: parent.width
+                    spacing: 6
+                    visible: root.count === 0
+
+                    Text {
+                        text: `No wallpapers in ${Config.wallpaperDir.replace(Quickshell.env("HOME"), "~")}`
+                        font.family: Theme.fontFamily
+                        font.pointSize: Fluent.bodyLargeSize
+                        font.weight: Fluent.normalWeight
+                        color: Theme.textOnSurface
+                    }
+
+                    Text {
+                        text: "Point the collection somewhere else in Settings, Wallpaper"
+                        font.family: Theme.fontFamily
+                        font.pointSize: Fluent.bodySize
+                        font.weight: Fluent.normalWeight
+                        color: Theme.textOnSurfaceVariant
+                    }
+                }
             }
         }
     }
