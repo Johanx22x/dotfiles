@@ -166,10 +166,17 @@ PanelWindow {
         modelData: root.modelData
     }
 
-    // Placeholders until each of these surfaces is drawn against its own
-    // photograph. They are empty rather than borrowed: a Quick Settings panel
+    // The three things the taskbar opens, each drawn against its own
+    // photograph. They were empty skeletons here for most of this theme's
+    // life, and empty rather than borrowed on purpose: a Quick Settings panel
     // that was genesis's dashboard in a different colour is the thing this
-    // theme was restarted to stop doing.
+    // theme was restarted to stop doing, and a placeholder that admits it is
+    // one is easier to finish than a copy that looks finished already.
+    //
+    // ONE Popout above and three Components here, not three Popouts. Windows
+    // dismisses whichever of these is open when you click another -- they are
+    // one surface showing different contents, and giving each its own window
+    // is how you end up with two of them on screen at once.
     Component {
         id: quickSettings
 

@@ -318,22 +318,32 @@ else
     note "all $readers FolderListModel(s) whose rows are read watch status"
 fi
 
-# --- a theme's own singleton is imported by the files that read it -----------
+# --- a singleton is imported by every file that reads it ---------------------
 #
-# A theme may keep a singleton at its root -- windows/Fluent.qml holds the forty
-# Fluent constants that twenty-nine components would otherwise each carry a copy
-# of. A file under components/ has an implicit import of components/ and of
-# NOTHING else, so reaching that singleton takes one line:
+# A singleton is reached by importing THE MODULE IT LIVES IN and by nothing
+# else. windows/Fluent.qml is `import qs.themes.windows`, NotificationState is
+# `import qs.modules.notifications`, Theme is `import qs`. A file under
+# components/ has an implicit import of components/ and of nothing else, so the
+# line has to be written even when the singleton is one directory up.
 #
-#     import ".."
+# WITHOUT IT THE FAILURE IS AT RUNTIME AND SILENT, in one of two shapes.
 #
-# WITHOUT IT THE FAILURE IS AT RUNTIME AND SILENT. `Fluent` still resolves --
-# `typeof Fluent` is "object" -- but it resolves to the TYPE rather than to the
-# singleton instance, so every property reads `undefined` and what reaches the
-# log is one line per binding naming the CONSUMER, never the singleton:
+# For a singleton used as a TYPE NAME the name still resolves -- `typeof Fluent`
+# is "object" -- but it resolves to the TYPE rather than to the instance, so
+# every property reads `undefined` and what reaches the log is one line per
+# binding naming the CONSUMER, never the singleton:
 #
 #     WARN scene: .../components/ScrollBar.qml[109:5]:
 #                 Unable to assign [undefined] to double
+#
+# For one read only inside a property binding or a handler there is no such
+# consolation prize: it is a plain ReferenceError, thrown when that binding
+# first evaluates, which for a flyout is the moment somebody opens it. The
+# do-not-disturb tile drew perfectly and did nothing for a week on
+#
+#     ReferenceError: NotificationState is not defined
+#
+# and qmllint says nothing, because the reference is not a type name.
 #
 # THIS RULE ENFORCED THE WRONG IMPORT FIRST. It required `import ".."`, which
 # is what genesis uses to reach its own directories and what qmllint is happy
@@ -347,9 +357,20 @@ fi
 # relative imports 2240 of those warnings in eighteen seconds, module imports
 # zero.
 #
-# IT IS GENERAL AND NOT ABOUT `Fluent`. Any `pragma Singleton` at any theme's
-# root is checked, because the next theme's will have another name and the
-# trap is the same shape.
+# IT SWEEPS THE WHOLE SHELL AND NOT ONLY THE THEMES, which it used to. The
+# narrower version checked a theme's own root singletons and would have said
+# nothing about the tile above, because NotificationState is the HOST's and
+# lives three directories away. Widening it costs one map -- a singleton's
+# module is its directory under the shell root -- and covers both halves of a
+# seam whose whole purpose is that the two halves are far apart.
+#
+# THE SAME-DIRECTORY CASE IS SKIPPED and that is a real hole, said plainly: a
+# file sitting beside the singleton has an implicit import that works when the
+# file is loaded as a type, and every host file is. A theme file beside its own
+# singleton would be a false negative here. None exists -- every theme
+# singleton is at the theme root and every reader is at least one directory
+# down -- and narrowing the hole means requiring an import qmllint calls
+# unused across the whole host tree, which is a bigger change than this rule.
 #
 # COMMENTS OFF FIRST, same as the two sweeps above and for a sharper reason
 # here: Fluent.qml's own header quotes `Fluent.controlRadius` while explaining
@@ -358,44 +379,65 @@ fi
 singleton_readers=0
 singleton_missing=()
 singleton_names=0
-for theme in "${themes[@]}"; do
-    roots=()
-    while IFS= read -r -d '' f; do
-        grep -qE '^[[:space:]]*pragma[[:space:]]+Singleton' "$f" \
-            && roots+=("$(basename "$f" .qml)")
-    done < <(find "$theme" -maxdepth 1 -name '*.qml' -type f -print0 | sort -z)
-    (( ${#roots[@]} == 0 )) && continue
-    singleton_names=$(( singleton_names + ${#roots[@]} ))
 
-    while IFS= read -r -d '' file; do
-        for name in "${roots[@]}"; do
-            # NOT `sed ... | grep -q`. `grep -q` exits on the first match and
-            # kills `sed` with SIGPIPE, and under `set -o pipefail` that turns
-            # a MATCH into a non-zero pipeline -- sometimes. Whether the write
-            # lands before grep leaves is a race, and this sweep flickered
-            # between 41 and 42 readers across runs on an unchanged tree until
-            # it was chased down. A test whose number moves on its own is a
-            # test nobody can read.
-            stripped="$(sed -e 's://.*::' "$file")"
-            grep -qE "(^|[^A-Za-z0-9_])${name}\." <<<"$stripped" || continue
-            singleton_readers=$(( singleton_readers + 1 ))
-            theme_module="qs.themes.$(basename "$theme")"
-            grep -qE "^[[:space:]]*import[[:space:]]+${theme_module//./\\.}[[:space:]]*$" "$file" \
-                || singleton_missing+=("${file#"$REPO"/} reads ${name}. and does not import ${theme_module}")
-        done
-    done < <(find "$theme" -mindepth 2 -name '*.qml' -type f -print0 | sort -z)
+# name -> module, over every `pragma Singleton` in the shell.
+declare -A singleton_module=()
+while IFS= read -r -d '' f; do
+    grep -qE '^[[:space:]]*pragma[[:space:]]+Singleton' "$f" || continue
+    rel="${f#"$QML_DIR"/}"
+    dir="${rel%/*}"
+    if [[ "$dir" == "$rel" ]]; then
+        module="qs"
+    else
+        module="qs.${dir//\//.}"
+    fi
+    singleton_module["$(basename "$f" .qml)"]="$module"
+    singleton_names=$(( singleton_names + 1 ))
+done < <(find "$QML_DIR" -name '*.qml' -type f -print0 | sort -z)
+
+for file in "${qml_files[@]}"; do
+    rel="${file#"$QML_DIR"/}"
+    dir="${rel%/*}"
+    if [[ "$dir" == "$rel" ]]; then
+        own="qs"
+    else
+        own="qs.${dir//\//.}"
+    fi
+
+    # NOT `sed ... | grep -q`. `grep -q` exits on the first match and kills
+    # `sed` with SIGPIPE, and under `set -o pipefail` that turns a MATCH into
+    # a non-zero pipeline -- sometimes. Whether the write lands before grep
+    # leaves is a race, and this sweep flickered between 41 and 42 readers
+    # across runs on an unchanged tree until it was chased down. A test whose
+    # number moves on its own is a test nobody can read.
+    stripped="$(sed -e 's://.*::' "$file")"
+
+    for name in "${!singleton_module[@]}"; do
+        module="${singleton_module[$name]}"
+        # Its own file, and the implicit-import hole documented above.
+        [[ "$(basename "$file" .qml)" == "$name" ]] && continue
+        [[ "$module" == "$own" ]] && continue
+
+        grep -qE "(^|[^A-Za-z0-9_.])${name}\.[A-Za-z_]" <<<"$stripped" || continue
+        singleton_readers=$(( singleton_readers + 1 ))
+        grep -qE "^[[:space:]]*import[[:space:]]+${module//./\\.}[[:space:]]*$" "$file" \
+            || singleton_missing+=("${file#"$REPO"/} reads ${name}. and does not import ${module}")
+    done
 done
 
 if (( ${#singleton_missing[@]} > 0 )); then
-    fail "${#singleton_missing[@]} file(s) read a theme singleton they never imported"
+    fail "${#singleton_missing[@]} file(s) read a singleton they never imported"
     printf 'qml-rules:   %s\n' "${singleton_missing[@]}" >&2
-    echo "qml-rules: add   import qs.themes.<theme>   and NOT import \"..\"" >&2
+    echo "qml-rules: add the module's own import line, NOT import \"..\"" >&2
     echo "qml-rules: the relative form resolves the TYPE, not the singleton, when" >&2
     echo "qml-rules: the file is loaded by URL -- which every theme file is" >&2
+    echo "qml-rules: and a read inside a binding is a plain ReferenceError, which" >&2
+    echo "qml-rules: qmllint does not see because it is not a type name" >&2
 elif (( singleton_names == 0 )); then
-    note "no theme keeps a singleton at its root -- nothing to check"
+    fail "no pragma Singleton found anywhere under ${QML_DIR#"$REPO"/}"
+    failed=1
 else
-    note "$singleton_readers read(s) of $singleton_names theme singleton(s) all import their theme module"
+    note "$singleton_readers read(s) of $singleton_names singleton(s) all import their module"
 fi
 
 if [[ $failed -eq 0 ]]; then
