@@ -1,20 +1,39 @@
-// A settings row that holds a number: glyph, label, and a minus/value/plus
-// stepper.
+// A settings row that holds a number. THIS IS THE HALF THE PAGES SEE; the
+// pixels are in themes/<theme>/components/StepperRow.qml.
 //
-// A STEPPER AND NOT A SLIDER. Both values this shell has to offer -- an
-// opacity in whole percent and a timeout in whole seconds -- have a small
-// number of useful positions and one number that matters. A slider hides that
-// number behind a handle position, cannot be nudged by one, and needs a drag
-// gesture to do what a click does here. Sliders earn their place over
-// continuous ranges; these are not.
+// A STEPPER AND NOT A SLIDER, which is a decision about the API and therefore
+// stays here. Both values this shell has to offer -- an opacity in whole
+// percent and a timeout in whole seconds -- have a small number of useful
+// positions and one number that matters. A slider hides that number behind a
+// handle position, cannot be nudged by one, and needs a drag gesture to do
+// what a click does here. Sliders earn their place over continuous ranges;
+// these are not. That is why the properties below are `from`, `to` and `step`
+// rather than a range and a position, and why the signal is `moved(int)`.
+//
+// THE CLAMPING IS HERE AND THE BUTTONS ARE NOT. nudge() below is the rule
+// about what a step is allowed to produce -- inside the range, and silent when
+// the value would not move -- and a theme calls it rather than doing the
+// arithmetic. A theme that clamped for itself could emit `moved` with the
+// value the row already has, which is a write to Config for no change, or
+// could emit one outside [from, to] and put a number on screen the page never
+// offered. It draws the minus and the plus; what a press MEANS is this file's.
 //
 // Same contract as ToggleRow: it displays `value` and asks for a new one
 // through the signal. It does not write anything itself.
+//
+// WHY THE ROOT IS AN Item AND NOT A Rectangle. It was a Rectangle for `radius`
+// and a hover fill, and both are drawing. The test ToggleRow's header sets out
+// was run over all 18 call sites and NOTHING OUTSIDE THIS FILE SETS `color`,
+// `radius` OR `border`, so all three moved behind the seam. What the call sites
+// do set stayed: `glyph`, `label`, `value`, `from`, `to`, `step`, `suffix`,
+// `display`, `hint`, `onMoved`, and the ordinary Item properties `enabled` --
+// four sites -- and `visible` -- one.
 
 import QtQuick
 import qs
+import qs.modules
 
-Rectangle {
+Item {
     id: root
 
     property string glyph: ""
@@ -45,179 +64,55 @@ Rectangle {
 
     signal moved(int value)
 
-    // See the note in ToggleRow: the parent supplies the width.
-    width: parent ? parent.width : implicitWidth
-    implicitWidth: 320
-    implicitHeight: Theme.groupHeight
-
-    radius: Theme.groupRadius
-    color: mouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
-
-    Behavior on color {
-        ColorAnimation { duration: Theme.animDuration }
-    }
-
-    opacity: root.enabled ? 1 : 0.4
-
+    // THE RULE ABOUT WHAT A STEP PRODUCES. Clamped to the range, and SILENT
+    // when the value would not move: at `to` the plus emits nothing at all
+    // rather than emitting the number that is already there. The theme's plus
+    // and minus call this with `+row.step` and `-row.step` and read nothing
+    // back -- the new value arrives the way every other value does, through
+    // the page, back into `value`.
     function nudge(delta: int): void {
         const next = Math.max(root.from, Math.min(root.to, root.value + delta));
         if (next !== root.value)
             root.moved(next);
     }
 
-    // Hover on the row, not only on the buttons: the row is one object and it
-    // should light up as one. The MouseArea is behind the buttons and does
-    // nothing on click -- unlike ToggleRow there is no single obvious action
-    // for "clicked the label", and guessing one (increment? reset?) would be
-    // worse than no target at all.
-    MouseArea {
-        id: mouse
+    // See the note in ToggleRow: the parent supplies the width, and binding
+    // implicitWidth to it instead would be a loop.
+    width: parent ? parent.width : implicitWidth
+    implicitWidth: 320
+
+    // THE THEME DRIVES THE HEIGHT, WITH A FLOOR UNDER IT. This row was one line
+    // tall before the split and this theme's is still one line tall, so the
+    // number the Loader reports and the floor under it agree today -- which is
+    // the point rather than a redundancy: a theme that stacks the stepper under
+    // the label the way ChoiceRow stacks its segments reports a bigger one and
+    // the section grows to fit. See ToggleRow for the two ways a theme reports
+    // nothing and for why this reads the Loader's implicit size rather than the
+    // loaded item's.
+    implicitHeight: Math.max(Theme.groupHeight, drawing.implicitHeight)
+
+    // Identical to ToggleRow's loader, and deliberately not factored out: see
+    // themes/genesis/components/README.md on why the sixteen lines are copied
+    // into each facade rather than shared through a base type.
+    Loader {
+        id: drawing
 
         anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.NoButton
-    }
 
-    Row {
-        anchors.left: parent.left
-        anchors.leftMargin: Theme.groupPadding
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.itemSpacing
+        readonly property string drawingUrl: Themes.surface("components/StepperRow.qml")
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            visible: root.glyph !== ""
-            text: root.glyph
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.iconSize
-            color: Theme.textOnSurfaceVariant
+        function build(): void {
+            if (String(drawing.source) === drawing.drawingUrl)
+                return;
 
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
+            drawing.setSource(drawing.drawingUrl, {
+                row: root
+            });
         }
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.label
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize
-            font.weight: Theme.fontWeight
-            color: Theme.textOnSurface
+        Component.onCompleted: drawing.build()
+        onDrawingUrlChanged: drawing.build()
 
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
-        }
-
-        Item {
-            id: hintMark
-
-            anchors.verticalCenter: parent.verticalCenter
-            visible: root.hint !== ""
-            // A hit area larger than the glyph: at 13pt the mark itself is
-            // about ten pixels across, which is a target you have to aim at.
-            implicitWidth: Theme.groupHeight - 12
-            implicitHeight: Theme.groupHeight - 12
-
-            Text {
-                anchors.centerIn: parent
-                text: Icons.info
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.iconSize
-                color: hintMouse.containsMouse ? Theme.primary : Theme.outline
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
-            }
-
-            MouseArea {
-                id: hintMouse
-
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.NoButton
-            }
-        }
-    }
-
-    // Aligned with the label, NOT with the mark that opens it. Hanging it off
-    // the mark is the obvious arrangement and it does not fit: the mark sits
-    // after the label, two thirds of the way across a row that is itself most
-    // of the pane's width, so a note wide enough to read would start there and
-    // run off the right edge -- where the Flickable clips it. Aligned left it
-    // is always inside, whatever the label says.
-    //
-    // The left margin is repeated from the Row above rather than measured off
-    // it: mapToItem is not a binding, it is a function evaluated once, and
-    // here that once is before anything has been laid out. It read 0 and the
-    // note happened to land in the right place for the wrong reason.
-    //
-    // AND THAT SAME SENTENCE IS WHY THERE IS NO `y` HERE ANY MORE. This row
-    // used to place the note at `root.height - 4`, unconditionally below, and
-    // on the last row of a page with no scroll left the Flickable cut it in
-    // half. The vertical decision is Tooltip's now: the band it must not
-    // cover is this whole row, the -4 is the overlap that used to be written
-    // into the y, and it hangs below or flips above depending on the room
-    // left in the viewport -- reactively, which the y it replaced was not.
-    Tooltip {
-        text: root.hint
-        shown: hintMouse.containsMouse
-
-        x: Theme.groupPadding
-        gap: -4
-    }
-
-    Row {
-        anchors.right: parent.right
-        anchors.rightMargin: Theme.groupPadding - 4
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: 2
-
-        StepperButton {
-            anchors.verticalCenter: parent.verticalCenter
-            // U+2212 MINUS SIGN, not the hyphen on the keyboard: at this size
-            // a hyphen sits high and short next to the plus and the pair
-            // stops looking like a pair.
-            symbol: "−"
-            enabled: root.enabled && root.value > root.from
-            onTriggered: root.nudge(-root.step)
-        }
-
-        // A FLOOR, NOT A FIXED WIDTH. The number sits between two buttons and
-        // both of them would shift sideways every time it went from 9 to 10, so
-        // it holds a width rather than hugging its text. Fifty-two is what three
-        // digits and a short suffix need, and it is what every row here used to
-        // be given outright.
-        //
-        // OUTRIGHT WAS WRONG the first time a suffix was longer than " px". The
-        // recording page asks for " Mbit/s", and `40 Mbit/s` is nine characters
-        // in a box built for six: it overflowed in both directions at once and
-        // was drawn straight through the minus and the plus, which is how it was
-        // noticed. Growing past the floor moves the buttons apart on that row
-        // and nowhere else -- the jitter this guards against is between one
-        // value and the next, not between one row and another.
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            width: Math.max(52, implicitWidth)
-            horizontalAlignment: Text.AlignHCenter
-            text: root.display !== "" ? root.display : `${root.value}${root.suffix}`
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize
-            font.weight: Font.Bold
-            color: Theme.textOnSurface
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
-        }
-
-        StepperButton {
-            anchors.verticalCenter: parent.verticalCenter
-            symbol: "+"
-            enabled: root.enabled && root.value < root.to
-            onTriggered: root.nudge(root.step)
-        }
+        // See ToggleRow for why there is no status handler here either.
     }
 }
