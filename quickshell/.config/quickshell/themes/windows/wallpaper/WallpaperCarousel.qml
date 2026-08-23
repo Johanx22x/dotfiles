@@ -735,7 +735,10 @@ PanelWindow {
 
                             anchors.fill: parent
                             hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
+
+                            // NO cursorShape, the same answer the rest of this
+                            // theme gives: the arrow stays on controls and the
+                            // hand belongs to hyperlinks. A tile is a control.
 
                             // Pointing at a tile also arms it for the keyboard,
                             // so the two never disagree about which one is

@@ -408,7 +408,15 @@ PanelWindow {
 
                             anchors.fill: parent
                             hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
+
+                            // NO cursorShape. Windows leaves the arrow on
+                            // every control it has -- a button, a tile, a list
+                            // row, a taskbar icon -- and shows the hand only
+                            // over a hyperlink, where it means "this leaves
+                            // for somewhere else". Putting one here would say
+                            // these entries are links, which is the one thing
+                            // they are not.
+
                             // Pointing at an entry also arms it for the keyboard,
                             // so the two can never disagree about which one is
                             // next.

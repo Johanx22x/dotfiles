@@ -26,7 +26,12 @@ import qs.themes.windows
 Column {
     id: root
 
-    readonly property int padding: Theme.notificationPadding
+    // `inset` and not `padding`: this is a Column, and QQuickBasePositioner
+    // already has a `padding` that lays its OWN children out. Shadowing it is a
+    // [property-override], and taking the inherited one instead would apply the
+    // gap twice -- once by the positioner and once by every anchor below, which
+    // all place themselves against this by hand.
+    readonly property int inset: Theme.notificationPadding
 
     // Which month is drawn, as an offset from the one today is in. Reset when
     // the panel closes, because it is built fresh every time it opens.
@@ -50,7 +55,7 @@ Column {
         return start;
     }
 
-    readonly property int cell: Math.floor((root.width - root.padding * 2) / 7)
+    readonly property int cell: Math.floor((root.width - root.inset * 2) / 7)
 
     spacing: 0
 
@@ -64,13 +69,13 @@ Column {
     // ---------------- The time ----------------
     Item {
         width: parent.width
-        height: time.implicitHeight + date.implicitHeight + root.padding
+        height: time.implicitHeight + date.implicitHeight + root.inset
 
         Text {
             id: time
 
             anchors.left: parent.left
-            anchors.leftMargin: root.padding
+            anchors.leftMargin: root.inset
             anchors.top: parent.top
 
             text: Qt.formatDateTime(clock.date, Config.use24Hour ? "HH:mm:ss" : "h:mm:ss")
@@ -97,7 +102,7 @@ Column {
             id: date
 
             anchors.left: parent.left
-            anchors.leftMargin: root.padding
+            anchors.leftMargin: root.inset
             anchors.top: time.bottom
 
             text: Qt.formatDateTime(clock.date, "dddd, d MMMM")
@@ -108,7 +113,7 @@ Column {
 
         ChevronButton {
             anchors.right: parent.right
-            anchors.rightMargin: root.padding
+            anchors.rightMargin: root.inset
             anchors.top: parent.top
 
             content: Icons.chevronDown
@@ -127,7 +132,7 @@ Column {
 
         Text {
             anchors.left: parent.left
-            anchors.leftMargin: root.padding
+            anchors.leftMargin: root.inset
             anchors.verticalCenter: parent.verticalCenter
 
             text: Qt.formatDate(root.firstDay, "MMMM yyyy")
@@ -139,7 +144,7 @@ Column {
 
         Row {
             anchors.right: parent.right
-            anchors.rightMargin: root.padding
+            anchors.rightMargin: root.inset
             anchors.verticalCenter: parent.verticalCenter
 
             spacing: 0
@@ -162,7 +167,7 @@ Column {
     // The weekday headers. Two letters, which is what Windows shows and what
     // fits a cell this wide.
     Row {
-        x: root.padding
+        x: root.inset
 
         visible: root.monthVisible
         spacing: 0
@@ -192,7 +197,7 @@ Column {
     // Six rows of seven. Always six, so the panel does not jump a row's height
     // when the month changes.
     Grid {
-        x: root.padding
+        x: root.inset
 
         visible: root.monthVisible
         columns: 7
@@ -254,7 +259,7 @@ Column {
     // A bottom inset, so the grid does not sit on the panel's edge.
     Item {
         width: parent.width
-        height: root.padding
+        height: root.inset
     }
 
     // A 32px square -- ControlHeight, Microsoft's own -- with the glyph

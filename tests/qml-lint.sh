@@ -306,52 +306,73 @@ declare -A BASELINE=(
     [genesis:uncreatable-type]=6
     [genesis:signal-handler-parameters]=1
 
-    # --- windows: genesis's account, twice ----------------------------------
+    # --- windows: 68 warnings, and none of them inherited -------------------
     #
-    # THE THEME IS DRAWN NOW AND THE TWO NUMBERS THAT COULD MOVE, MOVED.
-    # They started as genesis's, because the theme started as a copy of
-    # genesis; the pair coming apart is the only evidence there is that writing
-    # a second theme taught anybody anything.
+    # THIS TABLE USED TO SAY "genesis's account, twice", AND IT WAS RIGHT.
+    # The first Windows theme was made with `cp -r genesis windows`, so it
+    # started with genesis's 160 warnings in genesis's 160 places and the
+    # numbers moved only where somebody had rewritten a file. Johan looked at
+    # what that produced and called it a cheap adaptation; the theme was
+    # deleted and drawn again from an empty 36-file skeleton, and these are the
+    # numbers of a tree that was written rather than copied.
     #
-    #   unqualified       130 -> 96   (genesis 130)
-    #   missing-property   17 -> 14   (genesis 17)
-    #
-    # Almost all of genesis's 130 are one shape -- a delegate naming an id from
-    # the component outside it -- and a component written fresh does not have
-    # to be written that way. Where it still is, it is because the honest
-    # alternative was worse: an attempt to hang the launcher delegate's reads
-    # off the ListView instead moved five of them out of [unqualified] and into
-    # [missing-property], and those two are not interchangeable.
-    # [missing-property] is what catches a MISSPELLED read through a typed
-    # facade, which is the whole return on rule 1; five permanent false
-    # positives in it are five places a real typo can hide.
-    #
-    # The three that did not move are the three that cannot: they are Quickshell
-    # C++ types not exposed declaratively, PanelWindow's registration, and a Qt
-    # private enum on an onExited handler. Nothing in this repository can fix
-    # any of them.
+    #                    genesis   windows
+    #   unqualified          130        55
+    #   missing-property      17         4
+    #   unresolved-type        6         3
+    #   uncreatable-type       6         6
+    #                      -----     -----
+    #                        160        68
     #
     # Lower these as they fall. A budget left above the real number is a budget
     # that hides the next regression underneath it.
+
+    # SIX PanelWindows, one per surface, and the same six genesis and the
+    # fixture each carry. Quickshell registers PanelWindow uncreatable and
+    # instantiates it itself; nothing in this repository can change that.
     [windows:uncreatable-type]=6
+
+    # FIFTY-FOUR DELEGATE READS AND ONE PanelWindow SCOPE.
     #
-    # Seven delegate reads and one Quickshell artefact, and both are the
-    # documented shapes rather than anything new:
+    # The delegate shape is genesis's too, and it is worth stating exactly
+    # because 55 against 130 is the only number here that could be mistaken for
+    # a virtue. Inside a `delegate` or a `Repeater`, `root.anything` is out of
+    # scope as far as qmllint is concerned even though it resolves perfectly at
+    # runtime -- every photograph of this theme is of those bindings working.
+    # Windows has fewer because it has fewer delegates, not because a fix was
+    # found.
     #
-    #   six in the launcher's ListView delegate and one in the preview pane's
-    #   Repeater. Inside a delegate `root.anything` is out of scope as far as
-    #   qmllint is concerned; hanging them off the view instead was tried on
-    #   the first attempt and moved them into [missing-property], which is
-    #   worse -- that category is the one that catches a MISSPELLED read
-    #   through a typed facade, and false positives in it are places a real
-    #   typo can hide.
+    # There IS a way to cut them: hang the reads off the view instead of the
+    # outer id. It was tried on the launcher's ListView and it moved five out
+    # of [unqualified] and into [missing-property], which is a trade this
+    # repository refuses. [missing-property] is the category that catches a
+    # MISSPELLED read through a typed facade -- the whole return on rule 1 of
+    # themes/genesis/components/README.md -- and five permanent false positives
+    # in it are five places a real typo can hide.
     #
-    #   one is `margins` on a PanelWindow, a grouped scope qmllint cannot
-    #   resolve at all. The shell budget carries the same finding from
-    #   components/Popout.qml, and writing it dotted rather than as a block
-    #   does not help -- that was measured, not assumed.
-    [windows:unqualified]=8
-    [windows:unresolved-type]=1
+    # The odd one out is `margins` on a PanelWindow in launcher/Launcher.qml, a
+    # grouped scope qmllint cannot resolve at all; the shell budget carries the
+    # same finding from components/Popout.qml. Writing it dotted rather than as
+    # a block does not help. That was MEASURED after the comment at the site
+    # claimed it did: both forms produce the same two warnings at the same
+    # line, because what cannot be resolved is `margins` itself.
+    [windows:unqualified]=55
+
+    # FOUR READS THROUGH THE PICKER LOADER, all of them launcher/Launcher.qml
+    # calling `move()` and `activate()` on a `Loader.item` typed QObject. The
+    # launcher hosts pickers of different types behind one loader -- the
+    # clipboard history today, whatever comes next tomorrow -- so the item
+    # genuinely has no single type to declare, and the facade for it is the
+    # pair of functions every picker promises. Typing it would mean naming one
+    # picker in the surface that is supposed to host any of them.
+    [windows:missing-property]=4
+
+    # TWO Quickshell C++ TYPES AND ONE PanelWindow SCOPE. The two are
+    # `QList<NotificationAction*>` read off a live notification in
+    # components/NotificationCard.qml, which Quickshell does not expose
+    # declaratively; the third is the `margins` from the paragraph above,
+    # counted once in each category.
+    [windows:unresolved-type]=3
 
     # --- theme-probe: 6 warnings --------------------------------------------
     #
@@ -767,7 +788,12 @@ for key in $(printf '%s\n' "${!counts[@]}" "${!BASELINE[@]}" | sort -u); do
         # that went red is illustrated with its own files rather than with
         # whichever ten of the shell's happen to sort first.
         examples="$(grep -P "\[$category\]$" "${scope_file[$label]:-$report}" || true)"
-        printf '%s\n' "$examples" | head -n 10 >&2 || true
+        #
+        # QML_LINT_EXAMPLES raises the ten, and it exists because setting a
+        # baseline needs the whole category rather than a sample of it. Ten is
+        # right for a red run somebody has to read; writing a budget means
+        # counting every line the budget covers.
+        printf '%s\n' "$examples" | head -n "${QML_LINT_EXAMPLES:-10}" >&2 || true
     elif (( now < was )); then
         # Not a failure, and deliberately so: a branch that improves the tree
         # should not have to argue with a test. It does have to record it,

@@ -216,9 +216,13 @@ PanelWindow {
         bottom: true
     }
 
-    // The dotted form and not a `margins { }` block: the grouped scope is a
-    // type qmllint cannot resolve on a PanelWindow, so the block costs an
-    // [unqualified] and an [unresolved-type] for nothing. Same assignment.
+    // MEASURED, because this comment used to claim the opposite. The dotted
+    // form and the `margins { }` block cost qmllint exactly the same two
+    // warnings at exactly the same line -- an [unqualified] "unknown grouped
+    // property scope margins" and an [unresolved-type] -- because what it
+    // cannot resolve is PanelWindow's `margins` itself, not the syntax used to
+    // reach it. Both were run; the output was identical. The dotted form stays
+    // because one line beats three, and for no other reason.
     margins.bottom: (root.barVisible ? Theme.barHeight : 0) + root.taskbarGap
 
     implicitWidth: panel.implicitWidth
