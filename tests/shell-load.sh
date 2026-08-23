@@ -272,13 +272,22 @@ else
     # the log at the instant it appears would read half of it.
     sleep "$SETTLE"
 
-    # The five strings, and nothing looser. Everything else in this log is
+    # The six strings, and nothing looser. Everything else in this log is
     # about the sandbox rather than about the code -- no DBus, no PipeWire, no
     # UPower, no ~/.face, no niri config -- and those all announce themselves
     # as a service declining rather than as a name failing to resolve. Matching
     # WARN or ERROR wholesale would make this check a list of exceptions to
     # maintain instead of an assertion.
-    if broken="$(grep -nE 'ReferenceError|TypeError|Unable to assign|is not a type|Syntax error' \
+    #
+    # "Binding loop detected" is the sixth and it was added last, after a
+    # component split put a facade's width behind the loaded item's
+    # implicitWidth -- the exact shape that closes a cycle. Qt breaks the loop
+    # and carries on, so the shell still comes up and every other string here
+    # stays silent; the only trace is that one WARN. Demonstrated before it was
+    # added: `implicitHeight: bar.height + 1` in Bar.qml logs
+    # `Binding loop detected for property "implicitHeight"` and the five
+    # strings above match none of it.
+    if broken="$(grep -nE 'ReferenceError|TypeError|Unable to assign|is not a type|Syntax error|Binding loop detected' \
                       "$sandbox/qs.log")"; then
         count="$(wc -l <<<"$broken")"
         fail "the shell loaded, but $count log line(s) name something that does not resolve"
