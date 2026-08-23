@@ -520,25 +520,101 @@ Singleton {
     readonly property int animDuration: root.token("animDuration", 220)
 
     // ---------------- What the theme declares about the palette ----------------
-    // IT DECLARES WHERE THE COLOURS COME FROM, in its manifest:
+    // IT DECLARES WHERE THE COLOURS COME FROM, in its manifest, and there are
+    // two values:
     //
     //     "palette": { "source": "scheme" }
+    //     "palette": { "source": "pinned", "scheme": "gruvbox-dark" }
     //
-    // "scheme" is the one value this shell implements and it is exactly what
-    // the header describes: the generated palette, rewritten by matugen on
-    // every wallpaper change and followed live. A manifest that says nothing
-    // gets it, which is what keeps a theme written before this key existed
-    // working unchanged.
+    // "scheme" is what the header of this file describes: the generated
+    // palette, rewritten by matugen on every wallpaper change and followed
+    // live, over whichever scheme `desktop-scheme` has in force. A manifest
+    // that says nothing gets it, which is what keeps a theme written before
+    // this key existed working unchanged.
     //
-    // The other half of the decision -- a theme that does NOT follow the
-    // wallpaper -- is designed as "pinned" and is not built here. The seam it
-    // needs is palettePath below and nothing else in this file.
+    // "pinned" NAMES A SCHEME AND THE WHOLE DESKTOP WEARS IT. It is not a
+    // palette this shell reads from somewhere else -- entering the theme runs
+    // `desktop-scheme pin <name>` and leaving it runs `desktop-scheme unpin`,
+    // so matugen re-renders every one of the fourteen generated files and kitty,
+    // GTK, Zen and this shell all move together. A theme is a look for the
+    // desktop, and a desktop where the shell and the terminal disagree is not a
+    // look. The scheme the person picked for themselves is not lost while a
+    // theme is pinning: `desktop-scheme` keeps `chosen` beside `scheme` for
+    // exactly that, and `unpin` is what hands it back.
+    //
+    // THE KEY IS `palette.scheme`, AND THIS IS WHERE THAT IS STATED. It is a
+    // scheme NAME -- one of `desktop-scheme list` -- and never a path or a
+    // colour. Nothing else in the tree defines it: the fixture that pins one
+    // (tests/fixtures/theme-probe) and the check that drives the round trip
+    // (tests/scheme-pinning.sh) both read it back out of the manifest.
+    //
+    // WHAT "pinned" IS NOT, because this file used to say the opposite and the
+    // two designs are easy to confuse. It is NOT a theme carrying its own
+    // palette file that only the shell reads. That design has a name -- `fixed`
+    // -- and it was declined rather than deferred: it would produce a Windows
+    // shell over a Catppuccin terminal, and the palette this shell reads would
+    // be the one thing on the desktop that the scheme did not decide. The seam
+    // it would have needed is `palettePath` below, which is why that had a
+    // switch in it with one case; it has none now.
+    //
+    // A THEME THAT PINS A SCHEME THIS MACHINE DOES NOT HAVE is refused at the
+    // far end and not here. `desktop-scheme` has no file for the name, so it
+    // writes nothing and dies -- and because its stderr is a pipe rather than a
+    // terminal when this shell spawns it, lib_notify turns that into a
+    // notification naming the script and the name it would not take. What
+    // renders is whatever was already in force. Checking the name here would
+    // mean running `desktop-scheme list` to find out, which is a process and a
+    // second opinion about a directory the script owns.
     readonly property string defaultPaletteSource: "scheme"
 
     // Not readonly: the manifest is read asynchronously and this is what the
     // read lands on. It sits at the default until then, and a manifest that
     // cannot be read or asks for something unknown leaves it there.
     property string paletteSource: root.defaultPaletteSource
+
+    // WHICH SCHEME THE THEME PINS, or "" when it pins nothing.
+    //
+    // THE PAIR HAS ONE INVARIANT, the same one fontSource and themeFontFamily
+    // keep below: paletteSource is only ever "pinned" when this holds a name a
+    // theme actually wrote. adoptPalette() is what guarantees it, and it is what
+    // lets the handler underneath be a plain "empty or not" test.
+    property string pinnedScheme: ""
+
+    // ---------------- Entering the theme, and leaving it ----------------
+    // THE WHOLE OF THE WIRING, and it is two lines because everything either
+    // side of it already exists: the value above follows the manifest of the
+    // theme being DRAWN, and Config.qml owns the push into `desktop-scheme` the
+    // same way it owns `setScheme`. What is between them is one transition.
+    //
+    // ON THE CHANGE AND NOT ON A TIMER OR A POLL. A theme is entered when this
+    // moves from "" to a name -- which includes the first read of a pinning
+    // theme's manifest at startup, and is why a login lands on the theme's
+    // scheme rather than on whatever the last session left -- and it is left
+    // when it moves back to "". A theme swapped straight to another pinning
+    // theme moves it from one name to the other and pins the second, which is
+    // one call rather than an unpin and a pin with a render in between.
+    //
+    // IDEMPOTENT AT THE FAR END, which is what makes the startup case free:
+    // `desktop-scheme pin` on the scheme already in effect writes its state,
+    // declines to re-render and returns. Nothing on the desktop changes colour
+    // for a shell that restarted under a theme that was already pinning.
+    //
+    // WHAT IT DOES NOT COVER, said out loud rather than left to be found: a
+    // pinning theme that stops being DRAWN while the shell is not running -- its
+    // directory removed, or its manifest broken, so the next start falls back to
+    // genesis -- leaves the pin standing in the store, because there is no
+    // transition for this to see. The desktop then wears the departed theme's
+    // scheme until something moves it, and `desktop-scheme set` is what moves
+    // it. Closing that would mean reconciling the store against the manifest at
+    // every startup, which is a second mechanism that would also have to decide
+    // what to do about a person who picked a scheme while a pinning theme was
+    // on -- and that person's `set` is a real choice, not a state to correct.
+    onPinnedSchemeChanged: {
+        if (root.pinnedScheme === "")
+            Config.unpinScheme();
+        else
+            Config.pinScheme(root.pinnedScheme);
+    }
 
     function adoptManifest(text: string): void {
         let manifest = null;
@@ -568,20 +644,46 @@ Singleton {
     // what a manifest that gets one of them wrong means for the other. It means
     // nothing: they are independent claims and each falls back on its own.
     function adoptPalette(manifest: var): void {
-        const declared = manifest && manifest.palette ? manifest.palette.source : undefined;
+        // NOT NAMED `palette`, which is a property of this singleton twenty
+        // lines further down: a local of that name reads like the palette the
+        // shell is drawing with, and this is what a manifest claimed.
+        const declaredPalette = manifest && manifest.palette ? manifest.palette : null;
+        const declared = declaredPalette ? declaredPalette.source : undefined;
 
         if (declared === undefined) {
             root.paletteSource = root.defaultPaletteSource;
+            root.pinnedScheme = "";
             return;
         }
 
-        if (declared !== "scheme") {
+        if (declared === "pinned") {
+            const scheme = declaredPalette.scheme;
+
+            // A pin with no name is a theme asking for a scheme and not saying
+            // which, the same shape adoptFont refuses below for a "theme" font
+            // with no family. It cannot be honoured and must not be guessed at:
+            // there is no scheme to fall back to but the one already in force,
+            // which is what reading the scheme means.
+            if (typeof scheme !== "string" || scheme.trim() === "") {
+                console.warn(`Theme: ${root.themeName} asks to pin a colour scheme and does not name one -- reading the scheme`);
+                root.paletteSource = root.defaultPaletteSource;
+                root.pinnedScheme = "";
+                return;
+            }
+
+            // THE NAME FIRST AND THE SOURCE SECOND, so that the invariant above
+            // holds at every moment the handler can run: assigning pinnedScheme
+            // is what fires it, and by then paletteSource has to agree.
+            root.pinnedScheme = scheme.trim();
+            root.paletteSource = declared;
+            return;
+        }
+
+        if (declared !== "scheme")
             console.warn(`Theme: ${root.themeName} asks for a palette source called "${declared}", which this shell does not know -- reading the scheme`);
-            root.paletteSource = root.defaultPaletteSource;
-            return;
-        }
 
-        root.paletteSource = declared;
+        root.paletteSource = root.defaultPaletteSource;
+        root.pinnedScheme = "";
     }
 
     // ---------------- What the theme declares about the type ----------------
@@ -596,11 +698,13 @@ Singleton {
     // and the setting that picks it offers only families carrying the glyph set
     // genesis draws with.
     //
-    // "theme" is the other half and it IS built, unlike the palette's "pinned"
-    // above, because there is a theme that needs it the day it exists: a theme
-    // whose icons.json replaces the Nerd Font codepoints with an icon font of
-    // its own is a theme whose pictograms are not in any family that setting
-    // offers. Its `family` reaches Text.font.family unchanged.
+    // "theme" is the other half, and it exists for a theme that needs it: a
+    // theme whose icons.json replaces the Nerd Font codepoints with an icon
+    // font of its own is a theme whose pictograms are not in any family that
+    // setting offers. Its `family` reaches Text.font.family unchanged. It is
+    // shaped like the palette's "pinned" above -- a source name, and one more
+    // key that only that source reads -- and adoptPalette refuses a pin with no
+    // scheme in the same words this refuses a font with no family.
     //
     // WHAT THE HOST DOES NOT DO IS CHECK THE FAMILY IS INSTALLED, and that is a
     // decision rather than an omission. Qt resolves a family name by
@@ -681,17 +785,19 @@ Singleton {
         root.themeFontFamily = "";
     }
 
-    // ONE VALUE AND A SWITCH ANYWAY, because the switch is the seam: "pinned"
-    // is one more case returning a path inside the theme directory, and every
-    // line below it already handles a palette that changes file.
-    readonly property string palettePath: {
-        switch (root.paletteSource) {
-        case "scheme":
-        default:
-            // shellPath and not configPath: the latter is deprecated in 0.3.0.
-            return Quickshell.shellPath("colors.json");
-        }
-    }
+    // ONE VALUE AND NO SWITCH, and the switch that used to be here is the
+    // mistake this file's palette section now names. It was a seam kept open
+    // for "pinned" to return a path inside the theme directory -- which is the
+    // design that was declined, not the one that was built. What was built
+    // changes WHICH SCHEME matugen renders from, and matugen writes the same
+    // file it always did: a pinning theme reads colors.json exactly like every
+    // other theme, and the pin is why colors.json says gruvbox.
+    //
+    // So there is one palette file, there has only ever been one, and this
+    // stays a named property because paletteFile below binds its path to it.
+    //
+    // shellPath and not configPath: the latter is deprecated in 0.3.0.
+    readonly property string palettePath: Quickshell.shellPath("colors.json")
 
     // FOLLOWS Themes.name AND NOT Config.theme, unlike the manifest read in
     // modules/Themes.qml, and the two are right for opposite reasons. That one

@@ -44,14 +44,20 @@
 #                    wallpaper change -- kitty by signal, niri by watching its
 #                    include, GTK and Zen at the next start.
 #
-#  WHY THE USER'S CHOICE IS KEPT SEPARATELY FROM THE ONE IN EFFECT. A theme
-#  will later be able to PIN a scheme -- "this theme is Gruvbox, and while it is
-#  on you get Gruvbox" -- and leaving that theme has to put back whatever was
-#  there before, not the default and not the theme's. One key cannot answer both
-#  questions, so there are two: `scheme` is what renders, `chosen` is what the
-#  person last picked for themselves. `set` writes both; `pin` writes only the
-#  first; `unpin` copies the second over the first. Nothing pins anything today
-#  and the keys cost two lines.
+#  WHY THE USER'S CHOICE IS KEPT SEPARATELY FROM THE ONE IN EFFECT. A theme can
+#  PIN a scheme -- "this theme is Gruvbox, and while it is on you get Gruvbox"
+#  -- and leaving that theme has to put back whatever was there before, not the
+#  default and not the theme's. One key cannot answer both questions, so there
+#  are two: `scheme` is what renders, `chosen` is what the person last picked
+#  for themselves. `set` writes both; `pin` writes only the first; `unpin`
+#  copies the second over the first.
+#
+#  AND THE THING THAT PINS IS THE SHELL. A theme's manifest declares
+#  `"palette": { "source": "pinned", "scheme": "gruvbox-dark" }`; Theme.qml
+#  reads that declaration and Config.qml's `pinScheme`/`unpinScheme` are the two
+#  calls that reach `pin` and `unpin` here -- one on entering the theme, one on
+#  leaving it. Theme.qml's palette section is where that contract is written
+#  down, and tests/scheme-pinning.sh drives the whole round trip through it.
 #
 #  Same shape as desktop-opacity and desktop-font, its siblings: one state file
 #  under ~/.local/state, found through readlink rather than $PATH, written whole
@@ -133,10 +139,28 @@ current() {
 
 # The one the PERSON last picked, which is not always the one in effect -- see
 # the note about pinning at the top.
+#
+# DEFAULT_SCHEME AND NOT `current()` WHEN THE KEY IS UNSET, which is a bug that
+# destroyed the one thing this key exists to protect. Falling back to what is IN
+# EFFECT means a `pin` before any `set` records the THEME's scheme as the
+# person's own choice, and then there is nothing left for `unpin` to go back to.
+# That is not an exotic state: the store does not exist until somebody picks a
+# scheme, so it is every fresh clone. Measured on one, before the fallback below
+# was the default: `pin gruvbox-dark` and then `unpin` left `chosen` and
+# `scheme` both reading gruvbox-dark, and printed "already in effect, nothing to
+# re-render".
+#
+# THE DEFAULT IS THE ACCURATE ANSWER HERE AND NOT MERELY THE SAFE ONE. `set` has
+# written both keys since this script's first version, so a store carrying
+# `scheme` and no `chosen` can only have been written by a `pin` -- and what the
+# desktop was wearing before that pin is precisely what `current()` answers on a
+# store with no `scheme` row either: DEFAULT_SCHEME. So this is "put back
+# whatever was there before", spelled for the one case where nothing was ever
+# recorded. The other reading -- leave it where the theme left it -- is the bug.
 chosen() {
     local value
     value="$(state_get "$STATE_FILE" chosen)"
-    printf '%s\n' "${value:-$(current)}"
+    printf '%s\n' "${value:-$DEFAULT_SCHEME}"
 }
 
 # THE WORDS THAT OPEN THE matugen COMMAND LINE, one per line, for
@@ -336,8 +360,8 @@ prune_retired_keys() {
 
 # Write the keys, then re-render only if what renders actually moved. The state
 # is written either way: `set` on the scheme already in effect still has to
-# record it as the person's own choice, which is the case that matters the day
-# a theme is pinning something.
+# record it as the person's own choice, which is the case that matters while a
+# theme is pinning something -- that record is what `unpin` comes back to.
 commit() {
     local before="$1"
     local after

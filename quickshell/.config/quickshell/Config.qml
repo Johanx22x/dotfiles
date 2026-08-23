@@ -488,6 +488,58 @@ Singleton {
         schemeApply.running = true;
     }
 
+    // ---------------- And the two a THEME goes through ----------------
+    //
+    // A THEME CAN NAME A SCHEME AND THE WHOLE DESKTOP THEN WEARS IT, which is
+    // what `"palette": { "source": "pinned", "scheme": "gruvbox-dark" }` in a
+    // manifest means. Theme.qml is what reads that declaration and what decides
+    // when a theme has been entered or left; these two are the push, and they
+    // are here rather than there for the reason the section above gives -- this
+    // file is the shell's one seam into `desktop-scheme`, so there is one place
+    // that spawns it and one place to look when it did not run.
+    //
+    // WHY THEY ARE NOT `setScheme` WITH A FLAG. The three commands mean
+    // different things to the store the script keeps: `set` writes what renders
+    // AND what the person chose, `pin` writes only the first, `unpin` copies the
+    // second back over the first. A person picking Gruvbox and a theme bringing
+    // Gruvbox with it are not the same event, and the difference between them is
+    // the whole of what makes leaving a theme give the desktop back.
+    //
+    // THE SAME PROCESS AND THE SAME GUARD as `setScheme`, deliberately. Each of
+    // these ends in `wallpaper-switch reapply`, so two of them overlapping are
+    // two matugen renders writing the same fourteen files and the one that
+    // finishes last wins. The cost of the guard is that a theme changed during a
+    // render that is already running does not pin at all -- the desktop then
+    // wears the scheme it had, until the theme is entered again or a scheme is
+    // picked. A queue behind this would be a second mechanism for a window of
+    // about a second, and nothing has asked for one.
+    function pinScheme(name: string): void {
+        if (name === "" || schemeApply.running)
+            return;
+
+        root.schemeRequested = name;
+        schemeApply.command = ["desktop-scheme", "pin", name];
+        schemeApply.running = true;
+    }
+
+    function unpinScheme(): void {
+        if (schemeApply.running)
+            return;
+
+        // NOTHING IS NAMED AS APPLYING, and that is the honest answer rather
+        // than a missing one. What an unpin restores is `chosen`, which lives in
+        // the script's store; this file does not read that key and guessing at
+        // it would put a row of the scheme picker into its "applying" state on
+        // the strength of a prediction. The same rule as `currentPath` in
+        // WallpaperPage.qml: quicker, and a lie in exactly the case where the
+        // truth is worth having. `scheme` still follows the store, so the row
+        // that ends up marked as current is the one the script actually landed
+        // on.
+        root.schemeRequested = "";
+        schemeApply.command = ["desktop-scheme", "unpin"];
+        schemeApply.running = true;
+    }
+
     // Deliberately no onExited handler. `scheme` above follows the state file,
     // which the script has already written by the time it returns, and the
     // failure case is a file that never changed rather than one to read again.
