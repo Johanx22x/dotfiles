@@ -409,11 +409,12 @@ PanelWindow {
             // which is exactly windows-11-dark's ui_surface, so Theme.surface
             // is the tint.
             //
-            // Theme.glass() and NOT Fluent.acrylic() here, which is the one
-            // place in this file the two materials have to be told apart: this
-            // is a window on the desktop, not a flyout over something, and the
-            // glass alpha is the one the blur rule does not ignore.
-            color: Theme.glass(Theme.surface)
+            // OPAQUE, by Johan's rule (2026-08-23): transparency on the
+            // taskbar, the settings window and the applications, and nowhere
+            // else. This drew Theme.glass() before -- "a window on the
+            // desktop, not a flyout" -- and the classification was right, but
+            // the rule that classification fed into changed over its head.
+            color: Theme.surface
 
             // The one-pixel stroke every Windows surface with a corner radius
             // carries. No scheme role holds a black overlay, so this reads the

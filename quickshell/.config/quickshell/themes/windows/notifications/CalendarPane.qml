@@ -69,7 +69,7 @@ Column {
     // ---------------- The time ----------------
     Item {
         width: parent.width
-        height: time.implicitHeight + date.implicitHeight + root.inset
+        height: root.inset + time.implicitHeight + date.implicitHeight + root.inset
 
         Text {
             id: time
@@ -77,6 +77,11 @@ Column {
             anchors.left: parent.left
             anchors.leftMargin: root.inset
             anchors.top: parent.top
+            // The panel's own breathing room. Without it the clock ink began
+            // nine pixels under the panel's top edge -- measured off a live
+            // screenshot against ~20 in notifcenter-calendar-empty.jpg -- and
+            // Johan read it exactly right: cramped at the top.
+            anchors.topMargin: root.inset
 
             text: Qt.formatDateTime(clock.date, Config.use24Hour ? "HH:mm:ss" : "h:mm:ss")
             font.family: Theme.fontFamily

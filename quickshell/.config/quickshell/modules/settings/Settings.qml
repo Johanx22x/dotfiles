@@ -515,6 +515,12 @@ FloatingWindow {
                                 shown.push(page);
                             }
                             root.pages = shown;
+
+                            // The rail order, as names, for openPage(). Titles
+                            // and not ids because the title is the one name a
+                            // page already carries.
+                            SettingsState.registerPageTitles(
+                                shown.map(page => page.title.toLowerCase()));
                         }
                     }
                 }

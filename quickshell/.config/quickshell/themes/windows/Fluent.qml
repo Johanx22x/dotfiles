@@ -113,7 +113,15 @@ QtObject {
     // drives, and everything that opens ON TOP of something uses this. The
     // difference is not decoration: at the bar's transparency a launcher panel
     // showed the file manager's sidebar through itself, legibly.
-    readonly property real flyoutAlpha: 0.94
+    //
+    // 1.0 -- OPAQUE -- AND THAT IS JOHAN'S DECISION, 2026-08-23, overriding
+    // what Windows itself does. His rule for this desktop: transparency on the
+    // taskbar, the settings window and the applications, and nowhere else. The
+    // flyouts, the launcher, the power menu and the toasts are solid. The
+    // paragraph above is why the previous 0.94 was already nearly solid; this
+    // takes the last step rather than deleting acrylic(), so one number brings
+    // the translucency back if he ever changes his mind.
+    readonly property real flyoutAlpha: 1.0
 
     function acrylic(colour: color): color {
         return Qt.alpha(colour, root.flyoutAlpha);

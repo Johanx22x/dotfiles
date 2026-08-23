@@ -235,8 +235,19 @@ Item {
                         QuickTile {
                             cellWidth: grid.cell
                             tileGlyph: Icons.nightLight
-                            caption: "Night light"
+                            // The caption is where the tile says why it will
+                            // not move: the host rule is that the schedule
+                            // outranks the hand -- NightLight.setEnabled()
+                            // RETURNS silently while `scheduled` is on -- and
+                            // a tile that swallowed the click without a word
+                            // was reported, correctly, as broken. The Display
+                            // page's own switch greys itself under the same
+                            // rule; this is that answer in tile form.
+                            caption: NightLight.scheduled
+                                ? "Night light \u00b7 scheduled"
+                                : "Night light"
                             on: NightLight.enabled
+                            tileEnabled: !NightLight.scheduled
                             onToggled: NightLight.toggle()
                         }
 

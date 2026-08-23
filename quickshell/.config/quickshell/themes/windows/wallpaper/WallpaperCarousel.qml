@@ -462,13 +462,15 @@ PanelWindow {
             // OverlayCornerRadius, the 8 Windows gives a window.
             radius: Fluent.overlayRadius
 
-            // MICA, whose documented fallback is SolidBackgroundFillColorBase
-            // #202020 -- exactly windows-11-dark's ui_surface. hyprland.lua's
-            // blur-quickshell rule is xray: it samples the wallpaper and not
-            // the windows in front of it, which is what Mica does.
-            // Theme.glass() and not an alpha chosen here, because the rule
-            // ignores anything under 0.84.
-            color: Theme.glass(Theme.surface)
+            // OPAQUE, by Johan's rule (2026-08-23): transparency on the
+            // taskbar, the settings window and the applications, and nowhere
+            // else. The Mica reading that used to be here (glass + the xray
+            // blur rule) was sound; the rule it fed into changed over its
+            // head, and a solid SolidBackgroundFillColorBase is still exactly
+            // what Mica falls back to when transparency is off system-wide --
+            // which is now, in effect, this desktop's setting for everything
+            // that is not the bar, the settings window or an application.
+            color: Theme.surface
 
             border.width: 1
             border.color: Theme.outlineVariant
@@ -633,16 +635,17 @@ PanelWindow {
                         //
                         // HOVER BRIGHTENS, PRESS DIMS, AND NEITHER ANIMATES:
                         // Fluent.hoverMs is 0 and there is deliberately no
-                        // Behavior. Through Theme.glass() because the card
-                        // under it is glass -- an opaque fill would punch an
-                        // unblurred patch wherever the pointer is.
+                        // Behavior. Plain fills now that the card is opaque --
+                        // the glass wrapper these carried existed to keep the
+                        // blur under the pointer, and there is no blur to
+                        // keep.
                         Rectangle {
                             anchors.fill: parent
                             radius: Fluent.controlRadius
 
-                            color: pointer.pressed ? Theme.glass(Fluent.fillPress)
+                            color: pointer.pressed ? Fluent.fillPress
                                 : (pointer.containsMouse || tile.GridView.isCurrentItem)
-                                    ? Theme.glass(Fluent.fillSubtleHover)
+                                    ? Fluent.fillSubtleHover
                                     : "transparent"
                         }
 

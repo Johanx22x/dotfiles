@@ -367,12 +367,13 @@ declare -A BASELINE=(
     # picker in the surface that is supposed to host any of them.
     [windows:missing-property]=4
 
-    # TWO Quickshell C++ TYPES AND ONE PanelWindow SCOPE. The two are
+    # ONE Quickshell C++ TYPE AND ONE PanelWindow SCOPE. The type is
     # `QList<NotificationAction*>` read off a live notification in
     # components/NotificationCard.qml, which Quickshell does not expose
-    # declaratively; the third is the `margins` from the paragraph above,
+    # declaratively -- it was two reads until the action filter hoisted one
+    # into a plain `var`; the other is the `margins` from the paragraph above,
     # counted once in each category.
-    [windows:unresolved-type]=3
+    [windows:unresolved-type]=2
 
     # --- theme-probe: 6 warnings --------------------------------------------
     #

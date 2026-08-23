@@ -80,7 +80,27 @@ Item {
     readonly property string appSource: Icons.resolve(root.note.appIcon)
     readonly property string bodySource: root.note.image
 
-    readonly property int actionCount: root.note.actions.length
+    // ONLY THE ACTIONS THAT CARRY A LABEL. The freedesktop protocol lets a
+    // sender attach a "default" action -- the one that means "clicked the
+    // body" -- and its label is routinely empty, because nothing is supposed
+    // to draw it. Counting it made a real button with nothing written on it:
+    // photographed on a notify-send card whose only action was the default
+    // one. Windows has no such button either; its toast activation is the
+    // body, which is the same statement the protocol is making.
+    // An indexed loop and not `[...].filter()`: `actions` is a C++ QList, and
+    // spreading one depends on the iterator protocol being wired for that
+    // exact wrapper type. Length-and-index is the access every wrapper has.
+    readonly property var labelledActions: {
+        const out = [];
+        const all = root.note.actions;
+        for (let i = 0; i < all.length; i++) {
+            if ((all[i].text ?? "").trim() !== "")
+                out.push(all[i]);
+        }
+        return out;
+    }
+
+    readonly property int actionCount: root.labelledActions.length
 
     // WHETHER THERE IS ANYTHING TO EXPAND, asked twice because the answer has
     // to survive being expanded. Collapsed, `truncated` is the elide reporting
@@ -330,7 +350,7 @@ Item {
         spacing: root.buttonGap
 
         Repeater {
-            model: root.note.actions
+            model: root.labelledActions
 
             Rectangle {
                 id: button

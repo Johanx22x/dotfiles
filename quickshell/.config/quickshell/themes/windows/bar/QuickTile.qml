@@ -27,6 +27,12 @@ Item {
     property bool on: false
     property bool split: false
 
+    // Windows' DISABLED control state: the tile draws at rest with dim ink,
+    // ignores hover and press, and refuses the click. Fluent's disabled text
+    // is 36% white -- TextFillColorDisabled #5DFFFFFF -- and the fill stays at
+    // rest because a control that cannot be pressed has no pressed state.
+    property bool tileEnabled: true
+
     signal toggled
     signal picked
 
@@ -42,12 +48,16 @@ Item {
 
         color: {
             if (root.on) {
+                if (!root.tileEnabled)
+                    return Qt.alpha(Theme.primary, 0.5);
                 if (mainPointer.pressed)
                     return Qt.alpha(Theme.primary, 0.8);
                 if (mainPointer.containsMouse)
                     return Qt.alpha(Theme.primary, 0.9);
                 return Theme.primary;
             }
+            if (!root.tileEnabled)
+                return Theme.surfaceContainerHighest;
             if (mainPointer.pressed)
                 return Theme.surface;
             if (mainPointer.containsMouse)
@@ -68,7 +78,8 @@ Item {
             anchors.bottom: parent.bottom
             anchors.right: root.split ? divider.left : parent.right
 
-            hoverEnabled: true
+            enabled: root.tileEnabled
+            hoverEnabled: root.tileEnabled
             onClicked: root.toggled()
         }
 
@@ -77,8 +88,11 @@ Item {
             text: root.tileGlyph
             font.family: Theme.fontFamily
             font.pointSize: Fluent.bodySize
-            // Black on the accent fill, white otherwise.
-            color: root.on ? Theme.textOnPrimary : Theme.textOnSurface
+            // Black on the accent fill, white otherwise; disabled dims either.
+            color: {
+                const ink = root.on ? Theme.textOnPrimary : Theme.textOnSurface;
+                return root.tileEnabled ? ink : Qt.alpha(ink, 0.36);
+            }
         }
 
         Rectangle {

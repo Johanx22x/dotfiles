@@ -57,6 +57,48 @@ Singleton {
         root.isOpen = true;
     }
 
+    // ---------------- Opening a page by NAME ----------------
+    //
+    // What a THEME has to use. Page indices are positions in the rail, and the
+    // rail is shortened by availability -- a page the compositor cannot back
+    // is left out entirely and everything after it renumbers. A theme that
+    // wrote `open(9)` for the network list would open the wrong page on the
+    // machine where a page above it is missing, and the wrong page looks
+    // exactly like the right one until somebody reads it.
+    //
+    // The titles arrive from the window when its page host builds, which is
+    // the first time the window opens -- pages sit behind a Loader on
+    // `everOpened`. So a name asked for before that is PARKED rather than
+    // dropped: opening the window is what builds the pages, building the pages
+    // is what registers the titles, and registering resolves the parked name.
+    // The window opens on the page that was asked for either way.
+    property var pageTitles: []
+    property string pendingPage: ""
+
+    function openPage(title: string): void {
+        const want = title.toLowerCase();
+        const i = root.pageTitles.indexOf(want);
+        if (i >= 0) {
+            root.open(i);
+            return;
+        }
+        root.pendingPage = want;
+        root.isOpen = true;
+    }
+
+    // Called once by the window's page host. Unknown names fall through to
+    // page 0 rather than erroring, because by the time this can say "no such
+    // page" the window is already on screen and SOMETHING has to be current.
+    function registerPageTitles(titles: var): void {
+        root.pageTitles = titles;
+        if (root.pendingPage === "")
+            return;
+        const i = titles.indexOf(root.pendingPage);
+        root.pendingPage = "";
+        if (i >= 0)
+            root.currentPage = i;
+    }
+
     function close(): void {
         root.isOpen = false;
     }

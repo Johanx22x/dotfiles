@@ -133,7 +133,11 @@ PanelWindow {
         anchors.rightMargin: Theme.barPadding
         anchors.verticalCenter: parent.verticalCenter
 
-        onClicked: barPopout.openAt(clock.x + clock.width / 2, notificationCentre)
+        // toggleAt, not openAt: a second click on the widget that opened a
+        // flyout closes it, which is what Windows does on every one of these.
+        // openAt was the bug -- the click re-opened what was already open and
+        // the flyout looked stuck.
+        onClicked: barPopout.toggleAt(clock.x + clock.width / 2, notificationCentre)
     }
 
     TrayCorner {
@@ -149,8 +153,8 @@ PanelWindow {
         showKeyboardLayout: root.widget("keyboardLayout")
         showNotifications: root.widget("notifications")
 
-        onOverflowRequested: barPopout.openAt(corner.x + corner.width / 2, trayMenu)
-        onQuickSettingsRequested: barPopout.openAt(corner.x + corner.width / 2, quickSettings)
+        onOverflowRequested: barPopout.toggleAt(corner.x + corner.width / 2, trayMenu)
+        onQuickSettingsRequested: barPopout.toggleAt(corner.x + corner.width / 2, quickSettings)
     }
 
     // ================= THE ONE POPOUT THE BAR OWNS =================
@@ -188,8 +192,14 @@ PanelWindow {
                 // this shell already has in its settings window. Sending
                 // somebody there is honest; drawing a second, thinner copy of
                 // a list that already exists is not.
+                //
+                // openPage BY NAME, and this used to be `open()` with no
+                // argument -- which set currentPage to undefined and landed on
+                // whatever compared equal, so the chevron next to Wi-Fi opened
+                // the settings window on the wrong page and looked random.
+                // The tile already says which page it means.
                 barPopout.close();
-                SettingsState.open();
+                SettingsState.openPage(page);
             }
         }
     }
