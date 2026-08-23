@@ -48,6 +48,29 @@
 // `cp -r genesis tokyo` is a second theme rather than a directory full of
 // references to the first.
 //
+// AND WHERE themes/ IS WHEN THIS LOOKS, WHICH IS NOT WHERE THE COPY WAS MADE.
+// `Quickshell.shellPath` resolves against `Quickshell.shellDir`, and that is
+// the directory the shell was LAUNCHED from -- both compositors run
+// `qs -d --no-duplicate` with no `-p`, so it is $XDG_CONFIG_HOME/quickshell.
+// That is stow's target and not this repository, and Quickshell 0.3.1 does not
+// canonicalize it: a shell.qml reached through a symlink reports the LINK's
+// directory as shellDir, measured in a scratch home. install.sh stows
+// --no-folding on purpose, so ~/.config/quickshell/themes is a real directory
+// holding one symlink per file rather than one link standing for the tree --
+// lib/units/40-symlinks.sh says why -- and the consequence lands here: a
+// directory ADDED to the checkout has nothing at all on the other side until
+// `./install.sh apply symlinks` has run. `cp -r genesis tokyo` is two commands,
+// and themes/genesis/README.md is where both of them are written down.
+//
+// SO AN UNSTOWED THEME IS NOT A GREYED ROW, IT IS NO ROW. The catalogue below
+// lists that one directory and there is no second place to look: nothing in
+// Quickshell 0.3.1 resolves a symlink -- its qmltypes carry no canonical and no
+// readLink -- so finding the checkout from in here would mean spawning a
+// process at every startup to ask about a directory this shell never loads
+// from, and then a fault the picker has no wording for. `install.sh check` is
+// the one thing that can see both sides at once, and it reports exactly this:
+// the files a package has that $HOME does not, and the directory they are in.
+//
 // THE RELATIVE FORM IS NOW A RULE AND NOT A NECESSITY, which changed under it
 // and is worth not mistaking. While nothing imported a theme,
 // `import qs.themes.genesis.island` from inside one failed with "module is not
@@ -367,8 +390,16 @@ Singleton {
         printErrors: false
 
         onLoaded: root.adoptManifest(manifestFile.text())
+        // THE PATH AND NOT THE NAME, and it is the one line here where the
+        // difference matters. This is the failure of a file that is not there,
+        // and `themes/tokyo/manifest.json` reads like the checkout somebody
+        // just copied a directory into -- which is the exact wrong place to
+        // send them looking. The absolute path says out loud that the shell
+        // read ~/.config/quickshell, and the header above says why. Every other
+        // warning in this file names the theme instead: those manifests were
+        // read, and what is wrong with them is not where they are.
         onLoadFailed: {
-            console.warn(`Themes: themes/${Config.theme}/manifest.json cannot be read, falling back to ${root.fallbackName}`);
+            console.warn(`Themes: ${manifestFile.path} cannot be read, falling back to ${root.fallbackName}`);
             root.configuredUsable = false;
         }
     }

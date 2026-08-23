@@ -54,9 +54,22 @@ is which.
 A theme reaches its own parts by **relative path** and never by its own name:
 `import "../island"`, not `import qs.themes.genesis.island`. It is a rule, and
 now only a rule -- the module form does resolve again, and it was tried -- but
-the relative form is what makes this directory copyable. `cp -r genesis tokyo`,
-edit `manifest.json`, set `theme` to `tokyo`, and the shell draws the copy;
-spell your own name in here and the copy draws the original's island instead.
+the relative form is what makes this directory copyable:
+
+```sh
+cd quickshell/.config/quickshell/themes
+cp -r genesis tokyo             # a whole second theme, nothing to rename inside it
+$EDITOR tokyo/manifest.json     # "name" and "title"
+cd -; ./install.sh apply symlinks   # link the new directory into ~/.config
+```
+
+Then set `theme` to `tokyo` -- in the settings window, or in `config.json` --
+and the shell draws the copy. Spell your own name in here and the copy draws the
+original's island instead.
+
+**The last command is not optional and it is the one that is easy to miss**, so
+it has a section of its own further down: [Where the shell looks for
+it](#where-the-shell-looks-for-it).
 
 ## WHAT IS DELIBERATELY NOT IN HERE
 
@@ -115,6 +128,53 @@ be read, or which claims an interface this shell does not speak, falls back to
 the one that ships with it -- an empty desktop has no way back to the setting
 that emptied it.
 
+### Where the shell looks for it
+
+`~/.config/quickshell/themes`, and **never this checkout**. Both compositors
+start the shell with `qs -d --no-duplicate` and no `-p`, so
+`Quickshell.shellDir` is `$XDG_CONFIG_HOME/quickshell`, which is stow's target;
+Quickshell 0.3.1 does not resolve that path through the links inside it, and a
+`shell.qml` reached through a symlink reports the link's own directory
+(measured in a scratch home, not assumed).
+
+`install.sh` stows `--no-folding`, which is deliberate and argued in
+`lib/units/40-symlinks.sh`: `~/.config/quickshell/themes/` is a **real directory
+holding one symlink per file**, rather than one link standing for the whole
+tree. That is what keeps an application writing into `~/.config` from dropping a
+file inside the repository -- and it is also why a directory that exists only in
+the checkout does not exist for the shell. Nothing links to it, and nothing
+will until `stow` runs again.
+
+The failure that follows has no symptom at all. Reproduced in a scratch home,
+with a second theme copied into the repository and not stowed:
+
+* the theme picker lists **one** theme -- the catalogue `modules/Themes.qml`
+  builds is `["genesis"]`, so there is not even a greyed-out row to carry a
+  reason;
+* setting `theme` to it by hand draws genesis and logs `Themes:
+  /home/.../.config/quickshell/themes/probe/manifest.json cannot be read,
+  falling back to genesis` -- the path, which is the only hint anywhere that
+  the shell read somewhere else;
+* `./install.sh check` says `missing  symlinks  Symlinks -- 30 not linked under
+  ~/.config/quickshell/themes/probe`, which is the count of that directory and
+  the directory itself;
+* `./install.sh apply symlinks` links it, and the catalogue is
+  `["genesis","probe"]`.
+
+The third of those is the only one that names the problem, and that is not an
+oversight in the other two: the installer is the only part of this that can see
+the checkout and `$HOME` at once. The shell cannot. `Quickshell.shellPath` is
+the whole of its map, nothing in Quickshell 0.3.1 resolves a symlink to find
+the other end of one, and a picker that went looking would be spawning a process
+on every start to describe a directory it will never load from. The header of
+`modules/Themes.qml` is where that trade is written out.
+
+**A theme copied into `~/.config/quickshell/themes/` instead** is the mirror
+image: real files on the target side, so the shell lists it at once and `check`
+says nothing about it, because no package claims that directory. It is also not
+in the repository -- the next machine will not have it, and neither will this
+one after a re-clone.
+
 ## THE HONEST LIMIT
 
 **The manifest does not yet say what a theme provides.** The host builds the
@@ -125,12 +185,15 @@ already take an extra member through `register()`; nothing hands it one.
 
 **A theme is only watched if `shell.qml` names it.** Quickshell watches the
 files it reached by following imports out of `shell.qml`, so the nine import
-lines there are what make an edit in here reload the shell. A theme dropped
-into `themes/` by hand still runs -- it is loaded by URL and `Config.theme` is
-all it needs -- but nothing watches it, so editing it needs
-`qs kill && qs -d --no-duplicate` until its directories are on that list. Add
-them when a theme joins the repository. The long note at the top of
-`modules/Themes.qml` has the whole account.
+lines there are what make an edit in here reload the shell. A theme that is
+linked into `~/.config/quickshell/themes` but not on that list still *runs* --
+it is loaded by URL and `Config.theme` is all it needs -- but nothing watches
+it, so editing it needs `qs kill && qs -d --no-duplicate` until its directories
+are on that list. Add them when a theme joins the repository. The long note at
+the top of `modules/Themes.qml` has the whole account.
+
+A theme that is not linked there at all does not run and is not offered, which
+is a different thing entirely and is [above](#where-the-shell-looks-for-it).
 
 The imports do **not** make a broken theme everyone's problem, which is what it
 looks like they would and is the reason it was measured instead of reasoned
