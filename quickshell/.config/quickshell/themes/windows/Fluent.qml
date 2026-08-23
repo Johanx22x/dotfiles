@@ -93,6 +93,32 @@ import qs
 QtObject {
     id: root
 
+    // --- MATERIAL: THE BAR AND THE FLYOUTS ARE NOT THE SAME TRANSPARENCY ----
+    //
+    // Measured off photographs, not off the docs, and the docs would have led
+    // the other way: Microsoft describes one acrylic recipe and it is the same
+    // recipe for both. What the pictures show is that the TASKBAR carries the
+    // wallpaper's colour plainly -- a blue wallpaper gives a blue-tinged bar --
+    // while a FLYOUT over the same wallpaper stays a fairly solid grey. Same
+    // material, two results, because the taskbar sits on the desktop and a
+    // flyout sits on whatever is under it.
+    //
+    // One reference agent put it best after collecting thirty-four of these:
+    // "acrylic is not one number". A taskbar menu over magenta goes visibly
+    // purple; a desktop watermark reads straight through a volume flyout; a
+    // flyout over red stays stubbornly neutral. Getting the value right from
+    // the XAML would not have saved us.
+    //
+    // So the bar uses Theme.glass(), which the theme's surfaceAlpha token
+    // drives, and everything that opens ON TOP of something uses this. The
+    // difference is not decoration: at the bar's transparency a launcher panel
+    // showed the file manager's sidebar through itself, legibly.
+    readonly property real flyoutAlpha: 0.94
+
+    function acrylic(colour: color): color {
+        return Qt.alpha(colour, root.flyoutAlpha);
+    }
+
     // --- GEOMETRY: the two radii, and there is no third ----------------------
     //
     // Fluent 2's whole radius ramp is 0/2/4/6/8/12/16/24/32. THERE IS NO 7
@@ -358,6 +384,23 @@ QtObject {
     readonly property int trayIcon: 16
     readonly property int trayPadding: 8
     readonly property int badgeHeight: 14
+
+    // ---- THE SEARCH FLYOUT ----
+    //
+    // OURS. Microsoft publishes nothing about this screen: it is a WebView2
+    // surface rather than XAML, which is verifiable from the Windhawk styler
+    // mod that matches its source URL. Measured off a photograph of it.
+    //
+    // THE FIELD IS A PILL and that is the number that matters here. The
+    // Settings search box is a 4px box; this one is fully rounded, and it is
+    // among the first things the eye reads on the screen.
+    readonly property int searchFieldHeight: 40
+    readonly property int chipHeight: 30
+    readonly property int resultRowHeight: 44
+    readonly property int resultBestHeight: 62
+    readonly property int resultIcon: 24
+    readonly property int resultBestIcon: 32
+    readonly property int previewIcon: 64
     // CORRECTED AGAINST A PHOTOGRAPH. These were 6 and 16 and 3, taken from a
     // Windhawk mod's source -- and every published width for this indicator
     // comes from a mod that REDESIGNS it into a pill or a bubble. A close-up

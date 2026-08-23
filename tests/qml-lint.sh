@@ -334,6 +334,24 @@ declare -A BASELINE=(
     # Lower these as they fall. A budget left above the real number is a budget
     # that hides the next regression underneath it.
     [windows:uncreatable-type]=6
+    #
+    # Seven delegate reads and one Quickshell artefact, and both are the
+    # documented shapes rather than anything new:
+    #
+    #   six in the launcher's ListView delegate and one in the preview pane's
+    #   Repeater. Inside a delegate `root.anything` is out of scope as far as
+    #   qmllint is concerned; hanging them off the view instead was tried on
+    #   the first attempt and moved them into [missing-property], which is
+    #   worse -- that category is the one that catches a MISSPELLED read
+    #   through a typed facade, and false positives in it are places a real
+    #   typo can hide.
+    #
+    #   one is `margins` on a PanelWindow, a grouped scope qmllint cannot
+    #   resolve at all. The shell budget carries the same finding from
+    #   components/Popout.qml, and writing it dotted rather than as a block
+    #   does not help -- that was measured, not assumed.
+    [windows:unqualified]=8
+    [windows:unresolved-type]=1
 
     # --- theme-probe: 6 warnings --------------------------------------------
     #
