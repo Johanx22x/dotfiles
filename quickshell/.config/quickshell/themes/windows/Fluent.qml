@@ -421,6 +421,11 @@ QtObject {
 
     // The hidden-icons flyout behind the corner's chevron. OURS.
     readonly property int trayOverflowCell: 44
+
+    // The clipboard history, Win+V. OURS -- Windows draws it as a flyout of
+    // rounded tiles and publishes no metric for any of them.
+    readonly property int clipboardCardHeight: 64
+    readonly property int clipboardGap: 6
     // CORRECTED AGAINST A PHOTOGRAPH. These were 6 and 16 and 3, taken from a
     // Windhawk mod's source -- and every published width for this indicator
     // comes from a mod that REDESIGNS it into a pill or a bubble. A close-up
@@ -492,4 +497,111 @@ QtObject {
     // draw.
     readonly property int bannerPadding: 8
     readonly property real bannerTint: 0.12
+
+    // ---- HOW FAR A FLYOUT FLOATS OFF THE TASKBAR ---------------------------
+    //
+    // OURS, measured off ref/tray-volume-flyout.jpg: on a 1600px-wide shot of a
+    // 1920 desktop the volume flyout's right edge stands about 13px clear of
+    // the screen edge, which is a shade over fifteen at full size. Windows
+    // leaves the same air at the bar. Twelve is the Fluent ramp's value nearest
+    // that and it is what components/Popout.qml holds the panel off by, on all
+    // four sides so that the clamp at the screen edge gets the same clearance
+    // the bar does.
+    //
+    // It is here rather than in theme.json because it is a fact about how this
+    // theme draws a flyout, not a knob: the host's Popout has no idea a gap
+    // exists and could not use one.
+    readonly property int flyoutInset: 12
+
+    // ---- THE SCROLL BAR'S TWO OTHER TIMES ----------------------------------
+    //
+    // The delays are already in the SCROLL BAR block above; these are what
+    // happens once a delay is up. ScrollBar_themeresources.xaml:
+    // ScrollBarExpandDuration and ScrollBarContractDuration are both
+    // 00:00:00.167 -- the same ControlFastAnimationDuration as `fastMs` -- and
+    // ScrollBarOpacityChangeDuration is 00:00:00.083, which is `fasterMs`.
+    // They are named here so a reader of components/ScrollBar.qml is not left
+    // to work out which of the three durations is which by elimination.
+    readonly property int scrollExpandMs: root.fastMs
+    readonly property int scrollTrackFadeMs: root.fasterMs
+
+    // ---- THE SEGMENTED LEVEL METER -----------------------------------------
+    //
+    // OURS, ALL OF IT. Windows has no level meter: the volume mixer draws a
+    // moving fill inside the slider's own track and nothing else in the shell
+    // shows a signal level at all. So the ticks are a design decision, and the
+    // one thing they are answering to is components/LevelMeter.qml's promise
+    // that this must not read as a second slider under the first one.
+    //
+    // A three-pixel tick on a five-pixel pitch is the coarsest spacing that
+    // still moves smoothly at speech rates on a 120px meter -- about forty
+    // ticks -- and it is visibly not a continuous bar at arm's length, which
+    // is the whole point of it.
+    readonly property int meterTick: 3
+    readonly property int meterPitch: 5
+    readonly property int meterHeight: 4
+
+    // ---------------- The settings window ----------------
+    //
+    // Everything above came out of Microsoft's source. The five alphas and
+    // sizes here came out of Microsoft's source AND out of the photographs in
+    // the brief, which is a distinction worth keeping: where the two disagreed
+    // the photograph won, and the line says so.
+
+    // CardStrokeColorDefault, #19000000 -- BLACK at ten per cent, which is why
+    // it is an alpha here and not a colour role. Measured in
+    // ref/settings-system-about.jpg: the gap between two stacked cards reads
+    // #1c1c1c over a #202020 pane, and 0.9 x 32 is 28.8. Theme.outlineVariant
+    // is #2f2f2f under this scheme and would draw a LIGHTER line there, which
+    // is the wrong direction for a card edge.
+    readonly property real cardStrokeAlpha: 0.098
+
+    // LayerFillColorDefault, #4C3A3A3A: the fill the settings window's content
+    // pane carries over the window's own mica. It is what makes the right-hand
+    // pane read lighter than the navigation pane in
+    // ref/settings-personalization-taskbar.jpg -- +13 on every channel -- while
+    // both are the same colour in a shot taken with transparency off.
+    readonly property real layerAlpha: 0.3
+
+    // OURS, and arithmetic rather than a measurement: the toolkit stacks
+    // SettingsCards four apart, the Column the host puts the rows in is fixed
+    // at spacing 2, so each card gives up one pixel at the top and one at the
+    // bottom and the gap adds up to the four Windows draws.
+    readonly property int cardGapInset: 1
+
+    // The margin around a section heading in the toolkit's own sample page:
+    // Margin="0,30,0,6".
+    readonly property int sectionHeaderTop: 30
+    readonly property int sectionHeaderBottom: 6
+
+    // A PICTOGRAM IS A CHARACTER HERE, so an icon size is a text size. 20 is
+    // FontIcon's own default and the box SettingsCard clamps a header icon to;
+    // 16 is what NavigationView asks its icons for.
+    readonly property real glyphSize: Theme.fontSize * 20 / 14
+    readonly property real glyphSmallSize: Theme.fontSize * 16 / 14
+
+    // The gap between a toggle's word and its track. OURS: in
+    // ref/settings-touchpad-mica.png -- a 150% shot -- the last ink of "On"
+    // sits 21 pixels left of the track, which is 14 at 100%. That is measured
+    // from INK and a Text item's box ends a pixel or two past it, so the
+    // number written here is the round one under the measurement.
+    readonly property int switchLabelGap: 12
+
+    // MenuFlyoutItem: 32 tall -- measured on the flyout in
+    // ref/settings-flyout-menu.jpg, two items 48 apart at 150% -- with its
+    // highlight inset four pixels from each side of the menu. The Explorer
+    // context menu in ref/contextmenu-explorer-dark.png is NOT this control
+    // and its rows are taller; the flyout inside the settings window is.
+    readonly property int menuItemHeight: 32
+    readonly property int menuItemInset: 4
+
+    // NumberBoxMinWidth. A stepper is a NumberBox with its spin buttons
+    // inline, and this is what stops the number's column collapsing onto the
+    // two buttons.
+    readonly property int numberBoxMinWidth: 120
+
+    // The portrait at the top of the navigation pane. OURS: measured 60 across
+    // in ref/settings-personalization-taskbar.jpg, which is a 1:1 shot -- the
+    // nav pill in it is exactly 36 tall.
+    readonly property int userAvatar: 60
 }

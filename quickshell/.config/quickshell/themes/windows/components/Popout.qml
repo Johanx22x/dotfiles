@@ -1,20 +1,133 @@
-// NOT DRAWN YET.
+// THE PANEL THAT HANGS OFF THE TASKBAR: Quick Settings, the notification
+// centre, the tray overflow. One window, moved under whichever item was
+// clicked, with its content swapped -- see components/Popout.qml for why it is
+// one and not one per item.
 //
-// The interface asks every theme for this file, so it exists and it loads. It
-// draws nothing, and that is the honest state rather than a placeholder
-// pretending to be a design: this theme is being built one surface at a time
-// against a photograph of the real thing, and this component's turn has not
-// come.
+// WHAT THIS FILE DOES, AND IT IS SMALLER THAN IT LOOKS LIKE IT SHOULD BE:
+// it INSTANTIATES the content the facade was handed, REPORTS how big that
+// content came out, and holds the flyout off the bar by the gap Windows
+// leaves. Three things, and the third is the only pixel of its own.
 //
-// When it does: read Popout from qs.components, and read
-// themes/genesis/components/README.md first. `row` is typed on purpose --
-// through `property var` a misspelled read is checked by nothing at all.
+// ---------------------------------------------------------------------------
+// THERE IS NO PANEL RECTANGLE HERE, AND THAT IS A DECISION, NOT AN OMISSION
+// ---------------------------------------------------------------------------
+//
+// The obvious implementation is one acrylic rounded rectangle with the content
+// inside it, and it is what genesis draws. Under this theme it is wrong, and
+// the photograph is what says so.
+//
+// `ref/quicksettings-media-tiles.jpg`: the media transport is a PHYSICALLY
+// SEPARATE rounded panel sitting above the Quick Settings panel, with a
+// visible gap between them through which the wallpaper reads. They are two
+// surfaces, not two sections of one. A rectangle drawn behind the whole
+// content would bridge that gap with a strip of acrylic and turn the two
+// panels back into one -- the exact thing the reference is a picture of NOT
+// happening.
+//
+// So under this theme the MATERIAL belongs to the content, one card at a time,
+// and bar/QuickSettings.qml already draws its two: `Theme.surfaceContainer`,
+// `Fluent.overlayRadius`, one-pixel `Theme.outlineVariant` border, each. This
+// file owns the window's inside and nothing that is painted in it. If a future
+// surface wants one panel edge to edge, it draws one panel edge to edge; that
+// is a fact about that surface and not about every popout.
+//
+// The shadow is still this file's, because a shadow is not a card: it belongs
+// to the whole thing that is floating, whatever shape that turned out to be.
+// MultiEffect takes the CONTENT as its source, so the shadow follows the real
+// silhouette -- two cards with a gap get two shadows and the gap keeps its
+// wallpaper.
+//
+// ---------------------------------------------------------------------------
+// SIZE COMES FROM THE CONTENT AND FROM NOWHERE ELSE
+// ---------------------------------------------------------------------------
+//
+// The facade is a PanelWindow, not an Item, and it reads `implicitWidth` and
+// `implicitHeight` off its Loader to decide how big a layer surface to ask
+// for -- as a session high-water mark, so a popout never shrinks the window
+// under a later one. Reporting nothing is not "the theme declined to draw":
+// it is a window frozen at the `popoutMinWidth` floor with the content
+// invisible inside it. Measured while this file was still the empty skeleton:
+//
+//     QSDBG open= true w= 340 h= 340 resW= 0 resH= 0
+//
+// And it has to come from the CONTENT: `root.width` is the Loader's width,
+// which the facade sets from this file's `implicitWidth`. Reading it back is
+// the loop rule 2 of themes/genesis/components/README.md is about.
+//
+// `row.topSlack` is not touched here on purpose. It is the facade's own
+// arithmetic for the fillets that hide behind the bar, both ends of it are in
+// components/Popout.qml, and under this theme it is 0 because
+// `Theme.barCornerRadius` is 0 -- Windows rounds windows, not screens.
 
 import QtQuick
+import QtQuick.Effects
+import qs
 import qs.components
+import qs.themes.windows
 
 Item {
+    id: root
+
     required property Popout row
 
-    implicitHeight: 0
+    // THE GAP BETWEEN A FLYOUT AND THE TASKBAR, WHICH ONLY THIS FILE CAN LEAVE.
+    //
+    // The facade anchors its window to the bar's inner edge and puts the panel
+    // hard against it: under a bottom bar `y: parent.height - height + slack`,
+    // which with no fillets is flush. Windows does not draw it flush -- every
+    // flyout in the reference set floats clear of the taskbar and clear of the
+    // screen edge -- so the clearance has to be inside what this file reports,
+    // and it is symmetric so that the clamp at the screen's right edge gets the
+    // same air as the bar does.
+    //
+    // It doubles as the room the shadow spills into.
+    readonly property int inset: Fluent.flyoutInset
+
+    implicitWidth: content.implicitWidth + root.inset * 2
+    implicitHeight: content.implicitHeight + root.inset * 2
+
+    // The flyout shadow, cast by whatever the content actually is. Elevation 32
+    // in ElevationHelper terms; see Fluent.qml on where the blur and the offset
+    // come from and on why dark mode's shadows are twice light mode's.
+    //
+    // `blurMax` is MultiEffect's own unit -- `shadowBlur` is a fraction of it --
+    // so the pair below is the closest this gets to "16px of blur". The tail
+    // beyond `inset` is clipped by the layer surface, which is why the number
+    // that matters is the offset and not the spread.
+    MultiEffect {
+        anchors.fill: content
+
+        source: content
+        visible: content.status === Loader.Ready
+
+        autoPaddingEnabled: true
+        blurMax: Fluent.flyoutShadowBlur
+        shadowEnabled: true
+        shadowBlur: 1.0
+        shadowVerticalOffset: Fluent.flyoutShadowY
+        shadowColor: Qt.rgba(0, 0, 0, Fluent.shadowOpacity)
+    }
+
+    Loader {
+        id: content
+
+        // Centred by construction: one inset on each side, and the root's
+        // implicit size is the content plus both of them.
+        x: root.inset
+        y: root.inset
+
+        width: content.implicitWidth
+        height: content.implicitHeight
+
+        // Nothing is built until something is opened, and closing takes it
+        // down again -- the facade keeps the reservation, so a closed popout
+        // costs a window and not a panel.
+        active: root.row.isOpen
+        sourceComponent: root.row.contentComponent
+
+        // MultiEffect needs a texture to sample, and a Loader is not one until
+        // it is layered. The item goes on drawing normally; the effect above
+        // reads the same texture.
+        layer.enabled: true
+    }
 }

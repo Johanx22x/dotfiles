@@ -145,6 +145,14 @@ PanelWindow {
     // One dimension: the results are a list, so left and right have nothing to
     // walk.
     function move(dy: int): void {
+        if (root.picker !== "") {
+            // The picker says which axis it walks on. Through the Loader's
+            // `item`, not through an id: an id declared inside a Component
+            // belongs to that Component's scope and is not visible from here.
+            pickerLoader.item?.move(dy);
+            return;
+        }
+
         if (root.count === 0)
             return;
 
@@ -154,17 +162,22 @@ PanelWindow {
     }
 
     function activate(): void {
+        if (root.picker !== "") {
+            pickerLoader.item?.activate();
+            return;
+        }
+
         if (root.commandMode) {
             const command = root.commandResults[root.selected];
             if (!command)
                 return;
 
             if (command.picker !== "") {
-                // A command that asks a question keeps the launcher up. The
-                // pickers are not drawn in this theme yet -- see the note at
-                // the Loader below -- so this consumes the request rather than
-                // leaving the launcher showing a list that no longer matches
-                // what is typed.
+                // Opening a picker keeps the launcher up: the command was a
+                // question and the answer is the next screen. The field is
+                // cleared and RE-POINTED at the picker -- one field searches
+                // whatever is on screen, and leaving ">clipboard" in it would
+                // show a command that already ran.
                 root.picker = command.picker;
                 root.selected = 0;
                 input.text = "";
@@ -453,21 +466,33 @@ PanelWindow {
             onActionChosen: action => root.runAction(action)
         }
 
-        // THE PICKERS ARE NOT DRAWN YET, and this says so rather than showing
-        // an empty screen. `>clipboard` and its siblings open a second list
-        // inside this window; genesis has one and copying it is exactly what
-        // this theme was restarted to stop doing, so it waits its turn.
-        Item {
-            anchors.fill: parent
-            visible: root.picker !== ""
+        // Whichever picker a command opened. A Loader and not a visibility
+        // flag: the clipboard picker spawns a `cliphist list` and a decode per
+        // image row, and it should not be doing that while the application
+        // list is what is on screen.
+        Loader {
+            id: pickerLoader
 
-            Text {
-                anchors.centerIn: parent
-                text: `The ${root.picker} picker is not drawn in this theme yet.\nPress Escape to go back.`
-                horizontalAlignment: Text.AlignHCenter
-                font.family: Theme.fontFamily
-                font.pointSize: Fluent.bodySize
-                color: Theme.textOnSurfaceVariant
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: chips.bottom
+            anchors.bottom: parent.bottom
+            anchors.margins: root.padding
+            anchors.topMargin: 12
+
+            active: root.picker !== ""
+            visible: active
+
+            sourceComponent: clipboardComponent
+        }
+
+        Component {
+            id: clipboardComponent
+
+            ClipboardPicker {
+                filter: root.query
+
+                onPicked: LauncherState.close()
             }
         }
 
