@@ -3,7 +3,8 @@
     "title": "Windows 11",
     "interface": 1,
     "palette": {
-        "source": "scheme"
+        "source": "pinned",
+        "scheme": "windows-11-dark"
     },
     "font": {
         "source": "user"
