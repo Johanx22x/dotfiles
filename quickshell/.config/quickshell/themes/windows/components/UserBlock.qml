@@ -36,14 +36,25 @@ Item {
 
     required property UserBlock row
 
-    implicitHeight: Fluent.userAvatar + 2 * Fluent.cardGapInset
+    // THE CAPTION STRIP'S CLEARANCE IS IN HERE, and that placement is forced
+    // rather than chosen. Windows starts this block 57 below the window's top
+    // edge, because the title bar is above it; this shell's host anchors this
+    // facade a railPadding under the top edge and anchors everything else in
+    // the rail under this facade -- so the only place the strip's height can
+    // exist on the rail's side is inside this item, above the pill. The pill
+    // therefore sits at the BOTTOM of a taller box, and the empty band above
+    // it is the caption strip SettingsChrome.qml writes "Settings" into.
+    implicitHeight: Fluent.userBlockTopGap + Fluent.userAvatar + 2 * Fluent.cardGapInset
 
     Rectangle {
         id: pill
 
-        anchors.fill: parent
-        anchors.topMargin: Fluent.cardGapInset
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
         anchors.bottomMargin: Fluent.cardGapInset
+
+        height: Fluent.userAvatar
 
         radius: Fluent.controlRadius
 

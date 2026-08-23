@@ -618,4 +618,49 @@ QtObject {
     // Windows gives every list of things in Settings, from installed apps to
     // paired devices.
     readonly property int listRowHeight: 40
+
+    // ---------------- The settings window's caption strip ----------------
+    //
+    // Windows draws no app content in the top 48 of the Settings window: that
+    // strip is the title bar, and everything the window is about starts under
+    // it. The 48 is Microsoft's: the title-bar design page says a standard
+    // title bar is 32 and to "increase the size of the title bar to 48px" when
+    // it carries a search box, which the Settings app's does -- and measured
+    // off ref/settings-system-sound-volumemixer.jpg (window top edge at y=25,
+    // a 1:1 shot), the "Settings" caption is centred 24 below the top edge and
+    // the account block starts 57 below it, which is a 48 strip with the
+    // block's own margin under it. The same page puts the window title in
+    // Caption type, 16 from the left border when no icon or back button is in
+    // front of it.
+    //
+    // The BUTTON is OURS: the page names the glyphs (ChromeClose E8BB) but not
+    // the backplate, and in the reference the caption controls' glyphs sit 22
+    // in from the right edge and 17 down from the top, which centres them in a
+    // 46x32 button. The glyph SIZE is OURS twice over: the X's ink is 10x10 px
+    // in the reference, and this theme's ramp has no ChromeClose -- its X is
+    // E711, whose ink covers about 0.6 of its em where the chrome glyphs fill
+    // theirs -- so the point size is what lands E711's ink at Windows' 10 px.
+    // Measured in the sandbox, not derived: 10/14ths of body rendered an 8 px
+    // X, and 12.5/14ths renders the 10. Kept relative the way every other
+    // size in the ramp is.
+    readonly property int captionHeight: 48
+    readonly property int captionButtonWidth: 46
+    readonly property int captionButtonHeight: 32
+    readonly property real captionGlyphSize: Theme.fontSize * 12.5 / 14
+
+    // How far the account block at the top of the navigation pane stands off
+    // the window's top edge, BEYOND the padding the window already gives it.
+    // OURS by arithmetic on the measurement above: the portrait's top edge is
+    // 57 below the window's top in the reference, the host inserts its 16 of
+    // padding and the block inserts its 1 of pill inset, and 40 is what is
+    // left. It exists because the caption strip does: the block is the first
+    // thing the window anchors under its top edge, so the strip's clearance
+    // has nowhere else to live.
+    readonly property int userBlockTopGap: 40
+
+    // And the page title's clearance, for the same reason on the other pane.
+    // OURS: the title's ink starts 51 below the window's top edge in
+    // ref/settings-system-sound-volumemixer.jpg; the host's 16 of margin and
+    // the title line's own ~13 of bearing leave 22 to make up.
+    readonly property int headerTopGap: 22
 }

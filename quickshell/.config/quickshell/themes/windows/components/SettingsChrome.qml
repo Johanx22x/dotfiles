@@ -1,31 +1,44 @@
-// THE SETTINGS WINDOW'S TWO SURFACES: the mica the whole window sits on, and
-// the lighter layer the content pane is.
+// THE SETTINGS WINDOW'S GROUND, WHICH IS ONE SURFACE, and the caption that
+// names it.
 //
-// WHAT THE PHOTOGRAPH SAYS AND THE FACADE'S NAME DOES NOT. The half the window
-// sees calls the second rectangle "the tint down the navigation rail", which is
-// where genesis puts it. Windows tints the OTHER SIDE: in
-// ref/settings-personalization-taskbar.jpg the navigation pane is the window's
-// bare mica and the content pane is a LayerFillColorDefault over it, thirteen
-// levels lighter on every channel. In ref/settings-system-about.jpg, taken with
-// transparency off, the two panes are the same #202020 and only the cards stand
-// away from them -- which is the same drawing seen without the layer.
+// AN EARLIER VERSION OF THIS FILE DREW TWO SURFACES and the second one was a
+// measurement error. It laid a LayerFillColorDefault rectangle over the
+// content pane, thirteen levels lighter than the rail, with a stroke and a
+// rounded top-left corner -- the WinUI Gallery's arrangement -- and cited a
+// +13 read out of ref/settings-personalization-taskbar.jpg. That +13 was the
+// expanded "Taskbar behaviors" CARD, which fills most of that page. Sampled
+// where nothing is drawn, the same photograph says the opposite: the strip
+// between the cards' right edge and the window edge (x=1200) is the rail's
+// own ground from top to bottom, and in ref/settings-home-navpane.png the nav
+// pane, the margin left of the cards and the gap between the two card columns
+// are all exactly #202020 while only the cards sit at #2B2B2B. The Settings
+// app has NO content layer: one mica ground under both panes, no divider down
+// the rail's edge, and the cards are the only thing that comes forward.
 //
-// So the rail gets nothing of its own and the pane on the right is the one that
-// comes forward, which is section 0 of the brief in one rectangle: every
-// surface that comes forward gets LIGHTER.
+// WHAT SEPARATES THE PANES, THEN, IS NOTHING -- which is the look. A boundary
+// line down the rail is the single fastest way to read as "a sidebar app that
+// is not Windows"; every reference photograph shows the rail ending where its
+// pills end and the ground running on underneath.
 //
-// THE PANE'S CORNER IS 8,0,0,0 AND ITS STROKE IS TOP AND LEFT ONLY, which is
-// two facts about a corner that only exists because Windows rounds windows.
-// The pane's other three corners are the WINDOW's corners, so they take the
-// window's own 8 -- a square corner there would cut the mica's rounding off at
-// the bottom right. The stroke is drawn as a rectangle in the stroke's colour
-// with the fill inset one pixel on the two sides that carry it, because a
-// Rectangle's border is all four sides or none.
+// THE CAPTION STRIP IS THE OTHER THING THE PHOTOGRAPHS INSIST ON. Windows
+// starts no app content in the top 48 of this window: that strip is the title
+// bar, carrying "Settings" at the left and the caption controls at the right,
+// and the account block and the page title both start under it. This shell's
+// compositor draws no decorations (Settings.qml has the Qt/Hyprland story),
+// so the strip is the theme's to draw: the word here, the close button in
+// SettingsHeader.qml where the facade's signal is, and the clearance under
+// both in Fluent.userBlockTopGap and Fluent.headerTopGap. The caption says
+// "Settings" -- the name the real window prints -- in Caption type, centred
+// on the strip at the pane's own padding. The back arrow beside it in the
+// references is a navigation control this window has no history for, and
+// Segoe's proper glyph for it is not in this theme's ramp; a chevron standing
+// in would be the wrong shape at the one place every screenshot agrees on, so
+// nothing is drawn.
 //
 // NO SIZE CONTRACT AT ALL. This item is anchors.fill'ed by the window and
-// reports nothing back; `railWidth` comes off `row` and never off Theme, so
-// that the rectangle this draws and the rail the window lays out are one
-// number.
+// reports nothing back; `railWidth` and `railPadding` come off `row` and
+// never off Theme, so that the strip this draws and the rail the window lays
+// out are one geometry.
 
 import QtQuick
 import qs
@@ -37,8 +50,6 @@ Item {
 
     required property SettingsChrome row
 
-    // ---------------- The ground: mica ----------------
-    //
     // Theme.glass() and not Fluent.acrylic(): this is a WINDOW, and a window's
     // backdrop in Windows 11 is mica, which is the material that carries the
     // wallpaper's colour. The flyouts that open on top of things are the other
@@ -50,37 +61,18 @@ Item {
         color: Theme.glass(Theme.surface)
     }
 
-    // ---------------- The content pane, and its stroke ----------------
-    Rectangle {
-        id: pane
-
+    // ---------------- The caption ----------------
+    Text {
         anchors.left: parent.left
-        anchors.leftMargin: root.row.railWidth
-        anchors.right: parent.right
+        anchors.leftMargin: root.row.railPadding
         anchors.top: parent.top
-        anchors.bottom: parent.bottom
 
-        // The stroke. CardStrokeColorDefault is black at ten per cent, so this
-        // reads as a shadow line between the two panes rather than as a
-        // highlight -- see Fluent.cardStrokeAlpha for the measurement.
-        color: Qt.rgba(0, 0, 0, Fluent.cardStrokeAlpha)
+        height: Fluent.captionHeight
+        verticalAlignment: Text.AlignVCenter
 
-        topLeftRadius: Fluent.overlayRadius
-        topRightRadius: Fluent.overlayRadius
-        bottomRightRadius: Fluent.overlayRadius
-        bottomLeftRadius: 0
-
-        Rectangle {
-            anchors.fill: parent
-            anchors.topMargin: 1
-            anchors.leftMargin: 1
-
-            color: Qt.alpha(Theme.surfaceContainerHigh, Fluent.layerAlpha)
-
-            topLeftRadius: Fluent.overlayRadius - 1
-            topRightRadius: pane.topRightRadius
-            bottomRightRadius: pane.bottomRightRadius
-            bottomLeftRadius: 0
-        }
+        text: "Settings"
+        font.family: Theme.fontFamily
+        font.pointSize: Fluent.captionSize
+        color: Theme.textOnSurface
     }
 }
