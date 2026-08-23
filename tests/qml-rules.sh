@@ -48,6 +48,49 @@ failed=0
 note() { echo "qml-rules: $*"; }
 fail() { echo "qml-rules: FAIL $*" >&2; failed=1; }
 
+# --- what gets read, and why it is not one directory -------------------------
+#
+# THESE RULES ARE THEME RULES AS MUCH AS SHELL RULES, and that is measured
+# rather than argued. Of the two WheelHandlers in this repository one is in
+# components/ScrollList.qml and the other is in
+# themes/genesis/wallpaper/WallpaperCarousel.qml; of the three
+# FolderListModels, the ONLY one whose rows are read -- the only one this
+# file's second rule has anything to say about -- is in that same theme file.
+# Move genesis out from under quickshell/ and this check does not merely lose
+# coverage, it fails outright with "has the rule outlived its subject?", which
+# is the strongest evidence available that a theme is where these faults live.
+#
+# UNTIL NOW IT SWEPT ONE DIRECTORY. Everything under
+# quickshell/.config/quickshell was read, genesis is under there, so genesis
+# was checked -- by an accident of where it sits rather than because it is a
+# theme. tests/fixtures/theme-probe is a theme by the same definition this
+# repository uses everywhere else, has 27 .qml files, and matched nothing at
+# all. A theme was only checked if it happened to live in one directory, and
+# the one theme that does is the one that already existed.
+#
+# WHAT MAKES A DIRECTORY A THEME IS THE MANIFEST IN IT, NOT ITS PARENT, and
+# that definition is not invented here. modules/Themes.qml says "A DIRECTORY
+# WITH NO MANIFEST IS NOT A THEME AND IS NOT IN HERE"; tests/theme-interface.py
+# refuses a directory with the words "has no manifest.json, which is what makes
+# a directory a theme"; themes/genesis/README.md says "manifest.json is what
+# makes a directory a theme." Being under themes/ is a different and narrower
+# property -- it means a theme the runtime picker may OFFER -- and
+# tests/fixtures/theme-probe/README.md is explicit that it stays out of there
+# on purpose, precisely so nobody can choose it.
+#
+# THROUGH `git ls-files` AND NOT `find`, for a reason that bites on this
+# machine. The dotfiles checkout carries .claude/worktrees/ full of whole
+# copies of itself; a `find` for manifest.json from the repository root walks
+# into every one of them and discovers the same two themes several dozen
+# times. tests/shell-lint.sh already picks its files this way. The cost is that
+# a theme nobody has `git add`ed yet is not swept, which is the same answer
+# every other check here gives: this suite checks what is in the repository.
+themes=()
+while IFS= read -r manifest; do
+    [[ ${manifest##*/} == manifest.json ]] || continue
+    themes+=("$REPO/${manifest%/*}")
+done < <(cd "$REPO" && git ls-files -- '*manifest.json' | sort)
+
 qml_files=()
 while IFS= read -r -d '' file; do qml_files+=("$file"); done \
     < <(find "$QML_DIR" -name '*.qml' -type f -print0 | sort -z)
@@ -61,6 +104,45 @@ if (( ${#qml_files[@]} < 50 )); then
     echo "qml-rules: that is far below the tree these rules are written against" >&2
     exit 1
 fi
+
+# AND THE SAME FLOOR AGAIN, UNDER THE THEMES, because the sweep above cannot
+# provide it. The shell tree is 97 files without a single theme in it, so it
+# clears the 50 on its own -- a theme discovery that silently matched nothing
+# would leave that count untouched and this check would go green having read no
+# theme at all. That is the exact failure the count above exists to prevent,
+# reappearing one level down, so it is asserted separately: at least one theme,
+# and every theme found has QML in it.
+#
+# It does NOT ask whether a theme is COMPLETE. That is tests/theme-interface.py
+# next door, which derives the 27-file interface from shell.qml's own paths and
+# every Themes.surface() call site; a second, weaker copy of that question here
+# would be a number invented in this file to stand in for one that is measured
+# in that one.
+if (( ${#themes[@]} == 0 )); then
+    echo "qml-rules: no theme found -- looked for a manifest.json in git ls-files" >&2
+    echo "qml-rules: a sweep with no theme in it cannot say anything about themes" >&2
+    exit 1
+fi
+
+theme_files=0
+for theme in "${themes[@]}"; do
+    count=0
+    while IFS= read -r -d '' file; do
+        # Themes under the shell tree -- genesis -- are already in the list.
+        # Counted all the same, because the floor is about what was FOUND.
+        count=$(( count + 1 ))
+        [[ $file == "$QML_DIR"/* ]] || qml_files+=("$file")
+    done < <(find "$theme" -name '*.qml' -type f -print0 | sort -z)
+
+    if (( count == 0 )); then
+        echo "qml-rules: ${theme#"$REPO"/} has a manifest and no .qml at all" >&2
+        echo "qml-rules: a theme whose files went out from under it is not a theme" >&2
+        exit 1
+    fi
+    theme_files=$(( theme_files + count ))
+done
+
+note "${#themes[@]} theme(s), $theme_files file(s), swept wherever they live"
 
 # --- every WheelHandler declares acceptedDevices -----------------------------
 #
@@ -118,7 +200,7 @@ for file in "${qml_files[@]}"; do
 done
 
 if (( handlers == 0 )); then
-    fail "found no WheelHandler in ${QML_DIR#"$REPO"/} -- has the rule outlived its subject?"
+    fail "found no WheelHandler in ${#qml_files[@]} file(s) -- has the rule outlived its subject?"
 elif (( ${#missing[@]} > 0 )); then
     fail "${#missing[@]} WheelHandler(s) leave acceptedDevices at Qt's default:"
     printf 'qml-rules:   %s\n' "${missing[@]}" >&2

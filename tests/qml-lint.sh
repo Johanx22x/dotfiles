@@ -101,15 +101,60 @@
 #
 # ---------------------------------------------------------------------------
 #
+# A THEME IS SWEPT WHEREVER IT LIVES, AND UNTIL NOW IT WAS NOT. This script
+# read one directory -- quickshell/.config/quickshell -- and themes/genesis is
+# under it, so genesis was linted by an accident of where it sits rather than
+# because it is a theme. tests/fixtures/theme-probe is a theme by this
+# repository's own definition, holds 27 .qml files, and matched nothing at all.
+#
+# THAT IS WORSE THAN AN ORDINARY MISSED DIRECTORY, because the discipline the
+# whole theme layer rests on IS a measurement taken with this script.
+# themes/genesis/components/README.md rule 1 requires `required property
+# <Facade> row` over `property var row`, and its entire justification is a
+# table of two runs of this file: seven deliberate misspellings pass green
+# through a `var`, and the typed form names five of them by line. Every theme
+# is written to that rule, and the rule was enforced on exactly one theme.
+# Measured on this branch before the change: three misspelled reads were put
+# into the fixture's components/ToggleRow.qml with its `required property
+# ToggleRow row` left alone, and the sweep came back "306 warnings, none of
+# them new" and exited 0. Genesis was protected by its address.
+#
+# Discovery is now every directory with a manifest.json in it, which is what
+# modules/Themes.qml and tests/theme-interface.py already mean by a theme, and
+# an out-of-tree theme is copied into the sandbox at themes/<name>/ so that it
+# gets the SAME qmldirs, the SAME import paths and the SAME sweep genesis does.
+# See the blocks on both further down.
+#
+# ---------------------------------------------------------------------------
+#
 # THE BASELINE, AND WHY IT IS NOT ZERO. The tree measured 326 the first time a
 # linter could read it; 19 of those were cheap and are gone, which made it 307,
 # and one more went with the notification card's split -- see unresolved-type
-# below -- so it is 306.
+# below -- so the shell tree and genesis together are 306. The fixture adds the
+# 6 it was always going to add once anything looked at it, so the sweep is 312.
 # Gating at zero would mean gating at a number nobody can reach today, so this
-# gates at what is there and refuses to let it grow. The table below is the
-# whole of it, and the shape matters more than the total:
+# gates at what is there and refuses to let it grow.
 #
-#   246  unqualified                243 of them are one thing -- a delegate
+# ONE BUDGET PER SCOPE, AND A THEME IS ITS OWN SCOPE -- `shell` for
+# quickshell/ with the themes taken out, and its own name for each theme. The
+# single total that used to be here would have taken the fixture's 6 in
+# silence, and then the next theme's, and a number that every theme may add to
+# is not a budget: it is an account nobody can read. Split, an unbudgeted
+# theme is compared against zero, so dropping a theme into this repository
+# turns the run red naming THAT THEME and its categories, and the shell's
+# numbers stay a statement about the shell.
+#
+# The split is measured, not apportioned by eye:
+#
+#          shell  genesis  probe
+#   146      146        -      -   the shell tree, 97 files
+#   160        -      160      -   genesis, 50 files
+#     6        -        -      6   theme-probe, 27 files
+#
+# and by category, which is the shape that matters more than the total:
+#
+#   246  unqualified                116 shell + 130 genesis. 243 of them are
+#                                   one thing -- 115 and 128 -- a delegate
 #                                   naming an id from the component outside it,
 #                                   which qmllint answers with "set pragma
 #                                   ComponentBehavior: Bound". That pragma is a
@@ -120,18 +165,26 @@
 #                                   loads, which is exactly the evidence that
 #                                   cannot tell a bound delegate from a broken
 #                                   one. It is left alone deliberately. The
-#                                   other 3 are ordinary unqualified reads, in
-#                                   files where fixing them was a one-word
-#                                   change; Compositor.qml's three are gone.
-#    19  missing-property           reads through a `var`, and PathView
-#                                   attached properties declared by
+#                                   other 3 are ordinary unqualified reads --
+#                                   1 shell, 2 genesis -- in files where fixing
+#                                   them was a one-word change; Compositor.qml's
+#                                   three are gone.
+#    19  missing-property           2 shell + 17 genesis. Reads through a `var`,
+#                                   and PathView attached properties declared by
 #                                   PathAttribute, which qmllint cannot see.
-#                                   Checked one by one; none is a bug.
-#    17  signal-handler-parameters  every one is QProcess::ExitStatus on an
-#                                   onExited handler. Quickshell exposes a Qt
-#                                   private enum there; nothing in this
-#                                   repository can fix it.
-#    13  unresolved-type            Quickshell C++ types not exposed
+#                                   Checked one by one; none is a bug. THE
+#                                   FIXTURE HAS NONE, and that zero is the one
+#                                   number in this table that does work: it is
+#                                   what a misspelled read against a typed
+#                                   facade lands in, so rule 1 is enforced on
+#                                   theme-probe by [theme-probe:missing-property]
+#                                   having nowhere to hide.
+#    17  signal-handler-parameters  16 shell + 1 genesis. Every one is
+#                                   QProcess::ExitStatus on an onExited handler.
+#                                   Quickshell exposes a Qt private enum there;
+#                                   nothing in this repository can fix it.
+#    13  unresolved-type            7 shell + 6 genesis. Quickshell C++ types
+#                                   not exposed
 #                                   declaratively: Toplevel, UntypedObjectModel,
 #                                   FileViewAdapter, DBusMenuHandle. Not ours.
 #                                   Was 14: the notification card read
@@ -142,9 +195,12 @@
 #                                   number in this column ever moves for a
 #                                   reason of ours -- the TYPE is still not
 #                                   exposed; there is one fewer place asking.
-#     9  uncreatable-type           "PanelWindow is not creatable", which is
+#    15  uncreatable-type           3 shell + 6 genesis + 6 theme-probe.
+#                                   "PanelWindow is not creatable", which is
 #                                   false -- the whole shell is PanelWindows. An
 #                                   artefact of how Quickshell registers it.
+#                                   The fixture's 6 are its whole account: one
+#                                   per surface, and nothing else at all.
 #     1  incompatible-type          Loader.item assigned to a typed property.
 #     1  redundant-optional-chaining `?.` on a QVariantMap, in the Hyprland
 #                                   backend. LEFT ALONE ON PURPOSE, and it is
@@ -157,11 +213,16 @@
 #     0  unused-imports             were 15, all removed.
 #     0  duplicate-property-binding was the Island finding above.
 #
-# So 60 of the 307 -- signal-handler-parameters, unresolved-type,
-# uncreatable-type -- are Quickshell's type information rather than this
+# So 45 of the 312 -- signal-handler-parameters 17, unresolved-type 13,
+# uncreatable-type 15 -- are Quickshell's type information rather than this
 # repository's code, and no change here can move them. They are counted anyway,
 # because a baseline that quietly excludes things is a baseline nobody can
 # reproduce with a single command.
+#
+# THAT SENTENCE USED TO READ "60 of the 307" AND THE ARITHMETIC WAS WRONG. The
+# three categories it names came to 39, not 60; 60 was every category except
+# unqualified, which is not what the sentence says. Recomputed here from the
+# split above rather than carried forward.
 #
 # WHEN THIS GOES RED WITHOUT ANYBODY BREAKING ANYTHING: a qt6-declarative
 # update. CI runs archlinux:base-devel, which is rolling, so the version that
@@ -184,6 +245,14 @@ QMLLINT=/usr/lib/qt6/bin/qmllint
 # new one is reported against a number this file states, instead of appearing
 # from nowhere and being compared against an implicit zero nobody wrote down.
 #
+# ONE BUDGET PER SCOPE, AND A THEME IS ITS OWN SCOPE. Keys are `scope:category`
+# -- `shell` for quickshell/ with the themes taken out, and the theme's own
+# name for each theme. See the section above on why the single total that used
+# to be here was a budget a theme could inflate. A scope:category that is not
+# written down here is compared against zero, which is what makes an unbudgeted
+# theme go red naming its own numbers instead of quietly joining somebody
+# else's.
+#
 # `syntax` IS NOT IN HERE AND MUST NOT BE ADDED. It is the one finding this
 # table cannot express: every entry below is a number somebody is willing to
 # carry, and there is no number of files that do not parse that this repository
@@ -191,15 +260,37 @@ QMLLINT=/usr/lib/qt6/bin/qmllint
 # comparison, so that the way it stops failing a run is that the file is fixed
 # and not that a number was written here.
 declare -A BASELINE=(
-    [unqualified]=246
-    [missing-property]=19
-    [signal-handler-parameters]=17
-    [unresolved-type]=13
-    [uncreatable-type]=9
-    [incompatible-type]=1
-    [redundant-optional-chaining]=1
-    [unused-imports]=0
-    [duplicate-property-binding]=0
+    # --- the shell tree, themes excluded: 97 files, 146 warnings -------------
+    [shell:unqualified]=116
+    [shell:signal-handler-parameters]=16
+    [shell:unresolved-type]=7
+    [shell:uncreatable-type]=3
+    [shell:missing-property]=2
+    [shell:incompatible-type]=1
+    [shell:redundant-optional-chaining]=1
+    [shell:unused-imports]=0
+    [shell:duplicate-property-binding]=0
+
+    # --- genesis: 50 files, 160 warnings ------------------------------------
+    [genesis:unqualified]=130
+    [genesis:missing-property]=17
+    [genesis:unresolved-type]=6
+    [genesis:uncreatable-type]=6
+    [genesis:signal-handler-parameters]=1
+
+    # --- theme-probe: 27 files, 6 warnings ----------------------------------
+    #
+    # ALL SIX ARE "PanelWindow is not creatable", one per surface, which is the
+    # Quickshell artefact the table above carries nine of. The fixture has no
+    # unqualified read and no missing property at all -- and that is the number
+    # the demonstration in tests/fixtures/theme-probe/README.md moves: turn one
+    # component's `required property <Facade> row` into `property var row` and
+    # misspell a read and this line stays 6, because a read through `var` is a
+    # read qmllint cannot check. Restore the type and the misspelling arrives
+    # here as [theme-probe:missing-property], which is rule 1 of
+    # themes/genesis/components/README.md being enforced on a theme that is not
+    # genesis and does not live under quickshell/.
+    [theme-probe:uncreatable-type]=6
 )
 
 failed=0
@@ -226,6 +317,60 @@ if (( qml_count < 50 )); then
     exit 1
 fi
 
+# --- where the themes are ----------------------------------------------------
+#
+# WHAT MAKES A DIRECTORY A THEME IS THE MANIFEST IN IT, NOT ITS PARENT. That is
+# this repository's own definition and not one invented here: modules/
+# Themes.qml says "A DIRECTORY WITH NO MANIFEST IS NOT A THEME AND IS NOT IN
+# HERE", tests/theme-interface.py refuses a directory with the words "has no
+# manifest.json, which is what makes a directory a theme", and themes/genesis/
+# README.md says the same. Living under themes/ is a DIFFERENT and narrower
+# property -- it means a theme the runtime picker may offer -- and
+# tests/fixtures/theme-probe/README.md is explicit that the fixture stays out
+# of there on purpose, so that nobody can choose it.
+#
+# THROUGH `git ls-files` AND NOT `find`, for a reason that bites on this
+# machine: the dotfiles checkout carries .claude/worktrees/ full of whole
+# copies of itself, and a `find` for manifest.json from the repository root
+# walks into every one of them and discovers the same two themes several dozen
+# times over. tests/shell-lint.sh already chooses its files this way. The cost
+# is that a theme nobody has `git add`ed is not swept, which is the answer
+# every other check here gives: this suite checks what is in the repository.
+theme_dirs=()
+theme_names=()
+while IFS= read -r manifest; do
+    [[ ${manifest##*/} == manifest.json ]] || continue
+    dir="${manifest%/*}"
+    theme_dirs+=("$REPO/$dir")
+    theme_names+=("${dir##*/}")
+done < <(cd "$REPO" && git ls-files -- '*manifest.json' | sort)
+
+# THE FLOOR THE COUNT ABOVE CANNOT PROVIDE. The shell tree is 97 files with
+# every theme taken out, so it clears the 50 on its own: a theme discovery that
+# silently matched nothing would leave `qml_count` untouched and this script
+# would go green having linted the shell and no theme whatsoever. That is the
+# same failure the count above exists to prevent, one level down, so it is
+# asserted separately.
+#
+# It does NOT ask whether a theme is COMPLETE -- that is tests/theme-interface.py
+# next door, which derives the 27-file interface from shell.qml's own paths and
+# every Themes.surface() call site. A second, weaker copy of that question here
+# would be a number invented in this file standing in for one that is measured
+# in that one.
+if (( ${#theme_dirs[@]} == 0 )); then
+    echo "qml-lint: no theme found -- looked for a manifest.json in git ls-files" >&2
+    echo "qml-lint: a sweep with no theme in it cannot say anything about themes" >&2
+    exit 1
+fi
+
+for i in "${!theme_dirs[@]}"; do
+    if ! find "${theme_dirs[i]}" -name '*.qml' -type f -print -quit | grep -q .; then
+        echo "qml-lint: ${theme_dirs[i]#"$REPO"/} has a manifest and no .qml at all" >&2
+        echo "qml-lint: a theme whose files went out from under it is not a theme" >&2
+        exit 1
+    fi
+done
+
 note "$("$QMLLINT" --version)"
 
 sandbox="$(mktemp -d)"
@@ -237,6 +382,55 @@ trap 'rm -rf "$sandbox"' EXIT
 # components/qmldir for qmllint the same way it does for the shell.
 root="$sandbox/qs"
 cp -r "$SHELL_DIR" "$root"
+
+# --- a theme that lives somewhere else ---------------------------------------
+#
+# IT IS PUT WHERE GENESIS ALREADY IS, and that is the whole design rather than
+# a convenience. The goal is that a theme is checked THE SAME wherever it
+# lives; linting an out-of-tree theme through some other arrangement -- in
+# place, with its own import paths -- would answer a different question about
+# it than the one genesis is asked, and would be the same defect this change
+# is closing, wearing a second mechanism. Dropped in at themes/<name>/ it gets
+# the identical synthesized qmldirs, resolves `qs`, `qs.components` and
+# `qs.modules.*` against the identical copy of the host, and is swept by the
+# identical xargs below.
+#
+# tests/shell-load.sh already does exactly this -- it copies the shell tree
+# and drops tests/fixtures/theme-probe/ in as a second theme -- so this is the
+# arrangement the suite already runs the fixture under, not a new one.
+#
+# NOTHING IS COPIED THAT ALREADY EXISTS. tests/scrollbar-target.py builds its
+# module graph out of relative paths back into the real tree instead of copies,
+# because a QML type IS its document and a copy is a second type of the same
+# name that a `required property <Facade>` will refuse. That hazard is about
+# ASSIGNMENT between two live documents in a running engine, and it is real
+# there. Here nothing is constructed and nothing is assigned: qmllint resolves
+# names statically, the host tree is copied exactly once, and every theme
+# resolves `qs.components.ScrollBar` to that one copy. What is copied a second
+# time is only the theme's own files, which no other spelling reaches.
+#
+# The collision check is not decoration. Two themes of one name would have the
+# second silently overwrite the first, and the sweep would report the survivor
+# under both budgets.
+theme_sandbox=()
+for i in "${!theme_dirs[@]}"; do
+    if [[ ${theme_dirs[i]} == "$SHELL_DIR"/* ]]; then
+        # Already inside the copy above; nothing to do but record where it is.
+        rel="${theme_dirs[i]#"$SHELL_DIR"/}"
+        theme_sandbox+=("./$rel/")
+        continue
+    fi
+
+    dest="$root/themes/${theme_names[i]}"
+    if [[ -e $dest ]]; then
+        echo "qml-lint: two themes are called ${theme_names[i]}" >&2
+        echo "qml-lint:   ${theme_dirs[i]#"$REPO"/}" >&2
+        echo "qml-lint: a name is how a theme is chosen, so it has to be unique" >&2
+        exit 1
+    fi
+    cp -r "${theme_dirs[i]}" "$dest"
+    theme_sandbox+=("./themes/${theme_names[i]}/")
+done
 
 # --- the qmldirs -------------------------------------------------------------
 #
@@ -267,7 +461,8 @@ while IFS= read -r dir; do
 done < <(find "$root" -type d | sort)
 
 modules="$(find "$root" -name qmldir | wc -l)"
-note "$qml_count file(s) in $modules module(s)"
+swept="$(find "$root" -name '*.qml' -type f | wc -l)"
+note "$swept file(s) in $modules module(s): the shell and ${#theme_dirs[@]} theme(s)"
 
 # --- the floor under the parse check -----------------------------------------
 #
@@ -318,23 +513,97 @@ report="$sandbox/qmllint.txt"
     find . -name '*.qml' -type f | sort \
         | xargs "$QMLLINT" -I "$sandbox" -I /usr/lib/qt6/qml
 ) > "$report" 2>&1 || true
-# `#` as the delimiter and not `|`, which is the alternation here: with `|`
-# delimiting the expression, `\|` reads as an escaped delimiter and the branch
-# never matches -- the paths came out unrewritten and the sed reported success.
-sed -Ei "s#^(Warning|Info|Error|Critical): \./#\1: ${SHELL_DIR#"$REPO"/}/#" "$report"
+
+# --- who each finding belongs to, and where that file really is --------------
+#
+# TWO JOBS AT ONCE, AND THEY ARE THE SAME JOB. Every path in the report is
+# relative to the copy, so it has to be rewritten to the repository -- a
+# warning naming a file under /tmp that no longer exists is a warning nobody
+# can act on -- and the rewrite is no longer one substitution, because
+# ./themes/theme-probe/ came from tests/fixtures/ and ./modules/ came from
+# quickshell/. Deciding which prefix to put back IS deciding which budget the
+# finding counts against, so it is done once, here.
+#
+# THE PREFIXES ARE MATCHED WITH index() AND NOT A REGEX. A theme's name is a
+# directory name off the filesystem: it is allowed to contain `.`, `+` and
+# every other character a regular expression would read as an instruction,
+# and a sed built by pasting one in is a sed a theme can rewrite. The awk
+# below compares fixed strings.
+#
+# THE SHELL IS THE LAST ENTRY AND IT IS THE FALLBACK, so `./shell.qml` and
+# `./modules/Themes.qml` land there while ./themes/genesis/ is claimed first
+# by genesis. Order matters and is set here rather than inferred.
+#
+# A CONTINUATION LINE GOES WHERE ITS FINDING WENT. qmllint prints the offending
+# source under each message, and an Info line of advice under some of them;
+# neither carries a path. They are kept with the finding above them so the
+# examples this script prints on a failure are readable.
+scopes="$sandbox/scopes.tsv"
+: > "$scopes"
+for i in "${!theme_dirs[@]}"; do
+    printf '%s\t%s/\t%s\t%s\n' "${theme_sandbox[i]}" \
+        "${theme_dirs[i]#"$REPO"/}" "${theme_names[i]}" \
+        "$sandbox/scope.${theme_names[i]}.txt" >> "$scopes"
+done
+printf '%s\t%s\t%s\t%s\n' "./" "${SHELL_DIR#"$REPO"/}/" "shell" \
+    "$sandbox/scope.shell.txt" >> "$scopes"
+
+awk -v map="$scopes" '
+    BEGIN {
+        while ((getline line < map) > 0) {
+            split(line, f, "\t")
+            n++; pfx[n] = f[1]; real[n] = f[2]; label[n] = f[3]; out[n] = f[4]
+            printf "" > out[n]
+        }
+        close(map)
+
+        # THE SHELL BEFORE ANYTHING HAS BEEN CLAIMED, so that a line arriving
+        # before the first finding is kept rather than dropped. qmllint can say
+        # things that carry no <file>:<line>:<col> -- an Error out of qmllint
+        # itself is the one that matters -- and the whole report is
+        # reassembled from these files for the parse check and the Error check
+        # further down. A line this awk discards is a line those two never see.
+        cur = n
+    }
+    # A finding, and not the source line or the advice under it: those carry no
+    # <file>:<line>:<col>, which is what this insists on seeing.
+    /^(Warning|Info|Error|Critical): [^ ]+:[0-9]+:[0-9]+: / {
+        path = $2
+        sub(/:[0-9]+:[0-9]+:$/, "", path)
+
+        target = n                      # the shell, the fallback
+        for (i = 1; i < n; i++)
+            if (index(path, pfx[i]) == 1) { target = i; break }
+
+        kind = index($0, ": ")
+        rest = substr($0, kind + 2)
+        $0 = substr($0, 1, kind + 1) real[target] substr(rest, length(pfx[target]) + 1)
+        cur = target
+    }
+    cur { print > out[cur] }
+' "$report"
+
+# Back into one file for the two assertions that are about the whole sweep
+# rather than about any one scope: the parse check and the Error check. Neither
+# is budgeted, so neither needs to know whose file it is looking at.
+: > "$report"
+while IFS=$'\t' read -r _ _ _ file; do cat "$file" >> "$report"; done < "$scopes"
 
 # Anchored at the end of the line, which is not fussiness. qmllint echoes the
 # offending source under each message, and a delegate reading `root.list[index]`
 # puts `[index]` at the end of an echoed line that is not a finding at all --
 # counted loosely, that one line invented a whole category.
-mapfile -t found < <(grep -oP '^(?:Warning|Info|Error|Critical):.*\[\K[a-z-]+(?=\]$)' \
-                          "$report" | sort | uniq -c | awk '{print $2" "$1}')
-
 declare -A counts=()
-for entry in "${found[@]}"; do counts["${entry%% *}"]="${entry##* }"; done
-
+declare -A scope_file=()
 total=0
-for category in "${!counts[@]}"; do total=$(( total + counts[$category] )); done
+while IFS=$'\t' read -r _ _ label file; do
+    scope_file["$label"]="$file"
+    while read -r category count; do
+        counts["$label:$category"]="$count"
+        total=$(( total + count ))
+    done < <(grep -oP '^(?:Warning|Info|Error|Critical):.*\[\K[a-z-]+(?=\]$)' \
+                  "$file" | sort | uniq -c | awk '{print $2"\t"$1}')
+done < "$scopes"
 
 # --- does every file parse ---------------------------------------------------
 #
@@ -388,18 +657,28 @@ if grep -q '^Error:' "$report"; then
     printf '%s\n' "$errors" | head -n 10 >&2 || true
 fi
 
-# Every category in either table, so one that appears from nowhere is named
-# rather than silently added to a total.
-for category in $(printf '%s\n' "${!counts[@]}" "${!BASELINE[@]}" | sort -u); do
+# Every scope:category in either table, so one that appears from nowhere is
+# named rather than silently added to a total.
+#
+# A SCOPE THAT NOBODY BUDGETED IS COMPARED AGAINST ZERO, and that is the point
+# of keying by scope at all. Drop a theme into this repository and every
+# category it reports is a key that is not in the table above, so every one of
+# them reads `0 -> n` and the run goes red naming the theme, the category and
+# ten examples. The alternative -- one total for the tree -- let a new theme
+# add its warnings to a number written about somebody else's code, and the only
+# way to tell whose they were was to go and count.
+for key in $(printf '%s\n' "${!counts[@]}" "${!BASELINE[@]}" | sort -u); do
+    label="${key%%:*}"
+    category="${key#*:}"
     # Handled above, and on purpose not budgetable. `if` rather than
     # `[[ ... ]] && continue`: the second form is the last command in the loop
     # body on every iteration that is not syntax, and under `set -e` a false
     # test there ends the script.
     if [[ $category == syntax ]]; then continue; fi
-    now="${counts[$category]:-0}"
-    was="${BASELINE[$category]:-0}"
+    now="${counts[$key]:-0}"
+    was="${BASELINE[$key]:-0}"
     if (( now > was )); then
-        fail "[$category] $was -> $now"
+        fail "$label [$category] $was -> $now"
         # THE FIRST FEW IN THE CATEGORY, which is not the same as the new ones:
         # nothing here knows which of 249 unqualified reads arrived with this
         # branch. They are printed to say what the category looks like; the diff
@@ -408,13 +687,17 @@ for category in $(printf '%s\n' "${!counts[@]}" "${!BASELINE[@]}" | sort -u); do
         # tenth line, grep takes SIGPIPE, and under `set -o pipefail` that 141
         # becomes the exit status of the whole check -- which is a failure, but
         # not the one being reported, and not one `exit "$failed"` chose.
-        examples="$(grep -P "\[$category\]$" "$report" || true)"
+        #
+        # Out of the SCOPE's own findings and not the whole report, so a theme
+        # that went red is illustrated with its own files rather than with
+        # whichever ten of the shell's happen to sort first.
+        examples="$(grep -P "\[$category\]$" "${scope_file[$label]:-$report}" || true)"
         printf '%s\n' "$examples" | head -n 10 >&2 || true
     elif (( now < was )); then
         # Not a failure, and deliberately so: a branch that improves the tree
         # should not have to argue with a test. It does have to record it,
         # because a baseline nobody lowers stops being a baseline.
-        note "[$category] $was -> $now -- lower the baseline in this file"
+        note "$label [$category] $was -> $now -- lower the baseline in this file"
     fi
 done
 
