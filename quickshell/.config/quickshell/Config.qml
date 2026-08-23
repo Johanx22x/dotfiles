@@ -416,6 +416,147 @@ Singleton {
             root.fontFamily = family;
     }
 
+    // ---------------- The colour scheme, and where its accent comes from ----
+    //
+    // TWO SETTINGS, ONE STORE, AND NEITHER OF THEM IS KEPT HERE. The rule is
+    // the one WallpaperPage.qml's header states: a value that already has an
+    // owner outside the shell must not get a copy in this file, or the two
+    // disagree the first time it is changed from somewhere else. `desktop-scheme`
+    // is that owner -- it writes ~/.local/state/desktop-scheme and it is what a
+    // keybind, a terminal and a theme all go through -- so the properties below
+    // are a READ of its file and the setters below are a PUSH into its script.
+    // Nothing here is declared on the JsonAdapter.
+    //
+    // WHAT THE TWO ARE. The scheme is the BASE: surfaces, text, the sixteen
+    // ANSI slots. The accent source is where the seventeen Material 3 roles
+    // come from -- the wallpaper, as it always has been, or the scheme's own
+    // accent, or a colour picked by hand. They are separate because they are
+    // separate questions: a scheme with the wallpaper's accent is what this
+    // desktop looked like before either control existed.
+    //
+    // The defaults repeated here are the script's own (`DEFAULT_SCHEME` and
+    // `DEFAULT_ACCENT` in bin/desktop-scheme). A fresh machine has no state
+    // file at all, and both sides have to answer the same thing about it.
+    readonly property string schemeDefault: "tokyo-night"
+    readonly property string accentSourceDefault: "wallpaper"
+
+    property string scheme: root.schemeDefault
+    property string accentSource: root.accentSourceDefault
+    // Empty until somebody picks one, which is what the script stores too. It
+    // is kept across a switch away from `hex` and back, so the settings window
+    // can show the colour that would return rather than a blank field.
+    property string accentSeed: ""
+
+    // ONE SETTER EACH AND NEVER A BARE ASSIGNMENT FROM A PAGE, for the reason
+    // written out at length above `saveTimer`: two property writes in one
+    // synchronous turn lose the first one, silently, in memory and on disk.
+    // `setAccent` moves the source and the seed together for exactly that
+    // reason -- a row that assigned both would be that bug.
+    // NO "IT IS ALREADY THAT ONE" GUARD, deliberately. `desktop-scheme set`
+    // writes two keys -- what renders and what the PERSON chose -- and the
+    // second one is the answer a theme's `unpin` comes back to, so picking the
+    // scheme already in effect is a real thing to record. The script is what
+    // decides whether anything needs re-rendering, and it already declines when
+    // nothing moved.
+    function setScheme(name: string): void {
+        if (name === "")
+            return;
+
+        root.scheme = name;
+        root.schemePending = true;
+        schemePushTimer.restart();
+    }
+
+    // `seed` is only meaningful for `hex`, and an empty one there means "the
+    // colour already stored" -- which is what the script does with a bare
+    // `desktop-scheme accent hex`, so the two agree without this having to
+    // know whether one exists.
+    function setAccent(source: string, seed: string): void {
+        if (source === "")
+            return;
+
+        root.accentSource = source;
+        if (seed !== "")
+            root.accentSeed = seed;
+        root.accentPending = true;
+        schemePushTimer.restart();
+    }
+
+    property bool schemePending: false
+    property bool accentPending: false
+
+    // ONE PUSH PER FIRE, AND THE SECOND ONE WAITS FOR THE NEXT. Both commands
+    // end in `wallpaper-switch reapply`, which is a full matugen render over
+    // the same fourteen generated files; two of them started in the same turn
+    // would be two renders racing, and the one that happened to finish last
+    // would be the one holding a value the other had not written yet. Sent one
+    // after the other, the second reads a store the first has already updated
+    // and is therefore the render that has both answers in it.
+    //
+    // It only ever comes up if the scheme and the accent are both changed
+    // inside the same 150ms, which is two different controls in two different
+    // sections of one page. Cheap to be right about anyway.
+    Timer {
+        id: schemePushTimer
+
+        interval: 150
+        onTriggered: {
+            if (root.schemePending) {
+                root.schemePending = false;
+                Quickshell.execDetached(["desktop-scheme", "set", root.scheme]);
+
+                if (root.accentPending)
+                    schemePushTimer.restart();
+
+                return;
+            }
+
+            if (root.accentPending) {
+                root.accentPending = false;
+                Quickshell.execDetached(root.accentSource === "hex"
+                    ? ["desktop-scheme", "accent", "hex", root.accentSeed]
+                    : ["desktop-scheme", "accent", root.accentSource]);
+            }
+        }
+    }
+
+    FileView {
+        id: schemeFile
+
+        path: `${root.stateDir}/desktop-scheme`
+        watchChanges: true
+        // Absent until the script has run once, which is not an error: the
+        // properties already hold the same defaults the script does.
+        printErrors: false
+
+        onFileChanged: reload()
+        onLoaded: root.adoptScheme()
+    }
+
+    // The same tab-separated store `adoptTweaks` reads, and parsed the same
+    // way. A value is NOT validated against the list of schemes on disk: this
+    // file is what the script wrote, the script already refused a name it had
+    // no file for, and a shell that second-guessed it would be a settings
+    // window disagreeing with the terminal about what is on screen.
+    function adoptScheme(): void {
+        if (schemePushTimer.running)
+            return;
+
+        const parsed = ({});
+
+        for (const line of (schemeFile.text() || "").split("\n")) {
+            const at = line.indexOf("\t");
+            if (at < 0)
+                continue;
+
+            parsed[line.slice(0, at)] = line.slice(at + 1).trim();
+        }
+
+        root.scheme = parsed["scheme"] || root.schemeDefault;
+        root.accentSource = parsed["accent"] || root.accentSourceDefault;
+        root.accentSeed = parsed["accent-hex"] || "";
+    }
+
     // ---------------- What the compositor is told ----------------
     //
     // NOT Theme CONSTANTS, and this is the clearest case on the page for why
