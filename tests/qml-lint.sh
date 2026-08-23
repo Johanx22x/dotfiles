@@ -71,6 +71,36 @@
 # below.
 # ---------------------------------------------------------------------------
 #
+# AND IT IS THE ONLY CHECK HERE THAT PARSES A FILE NOTHING RUNS, which is the
+# reason the `[syntax]` block down the file is not just another category. QML
+# compiles a type when something INSTANTIATES it, so a file that is loaded by
+# URL at runtime, or sits behind a Loader that is not active, is never read at
+# all by a shell that starts and comes up. tests/shell-load.sh starts the tree
+# in a headless compositor and asks whether it loaded; it cannot ask this,
+# because for these files there is nothing to load.
+#
+# HOW BIG THAT HOLE IS, measured rather than reasoned about: every one of the
+# 126 .qml files in this tree was broken in turn -- the same line of garbage
+# appended, one file at a time -- and tests/shell-load.sh was run against each.
+#   80 of 126  it caught: a type in the statically imported host chain fails to
+#              resolve, the configuration does not load, `qs` exits 255.
+#   43 of 126  it did not: the shell came up, printed "Configuration Loaded"
+#              and exited 0, and the only trace was a "Syntax error" line in a
+#              log it was not reading. That string has since been added to the
+#              four it does read, so these are caught there now too.
+#    3 of 126  nothing anywhere said anything: components/ClickCatcher.qml,
+#              ConfirmButton.qml and HyprlandGrab.qml are named only from
+#              inside a delegate of a document that is itself loaded by URL, so
+#              the type is never resolved and the engine has no occasion to
+#              complain. A green shell, an empty log, and a file that does not
+#              parse.
+# The 46 that came up green are all 32 files under themes/ and 14 under
+# components/. That set grows with every surface moved behind a Loader and with
+# every theme added, and the log assertion next door cannot follow it, because
+# what it reads is the log of a shell that ran -- and none of this ran.
+#
+# ---------------------------------------------------------------------------
+#
 # THE BASELINE, AND WHY IT IS NOT ZERO. The tree measured 326 the first time a
 # linter could read it; 19 of those were cheap and are gone, so it is 307.
 # Gating at zero would mean gating at a number nobody can reach today, so this
@@ -143,6 +173,13 @@ QMLLINT=/usr/lib/qt6/bin/qmllint
 # Zero entries are kept rather than deleted: the category is spelled out so a
 # new one is reported against a number this file states, instead of appearing
 # from nowhere and being compared against an implicit zero nobody wrote down.
+#
+# `syntax` IS NOT IN HERE AND MUST NOT BE ADDED. It is the one finding this
+# table cannot express: every entry below is a number somebody is willing to
+# carry, and there is no number of files that do not parse that this repository
+# is willing to carry. It is asserted on its own further down, outside the
+# comparison, so that the way it stops failing a run is that the file is fixed
+# and not that a number was written here.
 declare -A BASELINE=(
     [unqualified]=246
     [missing-property]=19
@@ -222,6 +259,43 @@ done < <(find "$root" -type d | sort)
 modules="$(find "$root" -name qmldir | wc -l)"
 note "$qml_count file(s) in $modules module(s)"
 
+# --- the floor under the parse check -----------------------------------------
+#
+# WHY THE FILE COUNT ABOVE IS NOT THE FLOOR THIS ONE NEEDS. Every other
+# assertion in this file is over the tree, so an empty tree is the only way
+# they can go quiet, and `qml_count` is what stops that. The parse check below
+# has a second way to go quiet that no count of files can see: qmllint can stop
+# reporting syntax at all, and then a tree full of garbage sweeps clean. `-s`
+# suppresses it outright; a `.qmllint.ini` anywhere above the file being linted
+# can turn categories off; and Qt 5's qmllint -- the one on the PATH here, see
+# the note at the top -- exits 255 printing nothing on most of this tree. In
+# every one of those the report comes back with no `[syntax]` line in it, which
+# is byte for byte what a tree that parses looks like.
+#
+# So a file that cannot parse is written into the copy, linted on its own, and
+# the answer is read. This is the assertion that the instrument still answers
+# the question, and it fails the run rather than warning: with a qmllint that
+# has gone quiet, everything below is a green tick over an empty set.
+#
+# NOT THROUGH A PIPE INTO `grep -q`, which is the version that was written
+# first and was wrong in the direction that hides nothing and reports
+# everything: `set -o pipefail` is on and qmllint exits 255 on a syntax error,
+# so the pipeline carries 255 whatever grep found and `if !` fired on a clean
+# run. The output goes into a variable and grep reads that.
+canary="$root/SyntaxCanary.qml"
+printf 'import QtQuick\nItem { }\nthis file does not parse {{{\n' > "$canary"
+canary_out="$("$QMLLINT" -I "$sandbox" -I /usr/lib/qt6/qml "$canary" 2>&1 || true)"
+rm -f "$canary"
+if ! grep -q '\[syntax\]' <<<"$canary_out"; then
+    fail "qmllint no longer reports a file that cannot parse as [syntax]"
+    echo "qml-lint: a file of deliberate garbage was linted and it said:" >&2
+    # `|| true` for the reason the examples below have it: head closes the pipe
+    # and printf takes SIGPIPE, which under `set -o pipefail` would replace the
+    # status this line is about to exit with.
+    printf '%s\n' "${canary_out:-(nothing at all)}" | head -n 5 >&2 || true
+    exit 1
+fi
+
 # --- the sweep ---------------------------------------------------------------
 #
 # -I twice: the sandbox, so `qs.*` resolves to the copy, and Qt's own module
@@ -252,8 +326,52 @@ for entry in "${found[@]}"; do counts["${entry%% *}"]="${entry##* }"; done
 total=0
 for category in "${!counts[@]}"; do total=$(( total + counts[$category] )); done
 
-# Errors are not warnings. qmllint reports a file it cannot parse at all this
-# way, and no baseline should be able to absorb one.
+# --- does every file parse ---------------------------------------------------
+#
+# THE ONE FINDING THAT IS NOT A WARNING, whatever qmllint chooses to call it,
+# and the only question in this repository that this check alone can answer.
+# See the section on it in the header: tests/shell-load.sh comes up green with
+# a line of garbage appended to any one of 46 of the 126 files here -- all 32
+# under themes/ and 14 under components/ -- because QML compiles a type when
+# something instantiates it, and a surface loaded by URL at runtime is not
+# instantiated by a shell starting up.
+#
+# IT IS DELIBERATELY OUTSIDE THE BASELINE TABLE and skipped by the loop below,
+# which is the whole point of lifting it out rather than adding `[syntax]=0` to
+# the table with the other zeros. Every category down there is budgeted: it is
+# compared against a number, and the way a category stops failing the run is
+# that somebody writes its current count into the table. That is right for
+# warnings and wrong for this. There is no number of files that do not parse
+# which this repository is willing to carry, so there is no number to write.
+#
+# The prefix is anchored for the reason the counting grep two blocks up is:
+# qmllint echoes the offending source line under each message, and an echoed
+# line is not a finding.
+#
+# IT IS REPORTED BEFORE THE TABLE BECAUSE IT INVALIDATES THE TABLE. A file
+# qmllint cannot parse is a file whose types it cannot resolve, so every
+# category that reads one comes back short and the loop below helpfully offers
+# to lower the baseline. Measured, with a line of garbage on
+# themes/genesis/island/Island.qml: [unqualified] 246 -> 232 and
+# [missing-property] 19 -> 9. Those notes are an artefact of the failure
+# printed above them and not an invitation -- fix the file and the numbers come
+# back.
+syntax_lines="$(grep -P '^(?:Warning|Info|Error|Critical):.*\[syntax\]$' \
+                     "$report" || true)"
+if [[ -n $syntax_lines ]]; then
+    syntax_count="$(grep -c '' <<<"$syntax_lines")"
+    fail "$syntax_count file(s) in the tree do not parse:"
+    printf '%s\n' "$syntax_lines" | head -n 10 >&2 || true
+fi
+
+# AND NOT THE SAME THING, which was measured rather than assumed after the
+# comment here claimed it was. This used to say that a file qmllint cannot
+# parse is reported as an `Error:`; it is not. qmllint 6.11.2 reports it as
+# `Warning: <file>:<line>:<col>: Syntax error [syntax]` and exits 255, and the
+# 255 is swallowed by the `|| true` the sweep needs for its 307 warnings. So
+# this branch never fired for the fault it named, and the block above is what
+# now asks that question. It is kept for the ones it does catch -- a `Critical`
+# or an `Error` out of qmllint itself, which no baseline should absorb either.
 if grep -q '^Error:' "$report"; then
     fail "qmllint reported errors, not just warnings:"
     errors="$(grep '^Error:' "$report" || true)"
@@ -263,6 +381,11 @@ fi
 # Every category in either table, so one that appears from nowhere is named
 # rather than silently added to a total.
 for category in $(printf '%s\n' "${!counts[@]}" "${!BASELINE[@]}" | sort -u); do
+    # Handled above, and on purpose not budgetable. `if` rather than
+    # `[[ ... ]] && continue`: the second form is the last command in the loop
+    # body on every iteration that is not syntax, and under `set -e` a false
+    # test there ends the script.
+    if [[ $category == syntax ]]; then continue; fi
     now="${counts[$category]:-0}"
     was="${BASELINE[$category]:-0}"
     if (( now > was )); then

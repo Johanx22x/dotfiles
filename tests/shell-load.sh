@@ -25,19 +25,42 @@
 #   "caused by" ending at "@Config.qml[1720:1]: Syntax error", and putting a
 #   `NoSuchTypeAtAll {}` in shell.qml prints "NoSuchTypeAtAll is not a type".
 #
-#   The log carries no ReferenceError, TypeError, "Unable to assign" or
-#   "is not a type". This is the half that catches the other two, because a
-#   name that does not resolve in a QML binding is not a load failure at all --
-#   the binding is evaluated lazily and the shell comes up looking fine.
-#   Deleting Theme.qml outright, with every module in the tree reading it, still
-#   printed "Configuration Loaded" and exited 0: the only trace was 200-odd
-#   "ReferenceError: Theme is not defined". Dropping `pragma Singleton` from the
-#   top of it did the same, leaving "TypeError: Property 'glass' of object Theme
-#   is not a function" and a long tail of "Unable to assign [undefined] to
-#   QColor". A check that only asked the first question would have passed both.
+#   The log carries no ReferenceError, TypeError, "Unable to assign",
+#   "is not a type" or "Syntax error". This is the half that catches the other
+#   two, because a name that does not resolve in a QML binding is not a load
+#   failure at all -- the binding is evaluated lazily and the shell comes up
+#   looking fine. Deleting Theme.qml outright, with every module in the tree
+#   reading it, still printed "Configuration Loaded" and exited 0: the only
+#   trace was 200-odd "ReferenceError: Theme is not defined". Dropping
+#   `pragma Singleton` from the top of it did the same, leaving "TypeError:
+#   Property 'glass' of object Theme is not a function" and a long tail of
+#   "Unable to assign [undefined] to QColor". A check that only asked the first
+#   question would have passed both.
 #
-# A clean tree produces none of those four strings -- measured over repeated
+# A clean tree produces none of those five strings -- measured over repeated
 # runs -- so the pattern is a floor and not a budget.
+#
+# "Syntax error" IS THE FIFTH AND IT ARRIVED LATE, which is worth recording
+# because the shape of what it does and does not fix is the shape of this whole
+# check. The first four were chosen against faults in the host chain, where a
+# file that does not parse takes the configuration down with it and the
+# assertion above catches it before this one is reached. A file loaded by URL
+# at runtime -- which is every surface under themes/, and anything behind a
+# Loader with a `source` -- fails differently: the engine logs
+# "@<file>[line:1]: Syntax error" and a "Type <Name> unavailable" beside it,
+# drops the one widget, and carries on. "Configuration Loaded" is printed, the
+# exit status is 0, and until this string was added nothing here looked.
+# Measured by appending a line of garbage to themes/genesis/bar/Clock.qml: the
+# clock vanished from the bar, the log said exactly that, and this check was
+# green.
+#
+# It is only "Syntax error" and not also "Type <Name> unavailable". The second
+# line is the same event seen from the file that wanted the type, so it adds no
+# coverage here, and it has a failure mode of its own -- a type can be
+# unavailable because a service is absent, which in this sandbox is a normal
+# thing to be. One string, one meaning: nothing in this repository prints
+# "Syntax error" itself, the engine is the only source of it, and there is no
+# state of the sandbox that produces one.
 #
 # WHAT IT DOES NOT CATCH, said here so nobody reads a green tick as more than
 # it is. Both of the changes that reached the desktop broken in the day before
@@ -47,6 +70,21 @@
 # This check would have passed on both. It is a floor, not a ceiling:
 # tests/scroll-rail.sh next door is what asks whether a component BEHAVES, and
 # it has to be written per component.
+#
+# AND IT CANNOT SEE A FILE THAT NOTHING RUNS, which is the limit that matters
+# most as this tree grows and is the reason tests/qml-lint.sh now carries the
+# parse check rather than this file carrying it alone. QML compiles a type when
+# something INSTANTIATES it, so a file nothing reaches is a file nothing reads,
+# and a shell that never reached it starts perfectly and logs nothing. Measured
+# by breaking all 126 .qml files in the tree one at a time and running this
+# check against each: it caught 80, and of the 46 it did not, 43 at least left
+# a "Syntax error" in the log for the fifth string above to find. The other
+# three -- components/ClickCatcher.qml, ConfirmButton.qml and HyprlandGrab.qml,
+# each named only from inside a delegate of a document that is itself loaded by
+# URL -- produced a green run over an empty log with an unparseable file on
+# disk. No string added here can fix that, because there is no line to match:
+# a linter that reads every file whether or not anything runs it is the only
+# instrument that answers, and that is tests/qml-lint.sh.
 #
 # WHY A COMPOSITOR AND NOT `QT_QPA_PLATFORM=offscreen`. Offscreen runs QML and
 # exits 0, so it looks like the cheap answer, but `PanelWindow` -- which is
@@ -221,7 +259,11 @@ elif (( loaded == 0 )); then
     fail "qs is still running but never printed \"Configuration Loaded\""
     tail -n 30 "$sandbox/qs.log" >&2
 else
-    note "the shell loaded: $qml_count .qml file(s) parsed and instantiated"
+    # NOT "parsed and instantiated", which is what this line used to claim and
+    # is not true of most of them: 46 of the 126 are never reached by a shell
+    # that starts, so the number is the size of the tree it came up over and
+    # not a count of what it read. See the section on that in the header.
+    note "the shell came up over a tree of $qml_count .qml file(s)"
 
     # THEN LET IT RUN FOR A MOMENT. "Configuration Loaded" is printed while
     # bindings are still being evaluated, and a name that does not resolve
@@ -230,13 +272,13 @@ else
     # the log at the instant it appears would read half of it.
     sleep "$SETTLE"
 
-    # The four strings, and nothing looser. Everything else in this log is
+    # The five strings, and nothing looser. Everything else in this log is
     # about the sandbox rather than about the code -- no DBus, no PipeWire, no
     # UPower, no ~/.face, no niri config -- and those all announce themselves
     # as a service declining rather than as a name failing to resolve. Matching
     # WARN or ERROR wholesale would make this check a list of exceptions to
     # maintain instead of an assertion.
-    if broken="$(grep -nE 'ReferenceError|TypeError|Unable to assign|is not a type' \
+    if broken="$(grep -nE 'ReferenceError|TypeError|Unable to assign|is not a type|Syntax error' \
                       "$sandbox/qs.log")"; then
         count="$(wc -l <<<"$broken")"
         fail "the shell loaded, but $count log line(s) name something that does not resolve"
