@@ -10,16 +10,26 @@ what was deliberately left out of the split:
 
 That sentence is now mostly false, and this file is what replaced it.
 
-**Twenty components have a theme half**, which is every `.qml` in this
+**Twenty-four components have a theme half**, which is every `.qml` in this
 directory:
 
 ```
 ActionRow          BindRow            Chip               ChoiceRow
-CornerWedge        InfoRow            LevelMeter         ListRow
-MenuRow            NotificationCard   Popout             ScrollBar
+CornerWedge        CycleRow           InfoRow            LevelMeter
+ListRow            MenuRow            MonitorTile        NotificationCard
+PendingBanner      Popout             Reading            ScrollBar
 SearchField        SettingsSection    StepperButton      StepperRow
 StreamRow          ToggleRow          Tooltip            VolumeSlider
 ```
+
+**Four of those twenty-four are the display page's and are not shared widgets**
+-- `CycleRow`, `MonitorTile`, `PendingBanner` and `Reading`. Their facades live
+under `modules/settings/pages/display/`, beside the page that instantiates
+them, because each one has one or two call sites on one page and a file under
+`components/` is a claim that the next page will want it too. The seam does not
+care: what makes a component themed is the sixteen lines and the file in here,
+not the address of the facade. `SettingsSection` was the first of these and its
+facade has been outside `components/` since the day it was split.
 
 Count the files rather than trusting that number. It said nineteen and was
 already wrong when it was written: `ScrollBar` crossed the seam in
@@ -46,13 +56,22 @@ last assertion reads are the ones this directory paints. The whole of that is
 written up in `components/ScrollBar.qml` under AND THE BENCH FOLLOWED IT
 ACROSS. The reason was about a tool, and the tool changed.
 
-Two of the twenty are worth knowing about before you copy anything:
+Three of the twenty-four are worth knowing about before you copy anything:
 
 - **`SettingsSection`'s facade is not under `components/`.** It is
   `modules/settings/SettingsSection.qml`, and its implementation is here
   anyway, because `shell.qml` imports this directory for the file watcher and
   that is what makes a theme file reload -- see the last section of this file.
-  The seam does not care where a facade lives.
+  The seam does not care where a facade lives. The display page's four are the
+  same shape for a different reason -- see above -- and their theme halves are
+  in here for exactly this one.
+- **`MonitorTile` reports nothing back and its facade reads no height.** It is
+  the second component after `CornerWedge` for which that is right rather than
+  forgotten: its box is a coordinate transform the arrangement map computes,
+  and a theme with a say in it could put a screen where the arrangement does
+  not think it is. It is also the one component whose contract includes NOT
+  taking input -- the drag that moves a screen belongs to the host, for the
+  reason `modules/settings/pages/display/MonitorTile.qml` sets out at length.
 - **`Popout`'s facade is a `PanelWindow` and not an `Item`.** Every other one
   is an Item. The diagram below is drawn from `ToggleRow` and does not
   represent that shape at all: a window's facade keeps a layer surface, a
