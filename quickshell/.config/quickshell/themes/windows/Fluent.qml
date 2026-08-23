@@ -293,6 +293,11 @@ QtObject {
     readonly property int indicatorHeight: 16
     readonly property int indicatorRadius: 2
 
+    // MenuFlyoutPresenterThemeMinWidth. A flyout does not shrink to its widest
+    // label: three short words would otherwise give a menu barely wider than
+    // the words in it, which is not a shape Windows ever draws.
+    readonly property int menuMinWidth: 128
+
     // SettingsCard, verbatim from the Community Toolkit. Cards STACK WITH A GAP
     // and stay fully rounded; they do not join. The top-rounds/middle-squares
     // rule exists only INSIDE a SettingsExpander.

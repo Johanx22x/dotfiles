@@ -291,7 +291,12 @@ PanelWindow {
             // 4 + 11 + label + 11 + 4: the item margin and the item padding on
             // each side of the widest entry. MenuFlyoutItemThemePadding is
             // 11,8,11,9 and Fluent.controlPaddingH is the 11 of it.
-            width: root.labelRoom + (Fluent.controlPaddingH + root.itemInsetH) * 2
+            // Floored at MenuFlyoutPresenterThemeMinWidth. "Sign out",
+            // "Restart" and "Shut down" are short enough that the computed
+            // width came out around a hundred pixels -- a menu barely wider
+            // than the words in it, which is not a shape Windows draws.
+            width: Math.max(Fluent.menuMinWidth,
+                            root.labelRoom + (Fluent.controlPaddingH + root.itemInsetH) * 2)
 
             // The presenter's own 2px top and bottom, plus the first and last
             // item's 2px margin, around a column of 32px entries.
