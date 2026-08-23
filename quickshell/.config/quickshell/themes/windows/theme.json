@@ -1,0 +1,34 @@
+{
+    "_comment": "Windows 11 dark. Every number here is Microsoft's unless its line says otherwise. Sources: microsoft/microsoft-ui-xaml controls/dev/CommonStyles/*_themeresources.xaml for the control metrics, CommunityToolkit/Windows components/SettingsControls for the settings card, and the Fluent 2 geometry page for the two corner radii. Where nothing is published -- the taskbar has no public design documentation at all -- the number is ours and is called out below.",
+
+    "_bar": "OURS: the taskbar is shell chrome and Microsoft documents none of it. 48 is the measured height at 100% scaling; 8 and 4 are read off screenshots.",
+    "barHeight": 48,
+    "barPadding": 8,
+    "itemSpacing": 4,
+
+    "_groups": "SettingsCardSpacing 4 and SettingsCardPadding 16 are verbatim from the Community Toolkit sample the official docs point at. cardRadius is OverlayCornerRadius, the 8 that Windows gives windows, flyouts and dialogs.",
+    "groupSpacing": 4,
+    "groupPadding": 16,
+    "cardRadius": 8,
+
+    "_notifications": "A toast and a card in the notification centre are the same component in two expand states. 16 is the standard flyout padding, 8 the overlay radius, 40 the app-icon box.",
+    "notificationWidth": 360,
+    "notificationGap": 8,
+    "notificationPadding": 16,
+    "notificationRadius": 8,
+    "notificationIconSize": 40,
+
+    "_popout": "The Quick Settings flyout. OURS, measured from screenshots; Microsoft publishes nothing for it.",
+    "popoutMinWidth": 340,
+
+    "_type": "600 is Semibold. Windows 11's typography rules say Semibold for emphasis and never Bold, so this is the heaviest weight the theme ever asks for.",
+    "fontWeight": 600,
+    "imageSize": 20,
+
+    "_corners": "0 because Windows rounds WINDOWS, not the screen. This is what makes CornerWedge the empty implementation the interface explicitly supports -- the four ScreenCorner windows still exist, reserve nothing and take no input.",
+    "screenCornerRadius": 0,
+
+    "_motion": "ControlFastAnimationDuration. WinUI ships exactly three durations -- 83, 167, 250 -- and one easing spline, ControlFastOutSlowInKeySpline = 0,0,0,1. Note that hover is NOT among the things that animate: Windows swaps the brush on a DiscreteObjectKeyFrame at time zero.",
+    "animDuration": 167,
+    "recolorDuration": 0
+}

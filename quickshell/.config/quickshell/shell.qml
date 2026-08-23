@@ -83,7 +83,7 @@ import qs.modules.settings
 // the imports ends the import list as far as Quickshell's scanner is
 // concerned: the ENGINE still reads every line below and resolves them, so the
 // file loads and then dies with "module qs.themes.genesis is not installed"
-// for all eight at once -- an error about the imports that is really about a
+// for every one of them at once -- an error about the imports that is really about a
 // comment thirty lines above them. It cost a run here. modules/Themes.qml
 // carries the same warning over its own header for the same reason and a
 // different symptom.
@@ -96,12 +96,18 @@ import qs.modules.settings
 // themes/ by hand does not have to be.
 //
 // AND qmllint IS RIGHT THAT THEY ARE UNUSED, which is why it is silenced for
-// these eight lines and only these eight. "Unused" is the point: an import
-// nothing instantiates is exactly what a theme's directories are here for, so
-// the finding is correct and the code is deliberate. Silenced here rather than
+// these lines and only these. "Unused" is the point: an import nothing
+// instantiates is exactly what a theme's directories are here for, so the
+// finding is correct and the code is deliberate. Silenced here rather than
 // budgeted in tests/qml-lint.sh because that budget is per category across the
-// whole tree, and a budget of eight would hide the ninth unused import
-// wherever it appeared.
+// whole tree, and a budget the size of this list would hide the NEXT unused
+// import wherever it appeared.
+//
+// ONE LINE PER DIRECTORY, PER THEME, and the list grows with both. It was nine
+// lines while genesis was the only theme; every theme added since has added its
+// own root plus one line for each subdirectory it carries. The count is not
+// written down anywhere on purpose -- a number in a comment is a number that
+// goes stale, and this one already had.
 //qmllint disable unused-imports
 import qs.themes.genesis
 import qs.themes.genesis.bar
@@ -112,6 +118,15 @@ import qs.themes.genesis.launcher
 import qs.themes.genesis.notifications
 import qs.themes.genesis.powermenu
 import qs.themes.genesis.wallpaper
+import qs.themes.windows
+import qs.themes.windows.bar
+import qs.themes.windows.cheatsheet
+import qs.themes.windows.components
+import qs.themes.windows.island
+import qs.themes.windows.launcher
+import qs.themes.windows.notifications
+import qs.themes.windows.powermenu
+import qs.themes.windows.wallpaper
 //qmllint enable unused-imports
 
 ShellRoot {

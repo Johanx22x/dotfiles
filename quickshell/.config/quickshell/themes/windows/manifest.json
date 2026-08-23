@@ -1,0 +1,11 @@
+{
+    "name": "windows",
+    "title": "Windows 11",
+    "interface": 1,
+    "palette": {
+        "source": "scheme"
+    },
+    "font": {
+        "source": "user"
+    }
+}
