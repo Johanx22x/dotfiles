@@ -24,7 +24,7 @@
 #      desktop-scheme unpin           go back to the user's choice
 #
 #  A scheme is a JSON file in the repository's schemes/ directory, and
-#  schemes/README.md is the authoritative list of the 74 role names one has to
+#  schemes/README.md is the authoritative list of the 78 role names one has to
 #  fill. Read that before writing a scheme or a template; a name invented at
 #  either end is a palette that cannot be rendered at all.
 #

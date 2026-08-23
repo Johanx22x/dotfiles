@@ -102,7 +102,7 @@ The next host module that only a theme reaches for belongs on that line too.
 
 ## HOW A THEME IS LOADED
 
-`manifest.json` is what makes a directory a theme. It is three keys today:
+`manifest.json` is what makes a directory a theme. It is five keys today:
 
 ```json
 {
@@ -116,7 +116,7 @@ The next host module that only a theme reaches for belongs on that line too.
 expected to draw, where its files are looked for -- and the host refuses a
 number it does not speak rather than half-drawing a theme written against an
 older shape. `name` is a label; the directory is what the shell loads from.
-`title` is what a picker would show, and nothing shows it yet.
+`title` is what the picker shows, in the Theme section of the appearance page.
 
 `Config.theme` names the directory. `modules/Themes.qml` turns that name into
 URLs and reads the manifest; `modules/ThemeSurface.qml` loads one file out of

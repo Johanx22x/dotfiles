@@ -126,7 +126,8 @@ CHROMATICS = [
 # these are every Material 3 accent role referenced by the fourteen templates
 # in matugen/config.toml, and there are no others -- no `*_fixed`, no
 # `inverse_primary`, no `on_secondary`, no `tertiary_container`. The scheme
-# files' `fb_*` block carries exactly these nine names and no more, which is
+# files' `fb_*` block carries these nine names among its seventeen -- the nine
+# accents below plus eight surface, text and outline roles -- which is
 # not a coincidence: it was written as the fallback for the same set.
 ACCENT_ROLES = [
     "primary", "on_primary", "primary_container", "on_primary_container",
