@@ -23,7 +23,6 @@
 // wrong; its place was.
 
 import QtQuick
-import Quickshell
 import Quickshell.Services.UPower
 import qs
 import qs.modules.settings

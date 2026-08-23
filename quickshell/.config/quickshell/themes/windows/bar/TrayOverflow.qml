@@ -19,7 +19,6 @@
 // that is visibly short a control the real one has.
 
 import QtQuick
-import Quickshell
 import Quickshell.Services.SystemTray
 import qs
 import qs.themes.windows

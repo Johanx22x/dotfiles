@@ -73,7 +73,27 @@
 import QtQuick
 import qs
 import qs.components
+// qs.modules IS USED AND qmllint SAYS IT IS NOT. `Themes.title` below reads a
+// singleton out of it, and the linter reports the line as an unused import
+// anyway -- so it is silenced here rather than deleted, because deleting it is
+// what the linter is asking for and it breaks the page.
+//
+// MEASURED, because the same shape had already cost a day elsewhere. Take the
+// line out and the shell says, on every start:
+//
+//     WARN scene: @modules/settings/pages/BarPage.qml[320:-1]:
+//                 ReferenceError: Themes is not defined
+//
+// WHY IT HAPPENS HERE AND NOT IN EVERY FILE: a settings page is loaded BY URL,
+// through the window's own Loader, not imported as a type from a module. A
+// singleton resolves through an explicit module import on that path and
+// through the surrounding module's scope on the other, and qmllint only models
+// the second. themes/windows/Fluent.qml carries the same note from the theme
+// side, where it was found first: relative imports there produced 2240
+// `Unable to assign [undefined]` warnings against zero for the module form.
+//qmllint disable unused-imports
 import qs.modules
+//qmllint enable unused-imports
 import qs.modules.settings
 
 SettingsPage {
