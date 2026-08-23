@@ -63,6 +63,49 @@
 // exactly that. Measured, not read off the docs, in tests/scrollbar-target.py
 // -- and it is the reason those seven never suffered the fault the rail and
 // the launcher did, rather than any care taken about their margins.
+//
+// ---------------------------------------------------------------------------
+// THIS ONE IS NOT SPLIT, AND THE REASON IS A TEST
+// ---------------------------------------------------------------------------
+//
+// The theme half was designed and not written: a 4px pill with a 30px floor
+// under the thumb is drawing, the two grab margins and the four visibility
+// conditions are not, and the seam would have fallen where it falls for every
+// other widget in this directory. What stopped it is that this is the ONE
+// component in components/ with a bench of its own, and the bench cannot
+// follow it across the seam. Both halves of that were measured rather than
+// feared, by making the change in a scratch copy and running the bench:
+//
+//   THE IMPORT DOES NOT RESOLVE THERE. A facade loads its theme through
+//   Themes.surface(), which is `import qs.modules`, and `qs` inside a bench is
+//   a sandbox module built by the bench itself -- one directory, one stub
+//   singleton, no submodules. Adding the import gives
+//
+//     ScrollBar.qml:68:1: module "qs.modules" is not installed
+//     scrollbar-target.qml:112:13: Type ScrollBar unavailable
+//     the scene did not load: Status.Error
+//
+//   and every assertion below it is skipped. tests/wheel-and-click.py builds
+//   the same sandbox and loads ScrollList, which holds one of these, so it
+//   goes the same way. Two benches, not one.
+//
+//   AND THE LAST ASSERTION READS THE PAINT. scrollbar-target.py grabs the
+//   window and checks the four pixels at 596..599 are not the colour of the
+//   row behind them -- the only thing in tests/ that looks rather than asks,
+//   and it exists because being painted under a row was half of what the
+//   ScrollList fault cost. After a split those four pixels are drawn by a file
+//   in themes/, which a bench with no Themes singleton has no way to reach at
+//   all. The check would not merely move; it would have nothing left to look
+//   at.
+//
+// So the widening this file is mostly about -- three inward, eleven outward,
+// arrived at twice by finding the defect first -- keeps the only thing that
+// holds it. Splitting this is a change to tests/scrollbar-target.py before it
+// is a change to this file: the bench needs a `qs.modules` in its sandbox
+// carrying a Themes stub whose surface() resolves into the real themes/
+// directory, and the paint assertion needs to be pointed at the theme's pill.
+// That is a piece of work with a bench of its own to prove, and it is not this
+// one.
 import QtQuick
 import qs
 
