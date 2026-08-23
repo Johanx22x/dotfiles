@@ -10,16 +10,19 @@ what was deliberately left out of the split:
 
 That sentence is now mostly false, and this file is what replaced it.
 
-**Twenty-four components have a theme half**, which is every `.qml` in this
+**Twenty-nine components have a theme half**, which is every `.qml` in this
 directory:
 
 ```
 ActionRow          BindRow            Chip               ChoiceRow
+ActionRow          BindRow            Chip               ChoiceRow
 CornerWedge        CycleRow           InfoRow            LevelMeter
 ListRow            MenuRow            MonitorTile        NotificationCard
 PendingBanner      Popout             Reading            ScrollBar
-SearchField        SettingsSection    StepperButton      StepperRow
-StreamRow          ToggleRow          Tooltip            VolumeSlider
+SearchField        SettingsChrome     SettingsHeader     SettingsNavItem
+SettingsResult     SettingsSection    StepperButton      StepperRow
+StreamRow          ToggleRow          Tooltip            UserBlock
+VolumeSlider
 ```
 
 **Four of those twenty-four are the display page's and are not shared widgets**
@@ -56,15 +59,24 @@ last assertion reads are the ones this directory paints. The whole of that is
 written up in `components/ScrollBar.qml` under AND THE BENCH FOLLOWED IT
 ACROSS. The reason was about a tool, and the tool changed.
 
-Three of the twenty-four are worth knowing about before you copy anything:
+Three of the twenty-nine are worth knowing about before you copy anything:
 
-- **`SettingsSection`'s facade is not under `components/`.** It is
-  `modules/settings/SettingsSection.qml`, and its implementation is here
-  anyway, because `shell.qml` imports this directory for the file watcher and
-  that is what makes a theme file reload -- see the last section of this file.
-  The seam does not care where a facade lives. The display page's four are the
-  same shape for a different reason -- see above -- and their theme halves are
-  in here for exactly this one.
+- **`SettingsSection`'s facade is not under `components/`, and it is no longer
+  the only one.** It is `modules/settings/SettingsSection.qml`, and its
+  implementation is here anyway, because `shell.qml` imports this directory for
+  the file watcher and that is what makes a theme file reload -- see the last
+  section of this file. The seam does not care where a facade lives.
+
+  Five more facades now live beside it: `SettingsChrome`, `SettingsHeader`,
+  `SettingsNavItem`, `SettingsResult` and `UserBlock`, which between them are
+  the whole of what the settings window used to draw. Their implementations are
+  in here for the same reason, and their `row` declarations name types out of
+  `qs.modules.settings` rather than `qs.components`. That import has one edge
+  worth knowing: **two files in that directory are `pragma Singleton` and open
+  `import Quickshell`**, and a composite singleton declared in a qmldir is
+  created when a document importing the module is created -- which is fine in
+  the shell and is why the two Python benches under `tests/` build that module
+  with the singletons left out. Both say so where they do it.
 - **`MonitorTile` reports nothing back and its facade reads no height.** It is
   the second component after `CornerWedge` for which that is right rather than
   forgotten: its box is a coordinate transform the arrangement map computes,

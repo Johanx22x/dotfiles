@@ -16,6 +16,19 @@
 // RESULTS ARE ROWS, NOT PAGES. "Where do I change the notification timeout"
 // is answered by the row, and offering "Notifications" instead makes the user
 // do the last step themselves.
+//
+// THE WALK IS WHY A THEME MUST NOT MIRROR `label`, `title` OR `glyph`. The
+// recursion at the bottom of collect() is unconditional, so it descends
+// through a facade's Loader and into whatever the theme built under it: a
+// theme item carrying a `label` of its own is a second row with the same name,
+// and the window looks perfectly correct while every answer appears twice.
+// That is rule 3 in themes/genesis/components/README.md, and it is the reason
+// every facade in this window keeps those three names on the host side.
+//
+// THE RESULT ROWS ARE NOT IN THAT WALK. It starts at the pages and this pane
+// is a sibling of the page host, so SettingsResult's own `label` and `glyph`
+// are read by nothing here. They are still spelled the way the interface
+// spells them; see that file's header.
 
 import QtQuick
 import qs
@@ -133,75 +146,27 @@ Item {
             Repeater {
                 model: root.results
 
-                Rectangle {
+                // THE ROW IS DRAWN BY THE THEME and this delegate is the four
+                // strings that go into it plus the one that comes back out. It
+                // is the only thing in this file that was ever drawing: the
+                // walk above, the scoring, the cap at twelve and the list are
+                // all host and none of them has a pixel in it.
+                SettingsResult {
                     id: result
 
                     required property var modelData
 
                     width: list.width
-                    implicitHeight: Theme.groupHeight + 8
-                    radius: Theme.cardRadius
 
-                    color: resultMouse.containsMouse ? Theme.surfaceContainerHigh : Theme.surfaceContainer
+                    glyph: result.modelData.glyph
+                    label: result.modelData.label
+                    section: result.modelData.section
+                    pageTitle: result.modelData.pageTitle
 
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.animDuration }
-                    }
-
-                    Text {
-                        id: resultGlyph
-
-                        anchors.left: parent.left
-                        anchors.leftMargin: Theme.groupPadding
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        text: result.modelData.glyph
-                        visible: text !== ""
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.iconSize
-                        color: Theme.textOnSurfaceVariant
-                    }
-
-                    Column {
-                        anchors.left: resultGlyph.visible ? resultGlyph.right : parent.left
-                        anchors.leftMargin: resultGlyph.visible ? Theme.itemSpacing : Theme.groupPadding
-                        anchors.right: parent.right
-                        anchors.rightMargin: Theme.groupPadding
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 1
-
-                        Text {
-                            width: parent.width
-                            text: result.modelData.label
-                            elide: Text.ElideRight
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize
-                            font.weight: Theme.fontWeight
-                            color: Theme.textOnSurface
-                        }
-
-                        // The trail, so a row with a generic name is placed:
-                        // "Default timeout" alone could be three things.
-                        Text {
-                            width: parent.width
-                            text: result.modelData.section !== "" && result.modelData.section !== result.modelData.pageTitle
-                                ? `${result.modelData.pageTitle} › ${result.modelData.section}`
-                                : result.modelData.pageTitle
-                            elide: Text.ElideRight
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize - 3
-                            color: Theme.textOnSurfaceVariant
-                        }
-                    }
-
-                    MouseArea {
-                        id: resultMouse
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.picked(result.modelData.page, result.modelData.label)
-                    }
+                    // `page` and `label` are what the window needs to get
+                    // there and to light the row up when it arrives, and
+                    // neither is anything the theme was told.
+                    onClicked: root.picked(result.modelData.page, result.modelData.label)
                 }
             }
         }

@@ -49,8 +49,10 @@ should keep meaning something.
 
 ## WHAT IT COVERS
 
-- **All 31 files the host loads by path**: the seven surfaces `shell.qml`
-  builds a `ThemeSurface` for, and the twenty-four components with a facade.
+- **All 36 files the host loads by path**: the seven surfaces `shell.qml`
+  builds a `ThemeSurface` for, and the twenty-nine components with a facade
+  -- five of which are the settings window's own chrome, whose facades live
+  under `modules/settings/` rather than under `components/`.
   `tests/theme-interface.py` derives that list from the host's own call sites
   and fails naming whatever is missing, so this list cannot silently fall
   behind the interface.
@@ -159,12 +161,12 @@ should keep meaning something.
 
 ## WHAT KEEPS IT IN STEP, HONESTLY
 
-Thirty-two files that have to track an interface is a real cost, and it is
+Thirty-nine files that have to track an interface is a real cost, and it is
 worth being exact about which parts of it are automatic and which are not.
 
 **Automatic: that every file the host loads by path exists here.**
-`tests/theme-interface.py` derives the list of 31 from `shell.qml` and from
-every `Themes.surface("...")` call site, so a twenty-fifth component split
+`tests/theme-interface.py` derives the list of 36 from `shell.qml` and from
+every `Themes.surface("...")` call site, so a thirtieth component split
 tomorrow makes this fixture incomplete tomorrow, by name, in CI. There is no
 hand-written list to fall behind.
 

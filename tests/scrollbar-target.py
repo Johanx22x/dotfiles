@@ -102,6 +102,7 @@ THEME = TESTS / "theme-stub.qml"
 
 SHELL = TESTS.parent / "quickshell" / ".config" / "quickshell"
 COMPONENTS = SHELL / "components"
+SETTINGS = SHELL / "modules" / "settings"
 # The theme whose drawing is measured. Hard-coded rather than read out of
 # Config, because the real Themes falls back to exactly this name when the
 # configured theme has no readable manifest, and it is the one this repository
@@ -179,8 +180,8 @@ _qs.mkdir()
 # BOTH ARE BUILT HERE AND BOTH ARE BUILT IN tests/wheel-and-click.py, which
 # loads ScrollList and therefore holds one of these bars. The two sandboxes are
 # not shared -- that one hands Theme in as a context property and this one
-# registers it as a singleton, for reasons each file gives -- but the three
-# modules are the same three. Add one here and it belongs there too, and the
+# registers it as a singleton, for reasons each file gives -- but the four
+# modules are the same four. Add one here and it belongs there too, and the
 # other way round; a bench whose theme file does not load still measures every
 # press correctly and reports a bar with nothing drawn in it.
 #
@@ -233,6 +234,31 @@ _modules.mkdir()
 )
 (_modules / "qmldir").write_text(
     "module qs.modules\nsingleton Themes 1.0 Themes.qml\n", encoding="utf-8"
+)
+
+# AND `qs.modules.settings`, WHICH NOTHING IN THIS FILE ASKS FOR. It is here
+# because the paragraph above says the modules are the same modules in both
+# benches and that adding one to either belongs in the other -- the settings
+# window's own facades became a fourth module in tests/wheel-and-click.py when
+# SettingsNavItem was split, and the two sandboxes drifting apart is exactly
+# what that sentence exists to stop. Nothing here imports it, so it costs one
+# qmldir written into a temporary directory.
+#
+# THE SINGLETONS ARE LEFT OUT, unlike qs.components above, and that is measured
+# rather than tidy: a composite singleton declared in a qmldir is created when a
+# document that imports the module is created, and two of the files in that
+# directory are singletons that open `import Quickshell`. Declaring them turns
+# every use of the module into "Type SessionInfo unavailable" followed by
+# `module "Quickshell" plugin "quickshell-coreplugin" not found`.
+_settings = _modules / "settings"
+_settings.mkdir()
+(_settings / "qmldir").write_text(
+    "module qs.modules.settings\n" + "".join(
+        f"{qml.stem} 1.0 {os.path.relpath(qml, _settings)}\n"
+        for qml in sorted(SETTINGS.glob("*.qml"))
+        if "pragma Singleton" not in qml.read_text(encoding="utf-8")
+    ),
+    encoding="utf-8",
 )
 
 failed = 0

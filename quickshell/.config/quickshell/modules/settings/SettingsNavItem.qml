@@ -1,81 +1,87 @@
-// One entry in the settings window's navigation rail.
+// One entry in the settings window's navigation rail. THIS IS THE HALF THE
+// WINDOW SEES; the pill, the glyph and the label are in
+// themes/<theme>/components/SettingsNavItem.qml.
 //
-// Selected state is a FILLED PILL, not an accent bar or bold text: the rail
-// sits on the same glass as the content beside it, and a mark that only
-// colours the label is easy to lose over a wallpaper. The pill also matches
-// what the rest of this shell already does to say "this one" -- the active
-// workspace on the bar is the same shape.
+// ---------------------------------------------------------------------------
+// THE MOUSEAREA DID NOT MOVE, AND IT IS THE ONE THING IN HERE THAT COULD NOT
+// ---------------------------------------------------------------------------
 //
-// Selected and hovered are deliberately different tones rather than different
-// intensities of one, so that hovering a selected entry does not read as
-// having deselected it.
+// Every other split in this shell hands the theme the hit target along with
+// the drawing, because a theme that draws its own shape is the only thing that
+// knows where the shape is. This one keeps it, for the twenty-five lines of
+// reason written over `preventStealing` below: that flag is the whole of a bug
+// that was reported as "Updates does not open", it applies to exactly the two
+// entries below the fold, and a theme that wrote its own MouseArea and left it
+// out would bring the bug back on a window that looks perfect. It is not
+// something a facade can require -- `preventStealing` is a property of an
+// object the theme would own -- so the object stays here.
+//
+// WHAT THE THEME GETS INSTEAD IS `hovered`. The pill has three tones and one
+// of them is "the pointer is over this", so the theme has to be able to ask.
+// It is `readonly` because there is exactly one writer and it is the MouseArea
+// below.
+//
+// The rail gives the width; see the note at the top of ToggleRow. The height
+// is floored at Theme.groupHeight -- what an entry was before the split -- and
+// read off the Loader rather than off `Loader.item`, for the reason in
+// ToggleRow's header. tests/wheel-and-click.py depends on that floor: it
+// builds fourteen of these and asserts the rail is 530 tall.
 
 import QtQuick
 import qs
+import qs.modules
 
-Rectangle {
+Item {
     id: root
 
+    // `label` and `glyph` STAY ON THIS SIDE. modules/settings/SettingsSearch.qml
+    // duck-types on both names by walking the live object tree, and although
+    // its walk starts inside the pages and never reaches the rail, the names
+    // are the interface's and a theme must not mirror them. See rule 3 in
+    // themes/genesis/components/README.md.
     property string glyph: ""
     property string label: ""
     property bool selected: false
 
     signal clicked
 
+    // Whether the pointer is over this entry, for the theme to draw with. The
+    // MouseArea below is the only writer.
+    readonly property bool hovered: mouse.containsMouse
+
     // The rail gives the width; see the note at the top of ToggleRow.
     width: parent ? parent.width : implicitWidth
     implicitWidth: 150
-    implicitHeight: Theme.groupHeight
+    implicitHeight: Math.max(Theme.groupHeight, drawing.implicitHeight)
 
-    radius: Theme.groupRadius
+    // Identical to ToggleRow's loader, and deliberately not factored out: see
+    // themes/genesis/components/README.md on why the sixteen lines are copied
+    // into each facade rather than shared through a base type.
+    Loader {
+        id: drawing
 
-    color: root.selected ? Theme.primaryContainer
-        : mouse.containsMouse ? Theme.surfaceContainerHigh
-        : "transparent"
+        anchors.fill: parent
 
-    Behavior on color {
-        ColorAnimation { duration: Theme.animDuration }
-    }
+        readonly property string drawingUrl: Themes.surface("components/SettingsNavItem.qml")
 
-    Row {
-        anchors.left: parent.left
-        anchors.leftMargin: Theme.groupPadding
-        anchors.right: parent.right
-        anchors.rightMargin: Theme.groupPadding
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.itemSpacing
+        function build(): void {
+            if (String(drawing.source) === drawing.drawingUrl)
+                return;
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.glyph
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.iconSize
-            color: root.selected ? Theme.textOnPrimaryContainer : Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
+            drawing.setSource(drawing.drawingUrl, {
+                row: root
+            });
         }
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.label
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize
-            font.weight: Theme.fontWeight
-            // Elide rather than let a long name push the glyph out of the
-            // pill: the rail has a fixed width and a section added later
-            // should not be able to change the window's proportions.
-            width: parent.width - parent.spacing - Theme.iconSize * 1.6
-            elide: Text.ElideRight
-            color: root.selected ? Theme.textOnPrimaryContainer : Theme.textOnSurface
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-        }
+        Component.onCompleted: drawing.build()
+        onDrawingUrlChanged: drawing.build()
     }
 
+    // DECLARED AFTER THE LOADER, which is where it was before the split: the
+    // drawing came first and this was the last child of the file. A MouseArea
+    // paints nothing, so the order is about which item is asked first and not
+    // about what is on top -- and the theme draws no hit target of its own, so
+    // there is nothing above this to reach past.
     MouseArea {
         id: mouse
 
@@ -106,6 +112,9 @@ Rectangle {
         // trade and is not: that switch also turns off the Flickable's own
         // wheel handling, which is the net under ScrollList's handler, and
         // taking it away stopped the whole settings window scrolling.
+        //
+        // AND IT IS WHY THIS OBJECT IS ON THIS SIDE OF THE SEAM. See the
+        // header.
         preventStealing: true
 
         cursorShape: Qt.PointingHandCursor

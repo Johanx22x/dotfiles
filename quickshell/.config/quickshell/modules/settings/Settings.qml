@@ -36,7 +36,17 @@
 // what every other window on this desktop gets. Verified, not assumed:
 // QT_WAYLAND_DISABLE_WINDOWDECORATION is NOT set anywhere in this config. So
 // the header below is the only title bar this window has, and the close
-// button in it is the only pointer-reachable way out.
+// button in it is the only pointer-reachable way out. Both are drawn by the
+// theme now; SettingsHeader.qml carries that promise across the seam, because
+// a facade can require a property and cannot require a button.
+//
+// WHAT THIS FILE STILL DRAWS IS NOTHING. The glass, the rail's tint, the
+// header's two items, the pill behind a rail entry, the person at the top of
+// the sidebar and a search result are all the theme's -- SettingsChrome,
+// SettingsHeader, SettingsNavItem, UserBlock and SettingsResult beside this
+// file are the facades in front of them. What is left here is which pages
+// exist, which one is selected, where everything sits, and the three
+// scrollbars that hang outside the panes they describe.
 
 import Quickshell
 import QtQuick
@@ -105,19 +115,18 @@ FloatingWindow {
     // all have to agree on the shortened list.
     property var pages: []
 
-    Rectangle {
+    // THE WINDOW'S OWN SURFACES, and the two numbers the rail is built on.
+    // What it draws -- the glass under everything and the tint down the rail
+    // -- is the theme's; `railWidth` and `railPadding` are read back out of it
+    // below, and its header says why they are declared on that side rather
+    // than measured off whatever the theme drew.
+    //
+    // FIRST CHILD, as the glass rectangle it replaces was, so nothing about
+    // what paints over what has changed.
+    SettingsChrome {
+        id: chrome
+
         anchors.fill: parent
-
-        // The same glass as the bar, and therefore the same value this window
-        // edits -- move the opacity and the window showing the number goes
-        // with it. No radius: Hyprland rounds the window itself, at the
-        // `rounding` in hyprland.lua that everything else on screen agrees
-        // with.
-        color: Theme.glass(Theme.surface)
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
     }
 
     // FocusScope and not a bare Item: Escape has to arrive somewhere, and a
@@ -142,38 +151,22 @@ FloatingWindow {
             anchors.left: parent.left
             anchors.bottom: parent.bottom
 
-            readonly property int padding: 10
+            // BOTH NUMBERS COME OUT OF THE CHROME, which is the one place
+            // they are written. The panel the theme paints over this
+            // rectangle is drawn from the same `railWidth`, so the tint and
+            // the rail cannot end in different places; the padding is what
+            // leaves the empty strip the scrollbar below lives in, and
+            // tests/scrollbar-target.py asserts on the three pixels it takes
+            // out of it. See SettingsChrome.qml for why a theme does not get
+            // to move either of them.
+            // AND THIS ITEM DRAWS NOTHING AT ALL NOW. The panel that used to
+            // be its first child is one of the two rectangles the chrome
+            // paints, underneath everything here, over exactly this
+            // rectangle -- which is what reading `railWidth` from there
+            // rather than writing 210 twice is for.
+            readonly property int padding: chrome.railPadding
 
-            width: 210
-
-            // The panel. A TINT OVER THE GLASS and not a second glass layer:
-            // an opaque colour at its own alpha would compound with the
-            // window's, and the sidebar would come out noticeably more solid
-            // than the pane beside it -- the two would stop looking like one
-            // window seen through one sheet.
-            //
-            // 0.18 AND NO DIVIDING LINE. It started at 0.5 with a hairline
-            // down the right edge, which is how a file manager does it, and
-            // in a window this size it read as two windows stitched together:
-            // the line drew more attention than the boundary deserved, and
-            // the step in tone did the same job twice over. What is wanted is
-            // only enough separation to tell the navigation from the content
-            // at a glance -- past that, every bit of contrast spent on the
-            // frame is contrast taken from the selected entry, which is the
-            // thing actually worth seeing.
-            //
-            // It runs into the left, top and bottom edges of the window on
-            // purpose. Hyprland rounds those corners itself, so the panel
-            // ends in the window's own curve instead of in a straight cut a
-            // few pixels inside it.
-            Rectangle {
-                anchors.fill: parent
-                color: Qt.alpha(Theme.surfaceContainerHigh, 0.18)
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
+            width: chrome.railWidth
 
             UserBlock {
                 id: userBlock
@@ -327,73 +320,26 @@ FloatingWindow {
 
         // ================= CONTENT =================
 
-        Item {
+        // The page's name and the way out. Both are drawn by the theme; what
+        // stays here is WHICH NAME -- "Search" while the field has something
+        // in it, otherwise the selected page's own title, which is a question
+        // about the two panes below and not about the header.
+        //
+        // NO HEIGHT SET HERE. The header reports one, floored at
+        // Theme.groupHeight, and an Item's height follows its implicitHeight
+        // until something assigns one. Both panes below still anchor to
+        // `header.bottom`, which is what that number is for.
+        SettingsHeader {
             id: header
 
             anchors.top: parent.top
             anchors.left: rail.right
             anchors.right: parent.right
             anchors.margins: Theme.groupPadding
-            height: Theme.groupHeight
 
-            Text {
-                anchors.left: parent.left
-                anchors.leftMargin: Theme.groupPadding
-                anchors.right: closeButton.left
-                anchors.verticalCenter: parent.verticalCenter
+            heading: root.searching ? "Search" : (root.pages[SettingsState.currentPage]?.title ?? "")
 
-                text: root.searching ? "Search" : (root.pages[SettingsState.currentPage]?.title ?? "")
-                elide: Text.ElideRight
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize + 3
-                font.weight: Font.Bold
-                color: Theme.textOnSurface
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-
-            // Close. In the corner, round, and the only control in this
-            // window that is not a setting -- which is why it is a bare glyph
-            // on the glass rather than a pill like everything else.
-            Rectangle {
-                id: closeButton
-
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-
-                implicitWidth: Theme.groupHeight
-                implicitHeight: Theme.groupHeight
-                radius: height / 2
-
-                color: closeMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
-
-                Text {
-                    anchors.centerIn: parent
-                    text: Icons.close
-                    font.family: Theme.fontFamily
-                    font.pointSize: Theme.iconSize
-                    color: closeMouse.containsMouse ? Theme.textOnSurface : Theme.textOnSurfaceVariant
-
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.animDuration }
-                    }
-                }
-
-                MouseArea {
-                    id: closeMouse
-
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: SettingsState.close()
-                }
-            }
+            onCloseRequested: SettingsState.close()
         }
 
         // ---------------- Pages ----------------
