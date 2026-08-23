@@ -43,7 +43,7 @@
             // The VALUES are not derived: they are the text you actually
             // read. Pinned to kitty.conf's foreground so they do not depend
             // on how light the current wallpaper accent comes out.
-            "output": "#c0caf5"
+            "output": "{{colors.ui_text.default.hex}}"
         }
     },
 
