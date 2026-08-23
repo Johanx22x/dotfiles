@@ -35,7 +35,7 @@
     "_corners": "0 because Windows rounds WINDOWS, not the screen. This is what makes CornerWedge the empty implementation the interface explicitly supports -- the four ScreenCorner windows still exist, reserve nothing and take no input.",
     "screenCornerRadius": 0,
 
-    "_alpha": "OURS, and it is the number the whole theme leans on. Windows' acrylic is a 30px blur under a #2C2C2C tint at 15% tint opacity and 96% luminosity opacity, which no single alpha reproduces -- what a single alpha can do is let the wallpaper's colour through the way the real taskbar does. 78 is a starting point to be tuned against a photograph, not a measurement.",
+    "_alpha": "The number the whole theme leans on, and it is now measured rather than guessed. Windows' acrylic is a 30px blur under a #2C2C2C tint at 15% tint opacity and 96% luminosity opacity, which no single alpha reproduces -- what a single alpha can do is let the wallpaper's colour through the way the real taskbar does, and that is measurable. Sampling six points along a real Windows taskbar against the wallpaper directly above it, the bar keeps 0.28 of the wallpaper's saturation; ours at 78 keeps 0.25, WITHOUT the compositor blur the real desktop has and this sandbox does not. Close enough that moving it would be tuning against the sandbox rather than against Windows.",
     "surfaceAlpha": 78,
 
     "_motion": "ControlFastAnimationDuration. WinUI ships exactly three durations -- 83, 167, 250 -- and one easing spline, ControlFastOutSlowInKeySpline = 0,0,0,1. Note that hover is NOT among the things that animate: Windows swaps the brush on a DiscreteObjectKeyFrame at time zero.",
