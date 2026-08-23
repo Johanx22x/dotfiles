@@ -26,6 +26,7 @@ schemes/README.md              this file: the vocabulary and the substitution wo
 schemes/tokyo-night.json       the default scheme, taken from upstream (see "Tokyo Night is Night")
 schemes/catppuccin-mocha.json  Catppuccin Mocha
 schemes/gruvbox-dark.json      Gruvbox Dark Medium
+schemes/windows-11-dark.json   Windows 11 Dark
 ```
 
 `schemes/` is not a stow package — it holds no dotfile, so `install.sh` and
@@ -329,35 +330,35 @@ wallpaper. The prefixes make that collision impossible by construction.
 
 ### 1.1 base — surfaces, text, outlines
 
-| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | meaning | consumed at |
-|---|---|---|---|---|---|
-| `ui_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | Window / chrome background: the flat surface every app frame sits on. | gtk3 x9, gtk4 x8, zathura:28, zen-scheme.css x3, qt6ct idx10/17 |
-| `ui_bg_dim` | `#16161e` | `#181825` | `#1d2021` | A quiet chrome strip that must recede behind ui_bg. | **nothing today** — the kitty tab bar reads `term_tab_bg` |
-| `ui_bg_bar` | `#15161e` | `#181825` | `#3c3836` | Secondary bar / strip inside a window: statusbar, inputbar, notification, group header. | zathura:30,32,36,52 |
-| `ui_bg_field` | `#15161e` | `#181825` | `#1d2021` | Background of an editable field or a scrolling list (Qt Base). | qt6ct idx9 x3 |
-| `ui_bg_view` | `#0c0e14` | `#11111b` | `#1d2021` | The content pane, set one clear step away from ui_bg so content lifts off chrome. NOT necessarily darker -- see the ladder notes. | gtk3:83,145,162,173; gtk4:117 |
-| `ui_bg_shadow` | `#0c0e14` | `#11111b` | `#1d2021` | Deepest tone of the palette; Qt bevel drop shadow. | qt6ct idx11 x3 |
-| `ui_bg_alt_row` | `#1a1b26` | `#1e1e2e` | `#282828` | Alternating table row. Deliberately equal to ui_bg today (no stripe). | qt6ct idx16 x3 |
-| `ui_bg_raised` | `#292e42` | `#313244` | `#3c3836` | Card / popover / tooltip / completion menu: a container floating above ui_bg. | gtk3:115,122,125; gtk4:176,183,186; zathura:34; qt6ct idx18 x3 |
-| `ui_bg_button` | `#292e42` | `#313244` | `#3c3836` | Qt button face (QPalette::Button). | qt6ct idx1 x3 |
-| `ui_bg_control` | `#222534` | `#313244` | `#3c3836` | A raised inline control (the Nautilus breadcrumb pill, linked button groups). | gtk4:451 |
-| `ui_surface` | `#0c0e14` | `#11111b` | `#282828` | **Level 1 of the shell's surface ladder**: the ground a whole panel is drawn on — the bar, the launcher, the settings window, a popout, the notification stack. Each scheme picks its own four; the derivation and the citations are in 4.4. | quickshell-colors.json:11 |
-| `ui_surface_container` | `#1a1b26` | `#1e1e2e` | `#3c3836` | **Level 2**: a card sitting on that panel — a notification, a settings section, the dashboard sheet. Borderless in this shell, so it has to stand off level 1 by tone alone. | quickshell-colors.json:12 |
-| `ui_surface_container_high` | `#292e42` | `#313244` | `#504945` | **Level 3**: hover, and the pills the bar and the launcher draw at rest. 33 of its 46 readers are a hover or focus fill and 23 of those are literally `containsMouse ? this : "transparent"`, which is why every scheme's level 3 sits *above* its level 2 whatever its chrome does. | quickshell-colors.json:13 |
-| `ui_surface_container_highest` | `#343a55` | `#585b70` | `#665c54` | **Level 4**: tooltips, slider rails, meter tracks, key chips, field fills, and 9 more hover fills. Must not be equal to `ui_border_dim` — every tooltip fills with level 4 and borders with `outline_variant`. | quickshell-colors.json:14 |
-| `ui_bevel_dark` | `#15161e` | `#181825` | `#1d2021` | Qt 3D bevel, darkest shade (QPalette::Dark). | qt6ct idx4 x3 |
-| `ui_bevel_mid` | `#1a1b26` | `#1e1e2e` | `#282828` | Qt 3D bevel, mid shade (QPalette::Mid). | qt6ct idx5 x3 |
-| `ui_bevel_midlight` | `#353b55` | `#45475a` | `#504945` | Qt 3D bevel, light-mid shade (QPalette::Midlight). | qt6ct idx3 x3 |
-| `ui_border` | `#414868` | `#585b70` | `#665c54` | Visible 1px divider or frame between surfaces; Qt bevel lit edge (QPalette::Light). | gtk3:88,130,166; gtk4:138,191; qt6ct idx2 x3, idx14/15 disabled |
-| `ui_border_dim` | `#3b4261` | `#45475a` | `#504945` | A weaker divider: an unfocused window split. | **nothing today** — the unfocused split reads `term_border_inactive` |
-| `ui_text` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | Primary text and icons on any ui_bg* surface. | gtk3 x12, gtk4 x9, zathura x6, qt6ct idx0/6/8/19, fastfetch:49 |
-| `ui_text_variant` | `#a9b1d6` | `#bac2de` | `#d5c4a1` | Secondary / less important text that still has to be read. | cship.toml:63 |
-| `ui_text_dim` | `#545c7e` | `#7f849c` | `#a89984` | Text of an inactive-but-clickable element. | **nothing today** — the inactive tab label reads `term_tab_inactive_fg` |
-| `ui_text_muted` | `#565f89` | `#6c7086` | `#928374` | Disabled text, placeholder text, group headings -- present but not readable as content. | gtk3:172,174; zathura:37; qt6ct disabled idx0/6/7/8/13/19/20 |
-| `ui_on_accent` | `#1a1b26` | `#1e1e2e` | `#282828` | Text/glyphs drawn ON TOP of a full-strength accent or semantic fill. Never a surface. | gtk3:204,208,212,216; gtk4:221,225,229,233; kitty-colors:19,28; kitty-scheme.conf:62; zathura:39 |
-| `ui_doc_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | The page of a recoloured document (what zathura turns white paper into). | zathura:20 |
-| `ui_doc_fg` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | The ink of a recoloured document. | zathura:21 |
-| `ui_selection_disabled` | `#292e42` | `#313244` | `#504945` | Selection fill inside a DISABLED widget: present but must not shout. | qt6ct:64 idx12 |
+| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | Windows 11 Dark | meaning | consumed at |
+|---|---|---|---|---|---|---|
+| `ui_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | `#202020` | Window / chrome background: the flat surface every app frame sits on. | gtk3 x9, gtk4 x8, zathura:28, zen-scheme.css x3, qt6ct idx10/17 |
+| `ui_bg_dim` | `#16161e` | `#181825` | `#1d2021` | `#1c1c1c` | A quiet chrome strip that must recede behind ui_bg. | **nothing today** — the kitty tab bar reads `term_tab_bg` |
+| `ui_bg_bar` | `#15161e` | `#181825` | `#3c3836` | `#272727` | Secondary bar / strip inside a window: statusbar, inputbar, notification, group header. | zathura:30,32,36,52 |
+| `ui_bg_field` | `#15161e` | `#181825` | `#1d2021` | `#2d2d2d` | Background of an editable field or a scrolling list (Qt Base). | qt6ct idx9 x3 |
+| `ui_bg_view` | `#0c0e14` | `#11111b` | `#1d2021` | `#242424` | The content pane, set one clear step away from ui_bg so content lifts off chrome. NOT necessarily darker -- see the ladder notes. | gtk3:83,145,162,173; gtk4:117 |
+| `ui_bg_shadow` | `#0c0e14` | `#11111b` | `#1d2021` | `#0a0a0a` | Deepest tone of the palette; Qt bevel drop shadow. | qt6ct idx11 x3 |
+| `ui_bg_alt_row` | `#1a1b26` | `#1e1e2e` | `#282828` | `#202020` | Alternating table row. Deliberately equal to ui_bg today (no stripe). | qt6ct idx16 x3 |
+| `ui_bg_raised` | `#292e42` | `#313244` | `#3c3836` | `#2c2c2c` | Card / popover / tooltip / completion menu: a container floating above ui_bg. | gtk3:115,122,125; gtk4:176,183,186; zathura:34; qt6ct idx18 x3 |
+| `ui_bg_button` | `#292e42` | `#313244` | `#3c3836` | `#2d2d2d` | Qt button face (QPalette::Button). | qt6ct idx1 x3 |
+| `ui_bg_control` | `#222534` | `#313244` | `#3c3836` | `#323232` | A raised inline control (the Nautilus breadcrumb pill, linked button groups). | gtk4:451 |
+| `ui_surface` | `#0c0e14` | `#11111b` | `#282828` | `#202020` | **Level 1 of the shell's surface ladder**: the ground a whole panel is drawn on — the bar, the launcher, the settings window, a popout, the notification stack. Each scheme picks its own four; the derivation and the citations are in 4.4. | quickshell-colors.json:11 |
+| `ui_surface_container` | `#1a1b26` | `#1e1e2e` | `#3c3836` | `#2b2b2b` | **Level 2**: a card sitting on that panel — a notification, a settings section, the dashboard sheet. Borderless in this shell, so it has to stand off level 1 by tone alone. | quickshell-colors.json:12 |
+| `ui_surface_container_high` | `#292e42` | `#313244` | `#504945` | `#333333` | **Level 3**: hover, and the pills the bar and the launcher draw at rest. 33 of its 46 readers are a hover or focus fill and 23 of those are literally `containsMouse ? this : "transparent"`, which is why every scheme's level 3 sits *above* its level 2 whatever its chrome does. | quickshell-colors.json:13 |
+| `ui_surface_container_highest` | `#343a55` | `#585b70` | `#665c54` | `#454545` | **Level 4**: tooltips, slider rails, meter tracks, key chips, field fills, and 9 more hover fills. Must not be equal to `ui_border_dim` — every tooltip fills with level 4 and borders with `outline_variant`. | quickshell-colors.json:14 |
+| `ui_bevel_dark` | `#15161e` | `#181825` | `#1d2021` | `#141414` | Qt 3D bevel, darkest shade (QPalette::Dark). | qt6ct idx4 x3 |
+| `ui_bevel_mid` | `#1a1b26` | `#1e1e2e` | `#282828` | `#1c1c1c` | Qt 3D bevel, mid shade (QPalette::Mid). | qt6ct idx5 x3 |
+| `ui_bevel_midlight` | `#353b55` | `#45475a` | `#504945` | `#2c2c2c` | Qt 3D bevel, light-mid shade (QPalette::Midlight). | qt6ct idx3 x3 |
+| `ui_border` | `#414868` | `#585b70` | `#665c54` | `#414141` | Visible 1px divider or frame between surfaces; Qt bevel lit edge (QPalette::Light). | gtk3:88,130,166; gtk4:138,191; qt6ct idx2 x3, idx14/15 disabled |
+| `ui_border_dim` | `#3b4261` | `#45475a` | `#504945` | `#2f2f2f` | A weaker divider: an unfocused window split. | **nothing today** — the unfocused split reads `term_border_inactive` |
+| `ui_text` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#ffffff` | Primary text and icons on any ui_bg* surface. | gtk3 x12, gtk4 x9, zathura x6, qt6ct idx0/6/8/19, fastfetch:49 |
+| `ui_text_variant` | `#a9b1d6` | `#bac2de` | `#d5c4a1` | `#cccccc` | Secondary / less important text that still has to be read. | cship.toml:63 |
+| `ui_text_dim` | `#545c7e` | `#7f849c` | `#a89984` | `#717171` | Text of an inactive-but-clickable element. | **nothing today** — the inactive tab label reads `term_tab_inactive_fg` |
+| `ui_text_muted` | `#565f89` | `#6c7086` | `#928374` | `#969696` | Disabled text, placeholder text, group headings -- present but not readable as content. | gtk3:172,174; zathura:37; qt6ct disabled idx0/6/7/8/13/19/20 |
+| `ui_on_accent` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | Text/glyphs drawn ON TOP of a full-strength accent or semantic fill. Never a surface. | gtk3:204,208,212,216; gtk4:221,225,229,233; kitty-colors:19,28; kitty-scheme.conf:62; zathura:39 |
+| `ui_doc_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | `#1c1c1c` | The page of a recoloured document (what zathura turns white paper into). | zathura:20 |
+| `ui_doc_fg` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#e8e8e8` | The ink of a recoloured document. | zathura:21 |
+| `ui_selection_disabled` | `#292e42` | `#313244` | `#504945` | `#3a3a3a` | Selection fill inside a DISABLED widget: present but must not shout. | qt6ct:64 idx12 |
 
 **Three of these rows have no reader, and that is not an oversight.**
 `ui_bg_dim`, `ui_border_dim` and `ui_text_dim` name the *general* "dimmed
@@ -376,35 +377,35 @@ named for.
 
 ### 1.2 terminal — the sixteen ANSI slots plus fg/bg/cursor/selection
 
-| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | meaning | consumed at |
-|---|---|---|---|---|---|
-| `term_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | Terminal background. | kitty-scheme.conf:49 |
-| `term_fg` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | Default terminal text. | kitty-scheme.conf:48 |
-| `term_cursor` | `#c0caf5` | `#f5e0dc` | `#ebdbb2` | Cursor block colour (fallback; matugen overrides with primary). | kitty-scheme.conf:53 |
-| `term_cursor_text` | `#1a1b26` | `#1e1e2e` | `#282828` | The character under the cursor block. | kitty-scheme.conf:54 |
-| `term_selection_bg` | `#283457` | `#585b70` | `#504945` | Selection fill (fallback; matugen overrides with primary). | kitty-scheme.conf:51 |
-| `term_selection_fg` | `#c0caf5` | `#1e1e2e` | `#282828` | Text inside the selection, over term_selection_bg. | kitty-scheme.conf:50 |
-| `term_url` | `#73daca` | `#94e2d5` | `#8ec07c` | Underlined URL (fallback; matugen overrides with tertiary). | kitty-scheme.conf:56 |
-| `term_border_inactive` | `#292e42` | `#45475a` | `#504945` | Border of an unfocused kitty split. | kitty-scheme.conf:59 (no longer = ui_border_dim: upstream publishes `inactive_border_color #292e42`) |
-| `term_tab_bg` | `#16161e` | `#181825` | `#1d2021` | Tab bar background and inactive tab background. | kitty-colors:29, kitty-scheme.conf:65,66 |
-| `term_tab_inactive_fg` | `#545c7e` | `#7f849c` | `#a89984` | Label of an inactive tab. | kitty-colors:30, kitty-scheme.conf:64 |
-| `term_bell_border` | `#e0af68` | `#f9e2af` | `#fabd2f` | Border flash when a window rings the bell. | kitty-scheme.conf:60 |
-| `term_black` | `#15161e` | `#45475a` | `#282828` | ANSI slot color0. | kitty-scheme.conf:69; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_red` | `#f7768e` | `#f38ba8` | `#cc241d` | ANSI slot color1. | kitty-scheme.conf:72; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_green` | `#9ece6a` | `#a6e3a1` | `#98971a` | ANSI slot color2. | kitty-scheme.conf:75; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_yellow` | `#e0af68` | `#f9e2af` | `#d79921` | ANSI slot color3. | kitty-scheme.conf:78; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_blue` | `#7aa2f7` | `#89b4fa` | `#458588` | ANSI slot color4. | kitty-scheme.conf:81; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_magenta` | `#bb9af7` | `#f5c2e7` | `#b16286` | ANSI slot color5. | kitty-scheme.conf:84; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_cyan` | `#7dcfff` | `#94e2d5` | `#689d6a` | ANSI slot color6. | kitty-scheme.conf:87; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_white` | `#a9b1d6` | `#bac2de` | `#a89984` | ANSI slot color7. | kitty-scheme.conf:90; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_black` | `#414868` | `#585b70` | `#928374` | ANSI slot color8. | kitty-scheme.conf:70; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_red` | `#ff899d` | `#f38ba8` | `#fb4934` | ANSI slot color9. | kitty-scheme.conf:73; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_green` | `#9fe044` | `#a6e3a1` | `#b8bb26` | ANSI slot color10. | kitty-scheme.conf:76; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_yellow` | `#faba4a` | `#f9e2af` | `#fabd2f` | ANSI slot color11. | kitty-scheme.conf:79; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_blue` | `#8db0ff` | `#89b4fa` | `#83a598` | ANSI slot color12. | kitty-scheme.conf:82; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_magenta` | `#c7a9ff` | `#f5c2e7` | `#d3869b` | ANSI slot color13. | kitty-scheme.conf:85; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_cyan` | `#a4daff` | `#94e2d5` | `#8ec07c` | ANSI slot color14. | kitty-scheme.conf:88; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_white` | `#c0caf5` | `#a6adc8` | `#ebdbb2` | ANSI slot color15. | kitty-scheme.conf:91; inherited by ranger, fzf (--color=16), and every TUI |
+| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | Windows 11 Dark | meaning | consumed at |
+|---|---|---|---|---|---|---|
+| `term_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | `#0c0c0c` | Terminal background. | kitty-scheme.conf:49 |
+| `term_fg` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#cccccc` | Default terminal text. | kitty-scheme.conf:48 |
+| `term_cursor` | `#c0caf5` | `#f5e0dc` | `#ebdbb2` | `#ffffff` | Cursor block colour (fallback; matugen overrides with primary). | kitty-scheme.conf:53 |
+| `term_cursor_text` | `#1a1b26` | `#1e1e2e` | `#282828` | `#0c0c0c` | The character under the cursor block. | kitty-scheme.conf:54 |
+| `term_selection_bg` | `#283457` | `#585b70` | `#504945` | `#3a3d41` | Selection fill (fallback; matugen overrides with primary). | kitty-scheme.conf:51 |
+| `term_selection_fg` | `#c0caf5` | `#1e1e2e` | `#282828` | `#ffffff` | Text inside the selection, over term_selection_bg. | kitty-scheme.conf:50 |
+| `term_url` | `#73daca` | `#94e2d5` | `#8ec07c` | `#4cc2ff` | Underlined URL (fallback; matugen overrides with tertiary). | kitty-scheme.conf:56 |
+| `term_border_inactive` | `#292e42` | `#45475a` | `#504945` | `#2f2f2f` | Border of an unfocused kitty split. | kitty-scheme.conf:59 (no longer = ui_border_dim: upstream publishes `inactive_border_color #292e42`) |
+| `term_tab_bg` | `#16161e` | `#181825` | `#1d2021` | `#202020` | Tab bar background and inactive tab background. | kitty-colors:29, kitty-scheme.conf:65,66 |
+| `term_tab_inactive_fg` | `#545c7e` | `#7f849c` | `#a89984` | `#969696` | Label of an inactive tab. | kitty-colors:30, kitty-scheme.conf:64 |
+| `term_bell_border` | `#e0af68` | `#f9e2af` | `#fabd2f` | `#fce100` | Border flash when a window rings the bell. | kitty-scheme.conf:60 |
+| `term_black` | `#15161e` | `#45475a` | `#282828` | `#0c0c0c` | ANSI slot color0. | kitty-scheme.conf:69; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_red` | `#f7768e` | `#f38ba8` | `#cc241d` | `#c50f1f` | ANSI slot color1. | kitty-scheme.conf:72; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_green` | `#9ece6a` | `#a6e3a1` | `#98971a` | `#13a10e` | ANSI slot color2. | kitty-scheme.conf:75; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_yellow` | `#e0af68` | `#f9e2af` | `#d79921` | `#c19c00` | ANSI slot color3. | kitty-scheme.conf:78; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_blue` | `#7aa2f7` | `#89b4fa` | `#458588` | `#0037da` | ANSI slot color4. | kitty-scheme.conf:81; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_magenta` | `#bb9af7` | `#f5c2e7` | `#b16286` | `#881798` | ANSI slot color5. | kitty-scheme.conf:84; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_cyan` | `#7dcfff` | `#94e2d5` | `#689d6a` | `#3a96dd` | ANSI slot color6. | kitty-scheme.conf:87; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_white` | `#a9b1d6` | `#bac2de` | `#a89984` | `#cccccc` | ANSI slot color7. | kitty-scheme.conf:90; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_black` | `#414868` | `#585b70` | `#928374` | `#767676` | ANSI slot color8. | kitty-scheme.conf:70; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_red` | `#ff899d` | `#f38ba8` | `#fb4934` | `#e74856` | ANSI slot color9. | kitty-scheme.conf:73; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_green` | `#9fe044` | `#a6e3a1` | `#b8bb26` | `#16c60c` | ANSI slot color10. | kitty-scheme.conf:76; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_yellow` | `#faba4a` | `#f9e2af` | `#fabd2f` | `#f9f1a5` | ANSI slot color11. | kitty-scheme.conf:79; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_blue` | `#8db0ff` | `#89b4fa` | `#83a598` | `#3b78ff` | ANSI slot color12. | kitty-scheme.conf:82; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_magenta` | `#c7a9ff` | `#f5c2e7` | `#d3869b` | `#b4009e` | ANSI slot color13. | kitty-scheme.conf:85; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_cyan` | `#a4daff` | `#94e2d5` | `#8ec07c` | `#61d6d6` | ANSI slot color14. | kitty-scheme.conf:88; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_white` | `#c0caf5` | `#a6adc8` | `#ebdbb2` | `#f2f2f2` | ANSI slot color15. | kitty-scheme.conf:91; inherited by ranger, fzf (--color=16), and every TUI |
 
 **Tokyo Night's six bright chromatics are NOT repeats of the normal ones**, and
 this table said they were until the file was checked against upstream. The
@@ -431,15 +432,15 @@ reader in that file (`:62`, the active tab's label over an `fb_primary` fill:
 
 ### 1.3 semantic
 
-| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | meaning | consumed at |
-|---|---|---|---|---|---|
-| `sem_warning` | `#e0af68` | `#f9e2af` | `#fabd2f` | 'Watch out'. Never harmonised with the wallpaper. | gtk3:210,211; gtk4:227,228; zathura:54; Theme.qml:251; cship x6 |
-| `sem_on_warning` | `#1a1b26` | `#1e1e2e` | `#282828` | Text on a sem_warning fill. | gtk3:212; gtk4:229; zathura:55 |
-| `sem_critical` | `#f7768e` | `#f38ba8` | `#fb4934` | 'Something is wrong'. Also GTK's destructive_* and error_*, and Qt BrightText. | gtk3:202,203,214,215; gtk4:219,220,231,232; zathura:56; qt6ct idx7; Theme.qml:252; cship x4 |
-| `sem_on_critical` | `#1a1b26` | `#1e1e2e` | `#282828` | Text on a sem_critical fill. | gtk3:204,216; gtk4:221,233; zathura:57; Theme.qml:253 |
-| `sem_success` | `#9ece6a` | `#a6e3a1` | `#b8bb26` | 'It worked'. | gtk3:206,207; gtk4:223,224 |
-| `sem_on_success` | `#1a1b26` | `#1e1e2e` | `#282828` | Text on a sem_success fill. | gtk3:208; gtk4:225 |
-| `sem_info` | `#7dcfff` | `#89dceb` | `#83a598` | Nominal / informational reading -- the low end of a warn/critical ramp. | cship.toml:44,55 |
+| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | Windows 11 Dark | meaning | consumed at |
+|---|---|---|---|---|---|---|
+| `sem_warning` | `#e0af68` | `#f9e2af` | `#fabd2f` | `#fce100` | 'Watch out'. Never harmonised with the wallpaper. | gtk3:210,211; gtk4:227,228; zathura:54; Theme.qml:251; cship x6 |
+| `sem_on_warning` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | Text on a sem_warning fill. | gtk3:212; gtk4:229; zathura:55 |
+| `sem_critical` | `#f7768e` | `#f38ba8` | `#fb4934` | `#ff99a4` | 'Something is wrong'. Also GTK's destructive_* and error_*, and Qt BrightText. | gtk3:202,203,214,215; gtk4:219,220,231,232; zathura:56; qt6ct idx7; Theme.qml:252; cship x4 |
+| `sem_on_critical` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | Text on a sem_critical fill. | gtk3:204,216; gtk4:221,233; zathura:57; Theme.qml:253 |
+| `sem_success` | `#9ece6a` | `#a6e3a1` | `#b8bb26` | `#6ccb5f` | 'It worked'. | gtk3:206,207; gtk4:223,224 |
+| `sem_on_success` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | Text on a sem_success fill. | gtk3:208; gtk4:225 |
+| `sem_info` | `#7dcfff` | `#89dceb` | `#83a598` | `#4cc2ff` | Nominal / informational reading -- the low end of a warn/critical ramp. | cship.toml:44,55 |
 
 GTK's `destructive_*` and `error_*` sets are the same colour in both templates
 today; both map to `sem_critical` / `sem_on_critical`. There is no separate
@@ -453,25 +454,25 @@ They were written as the shell's fallback for a fresh clone or a malformed
 but it is no longer all they are, and it is not how the shell reads them. See
 the two paragraphs under the table.
 
-| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | meaning | consumed at |
-|---|---|---|---|---|---|
-| `fb_surface` | `#1a1b26` | `#1e1e2e` | `#282828` | M3 surface fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:140 |
-| `fb_surface_container` | `#292e42` | `#313244` | `#3c3836` | M3 surface_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:141 |
-| `fb_surface_container_high` | `#353b55` | `#45475a` | `#504945` | M3 surface_container_high fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:142 |
-| `fb_surface_container_highest` | `#414868` | `#585b70` | `#665c54` | M3 surface_container_highest fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:143 |
-| `fb_on_surface` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | M3 on_surface fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:144 |
-| `fb_on_surface_variant` | `#a9b1d6` | `#bac2de` | `#bdae93` | M3 on_surface_variant fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:145 |
-| `fb_outline` | `#565f89` | `#6c7086` | `#7c6f64` | M3 outline fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:146 |
-| `fb_outline_variant` | `#3b4261` | `#45475a` | `#504945` | M3 outline_variant fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:147 |
-| `fb_primary` | `#7aa2f7` | `#89b4fa` | `#83a598` | M3 primary fallback, used only until matugen writes colors.json. | kitty-scheme.conf:58,63 (kitty's active border and tab); mirrored at Theme.qml:149 |
-| `fb_on_primary` | `#1a1b26` | `#1e1e2e` | `#282828` | M3 on_primary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:150 |
-| `fb_primary_container` | `#3d59a1` | `#45475a` | `#458588` | M3 primary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:151 |
-| `fb_on_primary_container` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | M3 on_primary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:152 |
-| `fb_secondary` | `#bb9af7` | `#cba6f7` | `#d3869b` | M3 secondary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:154 |
-| `fb_secondary_container` | `#414868` | `#585b70` | `#665c54` | M3 secondary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:155 |
-| `fb_on_secondary_container` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | M3 on_secondary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:156 |
-| `fb_tertiary` | `#73daca` | `#f5c2e7` | `#fe8019` | M3 tertiary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:158 |
-| `fb_on_tertiary` | `#1a1b26` | `#1e1e2e` | `#282828` | M3 on_tertiary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:159 |
+| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | Windows 11 Dark | meaning | consumed at |
+|---|---|---|---|---|---|---|
+| `fb_surface` | `#1a1b26` | `#1e1e2e` | `#282828` | `#202020` | M3 surface fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:140 |
+| `fb_surface_container` | `#292e42` | `#313244` | `#3c3836` | `#2b2b2b` | M3 surface_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:141 |
+| `fb_surface_container_high` | `#353b55` | `#45475a` | `#504945` | `#333333` | M3 surface_container_high fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:142 |
+| `fb_surface_container_highest` | `#414868` | `#585b70` | `#665c54` | `#454545` | M3 surface_container_highest fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:143 |
+| `fb_on_surface` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#ffffff` | M3 on_surface fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:144 |
+| `fb_on_surface_variant` | `#a9b1d6` | `#bac2de` | `#bdae93` | `#cccccc` | M3 on_surface_variant fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:145 |
+| `fb_outline` | `#565f89` | `#6c7086` | `#7c6f64` | `#969696` | M3 outline fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:146 |
+| `fb_outline_variant` | `#3b4261` | `#45475a` | `#504945` | `#2f2f2f` | M3 outline_variant fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:147 |
+| `fb_primary` | `#7aa2f7` | `#89b4fa` | `#83a598` | `#4cc2ff` | M3 primary fallback, used only until matugen writes colors.json. | kitty-scheme.conf:58,63 (kitty's active border and tab); mirrored at Theme.qml:149 |
+| `fb_on_primary` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | M3 on_primary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:150 |
+| `fb_primary_container` | `#3d59a1` | `#45475a` | `#458588` | `#0067c0` | M3 primary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:151 |
+| `fb_on_primary_container` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#ffffff` | M3 on_primary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:152 |
+| `fb_secondary` | `#bb9af7` | `#cba6f7` | `#d3869b` | `#3a96dd` | M3 secondary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:154 |
+| `fb_secondary_container` | `#414868` | `#585b70` | `#665c54` | `#003e92` | M3 secondary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:155 |
+| `fb_on_secondary_container` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#ffffff` | M3 on_secondary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:156 |
+| `fb_tertiary` | `#73daca` | `#f5c2e7` | `#fe8019` | `#61d6d6` | M3 tertiary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:158 |
+| `fb_on_tertiary` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | M3 on_tertiary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:159 |
 
 **ONE OF THE SEVENTEEN HAS A READER, and this paragraph used to claim all of
 them did.** It did, for as long as `desktop-scheme accent` existed: that
