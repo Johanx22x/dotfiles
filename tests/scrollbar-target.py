@@ -52,11 +52,15 @@ everywhere, which is exactly the claim it exists to check.
 
 WHAT IS REAL AND WHAT IS NOT. components/ScrollBar.qml and
 components/ScrollList.qml are imported by relative path and are the shipping
-files, byte for byte; the geometry of every case is the call site's own, taken
-off the files named beside it. The rows are stand-in MouseAreas that record
-their own name, because the question is which item receives the press and a
-real row answers it by opening a page. Theme is stood in for by
-tests/theme-stub.qml for the reason written at length in tests/wheel-and-click.py.
+files, byte for byte; so is themes/genesis/components/ScrollBar.qml, which is
+the half that draws and which the facade loads by URL exactly as the shell
+does. The geometry of every case is the call site's own, taken off the files
+named beside it. The rows are stand-in MouseAreas that record their own name,
+because the question is which item receives the press and a real row answers it
+by opening a page. Theme is stood in for by tests/theme-stub.qml for the reason
+written at length in tests/wheel-and-click.py, and Themes -- the singleton that
+turns a theme's name into a path -- by the six lines further down that point it
+at themes/genesis.
 
 WHAT IT DOES NOT ASK. Whether the bar is in the right PLACE -- that is a
 judgement about what is beside it, and no bench holds it. Whether it looks
@@ -96,29 +100,38 @@ TESTS = Path(__file__).resolve().parent
 SCENE = TESTS / "scrollbar-target.qml"
 THEME = TESTS / "theme-stub.qml"
 
+SHELL = TESTS.parent / "quickshell" / ".config" / "quickshell"
+COMPONENTS = SHELL / "components"
+# The theme whose drawing is measured. Hard-coded rather than read out of
+# Config, because the real Themes falls back to exactly this name when the
+# configured theme has no readable manifest, and it is the one this repository
+# ships: a bench that followed a setting would measure a different bar on a
+# machine where somebody had changed one.
+DRAWN_BY = SHELL / "themes" / "genesis"
+
 
 # ---------------------------------------------------------------------------
 # The `qs` module
 # ---------------------------------------------------------------------------
-# components/ScrollBar.qml opens `import QtQuick` / `import qs`, and `qs` is a
-# module Quickshell synthesizes at runtime from the config root. A plain
-# QQmlEngine has never heard of it, so without this the shipping file the bench
-# is here to measure does not load at all -- "module qs is not installed",
-# then "Type ScrollBar unavailable", then a scene that is Status.Error and a
-# bench that asserts nothing. That is what it did between the day the tree
-# moved to module imports and the day this was written.
+# components/ScrollBar.qml opens `import QtQuick` / `import qs.modules`, and
+# `qs` is a module Quickshell synthesizes at runtime from the config root. A
+# plain QQmlEngine has never heard of it, so without this the shipping file the
+# bench is here to measure does not load at all -- "module qs is not
+# installed", then "Type ScrollBar unavailable", then a scene that is
+# Status.Error and a bench that asserts nothing. That is what it did between
+# the day the tree moved to module imports and the day this was written.
 #
 # A SANDBOX MODULE AND NOT THE REAL TREE, which is the same decision
 # theme-stub.qml already made and for the same reason: the root module's
 # Theme.qml opens `import Quickshell`, reads the generated palette through a
-# FileView, and pulls in a compositor behind it. What ScrollBar actually asks
-# `qs` for is five design tokens off Theme -- primary, outline, outlineVariant
-# and the two durations -- so the module built here holds exactly one type,
-# and it is the stub whose numbers this bench already trusted. The day
-# ScrollBar.qml reaches for a second one -- Config, Icons -- it has to be added
-# here as well: an unknown name inside an import that DOES resolve is a broken
-# binding at runtime and not a refused load, which is quieter than what this
-# comment is here to prevent.
+# FileView, and pulls in a compositor behind it. What the two halves of
+# ScrollBar actually ask `qs` for is five design tokens off Theme -- primary,
+# outline, outlineVariant and the two durations -- so the module built here
+# holds exactly one type, and it is the stub whose numbers this bench already
+# trusted. The day either half reaches for a second one -- Config, Icons -- it
+# has to be added here as well: an unknown name inside an import that DOES
+# resolve is a broken binding at runtime and not a refused load, which is
+# quieter than what this comment is here to prevent.
 #
 # AS A SINGLETON, because that is what the shell registers and therefore what
 # the shipping file expects: `Theme.primary` inside a file that imports qs is a
@@ -146,6 +159,80 @@ _qs.mkdir()
 )
 (_qs / "qmldir").write_text(
     "module qs\nsingleton Theme 1.0 Theme.qml\n", encoding="utf-8"
+)
+
+# ---------------------------------------------------------------------------
+# `qs.modules` and `qs.components`, which is how a bench reaches a component
+# the THEME draws
+# ---------------------------------------------------------------------------
+# components/ScrollBar.qml is a facade: it keeps the press target and the
+# position arithmetic, and loads the pill and the thumb out of
+# themes/<theme>/components/ScrollBar.qml. That costs two more modules, one per
+# direction across the seam, and without either of them the file this bench
+# measures does not load:
+#
+#   qs.modules      the facade calls Themes.surface() to find its theme's file.
+#   qs.components   the theme file declares `required property ScrollBar row`,
+#                   which is a type it can only name by importing the host's
+#                   components.
+#
+# BOTH ARE BUILT HERE AND BOTH ARE BUILT IN tests/wheel-and-click.py, which
+# loads ScrollList and therefore holds one of these bars. The two sandboxes are
+# not shared -- that one hands Theme in as a context property and this one
+# registers it as a singleton, for reasons each file gives -- but the three
+# modules are the same three. Add one here and it belongs there too, and the
+# other way round; a bench whose theme file does not load still measures every
+# press correctly and reports a bar with nothing drawn in it.
+#
+# THE COMPONENTS ARE THE SHIPPING FILES AND NOT COPIES OF THEM. The qmldir
+# below names each one by a relative path back into quickshell/, so `import
+# qs.components` and the scene's own relative import resolve to the same
+# document -- which is what makes the theme's `required property ScrollBar row`
+# accept the very object the scene built. Measured, in a scratch tree of four
+# files, because a qmldir entry reaching back out of its own directory is not
+# an obvious thing to rely on: two spellings of one file, an object made
+# through one of them, a `required property` declared through the other, and
+# the assignment lands. COPYING the components into the sandbox would be the
+# obvious alternative and is the thing to avoid -- a QML type is its document,
+# so a copy is a second type and the initial property would be refused by a
+# name that reads as though it matched.
+#
+# A SINGLETON, and a stub, for the same reason Theme is. The real
+# modules/Themes.qml opens `import Quickshell`, reads a manifest through a
+# FileView and builds its URL with Quickshell.shellPath -- none of which exists
+# under a plain QQuickView. What it is asked for here is one function of one
+# string, so that is what this is. IT POINTS AT THE REAL THEME DIRECTORY: the
+# pixels the last assertion in this file reads are the ones genesis paints, and
+# a stub theme written by the bench would have made that assertion a check that
+# the bench can draw a rectangle.
+_components = _qs / "components"
+_components.mkdir()
+(_components / "qmldir").write_text(
+    "module qs.components\n" + "".join(
+        # Fuzzy.qml is `pragma Singleton` and a qmldir that said otherwise
+        # would refuse it at the moment something used it. Read rather than
+        # listed, so the next singleton under components/ needs no edit here.
+        ("singleton " if "pragma Singleton" in qml.read_text(encoding="utf-8") else "")
+        + f"{qml.stem} 1.0 {os.path.relpath(qml, _components)}\n"
+        for qml in sorted(COMPONENTS.glob("*.qml"))
+    ),
+    encoding="utf-8",
+)
+
+_modules = _qs / "modules"
+_modules.mkdir()
+(_modules / "Themes.qml").write_text(
+    "pragma Singleton\n"
+    "import QtQuick\n"
+    "QtObject {\n"
+    "    function surface(file: string): string {\n"
+    f'        return "file://" + encodeURI("{DRAWN_BY}/" + file);\n'
+    "    }\n"
+    "}\n",
+    encoding="utf-8",
+)
+(_modules / "qmldir").write_text(
+    "module qs.modules\nsingleton Themes 1.0 Themes.qml\n", encoding="utf-8"
 )
 
 failed = 0
@@ -480,6 +567,16 @@ else:
 # -- no renderer, somewhere this has not been tried -- that is said out loud
 # and not counted as a pass or a failure, because a rendered assertion that
 # quietly turns into nothing is worse than none.
+#
+# AND SINCE THE SPLIT IT ASKS A SECOND QUESTION IN THE SAME BREATH, which is
+# the reason it did not have to be weakened into a geometry check when the
+# drawing moved into themes/. Those four pixels are now painted by
+# themes/genesis/components/ScrollBar.qml, and the row underneath is opaque and
+# runs the full width of the list -- so "not the row's colour" is exactly "the
+# theme half loaded, was handed a thumb, and painted over the row". Measured by
+# moving that file out of the way: the press rows above go to `bar None`, this
+# one reads `the row paints over the bar: 596..599 are ['#804060'] * 4`, and the
+# run is red in thirty places rather than quietly green with an invisible bar.
 
 note("--- and the row does not paint over it ---")
 
