@@ -278,6 +278,14 @@ PanelWindow {
     // the mark on every frame -- which is exactly the tearing the mark exists
     // to prevent, arrived at from the other direction.
     implicitWidth: Math.max(root.reservedWidth, Theme.popoutMinWidth) + root.fillet * 2
+    // popoutMinWidth AS A MINIMUM HEIGHT, and the name is wrong rather than
+    // the number. It is one token doing two jobs: the smallest a popout may be
+    // in either direction. Under genesis it is 220 and the floor never showed;
+    // under a theme that sets 340 it was the whole of why a short popout
+    // floated, until the line below stopped placing the panel at the wrong end.
+    // Left as it is because splitting the token is a change to every theme's
+    // theme.json, and it is written down here so the next reader does not
+    // spend the time working out that it is deliberate.
     implicitHeight: Math.max(root.reservedHeight, Theme.popoutMinWidth) - root.topSlack
 
     color: "transparent"
@@ -356,7 +364,39 @@ PanelWindow {
         id: drawing
 
         anchors.horizontalCenter: parent.horizontalCenter
-        y: -root.topSlack
+
+        // THE PANEL GOES TO THE BAR'S EDGE, WHICH IS NOT ALWAYS THE TOP OF
+        // THIS WINDOW.
+        //
+        // The window is anchored to the bar's inner side, and its HEIGHT is a
+        // session high-water mark -- see reservedHeight above -- so it is
+        // almost always taller than the panel currently inside it. Under a top
+        // bar that spare height falls below the panel and is invisible: the
+        // panel hangs from the window's top edge, which is the bar's edge, and
+        // the mask follows `drawing` so the empty part takes no input and
+        // draws nothing.
+        //
+        // Under a BOTTOM bar the two ends swap and this line did not. `y: 0`
+        // is then the far end of the window from the bar, so every popout
+        // opened at the top of a reservation instead of against the taskbar:
+        // the battery detail floated about two hundred pixels up on the 340
+        // floor alone, and the calendar floated by however tall the tallest
+        // popout of the session had been -- open the notification history once
+        // and the calendar moves further up for the rest of the session. That
+        // erratic distance is the high-water mark showing through, and it is
+        // what "the calendar opens much higher than the bar" was.
+        //
+        // `drawing.height` and not `implicitHeight`: it is the animated value,
+        // so the panel stays glued to the taskbar while it grows upward, which
+        // is the direction a bottom-anchored flyout should grow.
+        //
+        // The `+ topSlack` is zero under a theme with no fillets and it is not
+        // decoration: the corners that hide behind the bar are the BOTTOM two
+        // when the bar is at the bottom, so the rectangle has to overhang this
+        // window's bottom edge rather than its top.
+        y: Theme.barAtBottom
+            ? parent.height - drawing.height + root.topSlack
+            : -root.topSlack
 
         width: drawing.implicitWidth
         height: drawing.implicitHeight
