@@ -96,25 +96,36 @@ PanelWindow {
     // to anyway.
     WlrLayershell.layer: root.undocked ? WlrLayer.Overlay : WlrLayer.Top
 
+    // BOTTOM RIGHT, ABOVE THE TASKBAR, AND WITH A GAP. Windows raises its
+    // toasts from the corner nearest the clock, and they FLOAT: there is no
+    // weld, no fillet and no shared edge with the taskbar, which is the same
+    // arrangement the Start panel uses and the opposite of the one genesis
+    // uses here. Genesis hangs this panel off the bar's underside and makes it
+    // look like part of the bar; a gap on either side would break that. Here
+    // the gap is the point.
     anchors {
-        top: true
+        bottom: true
         right: true
     }
 
     margins {
-        // Flush with the bar and flush with the screen edge: the panel has to
-        // look like part of the bar, and a gap on either side would break it.
-        top: Theme.barHeight
-        right: 0
+        bottom: Theme.barHeight + root.floatGap
+        right: root.floatGap
     }
+
+    // OURS. Microsoft publishes nothing about toast placement; 12 is the gap
+    // measured off the Start panel, reused here so the two surfaces sit the
+    // same distance off the same edge.
+    readonly property int floatGap: 12
 
     // What the panel actually shows, before the rectangle is grown past the
     // window edges to hide its other corners.
     readonly property int panelHeight: stack.implicitHeight + Theme.notificationPadding * 2
 
-    // The fillet lives to the LEFT of the panel, outside it, so the window is
-    // that much wider than what it draws.
-    implicitWidth: Theme.notificationWidth + Theme.notificationPadding * 2 + Theme.barCornerRadius
+    // NO FILLET TO MAKE ROOM FOR. barCornerRadius is 0 under this theme, so
+    // the term genesis adds here for the wedge to the left of the panel is
+    // zero anyway; it is dropped rather than left as a zero nobody can read.
+    implicitWidth: Theme.notificationWidth + Theme.notificationPadding * 2
     implicitHeight: root.panelHeight
 
     Behavior on implicitHeight {

@@ -100,7 +100,16 @@ PanelWindow {
     // The theme reads it for exactly that reason. It is not a style token: it
     // is a number this window's own height is computed from, and both ends
     // have to use the same one.
-    readonly property int topSlack: root.barVisible ? Theme.cardRadius : 0
+    // AND IT IS GATED ON THE FILLET, WHICH IS WHAT IT WAS ALWAYS FOR. The
+    // slack exists so the two corners facing the bar can round off out of
+    // sight behind it, and the fillets are what carry the panel across that
+    // join. A theme with barCornerRadius 0 -- the windows theme, whose panels
+    // float clear of the taskbar the way Windows' own flyouts do -- draws no
+    // fillets, so there is nothing to hide and nothing to weld. Without this
+    // gate that theme's popouts were grown by cardRadius and pushed the same
+    // distance off the screen edge, losing eight pixels of content to a join
+    // that does not exist.
+    readonly property int topSlack: (root.barVisible && root.fillet > 0) ? Theme.cardRadius : 0
 
 
     // IS THE BAR ACTUALLY THERE?
@@ -205,15 +214,24 @@ PanelWindow {
     // popout that opens.
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
+    // THE BAR'S INNER SIDE, WHICHEVER SIDE THAT IS. This window used to
+    // anchor `top` outright, which was true for as long as every theme put its
+    // bar at the top. The windows theme puts it at the bottom, and a popout
+    // that stayed at the top opened detached at the far edge of the screen
+    // from the widget that asked for it.
     anchors {
-        top: true
+        top: !Theme.barAtBottom
+        bottom: Theme.barAtBottom
         left: true
     }
 
     margins {
-        // Flush with the bottom of the bar, or -- with no bar to be flush
-        // with -- clear of the screen edge by the same gap windows get.
+        // Flush with the bar's inner edge, or -- with no bar to be flush
+        // with -- clear of the screen edge by the same gap windows get. Only
+        // one of the two is live; the other anchor is false, so its margin is
+        // never consulted.
         top: root.barVisible ? Theme.barHeight : Theme.barCornerRadius
+        bottom: root.barVisible ? Theme.barHeight : Theme.barCornerRadius
         // Centred under the widget, then kept inside the screen. Without the
         // clamp, a popout opened by the rightmost widget would hang off the
         // edge.
@@ -300,8 +318,17 @@ PanelWindow {
         // this screen, or a fullscreen window over it -- the hole would be a
         // dead patch of screen where clicks stopped dismissing for no visible
         // reason.
+        // AND IT FOLLOWS THE BAR. Hard-coding y=0 left a 48px dead strip
+        // along the top of the screen under a bottom-bar theme -- clicks there
+        // stopped dismissing, for no visible reason -- while the bar itself,
+        // at the other end, was covered by the grab and stopped responding.
         passthrough: root.barVisible
-            ? Qt.rect(0, 0, root.screen?.width ?? 0, Theme.barHeight)
+            ? Qt.rect(0,
+                      Theme.barAtBottom
+                          ? (root.screen?.height ?? 0) - Theme.barHeight
+                          : 0,
+                      root.screen?.width ?? 0,
+                      Theme.barHeight)
             : Qt.rect(0, 0, 0, 0)
 
         onDismissed: if (root.isOpen)

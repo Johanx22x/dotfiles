@@ -364,6 +364,25 @@ Singleton {
     // Horizontal padding at the very ends of the bar.
     readonly property int barPadding: root.token("barPadding", 16)
 
+    // WHICH EDGE THE BAR IS ON, AS A NUMBER, BECAUSE token() ONLY TAKES ONE.
+    //
+    // 0 is the top and 1 is the bottom. It is not a style choice and it is not
+    // the bar's own business: the bar declares its own anchors and needs no
+    // help, but components/Popout.qml is a HOST window that has to open on the
+    // bar's inner side, and the host cannot see where a theme put its bar.
+    //
+    // It arrived with the windows theme, whose taskbar is at the bottom, and
+    // it is the third thing that theme asked the host for. The other two were
+    // railWidth and the notification daemon.
+    //
+    // A BOOLEAN WOULD BE BETTER AND theme.json CANNOT CARRY ONE: token()
+    // requires a finite number and falls through to the fallback for anything
+    // else, so a `"barEdge": "bottom"` would be read as absent and the popout
+    // would open at the top with nothing saying why. A number that is really a
+    // flag is the honest version of that constraint rather than a shortcut
+    // around it.
+    readonly property bool barAtBottom: root.token("barAtBottom", 0) !== 0
+
     // Space between the items inside one group.
     readonly property int itemSpacing: root.token("itemSpacing", 9)
     // Between groups within the same section (left / centre / right).

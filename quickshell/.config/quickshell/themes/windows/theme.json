@@ -2,6 +2,9 @@
     "_comment": "Windows 11 dark. Every number here is Microsoft's unless its line says otherwise. Sources: microsoft/microsoft-ui-xaml controls/dev/CommonStyles/*_themeresources.xaml for the control metrics, CommunityToolkit/Windows components/SettingsControls for the settings card, and the Fluent 2 geometry page for the two corner radii. Where nothing is published -- the taskbar has no public design documentation at all -- the number is ours and is called out below.",
 
     "_bar": "OURS: the taskbar is shell chrome and Microsoft documents none of it. 48 is the measured height at 100% scaling; 8 and 4 are read off screenshots.",
+    "_edge": "0 is the top and 1 is the bottom. The bar declares its own anchors and needs no help, but components/Popout.qml is a HOST window that has to open on the bar's inner side, and the host cannot see where a theme put its bar.",
+    "barAtBottom": 1,
+
     "barHeight": 48,
     "barPadding": 8,
     "itemSpacing": 4,
