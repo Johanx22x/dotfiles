@@ -4,5 +4,8 @@
     "interface": 1,
     "palette": {
         "source": "scheme"
+    },
+    "font": {
+        "source": "user"
     }
 }

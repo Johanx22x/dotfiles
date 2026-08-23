@@ -19,13 +19,44 @@
 //
 // These are the same glyphs waybar used, kept deliberately: the bar changed,
 // the vocabulary did not.
+//
+// AND THEY ARE THE DEFAULT SET RATHER THAN THE ONLY ONE. Nerd Font is genesis's
+// decision, not the shell's: a theme drawn after something else -- a Windows
+// one, a theme built on an icon font with a private area of its own -- draws
+// pictograms this file has never heard of. It says so in themes/<name>/
+// icons.json, one name at a time, and every property below picks the answer up.
+// The block at the very bottom is the whole of that mechanism, and it is where
+// the format, the guard and the case for an OVERLAY rather than a replacement
+// are written down.
+//
+// WHICH IS WHY THIS FILE IS STILL THE HOST'S, and that is worth saying out loud
+// because the codepoints in it are one theme's. The host draws glyphs itself --
+// every settings page names several -- so it needs a vocabulary whichever theme
+// is loaded, and a theme that renames one entry here renames it for the
+// settings window as well as for its own bar. One singleton and one set; the
+// theme changes what it disagrees with.
 
 pragma Singleton
 
 import Quickshell
+import Quickshell.Io
+// For Themes.name, which is the theme actually being DRAWN rather than the one
+// Config names -- a manifest that cannot be read falls back to the shipped
+// theme, and a refused theme's icons must not be drawn over the one shown in
+// its place. Theme.qml opens with the same import for the same reason and its
+// note there covers why this resolves rather than being the import cycle it
+// looks like on paper.
+import qs.modules
 
 Singleton {
     id: root
+
+    // THE THEME BEING DRAWN, read once into a property rather than spelled
+    // straight into the path below. Same reason Theme.qml does it: qmllint does
+    // not look inside a template literal when it decides whether an import was
+    // used, so naming Themes there and only there turns the import above into
+    // an "unused import" and tests/qml-lint.sh red on a correct file.
+    readonly property string themeName: Themes.name
 
     // Turns whatever an application handed us into something Image can open.
     //
@@ -75,7 +106,7 @@ Singleton {
     // nf-linux-archlinux. From the "Font Logos" range, not the Material
     // Design one -- that is why it is a four-digit codepoint while everything
     // else here is five.
-    readonly property string arch: String.fromCodePoint(0xF303)
+    readonly property string arch: root.glyph("arch", 0xF303)
 
     // ---------------- Clock ----------------
     // The comment used to say clock_outline. Read out of the cmap while adding
@@ -84,72 +115,72 @@ Singleton {
     // but a comment naming the wrong glyph is exactly how the two corrections
     // at the bottom of this file happened, so it is fixed rather than left as
     // a small lie.
-    readonly property string clock: String.fromCodePoint(0xF0954)      // nf-md-clock
-    readonly property string calendar: String.fromCodePoint(0xF00ED)   // nf-md-calendar_text
+    readonly property string clock: root.glyph("clock", 0xF0954)       // nf-md-clock
+    readonly property string calendar: root.glyph("calendar", 0xF00ED) // nf-md-calendar_text
 
     // ---------------- System ----------------
-    readonly property string cpu: String.fromCodePoint(0xF0EE0)        // nf-md-cpu_64_bit
-    readonly property string ram: String.fromCodePoint(0xF035B)        // nf-md-memory
-    readonly property string gpu: String.fromCodePoint(0xF08AE)        // nf-md-expansion_card_variant
+    readonly property string cpu: root.glyph("cpu", 0xF0EE0)           // nf-md-cpu_64_bit
+    readonly property string ram: root.glyph("ram", 0xF035B)           // nf-md-memory
+    readonly property string gpu: root.glyph("gpu", 0xF08AE)           // nf-md-expansion_card_variant
 
     // The island's thermal alert. A thermometer with an exclamation mark, so
     // it does not have to be read as "here is a temperature" -- it reads as
     // "this temperature is a problem". Picked off a rendered sheet.
-    readonly property string thermometerAlert: String.fromCodePoint(0xF0E01) // nf-md-thermometer_alert
+    readonly property string thermometerAlert: root.glyph("thermometerAlert", 0xF0E01) // nf-md-thermometer_alert
 
     // For the island's screen-capture state. Verified by RENDERING it: the
     // obvious-looking nf-md-monitor_share (U+F0A1B) draws a cassette in this
     // font, and two other candidates came out as a chequered square and a
     // sigma. Guessing codepoints by name does not work; this one was picked
     // off a rendered sheet.
-    readonly property string monitor: String.fromCodePoint(0xF0379)    // nf-md-monitor
+    readonly property string monitor: root.glyph("monitor", 0xF0379)   // nf-md-monitor
 
     // ---------------- Actions ----------------
-    readonly property string gamepad: String.fromCodePoint(0xF02B4)    // nf-md-google_controller
-    readonly property string search: String.fromCodePoint(0xF0349)     // nf-md-magnify
-    readonly property string close: String.fromCodePoint(0xF0156)      // nf-md-close
-    readonly property string power: String.fromCodePoint(0xF0425)      // nf-md-power
+    readonly property string gamepad: root.glyph("gamepad", 0xF02B4)   // nf-md-google_controller
+    readonly property string search: root.glyph("search", 0xF0349)     // nf-md-magnify
+    readonly property string close: root.glyph("close", 0xF0156)       // nf-md-close
+    readonly property string power: root.glyph("power", 0xF0425)       // nf-md-power
     // Solid and not md-cog_outline (0xF08BB): it sits next to the power glyph
     // on the bar, which is solid, and an outlined one beside it read as the
     // disabled version of a button rather than as a different button.
     // Checked against the font's cmap rather than guessed -- see the note
     // above `monitor` for why that matters.
-    readonly property string settings: String.fromCodePoint(0xF0493)   // nf-md-cog
+    readonly property string settings: root.glyph("settings", 0xF0493) // nf-md-cog
     // Outline and not the filled md-information (0xF02FC): it marks a row
     // that has something extra to say, and a solid disc next to a label reads
     // as a status light -- as though something were wrong with the setting.
-    readonly property string info: String.fromCodePoint(0xF02FD)       // nf-md-information_outline
+    readonly property string info: root.glyph("info", 0xF02FD)         // nf-md-information_outline
 
     // ---------------- Settings window ----------------
     // All four checked against the font's cmap before being written down,
     // which is the rule the two corrections further down this file exist to
     // enforce.
-    readonly property string account: String.fromCodePoint(0xF0009)     // nf-md-account_circle
-    readonly property string textSize: String.fromCodePoint(0xF027F)    // nf-md-format_size
-    readonly property string restore: String.fromCodePoint(0xF099B)     // nf-md-restore
-    readonly property string tune: String.fromCodePoint(0xF062E)        // nf-md-tune
+    readonly property string account: root.glyph("account", 0xF0009)    // nf-md-account_circle
+    readonly property string textSize: root.glyph("textSize", 0xF027F)  // nf-md-format_size
+    readonly property string restore: root.glyph("restore", 0xF099B)    // nf-md-restore
+    readonly property string tune: root.glyph("tune", 0xF062E)          // nf-md-tune
 
     // The settings pages added after the sound one. Every codepoint below was
     // resolved by NAME out of the installed font, which is this file's rule --
     // see the command in the notification block at the bottom.
-    readonly property string nightLight: String.fromCodePoint(0xF0594)  // nf-md-weather_night
-    readonly property string mouse: String.fromCodePoint(0xF037D)       // nf-md-mouse
+    readonly property string nightLight: root.glyph("nightLight", 0xF0594) // nf-md-weather_night
+    readonly property string mouse: root.glyph("mouse", 0xF037D)        // nf-md-mouse
     // Outlined, not the solid md-cursor_default (0xF01C0): a filled arrow at
     // label size is a black wedge, and the thing it stands for is a pointer
     // with a visible outline.
-    readonly property string cursor: String.fromCodePoint(0xF01BF)      // nf-md-cursor_default_outline
-    readonly property string battery: String.fromCodePoint(0xF0079)     // nf-md-battery
-    readonly property string batteryCharging: String.fromCodePoint(0xF0084) // nf-md-battery_charging
-    readonly property string batteryAlert: String.fromCodePoint(0xF0083)    // nf-md-battery_alert
+    readonly property string cursor: root.glyph("cursor", 0xF01BF)      // nf-md-cursor_default_outline
+    readonly property string battery: root.glyph("battery", 0xF0079)    // nf-md-battery
+    readonly property string batteryCharging: root.glyph("batteryCharging", 0xF0084) // nf-md-battery_charging
+    readonly property string batteryAlert: root.glyph("batteryAlert", 0xF0083) // nf-md-battery_alert
     // For the SETTINGS ROW and not for the widget: the row above it is the
     // peripherals' battery and would otherwise carry the same glyph, so this
     // one says which machine's battery is meant rather than repeating that it
     // is a battery.
-    readonly property string laptop: String.fromCodePoint(0xF0322)          // nf-md-laptop
-    readonly property string brightness: String.fromCodePoint(0xF00DF)      // nf-md-brightness_6
-    readonly property string gaps: String.fromCodePoint(0xF004C)        // nf-md-arrow_expand_all
-    readonly property string rounding: String.fromCodePoint(0xF0607)    // nf-md-rounded_corner
-    readonly property string swapVertical: String.fromCodePoint(0xF04E2) // nf-md-swap_vertical
+    readonly property string laptop: root.glyph("laptop", 0xF0322)          // nf-md-laptop
+    readonly property string brightness: root.glyph("brightness", 0xF00DF)  // nf-md-brightness_6
+    readonly property string gaps: root.glyph("gaps", 0xF004C)          // nf-md-arrow_expand_all
+    readonly property string rounding: root.glyph("rounding", 0xF0607)  // nf-md-rounded_corner
+    readonly property string swapVertical: root.glyph("swapVertical", 0xF04E2) // nf-md-swap_vertical
 
     // ---------------- Display page ----------------
     // The seven the display page used to keep to itself. They lived in
@@ -175,17 +206,17 @@ Singleton {
     // has had `chevronRight` and `chevronDown` and no left, so CycleRow drew
     // its back button from the display page's local set and its forward button
     // from here -- one control, two sources, over a single missing codepoint.
-    readonly property string chevronLeft: String.fromCodePoint(0xF0141)     // nf-md-chevron_left
-    readonly property string check: String.fromCodePoint(0xF012C)           // nf-md-check
-    readonly property string screenRotation: String.fromCodePoint(0xF0475)  // nf-md-screen_rotation
-    readonly property string relativeScale: String.fromCodePoint(0xF0452)   // nf-md-relative_scale
-    readonly property string arrowExpand: String.fromCodePoint(0xF0616)     // nf-md-arrow_expand
-    readonly property string timerSand: String.fromCodePoint(0xF051F)       // nf-md-timer_sand
+    readonly property string chevronLeft: root.glyph("chevronLeft", 0xF0141) // nf-md-chevron_left
+    readonly property string check: root.glyph("check", 0xF012C)            // nf-md-check
+    readonly property string screenRotation: root.glyph("screenRotation", 0xF0475) // nf-md-screen_rotation
+    readonly property string relativeScale: root.glyph("relativeScale", 0xF0452) // nf-md-relative_scale
+    readonly property string arrowExpand: root.glyph("arrowExpand", 0xF0616) // nf-md-arrow_expand
+    readonly property string timerSand: root.glyph("timerSand", 0xF051F)    // nf-md-timer_sand
     // For the Keep button, which used to carry a tick. A tick said "yes, this
     // is fine" and the button now also writes the change to disk, so it says
     // so. Its undo did NOT need adding: `restore` above is already 0xF099B,
     // md-restore, and the Forget chip uses that rather than an eighth glyph.
-    readonly property string contentSave: String.fromCodePoint(0xF0193)     // nf-md-content_save
+    readonly property string contentSave: root.glyph("contentSave", 0xF0193) // nf-md-content_save
     //
     // THERE WAS AN EIGHTH AND IT IS GONE, which is worth recording because it
     // existed to work around a bug rather than to fill a gap: the cmap check
@@ -201,16 +232,16 @@ Singleton {
     // documented: within one family the glyphs share weight and width, and the
     // legacy Font Awesome range collides with the "Font Awesome 7 Free"
     // installed as a fallback.
-    readonly property string logout: String.fromCodePoint(0xF0343)     // nf-md-logout
-    readonly property string restart: String.fromCodePoint(0xF0709)    // nf-md-restart
+    readonly property string logout: root.glyph("logout", 0xF0343)     // nf-md-logout
+    readonly property string restart: root.glyph("restart", 0xF0709)   // nf-md-restart
 
     // ---------------- Audio ----------------
-    readonly property string volumeMuted: String.fromCodePoint(0xF075F)  // nf-md-volume_off
-    readonly property string volumeLow: String.fromCodePoint(0xF057F)    // nf-md-volume_low
-    readonly property string volumeMedium: String.fromCodePoint(0xF0580) // nf-md-volume_medium
-    readonly property string volumeHigh: String.fromCodePoint(0xF057E)   // nf-md-volume_high
-    readonly property string headphones: String.fromCodePoint(0xF02CB)   // nf-md-headphones
-    readonly property string headset: String.fromCodePoint(0xF02CE)      // nf-md-headset
+    readonly property string volumeMuted: root.glyph("volumeMuted", 0xF075F) // nf-md-volume_off
+    readonly property string volumeLow: root.glyph("volumeLow", 0xF057F) // nf-md-volume_low
+    readonly property string volumeMedium: root.glyph("volumeMedium", 0xF0580) // nf-md-volume_medium
+    readonly property string volumeHigh: root.glyph("volumeHigh", 0xF057E) // nf-md-volume_high
+    readonly property string headphones: root.glyph("headphones", 0xF02CB) // nf-md-headphones
+    readonly property string headset: root.glyph("headset", 0xF02CE)     // nf-md-headset
 
     // The sound page's devices. Resolved by NAME out of the installed font
     // rather than read off a chart, which is this file's rule and which paid
@@ -219,10 +250,10 @@ Singleton {
     //   python3 -c "from fontTools.ttLib import TTFont; \
     //     f = TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf'); \
     //     print({n: c for c, n in f.getBestCmap().items()}['md-usb'])"
-    readonly property string microphone: String.fromCodePoint(0xF036C)    // nf-md-microphone
-    readonly property string microphoneOff: String.fromCodePoint(0xF036D) // nf-md-microphone_off
-    readonly property string speaker: String.fromCodePoint(0xF04C3)       // nf-md-speaker
-    readonly property string usb: String.fromCodePoint(0xF0553)           // nf-md-usb
+    readonly property string microphone: root.glyph("microphone", 0xF036C) // nf-md-microphone
+    readonly property string microphoneOff: root.glyph("microphoneOff", 0xF036D) // nf-md-microphone_off
+    readonly property string speaker: root.glyph("speaker", 0xF04C3)      // nf-md-speaker
+    readonly property string usb: root.glyph("usb", 0xF0553)              // nf-md-usb
 
     // Which of the above an audio output should be drawn with.
     //
@@ -260,17 +291,17 @@ Singleton {
     }
 
     // ---------------- Bluetooth ----------------
-    readonly property string bluetooth: String.fromCodePoint(0xF00AF)     // nf-md-bluetooth
+    readonly property string bluetooth: root.glyph("bluetooth", 0xF00AF)  // nf-md-bluetooth
 
     // ---------------- Screen recording ----------------
     // The three targets the recorder offers, plus its stop button.
-    readonly property string record: String.fromCodePoint(0xF044B)        // nf-md-record_rec
+    readonly property string record: root.glyph("record", 0xF044B)        // nf-md-record_rec
     // Checked on a rendered sheet like the rest of this section: at this
     // codepoint the font really does draw a circular arrow. Two of the
     // candidates did not survive that check -- nf-md-backup_restore draws a
     // paperclip here and nf-md-motion_play draws a scooter.
-    readonly property string replay: String.fromCodePoint(0xF0459)        // nf-md-replay
-    readonly property string stop: String.fromCodePoint(0xF04DB)          // nf-md-stop
+    readonly property string replay: root.glyph("replay", 0xF0459)        // nf-md-replay
+    readonly property string stop: root.glyph("stop", 0xF04DB)            // nf-md-stop
     // PICKED OFF A RENDERED SHEET, not by name, and the first attempt shows
     // why that matters in this font: nf-md-window_maximize draws a SHIELD and
     // nf-md-selection_drag draws a hook. Neither name is wrong -- the glyphs
@@ -278,20 +309,20 @@ Singleton {
     //
     // display shares the monitor glyph with the capture indicator on purpose:
     // the same object should not have two drawings in one shell.
-    readonly property string display: String.fromCodePoint(0xF0379)       // nf-md-monitor
-    readonly property string window: String.fromCodePoint(0xF08C6)        // nf-md-application
-    readonly property string region: String.fromCodePoint(0xF0001)        // nf-md-vector_square
+    readonly property string display: root.glyph("display", 0xF0379)      // nf-md-monitor
+    readonly property string window: root.glyph("window", 0xF08C6)        // nf-md-application
+    readonly property string region: root.glyph("region", 0xF0001)        // nf-md-vector_square
 
     // ---------------- Network ----------------
-    readonly property string wifi: String.fromCodePoint(0xF0928)         // nf-md-wifi_strength_4
-    readonly property string wifiAlert: String.fromCodePoint(0xF092B)    // nf-md-wifi_strength_alert_outline
-    readonly property string wifiOff: String.fromCodePoint(0xF092D)      // nf-md-wifi_strength_off_outline
-    readonly property string ethernet: String.fromCodePoint(0xF0201)     // nf-md-ethernet_cable
-    readonly property string ethernetOff: String.fromCodePoint(0xF0202)  // nf-md-ethernet_cable_off
+    readonly property string wifi: root.glyph("wifi", 0xF0928)           // nf-md-wifi_strength_4
+    readonly property string wifiAlert: root.glyph("wifiAlert", 0xF092B) // nf-md-wifi_strength_alert_outline
+    readonly property string wifiOff: root.glyph("wifiOff", 0xF092D)     // nf-md-wifi_strength_off_outline
+    readonly property string ethernet: root.glyph("ethernet", 0xF0201)   // nf-md-ethernet_cable
+    readonly property string ethernetOff: root.glyph("ethernetOff", 0xF0202) // nf-md-ethernet_cable_off
 
     // ---------------- Media ----------------
-    readonly property string music: String.fromCodePoint(0xF075A)        // nf-md-music
-    readonly property string pause: String.fromCodePoint(0xF03E4)        // nf-md-pause
+    readonly property string music: root.glyph("music", 0xF075A)         // nf-md-music
+    readonly property string pause: root.glyph("pause", 0xF03E4)         // nf-md-pause
 
     // The dashboard's transport. Material Design and NOT the Unicode media
     // symbols (U+23EE/23EF/23ED) that were here first: those fall through to
@@ -299,9 +330,9 @@ Singleton {
     // and a different optical size than every other glyph on screen, which is
     // exactly what made the buttons look wrong. All four were picked off a
     // rendered sheet.
-    readonly property string skipPrevious: String.fromCodePoint(0xF04AE)  // nf-md-skip_previous
-    readonly property string skipNext: String.fromCodePoint(0xF04AD)      // nf-md-skip_next
-    readonly property string play: String.fromCodePoint(0xF040A)         // nf-md-play
+    readonly property string skipPrevious: root.glyph("skipPrevious", 0xF04AE) // nf-md-skip_previous
+    readonly property string skipNext: root.glyph("skipNext", 0xF04AD)    // nf-md-skip_next
+    readonly property string play: root.glyph("play", 0xF040A)           // nf-md-play
 
     // ---------------- Where the audio is coming from ----------------
     //
@@ -309,10 +340,10 @@ Singleton {
     // below name an APPLICATION; the four after them name a SERVICE, which
     // is what somebody actually means by "where is this playing from" when
     // one browser plays all of them. sourceGlyph() puts them in order.
-    readonly property string chromium: String.fromCodePoint(0xF02AF)     // nf-md-google_chrome
-    readonly property string firefox: String.fromCodePoint(0xF0239)      // nf-md-firefox
-    readonly property string vlc: String.fromCodePoint(0xF057C)          // nf-md-vlc
-    readonly property string spotify: String.fromCodePoint(0xF1BC)       // nf-fa-spotify
+    readonly property string chromium: root.glyph("chromium", 0xF02AF)   // nf-md-google_chrome
+    readonly property string firefox: root.glyph("firefox", 0xF0239)     // nf-md-firefox
+    readonly property string vlc: root.glyph("vlc", 0xF057C)             // nf-md-vlc
+    readonly property string spotify: root.glyph("spotify", 0xF1BC)      // nf-fa-spotify
 
     // CHECKED BY GLYPH NAME AND NOT BY CODEPOINT, which is not the same
     // thing and this file has been bitten by the difference twice already --
@@ -330,10 +361,10 @@ Singleton {
     // nf-md-podcast and is md-FILE_MOVE. The Material range was renumbered
     // between MDI versions and the Nerd Font cheat sheets have not all
     // caught up. Check the font, not the sheet.
-    readonly property string youtube: String.fromCodePoint(0xF05C3)      // nf-md-youtube
-    readonly property string soundcloud: String.fromCodePoint(0xF1BE)    // nf-fa-soundcloud
-    readonly property string twitch: String.fromCodePoint(0xF0543)       // nf-md-twitch
-    readonly property string web: String.fromCodePoint(0xF059F)          // nf-md-web
+    readonly property string youtube: root.glyph("youtube", 0xF05C3)     // nf-md-youtube
+    readonly property string soundcloud: root.glyph("soundcloud", 0xF1BE) // nf-fa-soundcloud
+    readonly property string twitch: root.glyph("twitch", 0xF0543)       // nf-md-twitch
+    readonly property string web: root.glyph("web", 0xF059F)             // nf-md-web
 
     // WHERE THIS TRACK IS COMING FROM, answered service first.
     //
@@ -401,14 +432,14 @@ Singleton {
     // ---------------- Launcher commands ----------------
     // The ">" mode's entries. Same rule as everything else in this file:
     // checked against the font before being used.
-    readonly property string image: String.fromCodePoint(0xF02E9)         // nf-md-image
-    readonly property string shuffle: String.fromCodePoint(0xF049D)       // nf-md-shuffle_variant
+    readonly property string image: root.glyph("image", 0xF02E9)          // nf-md-image
+    readonly property string shuffle: root.glyph("shuffle", 0xF049D)      // nf-md-shuffle_variant
     // The third one of these found the same way, and the most quietly wrong:
     // 0xF0385 is md-MUSIC_BOX_OUTLINE, so the launcher's clipboard mode has
     // been offering to paste a music box. clipboard_text is 0xF014D.
-    readonly property string clipboard: String.fromCodePoint(0xF014D)     // nf-md-clipboard_text
-    readonly property string refresh: String.fromCodePoint(0xF0450)       // nf-md-refresh
-    readonly property string chevronRight: String.fromCodePoint(0xF0142)  // nf-md-chevron_right
+    readonly property string clipboard: root.glyph("clipboard", 0xF014D)  // nf-md-clipboard_text
+    readonly property string refresh: root.glyph("refresh", 0xF0450)      // nf-md-refresh
+    readonly property string chevronRight: root.glyph("chevronRight", 0xF0142) // nf-md-chevron_right
     // It was 0xF0765 until the settings window put it next to a label and it
     // was obviously a plain filled disc. Read out of the font's cmap: 0xF0765
     // is md-CIRCLE. The palette is 0xF03D8.
@@ -421,7 +452,7 @@ Singleton {
     //
     //   python -c "from fontTools.ttLib import TTFont; \
     //     print(TTFont('<font>.ttf').getBestCmap()[0xF03D8])"
-    readonly property string palette: String.fromCodePoint(0xF03D8)       // nf-md-palette
+    readonly property string palette: root.glyph("palette", 0xF03D8)      // nf-md-palette
 
     // ---------------- Notifications ----------------
     // BOTH OF THESE WERE WRONG, and silently: the codepoints below used to be
@@ -440,8 +471,8 @@ Singleton {
     //
     // Nerd Fonts keeps the icon's own name as the glyph name, so the answer is
     // the identity of the glyph and not just "something is mapped there".
-    readonly property string bell: String.fromCodePoint(0xF009C)         // nf-md-bell_outline
-    readonly property string bellOff: String.fromCodePoint(0xF0A91)      // nf-md-bell_off_outline
+    readonly property string bell: root.glyph("bell", 0xF009C)           // nf-md-bell_outline
+    readonly property string bellOff: root.glyph("bellOff", 0xF0A91)     // nf-md-bell_off_outline
 
     // ---------------- Installer ----------------
     // The bar widget that counts what `./install.sh check` found, its page in
@@ -459,26 +490,26 @@ Singleton {
     // the only way most people will ever reach the page, and a flag on the bar
     // that does not look like the rail entry it opens is a flag nobody
     // connects to anything.
-    readonly property string update: String.fromCodePoint(0xF06B0)       // nf-md-update
+    readonly property string update: root.glyph("update", 0xF06B0)       // nf-md-update
     // The packs on the installer page. md-package_variant and not md-package
     // (0xF03D3), which is a closed cardboard box and reads as "a file" beside
     // a label; the open one reads as a set of things.
-    readonly property string packages: String.fromCodePoint(0xF03D6)     // nf-md-package_variant
+    readonly property string packages: root.glyph("packages", 0xF03D6)   // nf-md-package_variant
     // "Here is a prompt", for the rows this window refuses to run itself. A
     // console and not a Tux or a shell glyph: what is being offered is a
     // terminal, not a distribution and not a login shell.
-    readonly property string terminal: String.fromCodePoint(0xF018D)     // nf-md-console
+    readonly property string terminal: root.glyph("terminal", 0xF018D)   // nf-md-console
     // The boxes in the pack list on that page, and the only checkboxes in this
     // shell: everything else that is on or off is a ToggleRow's switch. A pack
     // holding a hundred package names cannot be a hundred switches -- the row
     // would be taller than the name it is about -- so the compact form of the
     // same question gets the compact control.
-    readonly property string checkboxOn: String.fromCodePoint(0xF0135)   // nf-md-checkbox_marked_outline
-    readonly property string checkboxOff: String.fromCodePoint(0xF0131)  // nf-md-checkbox_blank_outline
+    readonly property string checkboxOn: root.glyph("checkboxOn", 0xF0135) // nf-md-checkbox_marked_outline
+    readonly property string checkboxOff: root.glyph("checkboxOff", 0xF0131) // nf-md-checkbox_blank_outline
     // The pack that is open, against `chevronRight` above for the ones that
     // are not. Rotating one glyph would save a line here and cost an
     // animation nobody asked for on a list that can be twenty rows long.
-    readonly property string chevronDown: String.fromCodePoint(0xF0140)  // nf-md-chevron_down
+    readonly property string chevronDown: root.glyph("chevronDown", 0xF0140) // nf-md-chevron_down
 
     // ---------------- Cheatsheet ----------------
     // The sheet ITSELF first, and then one glyph per category heading inside
@@ -493,7 +524,7 @@ Singleton {
     //   python3 -c "from fontTools.ttLib import TTFont; \
     //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
     //       .getBestCmap()[0xF05DA])"
-    readonly property string cheatsheet: String.fromCodePoint(0xF05DA)    // nf-md-book_open_page_variant
+    readonly property string cheatsheet: root.glyph("cheatsheet", 0xF05DA) // nf-md-book_open_page_variant
 
     // One per category heading. The names on the LEFT are the categories as
     // they are spelled in the descriptions in hyprland.lua -- that is the join
@@ -501,15 +532,15 @@ Singleton {
     // here, and a category with no entry falls back to a neutral glyph rather
     // than to a missing one. `palette` and `music` above already cover Look
     // and Media, and are reused instead of duplicated.
-    readonly property string keyboard: String.fromCodePoint(0xF030C)      // nf-md-keyboard
-    readonly property string apps: String.fromCodePoint(0xF003B)          // nf-md-apps
+    readonly property string keyboard: root.glyph("keyboard", 0xF030C)    // nf-md-keyboard
+    readonly property string apps: root.glyph("apps", 0xF003B)            // nf-md-apps
     // Same correction as `palette` above, found the same way: 0xF169B is
     // md-BOOK_SETTINGS_OUTLINE, which is why the "Windows" heading on the
     // cheatsheet carried a little book. dock_window is 0xF10AC.
-    readonly property string windowTiles: String.fromCodePoint(0xF10AC)   // nf-md-dock_window
-    readonly property string workspaces: String.fromCodePoint(0xF0570)    // nf-md-view_grid
-    readonly property string camera: String.fromCodePoint(0xF0100)        // nf-md-camera
-    readonly property string widgets: String.fromCodePoint(0xF072C)       // nf-md-widgets
+    readonly property string windowTiles: root.glyph("windowTiles", 0xF10AC) // nf-md-dock_window
+    readonly property string workspaces: root.glyph("workspaces", 0xF0570) // nf-md-view_grid
+    readonly property string camera: root.glyph("camera", 0xF0100)        // nf-md-camera
+    readonly property string widgets: root.glyph("widgets", 0xF072C)      // nf-md-widgets
 
     // The category glyph, by the name used in the bind descriptions.
     function category(name: string): string {
@@ -527,5 +558,148 @@ Singleton {
         case "Input":      return root.keyboard;
         default:           return root.keyboard;
         }
+    }
+
+    // ---------------- What a theme puts against these names ----------------
+    //
+    // themes/<name>/icons.json, the same shape of file as the palette and the
+    // design tokens and read the same way, so that a theme SWITCH changes the
+    // glyphs under the bindings already drawing them instead of reloading the
+    // shell. Every key is one of the property names above; every value is a
+    // codepoint.
+    //
+    //     {
+    //         "clock": "U+E641",
+    //         "power": "U+E7E8"
+    //     }
+    //
+    // AN OVERLAY AND NOT A REPLACEMENT, which is the decision in this block and
+    // the one worth arguing rather than assuming.
+    //
+    // A replacement is simpler to describe -- a theme hands over the whole set
+    // or gets this one -- and it fails at the only moment it matters. There are
+    // ninety-four names here; a theme that writes ninety-three has a BLANK where
+    // the ninety-fourth is drawn, and a blank is exactly the fault the top of
+    // this file exists to prevent: it does not error, it renders as nothing, and
+    // it reads as a layout bug rather than as a missing character. It would also
+    // make every theme restate codepoints it has no opinion about, and restate
+    // them without the thing that makes them trustworthy -- the cmap checks
+    // recorded against a dozen entries above, which are what caught a bluetooth
+    // speaker on a notification, a music box in the launcher and a shield on the
+    // recorder. JSON cannot carry a provenance note, and a set copied without
+    // one is a set nobody can check.
+    //
+    // THE OVERLAY'S OWN COST IS REAL and is taken with both eyes open: a name a
+    // theme MEANT to override and misspelled falls through to the glyph above
+    // it, so a Nerd Font pictogram turns up in a theme that has no Nerd Font. It
+    // is a wrong picture rather than a missing one -- visible, where a blank is
+    // not -- and it is the same trade every ?? in Theme.qml makes. What it is
+    // not is silent: a value this file refuses says which name it refused.
+    //
+    // "U+F0954" AND NOT THE CHARACTER ITSELF, which is the first paragraph of
+    // this file applied to a file somebody edits by hand. A private-use
+    // character pasted into JSON does not survive every editor, terminal and
+    // copy-paste, and when it is lost the string is empty and the glyph renders
+    // blank -- the failure this whole file is written in codepoints to avoid. A
+    // codepoint survives all of that, and it can be CHECKED: the fontTools
+    // one-liners above answer for a theme's entries exactly as they answer for
+    // these. So a raw glyph in the JSON is refused rather than taken quietly,
+    // and the warning says what to write instead.
+    FileView {
+        id: iconFile
+
+        path: Quickshell.shellPath(`themes/${root.themeName}/icons.json`)
+        // blockLoading, like the design tokens and unlike the palette: a colour
+        // arriving a frame late fades in and nobody sees it, while a GLYPH
+        // arriving a frame late is the bar visibly changing its mind at every
+        // login. text() performs the read synchronously the first time it is
+        // asked, so the first frame is already the theme's.
+        blockLoading: true
+        // NO watchChanges, for the reason theme.json's FileView gives: an edit
+        // under themes/ already needs a restart to be seen, and a glyph that
+        // reloaded live while the QML around it did not would be half an edit
+        // landing.
+        //
+        // Silent, too: a theme with no icons.json is a theme that accepted this
+        // vocabulary, which is what genesis does and what most themes will do.
+        printErrors: false
+    }
+
+    readonly property var overrides: {
+        const text = iconFile.text();
+        if (!text)
+            return {};
+
+        let parsed = null;
+
+        try {
+            parsed = JSON.parse(text);
+        } catch (e) {
+            console.warn(`Icons: could not parse themes/${root.themeName}/icons.json --`, e.message);
+            return {};
+        }
+
+        // `null`, `7` and a list are all valid JSON and none of them is a set of
+        // names. This says so, where Theme.qml's tokens take the same case in
+        // silence, and the difference is what the file being there means: an
+        // absent icons.json is a theme with no opinion, while a present one is
+        // somebody who sat down to change a glyph. The quiet version of this is
+        // an author editing a file that has been ignored since the first
+        // character was typed into it.
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+            console.warn(`Icons: themes/${root.themeName}/icons.json is not a set of names, so every glyph stays as it is`);
+            return {};
+        }
+
+        // CHECKED HERE AND NOT IN glyph(), which is what keeps the guard off the
+        // path that is walked: this runs once per read of the file, glyph() runs
+        // in ninety-four bindings, and what is left behind holds nothing but
+        // strings that are safe to draw.
+        const accepted = {};
+        for (const name in parsed) {
+            const character = root.character(name, parsed[name]);
+            if (character)
+                accepted[name] = character;
+        }
+        return accepted;
+    }
+
+    // ONE ENTRY, MADE DRAWABLE OR REFUSED OUT LOUD.
+    //
+    // THE GUARD IS A SHAPE AND NOT A RANGE, which is where this parts company
+    // with Theme.token() next door. A token is a number, and the only thing
+    // there is to say about a bad one is that it is not finite. An icon is TEXT,
+    // and "not empty" would accept every mistake there is -- a font family, a
+    // sentence, the word "clock" -- and draw it in the bar. So the value has to
+    // LOOK like a codepoint and has to BE one: hex, one to six digits, inside
+    // Unicode's range and not half of a surrogate pair. Anything else keeps the
+    // glyph written above, one name at a time, exactly as a malformed token
+    // keeps one number.
+    function character(name: string, value: var): string {
+        if (typeof value !== "string" || !/^[Uu]\+[0-9A-Fa-f]{1,6}$/.test(value)) {
+            console.warn(`Icons: ${root.themeName} gives "${name}" a glyph this shell cannot read -- write the codepoint, "U+F0954", and not the character itself`);
+            return "";
+        }
+
+        const code = parseInt(value.slice(2), 16);
+        if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) {
+            console.warn(`Icons: ${root.themeName} gives "${name}" the codepoint ${value}, which is not a character`);
+            return "";
+        }
+
+        return String.fromCodePoint(code);
+    }
+
+    // ONE NAME, WITH ITS CODEPOINT WRITTEN AT THE SITE THAT USES IT, which is
+    // what keeps every glyph above next to the note and the cmap check that
+    // produced it. The same shape as Theme.token(), and live for the same
+    // reason: reading root.overrides in here makes it a dependency of all
+    // ninety-four properties, so a theme switch moves the whole vocabulary at
+    // once and none of them is read at construction time.
+    //
+    // `??` and no second check, because overrides holds only what character()
+    // above already accepted -- there is no empty string in it to fall through.
+    function glyph(name: string, codepoint: int): string {
+        return root.overrides[name] ?? String.fromCodePoint(codepoint);
     }
 }

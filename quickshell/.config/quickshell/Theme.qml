@@ -39,11 +39,13 @@
 // it is derived. Handing a consequence to the JSON would not make a theme more
 // expressive, it would give it a second place to disagree with itself.
 //
-// Three values are not the theme's at all. fontFamily and fontSize are the
+// Three values are not the theme's TO PUT IN theme.json. fontSize is the
 // user's, written by `desktop-font` and shared with kitty; glassAlpha is
-// Config.opacity, shared with kitty, Zen and the compositor. They keep coming
-// from Config, and a theme.json that names them is ignored -- see the notes
-// where each of them is read.
+// Config.opacity, shared with kitty, Zen and the compositor; fontFamily is the
+// user's too by default, and is the one of the three a theme can take, in its
+// MANIFEST rather than here -- because "which family draws me" is a claim a
+// theme makes about itself and not a number it picks. A theme.json that names
+// any of the three is ignored -- see the notes where each of them is read.
 //
 // WHAT THIS BUYS BEYOND THEMES, and it is the case that proves the mechanism.
 // components/SectionNote.qml is a Text whose defaults are Theme.fontSize - 1,
@@ -376,14 +378,31 @@ Singleton {
     // `desktop-font` script writes both -- but the remembering is mechanical.
     //
     // The family is restricted to the Nerd Font variants at the setting, not
-    // here, because the reason is not about type: every glyph this shell
-    // draws is a Nerd Font codepoint rendered as text in THIS property. Point
-    // it anywhere else and the bar fills with tofu.
+    // here, because the reason is not about type: every glyph GENESIS draws is
+    // a Nerd Font codepoint rendered as text in THIS property. Point it
+    // anywhere else and that bar fills with tofu.
     //
-    // NEITHER IS A TOKEN, and the paragraph above is the reason rather than an
-    // oversight: they are one decision shared with a program that has never
-    // heard of a theme. A theme.json that names them is ignored.
-    readonly property string fontFamily: Config.fontFamily
+    // AND THAT SENTENCE NAMES A THEME NOW, which is the whole of the change
+    // here. "Every glyph this shell draws is a Nerd Font codepoint" was true of
+    // the only theme there was, and it is false of a theme that brings its own
+    // icon set (see the bottom of Icons.qml). A restriction that belongs to one
+    // theme cannot be enforced for all of them by the host, so it is DECLARED:
+    // a manifest saying `"font": {"source": "user"}` -- which is genesis, and
+    // which is also what a manifest that says nothing means -- is a theme
+    // asking to be drawn in the family the user picked, from a setting that
+    // offers only families carrying the glyph set it needs. A theme that names
+    // its own family is a theme taking that responsibility off the setting.
+    //
+    // NEITHER IS A TOKEN, and that is unchanged: they are one decision shared
+    // with a program that has never heard of a theme. A theme.json that names
+    // them is ignored -- the manifest is where this one is answered, because it
+    // is a claim a theme makes about ITSELF rather than a value it picks.
+    //
+    // THE SIZE STAYS THE USER'S WHATEVER THE THEME SAYS. It is points, shared
+    // with kitty, and it is a question about how big text should be on this
+    // screen rather than about which characters exist in a font -- the second
+    // is the only one a theme can answer better than the person reading it.
+    readonly property string fontFamily: root.fontSource === "theme" ? root.themeFontFamily : Config.fontFamily
     readonly property real fontSize: Config.fontSize
 
     // The weight every label the shell draws is asked for at. Qt's 100-900
@@ -496,10 +515,25 @@ Singleton {
             // Silent on purpose: modules/Themes.qml reads the same file, says
             // this out loud and falls back to the shipped theme. A second
             // warning about one broken manifest is noise.
-            root.paletteSource = root.defaultPaletteSource;
+            //
+            // BOTH HALVES GO BACK TO THEIR DEFAULTS and not only the palette: a
+            // file that does not parse has declared nothing, and a shell holding
+            // one declaration out of a manifest the host refused would be the
+            // worst of both readings.
+            root.adoptPalette(null);
+            root.adoptFont(null);
             return;
         }
 
+        root.adoptPalette(manifest);
+        root.adoptFont(manifest);
+    }
+
+    // MOVED OUT OF adoptManifest AND NOT CHANGED, because there are two
+    // declarations to read now and a single function would have had to decide
+    // what a manifest that gets one of them wrong means for the other. It means
+    // nothing: they are independent claims and each falls back on its own.
+    function adoptPalette(manifest: var): void {
         const declared = manifest && manifest.palette ? manifest.palette.source : undefined;
 
         if (declared === undefined) {
@@ -514,6 +548,103 @@ Singleton {
         }
 
         root.paletteSource = declared;
+    }
+
+    // ---------------- What the theme declares about the type ----------------
+    // IT DECLARES WHOSE FAMILY THE SHELL IS DRAWN IN, in its manifest:
+    //
+    //     "font": { "source": "user" }
+    //     "font": { "source": "theme", "family": "Segoe Fluent Icons" }
+    //
+    // "user" is genesis and is what a manifest that says nothing gets, so a
+    // theme written before this key existed keeps working unchanged: the family
+    // is Config.fontFamily, written by `desktop-font` and shared with kitty,
+    // and the setting that picks it offers only families carrying the glyph set
+    // genesis draws with.
+    //
+    // "theme" is the other half and it IS built, unlike the palette's "pinned"
+    // above, because there is a theme that needs it the day it exists: a theme
+    // whose icons.json replaces the Nerd Font codepoints with an icon font of
+    // its own is a theme whose pictograms are not in any family that setting
+    // offers. Its `family` reaches Text.font.family unchanged.
+    //
+    // WHAT THE HOST DOES NOT DO IS CHECK THE FAMILY IS INSTALLED, and that is a
+    // decision rather than an omission. Qt resolves a family name by
+    // substitution -- it will draw SOMETHING for a name no fontconfig knows --
+    // so the only check available here is the family name against
+    // Qt.fontFamilies(), which is stricter than Qt's own matching and would
+    // refuse names Qt renders perfectly well. Refusing a working theme to catch
+    // a broken one is the wrong way round; a theme that names a font nobody has
+    // gets the substituted face, which is the same thing every other program on
+    // this desktop does with it.
+    //
+    // AND THE SETTING IS UNTOUCHED BY THIS, which is worth writing down because
+    // it looks like a loose end. AppearancePage still offers the three Nerd
+    // Font variants and nothing else, and that is still right: it is choosing
+    // the USER's family, the one a "user" theme is drawn in and the one kitty
+    // shares. What changed is that the reason on that page -- "every icon in
+    // this shell is a glyph from this font" -- is now genesis's claim rather
+    // than the shell's, and a page that wanted to say so would read
+    // root.fontSource here rather than be told again by the host.
+    readonly property string defaultFontSource: "user"
+
+    // Not readonly, and for the same reason paletteSource is not: the manifest
+    // arrives asynchronously and this is where the read lands. A manifest that
+    // cannot be read, or that asks for something this shell does not know,
+    // leaves both of these where they start.
+    //
+    // THE PAIR HAS ONE INVARIANT: fontSource is only ever "theme" when
+    // themeFontFamily holds a family a theme actually wrote. adoptFont() below
+    // is what guarantees it, which is what lets fontFamily up in the type
+    // section be a plain ternary with nothing to check.
+    property string fontSource: root.defaultFontSource
+    property string themeFontFamily: ""
+
+    function adoptFont(manifest: var): void {
+        const font = manifest && typeof manifest.font === "object" && manifest.font !== null ? manifest.font : null;
+
+        // A `font` that is not a set of keys -- a bare string, a number -- is
+        // said out loud rather than treated as absent. Absent means "I have no
+        // opinion", and somebody who typed the key had one.
+        if (manifest && manifest.font !== undefined && font === null) {
+            console.warn(`Theme: ${root.themeName} carries a "font" that is not a set of keys -- drawing in the user's family`);
+            root.fontSource = root.defaultFontSource;
+            root.themeFontFamily = "";
+            return;
+        }
+
+        const declared = font ? font.source : undefined;
+
+        if (declared === undefined) {
+            root.fontSource = root.defaultFontSource;
+            root.themeFontFamily = "";
+            return;
+        }
+
+        if (declared === "theme") {
+            const family = font.family;
+
+            // "theme" without a family is a theme asking for its own font and
+            // not saying which, which cannot be honoured and must not be
+            // guessed at: an empty family is a Text with no font at all.
+            if (typeof family !== "string" || family.trim() === "") {
+                console.warn(`Theme: ${root.themeName} asks to pick its own font family and does not name one -- drawing in the user's family`);
+                root.fontSource = root.defaultFontSource;
+                root.themeFontFamily = "";
+                return;
+            }
+
+            root.themeFontFamily = family;
+            root.fontSource = declared;
+            return;
+        }
+
+        if (declared !== "user") {
+            console.warn(`Theme: ${root.themeName} asks for a font source called "${declared}", which this shell does not know -- drawing in the user's family`);
+        }
+
+        root.fontSource = root.defaultFontSource;
+        root.themeFontFamily = "";
     }
 
     // ONE VALUE AND A SWITCH ANYWAY, because the switch is the seam: "pinned"
@@ -540,7 +671,13 @@ Singleton {
         printErrors: false
 
         onLoaded: root.adoptManifest(manifestFile.text())
-        onLoadFailed: root.paletteSource = root.defaultPaletteSource
+        // Both declarations, for the reason adoptManifest gives when the file
+        // is there and will not parse: a manifest nobody could read has said
+        // nothing about either of them.
+        onLoadFailed: {
+            root.adoptPalette(null);
+            root.adoptFont(null);
+        }
     }
 
     // ---------------- Palette source ----------------
