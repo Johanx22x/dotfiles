@@ -27,7 +27,7 @@
 // pixels, two more objects per corner -- a Loader and the item it holds -- so
 // eight more per monitor, and a theme still unable to change anything about
 // the window it sits in. A theme that
-// wants square screen corners says so where that is one line -- its
+// wants square screen corners says so in three lines there -- its
 // CornerWedge draws nothing -- and these four windows go on existing,
 // reserving nothing and taking no input, which is what they already do.
 

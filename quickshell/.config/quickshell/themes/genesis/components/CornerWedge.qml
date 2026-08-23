@@ -25,7 +25,8 @@
 // outer one did before the split.
 //
 // AND THIS IS THE ONE FILE IN THIS DIRECTORY THAT MAY BE EMPTY. A theme with
-// square screen corners and no fillets implements it as `Item {}` and draws
+// square screen corners and no fillets implements it by declaring `row` and
+// drawing nothing, and
 // nothing: no floor is missed, no height is lost and no layout moves, because
 // the facade keeps the box. See the null-implementation rule in README.md,
 // which this component is the reason for.

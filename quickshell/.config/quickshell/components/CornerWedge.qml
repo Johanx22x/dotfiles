@@ -17,7 +17,8 @@
 // which is the opposite of what rule 2 in themes/genesis/components/README.md
 // asks for everywhere else. The reason is this component's null case.
 //
-// A square-cornered theme draws NOTHING here -- its CornerWedge is `Item {}`,
+// A square-cornered theme draws NOTHING here -- its CornerWedge is an Item
+// that declares `row` and nothing else,
 // which is a legitimate implementation and the only one in the tree for which
 // that is true. An empty Item reports an implicit size of 0. If this facade
 // took its size from the theme, every fillet in the shell would collapse to a

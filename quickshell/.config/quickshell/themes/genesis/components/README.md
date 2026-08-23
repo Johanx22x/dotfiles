@@ -489,7 +489,12 @@ every joint in this shell. A theme with square screen corners and a bar that
 meets the screen edge at ninety degrees implements it as:
 
 ```qml
-Item {}
+import QtQuick
+import qs.components
+
+Item {
+    required property CornerWedge row
+}
 ```
 
 and that is not a stub, a placeholder or a file somebody forgot to finish. It
@@ -517,7 +522,7 @@ theme from dropping a row out of its section. Which gives the rule two halves:
    `mask: Region {}`, and still `Theme.screenCornerRadius` square.
 
    Measured rather than argued. This theme's `CornerWedge.qml` was replaced by
-   `Item {}` and the shell read back under a headless labwc:
+   an empty implementation and the shell read back under a headless labwc:
 
    ```
    corner[topLeft]  window 10x10  anchors top,left   exclusion Ignore zone 0
@@ -537,7 +542,18 @@ theme from dropping a row out of its section. Which gives the rule two halves:
 this directory -- the last section of this file says why -- so a theme that
 ships no `CornerWedge.qml` at all gets a Loader in `Loader.Error` and one
 Quickshell warning per wedge naming the path. Same pixels, and a log that says
-somebody made a mistake. `Item {}` is how a theme says it meant it.
+somebody made a mistake. An Item that declares `row` and draws nothing is how
+a theme says it meant it.
+
+**AND IT STILL DECLARES `row`, WHICH IS NOT A FORMALITY.** The facade hands the
+theme its `row` as an initial property of `setSource`, so an item that does not
+declare one is an assignment with no target. Measured on the real shell under
+headless labwc: a bare `Item {}` here loads, lays out, takes no input, moves no
+geometry -- and logs `Cannot assign to non-existent property "row"` **fifteen
+times per startup**, once per wedge in the tree. Declaring `row` takes it to
+zero and moves nothing else. So rule 1 has no exception: an empty
+implementation is an implementation, and it obeys the same contract as a full
+one.
 
 There is a **third** way a theme reports nothing, and `SettingsSection` found
 it: its floor is not a number at all. A theme that never slots the column
