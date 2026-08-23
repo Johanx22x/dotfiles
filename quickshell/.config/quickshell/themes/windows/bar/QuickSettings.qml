@@ -25,6 +25,12 @@
 import QtQuick
 import Quickshell.Services.UPower
 import qs
+// qs.modules.notifications for NotificationState, which the do-not-disturb
+// tile reads. Missing, it was a ReferenceError on every open and the tile drew
+// but did nothing -- and qmllint says nothing about it, because the reference
+// is inside a property binding rather than a type name. Found by a second
+// pair of eyes reading the shell's log, not by any check here.
+import qs.modules.notifications
 import qs.modules.settings
 import qs.themes.windows
 
