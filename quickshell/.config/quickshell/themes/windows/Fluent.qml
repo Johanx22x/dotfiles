@@ -658,6 +658,18 @@ QtObject {
     // has nowhere else to live.
     readonly property int userBlockTopGap: 40
 
+    // ---------------- The Start menu's footer ----------------
+    //
+    // The band across the bottom of the Start menu that carries the account
+    // on the left and the power button on the right. OURS by measurement:
+    // ref/startmenu-classic-pinned-recommended.jpg shows the band at ~90 of
+    // its ~1.4x scale, which is 64 at 1:1. Its ground is a DARKENING of the
+    // panel -- sampled (18,37,73) against the content's (27,46,79) over the
+    // same wallpaper, about black at a tenth -- and startFooterShade is that
+    // tenth, laid over the panel's own colour rather than replacing it.
+    readonly property int startFooterHeight: 64
+    readonly property real startFooterShade: 0.10
+
     // And the page title's clearance, for the same reason on the other pane.
     // OURS: the title's ink starts 51 below the window's top edge in
     // ref/settings-system-sound-volumemixer.jpg; the host's 16 of margin and

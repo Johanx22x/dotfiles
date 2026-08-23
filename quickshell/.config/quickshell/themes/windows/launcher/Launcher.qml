@@ -24,9 +24,11 @@
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
+import QtQuick.Effects
 import qs
 import qs.components
 import qs.modules.launcher
+import qs.modules.settings
 import qs.themes.windows
 
 PanelWindow {
@@ -39,6 +41,11 @@ PanelWindow {
     // width.
     readonly property int panelWidth: 900
     readonly property int panelHeight: 620
+
+    // Whether the power button's flyout is up. Lives here rather than on the
+    // footer item because Escape is handled at the search field, which is the
+    // only place keys arrive.
+    property bool powerOpen: false
     readonly property int resultsWidth: 400
     readonly property int taskbarGap: 12
     readonly property int padding: 16
@@ -193,6 +200,13 @@ PanelWindow {
     }
 
     function back(): void {
+        // The power flyout is the topmost thing Escape can mean. Windows
+        // closes the flyout and leaves Start open, and so does this.
+        if (root.powerOpen) {
+            root.powerOpen = false;
+            return;
+        }
+
         if (root.picker !== "") {
             root.picker = "";
             root.selected = 0;
@@ -236,6 +250,7 @@ PanelWindow {
     }
 
     onVisibleChanged: {
+        root.powerOpen = false;
         if (visible) {
             // input.text and NOT root.query: the field is the source of truth
             // and it drives `query` through onTextChanged.
@@ -406,7 +421,7 @@ PanelWindow {
 
             anchors.left: parent.left
             anchors.top: chips.bottom
-            anchors.bottom: parent.bottom
+            anchors.bottom: footer.top
             anchors.leftMargin: root.padding
             anchors.topMargin: 12
             anchors.bottomMargin: root.padding
@@ -467,7 +482,7 @@ PanelWindow {
             anchors.left: list.right
             anchors.right: parent.right
             anchors.top: chips.bottom
-            anchors.bottom: parent.bottom
+            anchors.bottom: footer.top
             anchors.rightMargin: root.padding
             anchors.leftMargin: root.padding
             anchors.topMargin: 12
@@ -492,7 +507,7 @@ PanelWindow {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: chips.bottom
-            anchors.bottom: parent.bottom
+            anchors.bottom: footer.top
             anchors.margins: root.padding
             anchors.topMargin: 12
 
@@ -509,6 +524,330 @@ PanelWindow {
                 filter: root.query
 
                 onPicked: LauncherState.close()
+            }
+        }
+
+        // ---------------- The footer ----------------
+        //
+        // The band across the bottom of every Start menu: the account on the
+        // left, the power button on the right, on a ground one shade darker
+        // than the panel. ref/startmenu-classic-pinned-recommended.jpg is the
+        // photograph, Fluent.startFooterHeight the measurement. Windows also
+        // offers folder shortcuts along the right when the user turns them on;
+        // the DEFAULT footer is these two things and nothing else, and the
+        // default is what a fixed theme copies.
+        //
+        // TWO SOLID RECTANGLES, the second squaring the first's top corners.
+        // The band has to keep the panel's rounded BOTTOM corners and give up
+        // its top ones, and a Rectangle's radius is all four or none. Safe to
+        // overlap only because the panel is opaque -- flyoutAlpha is 1.0, by
+        // Johan's transparency rule -- so the double-painted strip does not
+        // double any alpha.
+        Item {
+            id: footer
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+
+            height: Fluent.startFooterHeight
+
+            readonly property color shade:
+                Qt.tint(Fluent.acrylic(Theme.surface),
+                        Qt.alpha("#000000", Fluent.startFooterShade))
+
+            Rectangle {
+                anchors.fill: parent
+                radius: Fluent.overlayRadius
+                color: footer.shade
+            }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                height: Fluent.overlayRadius
+                color: footer.shade
+            }
+
+            // The hairline along the band's top edge: the same black-alpha
+            // stroke every card in this theme carries, for the same reason --
+            // in dark mode an edge is a SHADOW, not a highlight.
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                height: 1
+                color: Qt.alpha("#000000", Fluent.cardStrokeAlpha)
+            }
+
+            // ---------------- The account ----------------
+            //
+            // Portrait and name, one hover target. Windows opens account
+            // options here; this desktop's account page is the settings
+            // window's User page, so that is where it goes -- the same
+            // "send them where the page already exists" rule the Quick
+            // Settings chevrons follow.
+            Rectangle {
+                id: account
+
+                anchors.left: parent.left
+                anchors.leftMargin: root.padding
+                anchors.verticalCenter: parent.verticalCenter
+
+                width: accountRow.implicitWidth + Fluent.controlPaddingH * 2
+                height: 40
+                radius: Fluent.controlRadius
+
+                color: accountPointer.pressed ? Fluent.fillPress
+                    : accountPointer.containsMouse ? Fluent.fillSubtleHover
+                    : "transparent"
+
+                Row {
+                    id: accountRow
+
+                    anchors.left: parent.left
+                    anchors.leftMargin: Fluent.controlPaddingH
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    spacing: 12
+
+                    Item {
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        width: 32
+                        height: 32
+
+                        // The initial on the accent circle, exactly the
+                        // settings rail's fallback, and the portrait over it
+                        // when ~/.face exists. `cache: false` for the reason
+                        // components/UserBlock.qml documents at length: the
+                        // path never changes, only the file behind it does.
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: width / 2
+                            visible: portrait.status !== Image.Ready
+                            color: Theme.primary
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: SessionInfo.displayName.charAt(0).toUpperCase()
+                                font.family: Theme.fontFamily
+                                font.pointSize: Fluent.bodySize
+                                font.weight: Fluent.strongWeight
+                                color: Theme.textOnPrimary
+                            }
+                        }
+
+                        Image {
+                            id: portrait
+
+                            anchors.fill: parent
+                            source: SessionInfo.hasAvatar
+                                ? `file://${SessionInfo.avatarPath}?r=${SessionInfo.avatarRevision}`
+                                : ""
+                            cache: false
+                            sourceSize.width: width * 2
+                            sourceSize.height: height * 2
+                            fillMode: Image.PreserveAspectCrop
+                            visible: status === Image.Ready
+
+                            layer.enabled: true
+                            layer.effect: MultiEffect {
+                                maskEnabled: true
+                                maskThresholdMin: 0.5
+                                maskSpreadAtMin: 1
+                                maskSource: ShaderEffectSource {
+                                    sourceItem: Rectangle {
+                                        width: 32
+                                        height: 32
+                                        radius: 16
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: SessionInfo.displayName
+                        font.family: Theme.fontFamily
+                        font.pointSize: Fluent.bodySize
+                        color: Theme.textOnSurface
+                    }
+                }
+
+                MouseArea {
+                    id: accountPointer
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+
+                    onClicked: {
+                        LauncherState.close();
+                        SettingsState.openPage("user");
+                    }
+                }
+            }
+
+            // ---------------- The power button ----------------
+            Rectangle {
+                id: powerButton
+
+                anchors.right: parent.right
+                anchors.rightMargin: root.padding
+                anchors.verticalCenter: parent.verticalCenter
+
+                width: 40
+                height: 40
+                radius: Fluent.controlRadius
+
+                color: powerPointer.pressed ? Fluent.fillPress
+                    : (powerPointer.containsMouse || root.powerOpen) ? Fluent.fillSubtleHover
+                    : "transparent"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: Icons.power
+                    font.family: Theme.fontFamily
+                    font.pointSize: Fluent.bodySize
+                    color: Theme.textOnSurface
+                }
+
+                MouseArea {
+                    id: powerPointer
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+
+                    onClicked: root.powerOpen = !root.powerOpen
+                }
+            }
+        }
+
+        // A click anywhere else in the panel puts the flyout away, which is
+        // what a context menu owes the surface under it. UNDER the flyout in
+        // stacking order and only alive while it is up, so the menu's own
+        // entries still take their clicks.
+        MouseArea {
+            anchors.fill: parent
+
+            visible: root.powerOpen
+            onClicked: root.powerOpen = false
+        }
+
+        // ---------------- The power flyout ----------------
+        //
+        // What the power button opens, which is Johan's call on where this
+        // desktop's power actions LIVE: a context menu off the Start menu's
+        // power button, exactly where Windows keeps its own. The drawing
+        // mirrors powermenu/PowerMenu.qml row for row -- same MenuFlyout
+        // geometry, same rest/hover/press fills, same three entries in the
+        // same order -- and the ACTIONS are carried over invocation for
+        // invocation from that file, where the header explains why getting
+        // one wrong is not a cosmetic bug.
+        Rectangle {
+            id: powerFlyout
+
+            anchors.right: parent.right
+            anchors.rightMargin: root.padding
+            anchors.bottom: footer.top
+            anchors.bottomMargin: 4
+
+            visible: root.powerOpen
+
+            readonly property var actions: [
+                {
+                    label: "Sign out",
+                    perform: () => Compositor.logout()
+                },
+                {
+                    label: "Restart",
+                    command: ["systemctl", "reboot"]
+                },
+                {
+                    label: "Shut down",
+                    command: ["systemctl", "poweroff"]
+                }
+            ]
+
+            // The 4 of MenuFlyoutItemMargin's horizontal inset and the 2 of
+            // its vertical one, the same two numbers powermenu/PowerMenu.qml
+            // reads out of the control's LayoutRoot.
+            readonly property int insetH: 4
+            readonly property int insetV: 2
+
+            width: 168
+            height: powerEntries.implicitHeight + powerFlyout.insetV * 2 + 8
+
+            radius: Fluent.overlayRadius
+            antialiasing: true
+            color: Fluent.acrylic(Theme.surface)
+            border.width: 1
+            border.color: Theme.outlineVariant
+
+            Column {
+                id: powerEntries
+
+                x: powerFlyout.insetH
+                y: powerFlyout.insetV + 4
+                width: parent.width - powerFlyout.insetH * 2
+                spacing: powerFlyout.insetV * 2
+
+                Repeater {
+                    model: powerFlyout.actions
+
+                    Rectangle {
+                        id: powerEntry
+
+                        required property var modelData
+
+                        width: parent.width
+                        height: Fluent.controlHeight
+                        radius: Fluent.controlRadius
+
+                        // Rest, hover, press: transparent, Secondary,
+                        // Tertiary. Hover brightens, press dims, nothing
+                        // animates -- the MenuFlyoutItem rules PowerMenu.qml
+                        // spells out over its own copy of this rectangle.
+                        color: powerEntryPointer.pressed ? Fluent.fillPress
+                            : powerEntryPointer.containsMouse ? Fluent.fillSubtleHover
+                            : "transparent"
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: Fluent.controlPaddingH
+                            anchors.right: parent.right
+                            anchors.rightMargin: Fluent.controlPaddingH
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            text: powerEntry.modelData.label
+                            elide: Text.ElideRight
+                            font.family: Theme.fontFamily
+                            font.pointSize: Fluent.bodySize
+                            color: Theme.textOnSurface
+                        }
+
+                        MouseArea {
+                            id: powerEntryPointer
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+
+                            // Closes the whole launcher first: the session may
+                            // be about to come down, and the last frame should
+                            // not be a half-dismissed menu.
+                            onClicked: {
+                                const action = powerEntry.modelData;
+                                LauncherState.close();
+                                if (action.perform)
+                                    action.perform();
+                                else
+                                    Quickshell.execDetached(action.command);
+                            }
+                        }
+                    }
+                }
             }
         }
 
