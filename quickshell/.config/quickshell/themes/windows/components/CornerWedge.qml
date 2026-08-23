@@ -1,118 +1,66 @@
-// How genesis carves a corner. The public half -- the three properties, and
-// why the BOX is the host's while the curve is not -- is components/CornerWedge.qml.
+// WINDOWS ROUNDS WINDOWS, NOT THE SCREEN, SO THERE IS NOTHING HERE TO DRAW.
+// The public half -- the three properties, and why the BOX is the host's while
+// the curve is not -- is components/CornerWedge.qml.
 //
-// WHY IT IS A MASKED RECTANGLE AND NOT A Shape
-// The obvious implementation is QtQuick.Shapes: two lines and an arc. It was
-// written that way first, and the arc came out visibly jagged. Measured, the
-// Shape's edge averaged 0.94 intermediate pixels per row against 5.25 for a
-// Rectangle's rounded corner -- five times worse. Neither `layer.samples`
-// (4x multisampling) nor a 4x supersampled layer texture fixed it; the second
-// made it worse.
+// THIS FILE IS NOT UNFINISHED. It is the answer, and it is the one component in
+// the interface for which an empty implementation is explicitly legitimate --
+// see WHEN THE RIGHT IMPLEMENTATION IS EMPTY in
+// themes/genesis/components/README.md, which this component is the reason for.
+// Do not "fix" it by drawing something.
 //
-// So the curve is not drawn as a path at all. It is a plain square with a
-// CIRCLE punched out of it, and that circle is a Rectangle with
-// `radius: width / 2` -- exactly the case Qt's documentation says gets
-// antialiased without multisampling. The subtraction is an inverted opacity
-// mask.
+// WHY IT IS EMPTY HERE AND NOT MERELY UNUSED. This theme's theme.json says
 //
-// The geometry is written once for the top-left orientation and rotated into
-// the other three. THE ROTATION IS ON THIS SIDE AND NOT ON THE FACADE, which
-// is a fact about how this file happens to write its geometry rather than
-// anything a caller asked for: a theme that drew all four orientations out
-// longhand would need no rotation at all. It is equivalent here because the
-// facade's box is square -- `radius` by `radius` -- and this item fills it, so
-// rotating the inner item about its centre covers exactly what rotating the
-// outer one did before the split.
+//     "_corners": "0 because Windows rounds WINDOWS, not the screen."
+//     "screenCornerRadius": 0
 //
-// AND THIS IS THE ONE FILE IN THIS DIRECTORY THAT MAY BE EMPTY. A theme with
-// square screen corners and no fillets implements it by declaring `row` and
-// drawing nothing, and
-// nothing: no floor is missed, no height is lost and no layout moves, because
-// the facade keeps the box. See the null-implementation rule in README.md,
-// which this component is the reason for.
+// and Theme.qml:542 makes the bar's fillets the same number:
+//
+//     readonly property int barCornerRadius: root.screenCornerRadius
+//
+// So every one of the eleven wedges in this shell -- the bar's two, the
+// launcher's two, the popout's two, the notification panel's one and the four
+// screen corners -- is handed `radius: 0` under this theme. A concave fillet of
+// zero radius has no area. There is no shape here that a curve could be drawn
+// into, and a bar that meets the screen edge at ninety degrees is what Windows
+// looks like: the taskbar is a full-width strip and its corners are square.
+//
+// WHY IT IS SAFE TO REPORT NOTHING, WHICH IS THE PART THAT IS NOT SAFE BY
+// DEFAULT. An empty Item reports an implicit size of 0, and eleven wedges are
+// placed by ANCHORS against their box. The box is not this file's:
+//
+//     // See the header: the host's, and never read back off the Loader.
+//     implicitWidth: root.radius
+//     implicitHeight: root.radius
+//         -- components/CornerWedge.qml:47-49
+//
+// and that facade's Loader is never read for a size -- it is named only inside
+// build(). Grepping every facade under components/ and modules/settings/ for
+// `drawing.implicit` returns thirty-odd hits and this component is not among
+// them; MonitorTile is the only other one missing, and its header says so for
+// its own reasons. Checked rather than assumed. So a wedge is
+// `radius` square whatever this file does, the anchors against it land where
+// they always did, and nothing downstream moves.
+//
+// AND IT STILL DECLARES `row`. That is rule 1 and it has no exception for the
+// empty case: the facade hands its `row` over as an initial property of
+// setSource, so an Item that does not declare one is an assignment with no
+// target. Measured on the real shell under headless labwc, a bare `Item {}`
+// here loads, lays out and logs
+//
+//     Cannot assign to non-existent property "row"
+//
+// fifteen times per startup, once per wedge in the tree. These five lines take
+// that to zero and move nothing else.
+//
+// AND IT IS NOT THE SAME AS SHIPPING NO FILE AT ALL. There is no per-file
+// fallback under components/, so a theme missing this file gets a Loader in
+// Loader.Error and one Quickshell warning per wedge naming the path -- the same
+// pixels, and a log that says somebody made a mistake. An Item that declares
+// `row` and draws nothing is how a theme says it meant it.
 
 import QtQuick
-import QtQuick.Effects
 import qs.components
 
 Item {
-    id: root
-
-    // The facade, handed in by its Loader as an initial property. See the note
-    // in this directory's ToggleRow.qml on why it is `required`, why it is
-    // typed rather than `var`, and why `CornerWedge` here is the facade and
-    // not this file.
     required property CornerWedge row
-
-    rotation: switch (root.row.corner) {
-    case "topLeft":
-        0;
-        break;
-    case "topRight":
-        90;
-        break;
-    case "bottomRight":
-        180;
-        break;
-    default:
-        270;
-    }
-
-    // What we keep: the whole square.
-    Rectangle {
-        id: square
-
-        anchors.fill: parent
-        color: root.row.fillColor
-
-        // Rendered into a texture for the effect below, never drawn directly.
-        visible: false
-        layer.enabled: true
-    }
-
-    // What we remove: a circle centred on the INNER corner of the square, so
-    // the quarter of it that overlaps is the bite taken out of the shape.
-    Item {
-        id: hole
-
-        anchors.fill: parent
-
-        visible: false
-        layer.enabled: true
-
-        Rectangle {
-            x: 0
-            y: 0
-            width: root.row.radius * 2
-            height: root.row.radius * 2
-            radius: width / 2
-
-            // This is the antialiasing the whole component exists for.
-            antialiasing: true
-
-            // Only the alpha matters: the mask is read as coverage.
-            color: "black"
-        }
-    }
-
-    MultiEffect {
-        anchors.fill: parent
-
-        source: square
-        maskEnabled: true
-        maskSource: hole
-        // Keep the source where the mask is EMPTY, i.e. everywhere the circle
-        // is not.
-        maskInverted: true
-
-        // WITHOUT THESE THE MASK IS A HARD THRESHOLD.
-        // MultiEffect defaults to cutting the mask at a single value with no
-        // spread, which throws away the very thing the circle was drawn for:
-        // its antialiased edge. Measured, the thresholded version had ZERO
-        // intermediate pixels along the curve -- worse than the Shape it
-        // replaced. A threshold at the midpoint with full spread passes the
-        // circle's own coverage through instead of rounding it to on/off.
-        maskThresholdMin: 0.5
-        maskSpreadAtMin: 1.0
-    }
 }
