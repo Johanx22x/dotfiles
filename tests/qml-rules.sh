@@ -318,6 +318,70 @@ else
     note "all $readers FolderListModel(s) whose rows are read watch status"
 fi
 
+# --- a theme's own singleton is imported by the files that read it -----------
+#
+# A theme may keep a singleton at its root -- windows/Fluent.qml holds the forty
+# Fluent constants that twenty-nine components would otherwise each carry a copy
+# of. A file under components/ has an implicit import of components/ and of
+# NOTHING else, so reaching that singleton takes one line:
+#
+#     import ".."
+#
+# WITHOUT IT THE FAILURE IS AT RUNTIME, PER READ. Measured: two copies of one
+# component in a scratch tree under labwc, one with the import and one without.
+# With it the read returns its value. Without it:
+#
+#     WARN scene: @themes/windows/components/Chip.qml[3:-1]:
+#                 ReferenceError: Fluent is not defined
+#
+# qmllint CATCHES THIS TOO, as [unqualified], so this rule is not covering a
+# blind spot -- it is covering a moving number. [windows:unqualified] is 130
+# today and will move on almost every commit while that theme is being drawn,
+# which makes a missing import +1 against a figure somebody is already editing
+# for other reasons. A rule that names the file and the singleton survives that;
+# a count folded into a baseline edit does not.
+#
+# IT IS GENERAL AND NOT ABOUT `Fluent`. Any `pragma Singleton` at any theme's
+# root is checked, because the next theme's will have another name and the
+# trap is the same shape.
+#
+# COMMENTS OFF FIRST, same as the two sweeps above and for a sharper reason
+# here: Fluent.qml's own header quotes `Fluent.controlRadius` while explaining
+# this, and a sweep that read its comments would report the file that documents
+# the rule as the file that breaks it.
+singleton_readers=0
+singleton_missing=()
+singleton_names=0
+for theme in "${themes[@]}"; do
+    roots=()
+    while IFS= read -r -d '' f; do
+        grep -qE '^[[:space:]]*pragma[[:space:]]+Singleton' "$f" \
+            && roots+=("$(basename "$f" .qml)")
+    done < <(find "$theme" -maxdepth 1 -name '*.qml' -type f -print0 | sort -z)
+    (( ${#roots[@]} == 0 )) && continue
+    singleton_names=$(( singleton_names + ${#roots[@]} ))
+
+    while IFS= read -r -d '' file; do
+        for name in "${roots[@]}"; do
+            sed -e 's://.*::' "$file" \
+                | grep -qE "(^|[^A-Za-z0-9_])${name}\." || continue
+            singleton_readers=$(( singleton_readers + 1 ))
+            grep -qE '^[[:space:]]*import[[:space:]]+"\.\."[[:space:]]*$' "$file" \
+                || singleton_missing+=("${file#"$REPO"/} reads ${name}. and does not import \"..\"")
+        done
+    done < <(find "$theme" -mindepth 2 -name '*.qml' -type f -print0 | sort -z)
+done
+
+if (( ${#singleton_missing[@]} > 0 )); then
+    fail "${#singleton_missing[@]} file(s) read a theme singleton they never imported"
+    printf 'qml-rules:   %s\n' "${singleton_missing[@]}" >&2
+    echo "qml-rules: add   import \"..\"   -- qmllint will call it unused; it is not" >&2
+elif (( singleton_names == 0 )); then
+    note "no theme keeps a singleton at its root -- nothing to check"
+else
+    note "$singleton_readers read(s) of $singleton_names theme singleton(s) all import their directory"
+fi
+
 if [[ $failed -eq 0 ]]; then
     note "the QML tree keeps to its rules"
 fi
