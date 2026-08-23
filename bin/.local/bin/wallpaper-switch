@@ -1604,7 +1604,7 @@ mapfile -t ACCENT_ARGS <<< "$ACCENT_ARGS_TEXT"
 # call site would be a flag with nothing to apply to.
 #
 # --import-json MERGES THE SCHEME INTO THE PALETTE MATUGEN JUST DERIVED, so the
-# 74 roles named in schemes/README.md come from the file and every template
+# 78 roles named in schemes/README.md come from the file and every template
 # sees them alongside the Material 3 ones in a single render. It is one process
 # rather than two because it can be: dumping the palette with
 # `-j hex --dry-run`, merging it with jq and rendering with `matugen json` was
@@ -1618,6 +1618,14 @@ mapfile -t ACCENT_ARGS <<< "$ACCENT_ARGS_TEXT"
 # hue and replaced its lightness and chroma with Material 3's. Which nine and
 # why is argued in scheme-accent.py; nothing at this call site changed for it,
 # since the words that open the render were always that script's to choose.
+#
+# AND THE OTHER EIGHT ARE NOT THE WALLPAPER'S EITHER ANY MORE. surface,
+# surface_container, surface_container_high, surface_container_highest,
+# on_surface, on_surface_variant, outline and outline_variant still reach the
+# shell under those M3 spellings, but quickshell-colors.json fills them from
+# `ui_*` -- so of the 17 M3 names this repository ever consumed, nine are the
+# image's and eight are the scheme's. schemes/README.md section 1.5 is the
+# table that says which is which.
 #
 # THE IMPORTED FILE WINS ON A NAME CLASH -- measured -- which is why every role
 # in a scheme carries a `ui_` / `term_` / `sem_` / `fb_` prefix and why nothing

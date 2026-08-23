@@ -7,17 +7,41 @@ for as long as that is true the failure is silent in the worst possible way:
 
   A ROLE THAT NO SCHEME SUPPLIES IS A DESKTOP THAT CANNOT RE-THEME ITSELF.
   matugen stops at the first `{{colors.foo.default.hex}}` it cannot resolve --
-  "Value does not exist in the context" -- and writes NONE of the eleven files.
-  Not a wrong colour: no colour. Every application keeps whatever it had, and
-  the next wallpaper change fails the same way.
+  "Value does not exist in the context" -- and writes NONE of the fourteen
+  files. Not a wrong colour: no colour. Every application keeps whatever it
+  had, and the next wallpaper change fails the same way.
 
-  AND TODAY IT WOULD NOT EVEN GET THAT FAR. The templates still carry the base
-  palette as hex literals, so not one of them reads a scheme role yet. An
-  empty scheme file, or one missing half the vocabulary, renders eleven
-  perfectly good files and says nothing at all. That window closes when the
-  templates are substituted; until then this check IS the whole of the
-  enforcement, which is why it counts roles rather than trusting a render to
-  fail.
+THIS FILE USED TO SAY THAT COULD NOT HAPPEN YET, and the reason it gave has
+expired -- which changes what the check is for, so the old argument goes first.
+It said: the templates still carry the base palette as hex literals, not one of
+them reads a scheme role, so an incomplete scheme renders a full set of
+perfectly good files and says nothing at all -- and until that changed, this
+check WAS the whole of the enforcement. The templates were substituted. Ten of
+the fourteen read scheme roles now and not one live hex literal is left in any
+of them, so an incomplete scheme does fail a render today. THREE THINGS ARE
+LEFT, and each is a reason to keep counting roles rather than trusting the
+render:
+
+  WHERE THE RENDER FAILS IS THE WORST PLACE IT COULD. On the machine, mid
+  wallpaper change or mid scheme switch, as fourteen files that were not
+  written -- a desktop that simply does not change, with the reason in
+  matugen's stderr and nothing else. This moves that to a runner, before the
+  scheme is merged.
+
+  A RENDER ONLY EXERCISES THE ROLES A TEMPLATE HAPPENS TO READ, and that is 60
+  of the 78. The other 18 -- sixteen of the `fb_*` fallbacks, which the shell
+  and `scheme-accent.py` consume by hand rather than through matugen, plus
+  `ui_bg_dim` and `ui_text_dim` -- are read by no template at all. A scheme
+  that omits one of those renders cleanly today and breaks on the day something
+  reads it. For those 18 this check is still the whole of the enforcement, word
+  for word as it was for all 78.
+
+  AND MOST OF WHAT IS CHECKED HERE IS NOT RENDERABLE AT ALL. Canonical JSON
+  form, lowercase `#rrggbb`, `_meta.label` and `_meta.variant`, a scheme
+  filename that would collide with one of `desktop-scheme`'s own command words,
+  a key that would quietly override an accent matugen derives from the
+  wallpaper, and the README's prose agreeing with the README's tables. A render
+  is happy with every one of those going wrong.
 
 WHY THE README IS THE SOURCE AND NOT THIS FILE. Several people -- several
 agents -- edit the templates and the schemes at the same time, and each of them
@@ -28,10 +52,10 @@ the counts stated in that section's own prose are checked against the tables
 that follow it -- a dropped row cannot pass by being dropped consistently.
 
 WHAT IT CANNOT SEE. Whether the palette actually renders. That needs matugen
-and a wallpaper, neither of which a runner has, and it was measured by hand
-instead: all eleven templates, all 56 stills in the collection, byte for byte
-against what the desktop generates today. The evidence is written up under
-"How the two halves join" in schemes/README.md.
+and a wallpaper, neither of which a runner has, so it was measured by hand
+instead -- every template against what the desktop generates today. The
+evidence, and the count of what one render's context actually holds, is written
+up under "How the two halves join" in schemes/README.md.
 
 Run it from anywhere:  tests/scheme-roles.py
 """
@@ -115,15 +139,16 @@ def check_vocabulary(groups: dict[str, list[str]],
     that gave every group its prefix."""
     text = README.read_text(encoding="utf-8")
 
-    # "74 roles in four groups: **23 base**, **27 terminal**, **7 semantic**,
+    # "78 roles in four groups: **27 base**, **27 terminal**, **7 semantic**,
     # **17 accent fallbacks**." Parsed rather than hardcoded, so the paragraph a
-    # person reads and the tables a machine reads cannot drift apart.
+    # person reads and the tables a machine reads cannot drift apart -- and the
+    # numbers in this comment are an ILLUSTRATION of the shape, not the values.
     stated = re.search(
         r"\*\*(\d+) base\*\*, \*\*(\d+) terminal\*\*,\s*\*\*(\d+) semantic\*\*,"
         r"\s*\*\*(\d+) accent fallbacks\*\*", text)
     if not stated:
         problem("README section 1 no longer states the size of each group; "
-                "the sentence naming '23 base', '27 terminal' and so on is "
+                "the sentence naming '27 base', '27 terminal' and so on is "
                 "what the tables are checked against")
     else:
         expected = dict(zip(["1.1", "1.2", "1.3", "1.4"],
