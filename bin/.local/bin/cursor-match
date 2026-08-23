@@ -46,8 +46,17 @@ BIN_DIR="$(dirname "$(readlink -f "$0")")"
 . "$BIN_DIR/../lib/desktop-lib.sh"
 
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cursor-match"
-MATCHER="$DATA_DIR/color_match.py"
 THEMES="$DATA_DIR/themes.json"
+
+# THE MATCHER IS NOT UNDER DATA_DIR, and it used to be. The CIEDE2000 arithmetic
+# in it is not about pointers at all, and `scheme-accent.py` -- which snaps the
+# wallpaper's colour onto the palette of the scheme in effect -- is a second
+# caller of the same maths, so the file moved to lib/ next to desktop-lib.sh and
+# both callers reach it from there. Its own header argues the move.
+#
+# Found the same way as the library above, through readlink and not $PATH: this
+# script runs from wallpaper-switch, which runs from a systemd timer.
+MATCHER="$BIN_DIR/../lib/color-match/color_match.py"
 PALETTE="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/colors.json"
 
 # desktop-tweak's store, read directly. See the note above the first read.
@@ -102,7 +111,8 @@ missing() {
 }
 
 [[ -r $PALETTE ]] || missing "no palette at $PALETTE -- run wallpaper-switch first"
-[[ -r $MATCHER && -r $THEMES ]] || missing "the matcher is not installed in $DATA_DIR"
+[[ -r $MATCHER ]] || missing "no colour matcher at $MATCHER"
+[[ -r $THEMES ]] || missing "the theme list is not installed in $DATA_DIR"
 command -v python3 >/dev/null || missing "python3 is not installed"
 
 # THE STORE ITSELF, NOT `desktop-tweak show`. The setting is read straight from
