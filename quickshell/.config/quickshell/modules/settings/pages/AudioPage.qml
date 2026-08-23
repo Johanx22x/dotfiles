@@ -352,7 +352,10 @@ SettingsPage {
             // Wide enough for the longest thing it ever says, so the slider
             // beside it keeps one length instead of breathing in and out as
             // the number crosses 100 or the row is muted.
-            width: Math.max(mutedMetrics.width, loudMetrics.width)
+            //
+            // MEASURED BY THE THING THAT DRAWS. See the two hidden Texts
+            // below for why they are not TextMetrics any more.
+            width: Math.max(mutedMetrics.implicitWidth, loudMetrics.implicitWidth)
             horizontalAlignment: Text.AlignRight
 
             text: line.muted ? mutedMetrics.text : `${Math.round(line.volume * 100)}%`
@@ -366,16 +369,47 @@ SettingsPage {
                 ColorAnimation { duration: Theme.animDuration }
             }
 
-            TextMetrics {
+            // HIDDEN Texts AND NOT TextMetrics, which is the same call
+            // themes/genesis/island/ReplayControl.qml makes and for the same
+            // measured reason: a TextMetrics and a Text do not agree about the
+            // width of one string in one font, and the Text is the one that is
+            // right, because the Text is the one that draws.
+            //
+            // THIS IS THE WORST OF THE FIVE PLACES THE SHELL DID IT, and the
+            // only one whose ink actually crossed its own edge at the SHIPPED
+            // font size rather than only at a larger one, so the numbers are
+            // worth writing down. "muted" in this face, bold, at fontSize 11:
+            //
+            //   TextMetrics.width  43.00      <- what was reserved
+            //   Text.implicitWidth 45.00      <- what is laid out
+            //   painted ink        44 px      <- counted from a grab
+            //
+            // The ink is the row that settles it, and it does not fit in 43.
+            // There is no elide here, so nothing clipped and nothing looked
+            // broken -- a Text with less width than it needs and AlignRight
+            // simply paints out past its own left edge. The word crossed into
+            // the gap the slider was anchored to leave, by a pixel, in exactly
+            // the state the pointer had just clicked into.
+            //
+            // 2 px AND NOT A ROUNDING ERROR: five characters of a monospaced
+            // face at 9.00 px of advance each is 45, and TextMetrics answers
+            // 43. It is a different measurement of the same font, not the same
+            // measurement rounded.
+            //
+            // `visible: false` and nothing else -- an invisible Text still
+            // lays its string out, and these two are in no layout to disturb.
+            Text {
                 id: mutedMetrics
 
+                visible: false
                 font: percent.font
                 text: "muted"
             }
 
-            TextMetrics {
+            Text {
                 id: loudMetrics
 
+                visible: false
                 font: percent.font
                 text: "150%"
             }
