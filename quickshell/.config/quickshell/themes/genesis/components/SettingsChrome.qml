@@ -1,6 +1,9 @@
 // How genesis draws the settings window's own surfaces. The public half -- the
-// rail's two numbers and the long note on why they are declared there rather
-// than read back off this file -- is modules/settings/SettingsChrome.qml.
+// rail's two numbers, where they come from, and the long note on why they are
+// published there rather than read back off this file -- is
+// modules/settings/SettingsChrome.qml. They are `Theme.railWidth` and
+// `Theme.railPadding` now, so genesis picks them in its own theme.json like any
+// other token; this file still only paints over the rectangle it is handed.
 //
 // TWO RECTANGLES AND NOTHING ELSE, in the order they were painted before the
 // split: the window's glass first, the rail's tint over it. Everything else in

@@ -400,6 +400,34 @@ Singleton {
     // otherwise come out as a sliver hanging off the bar.
     readonly property int popoutMinWidth: root.token("popoutMinWidth", 220)
 
+    // ---------------- Settings rail ----------------
+    // How wide the settings window's navigation sidebar is. NOT READ FROM HERE
+    // BY ANYTHING THAT DRAWS: modules/settings/SettingsChrome.qml publishes it
+    // as a property of its own and every one of the six things in
+    // modules/settings/Settings.qml anchored against the rail reads it off that
+    // facade, so the dependency stays in one file rather than in six. That
+    // facade's header has the whole account.
+    //
+    // 210 is what the window has always been, and it is a number this shell
+    // chose rather than one it inherited: a rail is as wide as its longest
+    // label plus its glyph, and "Notifications" at 11pt DemiBold with a Nerd
+    // Font pictogram in front of it is what set it. A theme whose type or
+    // whose idea of a sidebar is different needs its own number -- Windows 11
+    // ships NavigationView at OpenPaneLength 320 and its Settings app does not
+    // override it, and no amount of drawing gets there from 210.
+    readonly property int railWidth: root.token("railWidth", 210)
+
+    // How much that rail insets its own contents by, on every side.
+    //
+    // TEN IS ALSO THE SCROLLBAR'S CHANNEL, which is the part worth knowing
+    // before moving it. The rail's entries stop at the padding and the bar
+    // lives in the strip that leaves: four pixels of bar centred in ten leaves
+    // three on each side, and tests/scrollbar-target.py asserts that at 210 and
+    // 10 the entries own up to x=199 and the bar answers from 200. A theme that
+    // takes this below the bar's own width has no channel left, and the press
+    // target goes back over the entries -- the bug that bench exists for.
+    readonly property int railPadding: root.token("railPadding", 10)
+
     // ---------------- Type ----------------
     // POINTS, not pixels, and that is the whole point: kitty.conf says
     // `font_size 11.0`, and kitty measures in points. Sizing the bar in

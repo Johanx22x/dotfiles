@@ -118,8 +118,9 @@ FloatingWindow {
     // THE WINDOW'S OWN SURFACES, and the two numbers the rail is built on.
     // What it draws -- the glass under everything and the tint down the rail
     // -- is the theme's; `railWidth` and `railPadding` are read back out of it
-    // below, and its header says why they are declared on that side rather
-    // than measured off whatever the theme drew.
+    // below, and its header says why they are published on that side rather
+    // than measured off whatever the theme drew, and why they are the theme's
+    // tokens rather than this file's literals.
     //
     // FIRST CHILD, as the glass rectangle it replaces was, so nothing about
     // what paints over what has changed.
@@ -152,18 +153,25 @@ FloatingWindow {
             anchors.bottom: parent.bottom
 
             // BOTH NUMBERS COME OUT OF THE CHROME, which is the one place
-            // they are written. The panel the theme paints over this
-            // rectangle is drawn from the same `railWidth`, so the tint and
-            // the rail cannot end in different places; the padding is what
+            // this window reads them from. The panel the theme paints over
+            // this rectangle is drawn from the same `railWidth`, so the tint
+            // and the rail cannot end in different places; the padding is what
             // leaves the empty strip the scrollbar below lives in, and
             // tests/scrollbar-target.py asserts on the three pixels it takes
-            // out of it. See SettingsChrome.qml for why a theme does not get
-            // to move either of them.
+            // out of it, at genesis's numbers.
+            //
+            // A THEME DOES GET TO MOVE THEM NOW, and this file needs no edit
+            // for that: the chrome reads `Theme.railWidth` and
+            // `Theme.railPadding`, two tokens out of themes/<theme>/theme.json
+            // whose fallbacks are the 210 and 10 this window has always had.
+            // Everything below is anchored against the chrome and follows.
+            // SettingsChrome.qml's header has the account, including what the
+            // old "a theme cannot widen the rail" argument got right.
             // AND THIS ITEM DRAWS NOTHING AT ALL NOW. The panel that used to
             // be its first child is one of the two rectangles the chrome
             // paints, underneath everything here, over exactly this
             // rectangle -- which is what reading `railWidth` from there
-            // rather than writing 210 twice is for.
+            // rather than writing the number twice is for.
             readonly property int padding: chrome.railPadding
 
             width: chrome.railWidth
