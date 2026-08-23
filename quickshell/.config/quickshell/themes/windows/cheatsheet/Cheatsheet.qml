@@ -85,11 +85,29 @@ PanelWindow {
         return root.keyGutter + root.rowGap + Math.ceil(widest);
     }
 
+    // THE COLUMN IS ALSO AT LEAST ITS OWN HEADER, and this was missing.
+    //
+    // `naturalColumnWidth` adds up the CHORDS AND DESCRIPTIONS and nothing
+    // else, so a sheet with no binds in it at all measures `keyGutter +
+    // rowGap` -- a card about 195px wide with "Keyboard shortcuts" running
+    // sixty pixels out past its right edge and "Esc to close" printed on the
+    // wallpaper. Photographed exactly like that in a sandbox where no
+    // compositor config was there to parse, which is the state a first run on
+    // a new machine is also in.
+    //
+    // The comment on the header row already knew the two widths could
+    // disagree; it protected the case where the header is NARROWER, by giving
+    // the row `contentWidth` instead of its own implicit width. This is the
+    // other direction, and it belongs here rather than there: a header that
+    // fits is a property of the column, not of the row.
+    readonly property int naturalWidth: Math.max(root.naturalColumnWidth,
+                                                 root.headerWidth)
+
     // ...capped by the published page maximum and by what there actually is. On
     // a screen too narrow for one full column the descriptions elide, which is
     // the honest outcome: there is no width at which they both fit and stay
     // this size.
-    readonly property int contentWidth: Math.min(root.naturalColumnWidth,
+    readonly property int contentWidth: Math.min(root.naturalWidth,
                                                  Fluent.pageMaxWidth,
                                                  root.contentRoom)
 
@@ -106,6 +124,46 @@ PanelWindow {
         font.family: Theme.fontFamily
         font.pointSize: Fluent.bodySize
         font.weight: Fluent.normalWeight
+    }
+
+    // THE HEADER'S TWO FACES, so the column can be floored on the header it has
+    // to hold. See headerWidth below for what went wrong without this.
+    //
+    // MEASURED HERE AND NOT READ OFF pageTitle.implicitWidth, even though the
+    // Text is right there and knows its own width. That item's parent is bound
+    // to `contentWidth`, so reading back out of it to compute `contentWidth` is
+    // a loop through the layout -- it happens to be one Qt can resolve today
+    // because the title neither wraps nor elides, and it stops being one the
+    // day somebody gives it a maximumLineCount.
+    FontMetrics {
+        id: titleMetrics
+
+        font.family: Theme.fontFamily
+        font.pointSize: Fluent.titleSize
+        font.weight: Fluent.strongWeight
+    }
+
+    FontMetrics {
+        id: hintMetrics
+
+        font.family: Theme.fontFamily
+        font.pointSize: Fluent.captionSize
+        font.weight: Fluent.normalWeight
+    }
+
+    // The header row at its natural size: the page title, the gap, and the
+    // "Esc to close" that sits hard right of it. Both strings are literals in
+    // the header below and literals here, which is a duplication worth naming
+    // -- the alternative was to hoist them into properties and thread them
+    // through, for two strings that have not changed since the page was
+    // written.
+    readonly property int headerWidth: {
+        if (titleMetrics.font.family === "" || titleMetrics.font.pointSize <= 0)
+            return 0;
+
+        return Math.ceil(titleMetrics.advanceWidth("Keyboard shortcuts"))
+            + root.rowGap
+            + Math.ceil(hintMetrics.advanceWidth("Esc to close"));
     }
 
     // The chords sit in a fixed-width gutter, flush with its RIGHT edge, so the

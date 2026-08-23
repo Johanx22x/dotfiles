@@ -68,9 +68,18 @@ Column {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 6
 
+            // BODY SIZE AND NOT CAPTION, which is what it was. MEASURED off
+            // search-flyout-results.jpg rather than reasoned from "a heading
+            // is small and dim": the ink height of "Best match" is 16 rows and
+            // the ink height of the row title under it is 16-17, so the header
+            // is the SAME size as the results it heads and carries its weight
+            // in the semibold, not in being a different size. The count beside
+            // it measures 13 for a digit against that 16, which is the same
+            // face's cap height -- so it is the same size too, and only the
+            // colour separates it.
             text: root.header
             font.family: Theme.fontFamily
-            font.pointSize: Fluent.captionSize
+            font.pointSize: Fluent.bodySize
             font.weight: Fluent.strongWeight
             color: Theme.textOnSurface
         }
@@ -85,7 +94,7 @@ Column {
             visible: root.headerCount > 0
             text: root.headerCount
             font.family: Theme.fontFamily
-            font.pointSize: Fluent.captionSize
+            font.pointSize: Fluent.bodySize
             color: Theme.outline
         }
 
@@ -146,6 +155,8 @@ Column {
             height: width
 
             Image {
+                id: rowIcon
+
                 anchors.fill: parent
                 source: root.iconSource
                 visible: !root.command && status === Image.Ready
@@ -162,6 +173,33 @@ Column {
                 font.family: Theme.fontFamily
                 font.pointSize: Fluent.bodySize
                 color: root.current ? Theme.primary : Theme.textOnSurfaceVariant
+            }
+
+            // THE SAME PLATE THE PREVIEW PANE DRAWS, and it was missing here.
+            // The Image above shows only when it is Ready, so a desktop file
+            // that names no icon -- or names one this icon theme does not have
+            // -- left a 24px hole with the label indented past it. Six rows in
+            // one photograph of the "All apps" list: Avahi's three browsers,
+            // Advanced Network Configuration and two more.
+            //
+            // Null OR Error, not `!== Ready`. Loading is a state an
+            // asynchronous Image passes THROUGH, and gating on it would flash
+            // a letter plate under every icon on the way in.
+            Rectangle {
+                anchors.fill: parent
+                visible: !root.command
+                    && (rowIcon.status === Image.Null || rowIcon.status === Image.Error)
+                radius: Fluent.controlRadius
+                color: Theme.surfaceContainerHigh
+
+                Text {
+                    anchors.centerIn: parent
+                    text: (root.title || "?").charAt(0).toUpperCase()
+                    font.family: Theme.fontFamily
+                    font.pointSize: Fluent.captionSize
+                    font.weight: Fluent.strongWeight
+                    color: Theme.textOnSurfaceVariant
+                }
             }
         }
 

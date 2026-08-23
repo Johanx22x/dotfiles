@@ -66,6 +66,8 @@ Rectangle {
             height: Fluent.previewIcon
 
             Image {
+                id: heroImage
+
                 anchors.fill: parent
                 source: root.iconSource
                 visible: !root.command && status === Image.Ready
@@ -88,9 +90,17 @@ Rectangle {
             // enough among terminal applications that the hero cannot be left
             // as an empty square. A rounded plate with the first letter, which
             // is what Windows does for a file type it has no icon for.
+            //
+            // OFF THE IMAGE'S STATUS AND NOT OFF `iconSource === ""`, which is
+            // what it used to test. The two are not the same set: a desktop
+            // file that NAMES an icon this icon theme does not have gives a
+            // non-empty source that never loads, and that case showed neither
+            // the image nor the plate. Error covers it; Null covers the empty
+            // name this originally handled.
             Rectangle {
                 anchors.fill: parent
-                visible: !root.command && root.iconSource === ""
+                visible: !root.command
+                    && (heroImage.status === Image.Null || heroImage.status === Image.Error)
                 radius: Fluent.controlRadius
                 color: Theme.surfaceContainerHigh
 

@@ -425,8 +425,20 @@ PanelWindow {
 
             model: root.commandMode ? root.commandResults : root.results
 
+            // ANCHORED, because it was not and it showed. Declared bare, the
+            // bar takes the ListView's origin -- x 0, y 0 -- and draws its
+            // handle down the LEFT edge beside the first section header, where
+            // it reads as a stray accent rule against "All apps" rather than
+            // as a scrollbar. It is a ListView, so `parent` is the view item
+            // and not the content that moves; see the placement note in
+            // components/ScrollBar.qml for why that distinction decides
+            // whether a bar travels with the scroll it reports.
             ScrollBar {
                 view: list
+
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
             }
 
             delegate: ResultRow {
