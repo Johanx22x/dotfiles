@@ -1604,20 +1604,28 @@ mapfile -t ACCENT_ARGS <<< "$ACCENT_ARGS_TEXT"
 # call site would be a flag with nothing to apply to.
 #
 # --import-json MERGES THE SCHEME INTO THE PALETTE MATUGEN JUST DERIVED, so the
-# 17 Material 3 roles are the wallpaper's -- by way of the scheme colour
-# `accent-args` snapped it to -- and the 74 named in schemes/README.md come
-# from the file, and every template sees all of them in one render. It is one
-# process rather than two because it can be: dumping the palette with
+# 74 roles named in schemes/README.md come from the file and every template
+# sees them alongside the Material 3 ones in a single render. It is one process
+# rather than two because it can be: dumping the palette with
 # `-j hex --dry-run`, merging it with jq and rendering with `matugen json` was
 # measured against all 56 stills in the collection and produced byte-identical
 # output, for an extra process and an extra temporary file.
+#
+# THE M3 ACCENT ROLES ARE NO LONGER MATUGEN'S TO DECIDE, and this comment used
+# to say they were. Nine of the seventeen -- every one a template actually
+# reads -- arrive already made, in the `--import-json-string` that
+# `accent-args` builds, because matugen's own derivation kept only the seed's
+# hue and replaced its lightness and chroma with Material 3's. Which nine and
+# why is argued in scheme-accent.py; nothing at this call site changed for it,
+# since the words that open the render were always that script's to choose.
 #
 # THE IMPORTED FILE WINS ON A NAME CLASH -- measured -- which is why every role
 # in a scheme carries a `ui_` / `term_` / `sem_` / `fb_` prefix and why nothing
 # in one may be called `primary`. The prefixes are what let the two halves share
 # one render without either overwriting the other: the scheme file only ever
-# carries prefixed names, and the roles matugen derives are the unprefixed M3
-# ones.
+# carries prefixed names. That same rule is what lets `accent-args` overrule
+# matugen -- it imports the UNPREFIXED names on purpose, which is exactly the
+# collision the prefixes exist to prevent a scheme from causing by accident.
 #
 # Still `die`, and now it covers one more thing. A missing scheme file, one that
 # is not valid JSON, one of the wrong shape and one missing a role a template
