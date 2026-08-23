@@ -21,6 +21,10 @@
     "_popout": "The Quick Settings flyout. OURS, measured from screenshots; Microsoft publishes nothing for it.",
     "popoutMinWidth": 340,
 
+    "_rail": "NavigationView ships OpenPaneLength = 320.0 and the Settings app does not override it. 16 is the pane's own horizontal inset, NavigationViewAutoSuggestBoxMargin. Both of these are tokens only because this theme asked for them: the facade used to declare 210 and 10 on itself.",
+    "railWidth": 320,
+    "railPadding": 16,
+
     "_type": "600 is Semibold. Windows 11's typography rules say Semibold for emphasis and never Bold, so this is the heaviest weight the theme ever asks for.",
     "fontWeight": 600,
     "imageSize": 20,
