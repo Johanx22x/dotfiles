@@ -1052,6 +1052,19 @@ window-rule {
     open-floating true
 }
 
+// Steam notification toasts. On X11 Steam places this window at the
+// bottom-right corner itself, but Wayland clients cannot position their own
+// windows: xwayland-satellite maps the toast as a regular toplevel and niri
+// centers it, which is how notifications ended up in the middle of the
+// screen. Pin it back to the corner, and keep it from stealing focus.
+// The title is notificationtoasts_<n>_desktop.
+window-rule {
+    match app-id=r#"^steam$"# title=r#"^notificationtoasts"#
+    open-floating true
+    open-focused false
+    default-floating-position x=16 y=16 relative-to="bottom-right"
+}
+
 // The capture card (PS5 / Switch 2 through the NZXT Signal HD60). The
 // `capture-card` script launches mpv with --wayland-app-id=capture-card, which
 // is how a rule can target it without affecting the rest of mpv.
