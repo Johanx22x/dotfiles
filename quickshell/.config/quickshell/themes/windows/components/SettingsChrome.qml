@@ -50,15 +50,20 @@ Item {
 
     required property SettingsChrome row
 
-    // Theme.glass() and not Fluent.acrylic(): this is a WINDOW, and a window's
-    // backdrop in Windows 11 is mica, which is the material that carries the
-    // wallpaper's colour. The flyouts that open on top of things are the other
-    // material and use the other function.
+    // SOLID, ON TRIAL -- Johan's request, 2026-08-23: "haz el panel de
+    // settings NO transparente en el tema windows. Quiero ver como queda."
+    // This drew Theme.glass(Theme.surface) before, and the reasoning that put
+    // it there still stands written: this is a WINDOW, a window's backdrop in
+    // Windows 11 is mica, and mica is the material that carries the
+    // wallpaper's colour. A solid surface is what Mica falls back to when
+    // transparency is off system-wide, so this is not un-Windows -- it is
+    // Windows with the transparency toggle off, for this one window. If the
+    // trial does not take, the old line is one edit away.
     Rectangle {
         anchors.fill: parent
 
         radius: Fluent.overlayRadius
-        color: Theme.glass(Theme.surface)
+        color: Theme.surface
     }
 
     // ---------------- The caption ----------------
