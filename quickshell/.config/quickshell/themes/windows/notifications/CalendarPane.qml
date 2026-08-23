@@ -119,7 +119,12 @@ Column {
         ChevronButton {
             anchors.right: parent.right
             anchors.rightMargin: root.inset
-            anchors.top: parent.top
+            // On the CLOCK's centre line, not the panel's top edge. When the
+            // clock gained its top inset this stayed anchored to the corner
+            // and sat visibly higher than the row it collapses -- Johan's
+            // "sigue descuadrado", and the reference has it level with the
+            // time.
+            anchors.verticalCenter: time.verticalCenter
 
             content: Icons.chevronDown
             turn: root.monthVisible ? 0 : 180
