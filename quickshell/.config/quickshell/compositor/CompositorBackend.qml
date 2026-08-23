@@ -339,6 +339,78 @@ QtObject {
         return names;
     }
 
+    // ---- The window list, which is what a taskbar is a list OF -------------
+    //
+    // ONE ENTRY PER APPLICATION, NOT PER WINDOW, AND THAT IS WINDOWS' OWN
+    // DEFAULT. "Combine taskbar buttons" ships set to Always: three Explorer
+    // windows are one button, and the running indicator underneath does not
+    // change to say there are three. That was checked against a photograph
+    // rather than assumed -- the indicator has exactly two shapes, a small dim
+    // dot for running and a wide accent bar for focused, and no third.
+    //
+    // Grouping here rather than in a theme is the same call as everything else
+    // in this file: it is a fact about the window list, every theme that draws
+    // one wants the same answer, and a theme computing it would be a theme
+    // deciding what is running.
+    //
+    // WHAT IS LEFT OUT. Windows with a `parent` are dialogs and tool windows;
+    // Windows hangs them off the parent's button and so do we, by not giving
+    // them one. Minimised windows KEEP their button -- that is the button you
+    // press to get them back -- so `minimized` is published rather than
+    // filtered on.
+    //
+    // `screens` IS A LIST because a window can straddle two monitors, and this
+    // keeps the whole list rather than picking one: a bar filters by its own
+    // screen, and a window overlapping both should appear on both, which is
+    // what Windows does.
+    //
+    // NOT readonly, for the same reason fullscreenOutputs is not: a backend
+    // whose IPC knows better -- z-order, say, which this protocol does not
+    // carry at all -- may replace it.
+    property var windows: {
+        const byApp = {};
+        const order = [];
+        for (const tl of ToplevelManager.toplevels.values) {
+            if (!tl || tl.parent)
+                continue;
+            const id = tl.appId ?? "";
+            if (!(id in byApp)) {
+                byApp[id] = {
+                    appId: id,
+                    title: tl.title ?? "",
+                    activated: false,
+                    minimized: true,
+                    screens: [],
+                    toplevels: []
+                };
+                order.push(id);
+            }
+            const e = byApp[id];
+            e.toplevels.push(tl);
+            // The title shown is the FOCUSED window's where there is one, so a
+            // grouped button names the window you would get back.
+            if (tl.activated === true) {
+                e.activated = true;
+                e.title = tl.title ?? "";
+            }
+            // A group is minimised only when every window in it is.
+            if (tl.minimized !== true)
+                e.minimized = false;
+            for (const sc of (tl.screens ?? [])) {
+                if (sc?.name && !e.screens.includes(sc.name))
+                    e.screens.push(sc.name);
+            }
+        }
+        return order.map(id => byApp[id]);
+    }
+
+    // The window list for one monitor, which is the question a bar actually
+    // asks. Kept beside hasFullscreenOn below for the same reason: a caller
+    // should not have to know that `screens` is a list.
+    function windowsOn(outputName: string): var {
+        return windows.filter(w => w.screens.includes(outputName));
+    }
+
     // Is something fullscreen AND ON SCREEN on this monitor? Asked by every
     // surface that is welded to the bar, since a fullscreen window covers the
     // bar and leaves the weld joining a panel to nothing.

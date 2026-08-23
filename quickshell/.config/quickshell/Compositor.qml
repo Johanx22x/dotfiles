@@ -58,6 +58,12 @@ Singleton {
     readonly property string name: backend?.name ?? "unknown"
     readonly property var workspaces: backend?.workspaces ?? []
     readonly property var activeWindow: backend?.activeWindow ?? null
+
+    // The open windows, grouped one entry per application the way Windows'
+    // own "combine taskbar buttons" default does. Each entry carries appId,
+    // title, activated, minimized, the screens it is on, and the toplevels
+    // behind it -- which is what a task button needs to raise one.
+    readonly property var windows: backend?.windows ?? []
     readonly property string focusedOutput: backend?.focusedOutput ?? ""
     readonly property bool casting: backend?.casting ?? false
     readonly property int captureCount: backend?.captureCount ?? 0
@@ -89,6 +95,13 @@ Singleton {
     // why that difference is the whole point of this layer.
     function can(feature: string): bool {
         return backend?.can(feature) ?? false;
+    }
+
+    // The window list for one monitor. A bar asks this; nobody should have to
+    // know that a window's `screens` is a list because a window can straddle
+    // two of them.
+    function windowsOn(outputName: string): var {
+        return backend?.windowsOn(outputName) ?? [];
     }
 
     function workspacesOn(outputName: string): var {
