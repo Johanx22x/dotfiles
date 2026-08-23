@@ -24,6 +24,13 @@
 // carries them because the shell has them is a theme wearing another theme's
 // inventory, which is exactly how the first attempt went wrong.
 
+// Bound, so the four Components below may read the ids around them --
+// barPopout, trayItemMenu, root -- as checked names rather than as runtime
+// context lookups qmllint flags as [unqualified]. The cost is that every
+// delegate in this file must declare its model data with `required property`,
+// which the task-button Repeater already does.
+pragma ComponentBehavior: Bound
+
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
@@ -31,6 +38,7 @@ import qs
 import qs.components
 import qs.modules
 import qs.modules.settings
+import qs.themes.windows
 // The notification centre lives next door in notifications/, because it is
 // that surface's content and not the bar's. A directory import and NOT the
 // module form: `import qs.themes.windows` is the rule for reaching THE THEME'S
@@ -215,6 +223,79 @@ PanelWindow {
 
         TrayOverflow {
             onDismissRequested: barPopout.close()
+
+            // A right-click on an icon in the flyout: swap the popout's
+            // content over to that icon's menu. openAt and NOT toggleAt --
+            // the popout is already open showing the flyout, and this is a
+            // swap of what one open window shows, not a second click on the
+            // widget that owns it. toggleAt would see the popout open and
+            // close it instead.
+            //
+            // The x the flyout hands over is in the POPOUT WINDOW's
+            // coordinates -- see the note in TrayOverflow.qml -- and openAt
+            // wants a screen x, so the window's own left margin is added
+            // back here, read BEFORE openAt moves it. That is what parks the
+            // menu under the icon that was clicked rather than under the
+            // chevron.
+            onMenuRequested: (item, windowX) => {
+                root.trayMenuHandle = item.menu;
+                barPopout.openAt(root.popoutWindow.margins.left + windowX, trayItemMenu);
+            }
+        }
+    }
+
+    // Which tray item's menu the popout is showing. Held on the bar rather
+    // than passed into the component because a Component cannot take
+    // arguments; the view reads it when it is built. The same arrangement,
+    // for the same reason, as menuHandle in genesis's bar/Tray.qml.
+    property var trayMenuHandle: null
+
+    // barPopout AGAIN, UNTYPED, and only for the margins read above. The
+    // window's `margins` group is a Margins, a type qmllint cannot resolve --
+    // the same [unresolved-type] the launcher already budgets one of -- so
+    // reading it off the typed id would spend a warning on a name that is
+    // not wrong. Through a var the read is unchecked instead, which is the
+    // honest price: it is one property, one line from the id it aliases, and
+    // genesis's tray hands its whole popout around as var for the same reason.
+    readonly property var popoutWindow: barPopout
+
+    Component {
+        id: trayItemMenu
+
+        // A tray icon's own context menu, rendered by the host's MenuView --
+        // which draws genesis's menu rows, and that is ACCEPTED for now: see
+        // "Tray context menus stay genesis's" in this theme's README, and the
+        // long note in components/MenuView.qml on why that file has no theme
+        // half to restyle.
+        //
+        // The GROUND is this theme's, though, and it cannot be skipped: the
+        // windows Popout deliberately paints no panel of its own (see
+        // themes/windows/components/Popout.qml), so a bare MenuView here
+        // would print menu rows straight onto the wallpaper -- the exact bug
+        // the hidden-icons flyout shipped with once. Same material as every
+        // other flyout: acrylic over surface, the overlay radius, one pixel
+        // of outlineVariant.
+        Item {
+            implicitWidth: menuView.implicitWidth + Fluent.quickPadding * 2
+            implicitHeight: menuView.implicitHeight + Fluent.quickPadding * 2
+
+            Rectangle {
+                anchors.fill: parent
+                radius: Fluent.overlayRadius
+                antialiasing: true
+                color: Fluent.acrylic(Theme.surface)
+                border.width: 1
+                border.color: Theme.outlineVariant
+            }
+
+            MenuView {
+                id: menuView
+
+                x: Fluent.quickPadding
+                y: Fluent.quickPadding
+                handle: root.trayMenuHandle
+                onRequestClose: barPopout.close()
+            }
         }
     }
 

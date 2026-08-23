@@ -5,8 +5,16 @@
 // layout, then the overflow chevron. Windows calls the whole right-hand end
 // "the taskbar corner" rather than a system tray, and the naming matters here
 // because it is not a strip of separate buttons: network, volume and battery
-// share one target that opens Quick Settings, and only the third-party icons
-// beside them are individually clickable.
+// share one target that opens Quick Settings.
+//
+// THE THIRD-PARTY ICONS ARE NOT HERE, and that is Windows' own default being
+// copied. Out of the box Windows hides every application icon behind the
+// chevron and promotes one onto the corner only when the user drags it out;
+// this shell has no drag, so it draws the out-of-box arrangement and the
+// whole SNI set lives in the hidden-icons flyout (TrayOverflow.qml). The
+// first pass drew the icons here AND in the flyout, which put Discord, Steam
+// and the rest on screen twice -- a chevron that opens a copy of what is
+// already beside it is not an overflow, it is a duplicate.
 //
 // THE KEYBOARD LAYOUT IS TWO STACKED LINES -- "ENG" over "IN" -- which is one
 // of those details that is invisible until you see it and then cannot be
@@ -83,9 +91,10 @@ Row {
         }
     }
 
-    // The overflow chevron. Windows keeps the icons it is not showing behind
-    // it; we have no overflow, so it is what opens the tray's own popout
-    // instead -- the same gesture reaching the same set.
+    // The overflow chevron, and it is a real overflow now: every tray icon
+    // is behind it and none beside it, so the flyout it opens is a reveal
+    // rather than a second route. Gone when the tray is empty, which is what
+    // Windows does -- no icons means no chevron, not a chevron over nothing.
     CornerItem {
         visible: root.showTray && SystemTray.items.values.length > 0
 
@@ -103,30 +112,6 @@ Row {
         }
 
         onActivated: root.overflowRequested()
-    }
-
-    // The third-party icons, each its own target, at the size Windows draws
-    // every symbol.
-    Repeater {
-        model: root.showTray ? SystemTray.items : null
-
-        CornerItem {
-            id: trayItem
-
-            required property SystemTrayItem modelData
-
-            content: Image {
-                width: Fluent.trayIcon
-                height: Fluent.trayIcon
-                sourceSize.width: width
-                sourceSize.height: height
-                fillMode: Image.PreserveAspectFit
-                asynchronous: true
-                source: Icons.resolve(trayItem.modelData?.icon ?? "")
-            }
-
-            onActivated: trayItem.modelData?.activate()
-        }
     }
 
     // The keyboard layout, when there is more than one to be in.

@@ -11,12 +11,24 @@
 // shows and because it keeps the flyout roughly as wide as the corner it
 // hangs under.
 //
-// WE HAVE NO REAL OVERFLOW, and that is worth saying rather than pretending.
-// Windows hides icons past a threshold; this shell shows them all in the
-// corner. So the chevron opens the same set the corner is already displaying,
-// which makes it a second route rather than a reveal. The alternative was to
-// draw a chevron that opens an empty panel, or no chevron at all and a corner
-// that is visibly short a control the real one has.
+// EVERY SNI ICON LIVES HERE AND ONLY HERE. Out of the box Windows hides all
+// application icons behind the chevron -- promotion onto the corner is a
+// per-icon user setting this shell does not have -- so hiding the whole set
+// is the default being copied, not a shortfall. An earlier version of this
+// file said the opposite: the corner drew every icon and the chevron opened
+// the same set again, a second route dressed up as a reveal, which put
+// Discord, Steam and the rest on screen twice. The fix was to stop the
+// corner promoting, not to stop the chevron.
+//
+// TWO CLICKS PER ICON, the same pair genesis's tray answers. Left activates
+// the item and closes the flyout; right asks the bar to swap the popout over
+// to the icon's own D-Bus menu -- an item that is onlyMenu treats left as
+// right, and one with no menu at all answers right with nothing. The menu
+// Component lives in Bar.qml, because the popout it swaps is the bar's, and
+// the signal carries the ITEM rather than its menu handle: `.menu` is a
+// DBusMenuHandle, a type qmllint cannot see, and reading it off the typed
+// delegate here is a warning that reading it off a var parameter in Bar.qml
+// is not.
 
 import QtQuick
 import Quickshell.Services.SystemTray
@@ -103,12 +115,41 @@ Item {
                     hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
 
+                    // Right-click used to call modelData.display(), which
+                    // wants a QsWindow and was being handed this Item: it did
+                    // nothing, silently, and then dismissRequested() closed
+                    // the flyout -- which from a chair is exactly what a
+                    // broken right-click looks like. The menu now goes the
+                    // way genesis's tray menus go: through the bar's popout
+                    // and the host's MenuView, off the menu HANDLE the item
+                    // publishes rather than a window it wants to own.
                     onClicked: mouse => {
-                        if (mouse.button === Qt.RightButton)
-                            cell.modelData?.display(root, cell.x, cell.y);
-                        else
-                            cell.modelData?.activate();
-                        root.dismissRequested();
+                        const item = cell.modelData;
+                        if (!item)
+                            return;
+
+                        const wantsMenu = mouse.button === Qt.RightButton || item.onlyMenu;
+                        if (!wantsMenu) {
+                            item.activate();
+                            root.dismissRequested();
+                            return;
+                        }
+
+                        // Some items expose no menu at all. Genesis answers
+                        // that with nothing, and so does this -- the flyout
+                        // stays up, since nothing happened.
+                        if (!item.hasMenu)
+                            return;
+
+                        // WINDOW coordinates, deliberately. Genesis maps its
+                        // icon to null and uses the result as a screen x
+                        // because its tray sits on the bar, which spans the
+                        // screen from x = 0. This grid sits inside the
+                        // popout's own window, which starts wherever the
+                        // popout was clamped to -- so the bar adds the
+                        // popout's left margin back before handing the number
+                        // to openAt(). See the handler in Bar.qml.
+                        root.menuRequested(item, cell.mapToItem(null, cell.width / 2, 0).x);
                     }
                 }
             }
@@ -128,4 +169,10 @@ Item {
     }
 
     signal dismissRequested
+
+    // A request to show one icon's context menu: the item is the
+    // SystemTrayItem itself (the bar takes `.menu` off it -- see the header),
+    // the x is the clicked cell's centre in THIS WINDOW's coordinates -- see
+    // the note in the click handler.
+    signal menuRequested(var item, real windowX)
 }

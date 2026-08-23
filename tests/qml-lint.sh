@@ -332,7 +332,9 @@ declare -A BASELINE=(
     # instantiates it itself; nothing in this repository can change that.
     [windows:uncreatable-type]=6
 
-    # FIFTY-FOUR DELEGATE READS AND ONE PanelWindow SCOPE.
+    # FIFTY-ONE DELEGATE READS AND ONE PanelWindow SCOPE. Three of the
+    # original fifty-four were Bar.qml's Components reading outer ids, and
+    # `pragma ComponentBehavior: Bound` turned those into checked names.
     #
     # The delegate shape is genesis's too, and it is worth stating exactly
     # because 55 against 130 is the only number here that could be mistaken for
@@ -356,7 +358,7 @@ declare -A BASELINE=(
     # a block does not help. That was MEASURED after the comment at the site
     # claimed it did: both forms produce the same two warnings at the same
     # line, because what cannot be resolved is `margins` itself.
-    [windows:unqualified]=55
+    [windows:unqualified]=52
 
     # FOUR READS THROUGH THE PICKER LOADER, all of them launcher/Launcher.qml
     # calling `move()` and `activate()` on a `Loader.item` typed QObject. The
