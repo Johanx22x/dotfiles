@@ -328,7 +328,7 @@ named for.
 | `term_cursor` | `#c0caf5` | `#f5e0dc` | `#ebdbb2` | Cursor block colour (fallback; matugen overrides with primary). | kitty.conf:110 |
 | `term_cursor_text` | `#1a1b26` | `#1e1e2e` | `#282828` | The character under the cursor block. | kitty.conf:111 |
 | `term_selection_bg` | `#283457` | `#585b70` | `#504945` | Selection fill (fallback; matugen overrides with primary). | kitty.conf:108 |
-| `term_selection_fg` | `#c0caf5` | `#1e1e2e` | `#282828` | Text inside the selection, over term_selection_bg. | **nothing today** -- `kitty-scheme.conf:41` paints `selection_foreground` from `ui_on_accent` instead; see the note under this table |
+| `term_selection_fg` | `#c0caf5` | `#1e1e2e` | `#282828` | Text inside the selection, over term_selection_bg. | kitty-scheme.conf:50 |
 | `term_url` | `#73daca` | `#94e2d5` | `#8ec07c` | Underlined URL (fallback; matugen overrides with tertiary). | kitty.conf:113 |
 | `term_border_inactive` | `#292e42` | `#45475a` | `#504945` | Border of an unfocused kitty split. | kitty.conf:116 (no longer = ui_border_dim: upstream publishes `inactive_border_color #292e42`) |
 | `term_tab_bg` | `#16161e` | `#181825` | `#1d2021` | Tab bar background and inactive tab background. | kitty-colors:22, kitty.conf:122,123 |
@@ -361,15 +361,18 @@ the desktop's history and not about the palette. `color0`/`color8` and
 `color7`/`color15` are the exception: those four are `black`, `terminal_black`,
 `fg_dark` and `fg`, four separate palette entries rather than a brightened pair.
 
-**`term_selection_fg` has no reader**, because `kitty-scheme.conf:41` paints
-`selection_foreground` from `ui_on_accent`. That was right while the role
-tracked the on-accent colour; it is not right now that the role carries
-upstream's own `selection_foreground` (`#c0caf5`, light text on the dark
-`bg_visual` fill). The pair the template actually renders — `ui_on_accent`
-`#1a1b26` on `term_selection_bg` `#283457` — grades 1.40:1, and only never
-shows because `kitty-colors.conf` overrides both halves with the wallpaper
-accent. Pointing that line at `term_selection_fg` would render 7.57:1 and is a
-one-word change in a file this section does not own.
+**`term_selection_fg` got its reader**, and the one word it took is worth
+keeping written down. `kitty-scheme.conf` painted `selection_foreground` from
+`ui_on_accent`, which was right while that role tracked the on-accent colour
+and stopped being right once `term_selection_fg` carried upstream's own
+`selection_foreground` (`#c0caf5`, light text on the dark `bg_visual` fill).
+The pair the template rendered — `ui_on_accent` `#1a1b26` on
+`term_selection_bg` `#283457` — grades 1.40:1; the pair it renders now grades
+7.57:1. It never showed on a working desktop, because `kitty-colors.conf`
+overrides both halves with the wallpaper accent, which is exactly why a
+measurement rather than a look is what found it. `ui_on_accent` keeps its other
+reader in that file (`:62`, the active tab's label over an `fb_primary` fill:
+6.79:1 Tokyo Night, 7.79:1 Catppuccin, 5.48:1 Gruvbox).
 
 ### 1.3 semantic
 
@@ -390,9 +393,10 @@ failed" different colours, which nothing currently wants.
 
 ### 1.4 accent fallback — the 17 Material 3 roles, pre-matugen
 
-These are only read on a fresh clone or a malformed `colors.json`
-(`Theme.qml:283-292`). They still belong to the scheme: a Gruvbox desktop whose
-shell boots Tokyo-Night-blue for a second is a visible defect.
+They were written as the shell's fallback for a fresh clone or a malformed
+`colors.json`, and that is still what the `meaning` column below describes --
+but it is no longer all they are, and it is not how the shell reads them. See
+the two paragraphs under the table.
 
 | role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | meaning | consumed at |
 |---|---|---|---|---|---|
@@ -414,16 +418,32 @@ shell boots Tokyo-Night-blue for a second is a visible defect.
 | `fb_tertiary` | `#73daca` | `#f5c2e7` | `#fe8019` | M3 tertiary fallback, used only until matugen writes colors.json. | Theme.qml:64 |
 | `fb_on_tertiary` | `#1a1b26` | `#1e1e2e` | `#282828` | M3 on_tertiary fallback, used only until matugen writes colors.json. | Theme.qml:65 |
 
-**Sixteen of these seventeen are consumed by nothing, and the "consumed at"
-column above is aspirational.** `Theme.qml:101-120` writes its fallbacks as
-literals — `palette.surface_container_high ?? "#343a52"`, `palette.tertiary ??
-"#e0bbdd"` — so what a fresh clone shows is not the scheme's `fb_*` block but a
-hardcoded copy of Tokyo Night, whichever scheme is selected. That is exactly
-the defect the block was added to fix, and it is still open: only `fb_primary`
-has a real reader (`kitty-scheme.conf:47,52`). The two literals named above are
-also the two `fb_*` values this scheme had to correct — `#e0bbdd` is not a
-Tokyo Night colour at all — so closing the gap means changing both sides in one
-step, on the QML side, which this file does not own.
+**All seventeen are read, and the "consumed at" column above names the wrong
+place: it points at `Theme.qml`, which does not read them, and its line numbers
+went stale as that file grew.** `desktop-scheme` builds the whole matugen
+accent import out of this block — `scheme_accent_payload` strips the `fb_`
+prefix and hands the seventeen over as the Material 3 roles, which is what the
+`accent scheme` setting IS: on that setting these values are not a fallback at
+all but the live accent of the desktop. `fb_primary` has a second reader in
+`kitty-scheme.conf:58,63`, where the active border and the active tab want the
+scheme's own accent rather than the wallpaper's.
+
+**What does NOT read them is `Theme.qml`, and that is a decision rather than a
+gap.** Its fallbacks stay literals because nothing hands this block to the
+shell: `schemes/` lives in the checkout, not under `Quickshell.shellPath()`,
+and the shell's only route to it is running `desktop-scheme list`
+(`AppearancePage.qml:66`). A read would be that process or a path climbing out
+of the shell root, both asynchronous, so a literal would still be needed
+underneath each one. The rule written at `Theme.qml:96-122` is what keeps the
+two sides honest instead: every `??` literal in that file must be a value of
+`schemes/tokyo-night.json` — the `fb_*` role of the same name, or the `sem_*`
+one for the three alerts — and tokyo-night is the right scheme to copy because
+it is the one in force wherever the fallback can be seen (`desktop-scheme`
+answers `DEFAULT_SCHEME` when its state file says nothing, and any other scheme
+was selected through `desktop-scheme set`, which leaves a `colors.json`
+behind). Two literals had drifted off that rule and were corrected with it:
+`surface_container_high` read `#343a52` and `tertiary` read `#e0bbdd`, which is
+in no scheme file and no Tokyo Night palette.
 
 ### 1.5 accent — the 17 Material 3 roles the templates already consume
 
@@ -1122,7 +1142,7 @@ Night. Correct the comment in the same change.
 ```
 46 : #1a1b26 -> fb_surface                     surface
 47 : #292e42 -> fb_surface_container           surfaceContainer
-48 : #343a52 -> fb_surface_container_high      surfaceContainerHigh
+48 : #353b55 -> fb_surface_container_high      surfaceContainerHigh
 49 : #414868 -> fb_surface_container_highest   surfaceContainerHighest
 50 : #c0caf5 -> fb_on_surface                  textOnSurface
 51 : #a9b1d6 -> fb_on_surface_variant          textOnSurfaceVariant
@@ -1135,7 +1155,7 @@ Night. Correct the comment in the same change.
 60 : #bb9af7 -> fb_secondary                   secondary
 61 : #414868 -> fb_secondary_container         secondaryContainer
 62 : #c0caf5 -> fb_on_secondary_container      textOnSecondaryContainer
-64 : #e0bbdd -> fb_tertiary                    tertiary
+64 : #73daca -> fb_tertiary                    tertiary
 65 : #1a1b26 -> fb_on_tertiary                 textOnTertiary
 73 : #e0af68 -> sem_warning                    warning
 74 : #f7768e -> sem_critical                   critical

@@ -93,6 +93,45 @@ Singleton {
     // (fresh clone) or comes out malformed. They are Tokyo Night tones, so a
     // shell with no palette still looks deliberate rather than broken.
     //
+    // AND EVERY ONE OF THEM IS A VALUE OF schemes/tokyo-night.json. That is the
+    // rule for what may stand after a ?? in this file, and it is checkable:
+    // each literal below is that scheme's `fb_*` role of the same name (the
+    // three alerts further down are its `sem_*` ones), so a colour here can be
+    // looked up rather than taken on trust. Two had drifted off it and were
+    // nobody's colour -- surfaceContainerHigh read #343a52 and tertiary read
+    // #e0bbdd, which is not in the Tokyo Night palette at all and is not in any
+    // scheme file. A literal no scheme contains is a colour nothing can check.
+    //
+    // TOKYO NIGHT AND NOT "SOME DARK BLUE", because tokyo-night is the scheme
+    // in force in every state where this fallback can be seen: `desktop-scheme`
+    // answers DEFAULT_SCHEME when its state file says nothing (Config.qml
+    // repeats the same default at :440), and a machine that has selected any
+    // other scheme selected it through `desktop-scheme set`, which re-renders
+    // and therefore leaves a colors.json behind. The fallback and the default
+    // scheme are one decision, so they are the same colours.
+    //
+    // ONE STATE CAN STILL DISAGREE and it is worth knowing rather than
+    // pretending away: the scheme is remembered in ~/.local/state, colors.json
+    // is generated into the checkout and gitignored, so a re-clone (or a wiped
+    // ~/.config) on a machine that had picked Gruvbox boots this Tokyo Night
+    // fallback over a Gruvbox base until the first wallpaper change. Both
+    // compositors run `wallpaper-switch reapply` at startup, so that window is
+    // the length of one render -- unless the wallpaper directory is empty, the
+    // case lib/units/80-palette.sh fails by design, where it lasts the session.
+    // Closing it means the shell READING the scheme, which is the paragraph
+    // below.
+    //
+    // WHY LITERALS AND NOT A READ OF THE SCHEME'S OWN `fb_*` BLOCK. That block
+    // is not unread -- `desktop-scheme` builds the entire accent import out of
+    // it for `accent scheme`, and kitty-scheme.conf paints the active border
+    // and tab from fb_primary -- but nothing hands it to THIS file. schemes/
+    // lives in the checkout, not under Quickshell.shellPath(), and the shell's
+    // one route to it is running `desktop-scheme list`
+    // (settings/pages/AppearancePage.qml:66). Reading it here would mean either
+    // that process or a path climbing out of the shell root, both asynchronous,
+    // so a literal would still be needed underneath each one: it would be a
+    // layer over these values rather than a replacement for them.
+    //
     // NAMING: M3's foreground roles are on_surface, on_primary and so on, but
     // a QML property called `onSurface` is parsed as the signal handler for
     // `surfaceChanged`, and the file fails to load with "Cannot assign a
@@ -100,7 +139,7 @@ Singleton {
     // below keep the M3 names; only the QML side is renamed.
     property color surface: palette.surface ?? "#1a1b26"
     property color surfaceContainer: palette.surface_container ?? "#292e42"
-    property color surfaceContainerHigh: palette.surface_container_high ?? "#343a52"
+    property color surfaceContainerHigh: palette.surface_container_high ?? "#353b55"
     property color surfaceContainerHighest: palette.surface_container_highest ?? "#414868"
     property color textOnSurface: palette.on_surface ?? "#c0caf5"
     property color textOnSurfaceVariant: palette.on_surface_variant ?? "#a9b1d6"
@@ -116,7 +155,7 @@ Singleton {
     property color secondaryContainer: palette.secondary_container ?? "#414868"
     property color textOnSecondaryContainer: palette.on_secondary_container ?? "#c0caf5"
 
-    property color tertiary: palette.tertiary ?? "#e0bbdd"
+    property color tertiary: palette.tertiary ?? "#73daca"
     property color textOnTertiary: palette.on_tertiary ?? "#1a1b26"
 
     // ---------------- Semantic: the SCHEME's, never the wallpaper's ----------
