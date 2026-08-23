@@ -1,79 +1,101 @@
-// The month, for the dashboard.
+// The month: the flyout under the clock, and the card in the dashboard.
+//
+// TWO CALLERS, ONE FILE. Clock.qml opens this in the bar's popout the way
+// Windows opens its calendar from the taskbar clock; island/Dashboard.qml draws
+// the same component on a photograph and hands it a palette. That is why every
+// colour in here is a PROPERTY with a Theme role as its default rather than a
+// Theme role read in place -- see the block below -- and why the cell metrics
+// are properties too: the dashboard sizes a card around them.
 //
 // Built by hand rather than with QtQuick.Controls' MonthGrid: the Controls
-// version drags a style along and its delegates are themed through a
-// different mechanism than the rest of this shell. A month is six rows of
-// seven cells; doing it directly costs less than bending someone else's
-// grid into the palette.
+// version drags a style along and its delegates are themed through a different
+// mechanism than the rest of this shell. A month is six rows of seven cells;
+// doing it directly costs less than bending someone else's grid into the
+// palette.
 //
-// Weeks start on Monday, which is what the locale here uses and what the
-// clock's own "ddd, dd/MM" implies.
+// WHAT THE REDRAW CHANGED, AND WHAT IT DELIBERATELY DID NOT.
+//
+//   THE HEADER READS LEFT TO RIGHT. Windows 11 puts the month and year at the
+//   left of its calendar flyout and the two steppers at the right; genesis
+//   centres the month with a stepper on each side. This is the layout with the
+//   clearer reading order and it is the one Windows has.
+//
+//   THE STEPPERS ARE 4px RECTANGLES. They were circles. Every in-page control
+//   in Windows 11 is ControlCornerRadius, which is 4, and the hover on them is
+//   instantaneous like every other hover in this theme.
+//
+//   TODAY IS STILL A DISC. Windows 11's calendar marks today with an accent
+//   circle, so this is one of the few places in the whole theme where a radius
+//   of half the height is correct rather than a leftover pill.
+//
+//   THE CELLS DO NOT HIGHLIGHT ON HOVER. Windows' days are clickable -- they
+//   open the day's agenda -- and ours are not, because this shell has no
+//   calendar behind them. A hover fill on something that cannot be clicked is
+//   an affordance promising a thing that is not there.
+//
+// Weeks start on Monday, which is what the locale here uses.
 //
 // THE WEEKDAY INITIALS ARE ENGLISH AND ARE WRITTEN OUT RATHER THAN ASKED FOR.
 // They were L M X J V S D -- Spanish, hardcoded, and the only Spanish string
-// left in the shell's interface. Everything this repo produces goes in
-// English, so they are M T W T F S S.
-//
-// NOT DERIVED FROM THE LOCALE, deliberately. Qt.formatDate would hand back
-// whatever LANG says, which is en_US.UTF-8 on this machine today and is a
-// setting somebody could change tomorrow -- and the rule is that the
+// left in the shell's interface. NOT DERIVED FROM THE LOCALE, deliberately:
+// Qt.formatDate would hand back whatever LANG says, and the rule is that the
 // interface is English, not that it follows the machine. The month name above
-// the grid DOES go through Qt.formatDate and so does follow the locale; that
-// is left alone because it has always been correct here and changing it would
-// be a second decision hiding inside this one.
+// the grid DOES go through Qt.formatDate and so does follow the locale.
 //
-// The repeated T and S are the standard compact English form: position
-// carries what the letter cannot, which is the same bargain every seven-column
-// calendar makes.
+// The repeated T and S are the standard compact English form: position carries
+// what the letter cannot, which is the same bargain every seven-column calendar
+// makes.
 
 import QtQuick
 import qs
+import ".."
 
 Column {
     id: root
 
     // ---- The colours, because the ground under this is not always ours ----
     //
-    // Every colour here used to be a Theme role read in place, which was
-    // right while the calendar sat on a card in the wallpaper's palette. The
-    // dashboard now draws it on a photograph -- see the header of
-    // Dashboard.qml -- where a role derived from the wallpaper has nothing to
-    // do with what is behind the type.
-    //
-    // The defaults are exactly the roles that were read here before, so a
-    // caller that says nothing gets the calendar it had.
+    // The defaults are exactly the roles this file would read in place, so a
+    // caller that says nothing gets the calendar the taskbar wants; the
+    // dashboard overrides all six because a role derived from the wallpaper has
+    // nothing to do with what is behind the type on a photograph.
     property color ink: Theme.textOnSurface
     property color inkMuted: Theme.textOnSurfaceVariant
     property color todayFill: Theme.primary
+
+    // BLACK, AND IT LOOKS WRONG UNTIL YOU SEE IT BESIDE THE REAL THING.
+    // TextOnAccentFillColorPrimary is #FF000000 in dark mode, because dark
+    // mode's accent fill is SystemAccentColorLight2 -- the LIGHT shade of the
+    // ramp. Theme.textOnPrimary carries it. Do not "fix" this to white.
     property color todayInk: Theme.textOnPrimary
+
     property color hoverWash: Theme.surfaceContainerHigh
 
-    // WHAT THE ARROWS LOOK LIKE WHEN NOBODY IS POINTING AT THEM. Transparent
-    // by default, which is right on a card whose own edge says where the
-    // surface is; the dashboard passes a fill, because on a photograph a
-    // control with no resting surface is indistinguishable from a caption.
+    // WHAT THE STEPPERS LOOK LIKE WHEN NOBODY IS POINTING AT THEM. Transparent,
+    // which is right on a flyout whose own edge says where the surface is; the
+    // dashboard passes a fill, because on a photograph a control with no
+    // resting surface is indistinguishable from a caption.
     property color restWash: "transparent"
 
-    // ---- The cell, and why it is smaller than it was ----
+    // ---- The cell ----
     //
     // The month is the tallest thing in the dashboard and therefore sets the
-    // whole panel's height -- see the note on `bodyHeight` in Dashboard.qml.
-    // It was 34 x 30 with a 36-pixel header, which came to 252 tall; at
-    // 30 x 26 with a 30-pixel header it is 213, and the panel is 39 pixels
-    // shorter for it. The type inside did not change, so the day numbers are
-    // exactly as legible as they were; what went is padding around them.
+    // whole panel's height -- see the note on `bodyHeight` in Dashboard.qml --
+    // so these stay where they are. Windows' own day cell is nearer 40 square;
+    // growing them here would push a card in a file this one does not own.
     property int cellWidth: 30
     property int cellHeight: 26
     property int headerHeight: 30
 
-    // Which month to show. Defaults to the current one; the arrows move it.
+    // Which month to show. Defaults to the current one; the steppers move it.
     property date shown: new Date()
 
-    readonly property int year: shown.getFullYear()
-    readonly property int month: shown.getMonth()
+    readonly property int year: root.shown.getFullYear()
+    readonly property int month: root.shown.getMonth()
 
     readonly property var today: new Date()
-    readonly property bool showingThisMonth: year === today.getFullYear() && month === today.getMonth()
+    readonly property bool showingThisMonth: root.year === root.today.getFullYear()
+        && root.month === root.today.getMonth()
 
     // Monday-first offset of the 1st: JS getDay() is Sunday-first.
     readonly property int leadingBlanks: {
@@ -84,37 +106,52 @@ Column {
     readonly property int daysInMonth: new Date(root.year, root.month + 1, 0).getDate()
 
     function shift(months: int): void {
-        shown = new Date(root.year, root.month + months, 1);
+        root.shown = new Date(root.year, root.month + months, 1);
     }
 
-    spacing: 6
+    spacing: Theme.itemSpacing
 
     // ---------------- Header ----------------
     Item {
         width: grid.width
         height: root.headerHeight
 
-        Arrow {
+        Text {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            glyph: "‹"
-            onActivated: root.shift(-1)
-        }
 
-        Text {
-            anchors.centerIn: parent
             text: Qt.formatDate(new Date(root.year, root.month, 1), "MMMM yyyy")
             font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize
-            font.weight: Font.Bold
+            font.pointSize: Fluent.bodySize
+            // Semibold and NEVER Bold: that is Windows 11's typography rule in
+            // as many words, and Fluent.strongWeight is where the theme keeps
+            // the number.
+            font.weight: Fluent.strongWeight
             color: root.ink
         }
 
-        Arrow {
+        Row {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            glyph: "›"
-            onActivated: root.shift(1)
+            spacing: 0
+
+            Stepper {
+                glyph: Icons.chevronLeft
+                box: root.headerHeight
+                ink: root.inkMuted
+                rest: root.restWash
+                wash: root.hoverWash
+                onActivated: root.shift(-1)
+            }
+
+            Stepper {
+                glyph: Icons.chevronRight
+                box: root.headerHeight
+                ink: root.inkMuted
+                rest: root.restWash
+                wash: root.hoverWash
+                onActivated: root.shift(1)
+            }
         }
     }
 
@@ -128,10 +165,11 @@ Column {
 
                 width: root.cellWidth
                 horizontalAlignment: Text.AlignHCenter
+
                 text: modelData
                 font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 2
-                font.weight: Font.Bold
+                font.pointSize: Fluent.captionSize
+                font.weight: Fluent.normalWeight
                 color: root.inkMuted
             }
         }
@@ -145,7 +183,7 @@ Column {
         spacing: 0
 
         Repeater {
-            // Six weeks always: a month that needs five would make the popout
+            // Six weeks always: a month that needs five would make the flyout
             // change height from one month to the next.
             model: 42
 
@@ -155,32 +193,37 @@ Column {
                 required property int index
 
                 readonly property int day: cell.index - root.leadingBlanks + 1
-                readonly property bool inMonth: day >= 1 && day <= root.daysInMonth
-                readonly property bool isToday: inMonth && root.showingThisMonth && day === root.today.getDate()
+                readonly property bool inMonth: cell.day >= 1 && cell.day <= root.daysInMonth
+                readonly property bool isToday: cell.inMonth
+                    && root.showingThisMonth
+                    && cell.day === root.today.getDate()
 
                 implicitWidth: root.cellWidth
                 implicitHeight: root.cellHeight
 
                 Rectangle {
                     anchors.centerIn: parent
+
                     width: root.cellHeight - 2
                     height: root.cellHeight - 2
                     radius: height / 2
+
                     visible: cell.isToday
                     color: root.todayFill
-
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.recolorDuration }
-                    }
                 }
 
                 Text {
                     anchors.centerIn: parent
+
                     visible: cell.inMonth
                     text: cell.day
+
                     font.family: Theme.fontFamily
-                    font.pointSize: Theme.fontSize
-                    font.weight: cell.isToday ? Font.Bold : Theme.fontWeight
+                    font.pointSize: Fluent.bodySize
+                    font.weight: cell.isToday ? Fluent.strongWeight : Fluent.normalWeight
+                    // Tabular figures, so the columns of a month line up with
+                    // each other rather than with the width of their own digits.
+                    font.features: ({ "tnum": 1 })
                     color: cell.isToday ? root.todayInk : root.ink
                 }
             }
@@ -189,44 +232,52 @@ Column {
 
     // The two month steppers.
     //
-    // IT WAS components/MenuRow.qml, which is the row a tray menu is built
-    // out of and paints itself from Theme. Two of them here meant the only
-    // part of this calendar that could not follow `ink` was the pair of
-    // arrows, and on the dashboard's photographic ground that is the pair
-    // that would have disappeared. Same size and same hover wash, one colour
-    // that answers the caller.
-    component Arrow: Rectangle {
-        id: arrow
+    // IT WAS components/MenuRow.qml, which is the row a tray menu is built out
+    // of and paints itself from Theme. Two of them here meant the only part of
+    // this calendar that could not follow `ink` was the pair of steppers, and on
+    // the dashboard's photographic ground that is the pair that would have
+    // disappeared. One colour that answers the caller instead.
+    component Stepper: Rectangle {
+        id: stepper
 
+        // EVERY COLOUR AND SIZE ARRIVES AS A PROPERTY rather than being read
+        // off the outer `root`. An inline component is its own scope: an id
+        // from the file around it resolves at runtime and is [unqualified] to
+        // qmllint, which is the one shape almost every unqualified read in the
+        // shipped theme has. Four bindings at the call site cost nothing and
+        // the component becomes readable on its own terms.
         property string glyph: ""
+        property int box: 30
+        property color ink: "white"
+        property color rest: "transparent"
+        property color wash: "transparent"
 
         signal activated
 
-        implicitWidth: root.headerHeight
-        implicitHeight: root.headerHeight
+        implicitWidth: stepper.box
+        implicitHeight: stepper.box
 
-        radius: height / 2
-        color: arrowMouse.containsMouse ? root.hoverWash : root.restWash
+        radius: Fluent.controlRadius
+        color: stepperPointer.containsMouse ? stepper.wash : stepper.rest
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
+        // NO `Behavior on color`. Fluent.hoverMs is 0 and it is 0 on purpose --
+        // see TaskbarItem.qml, which carries the long version.
 
         Text {
             anchors.centerIn: parent
-            text: arrow.glyph
+
+            text: stepper.glyph
             font.family: Theme.fontFamily
             font.pointSize: Theme.iconSize
-            color: root.inkMuted
+            color: stepper.ink
         }
 
         MouseArea {
-            id: arrowMouse
+            id: stepperPointer
 
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: arrow.activated()
+            onClicked: stepper.activated()
         }
     }
 }

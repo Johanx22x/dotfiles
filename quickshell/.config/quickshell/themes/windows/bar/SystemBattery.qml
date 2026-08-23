@@ -1,35 +1,38 @@
 // The machine's own battery, for the machines that have one.
 //
-// NOT THE SAME WIDGET AS PeripheralBattery, and the split is the whole design.
-// That one shows everything with a battery that is NOT powering the computer
-// -- a mouse, a headset, a controller -- and filters this out by name. This
-// one is the opposite filter, and the two never show the same device twice.
+// A TRAY GLYPH AND NOT A PILL. Windows draws the battery as one icon with the
+// charge beside it, in the same box as everything else in the taskbar corner:
+// no tinted backplate when it is low, no rounded capsule, no colour behind the
+// number. When it is nearly flat the GLYPH and the READING go critical, which is
+// what Windows does and is also less shouting than genesis's tinted pill -- a
+// solid block of colour on a bar reads as an error dialog that got loose.
 //
-// It is worth being two widgets rather than one with a flag: a peripheral
-// running flat means "go and charge that thing", while the machine running
-// flat means "save your work". They deserve different thresholds and
-// different words, and they do not belong side by side in one list.
+// NOT THE SAME WIDGET AS PeripheralBattery, and the split is the whole design.
+// That one shows everything with a battery that is NOT powering the computer --
+// a mouse, a headset, a controller -- and filters this out by name. This one is
+// the opposite filter, and the two never show the same device twice. A
+// peripheral running flat means "go and charge that thing"; the machine running
+// flat means "save your work". They deserve different thresholds and different
+// words.
 //
 // OFF UNLESS THIS MACHINE SAID IT IS A LAPTOP. See Config.laptopBattery --
-// install.sh asks once, `laptop-modules` records the answer and the Bar page
-// can change it afterwards, because a tracked configuration cannot know
-// which of two machines it landed on.
-//
-// AND OFF ANYWAY WHEN THERE IS NO BATTERY. The flag is the intention; this is
-// the check that the intention is possible. A desktop where somebody answered
-// yes by mistake shows nothing rather than a permanent 0%.
+// install.sh asks once, `laptop-modules` records the answer and the Bar page can
+// change it afterwards, because a tracked configuration cannot know which of two
+// machines it landed on. AND OFF ANYWAY WHEN THERE IS NO BATTERY: the flag is
+// the intention, this is the check that the intention is possible.
 
 import Quickshell.Services.UPower
 import QtQuick
 import qs
 import qs.modules.bar
+import ".."
 
-Rectangle {
+TaskbarItem {
     id: root
 
-    // UPower's aggregate. On a laptop it IS the battery; on a desktop it
-    // exists but reports isLaptopBattery false and a percentage of zero --
-    // measured here, where it also carries icon-name battery-missing-symbolic.
+    // UPower's aggregate. On a laptop it IS the battery; on a desktop it exists
+    // but reports isLaptopBattery false and a percentage of zero -- measured
+    // here, where it also carries icon-name battery-missing-symbolic.
     readonly property var device: UPower.displayDevice
 
     readonly property bool present: Config.laptopBattery
@@ -43,8 +46,6 @@ Rectangle {
 
     // TIGHTER THAN THE PERIPHERAL ONE, and deliberately. 20% on a mouse is a
     // reminder; 20% on the machine you are working on is about half an hour.
-    // The numbers are the ones every laptop desktop has settled on for the
-    // same reason -- they are roughly "finish the paragraph" and "save now".
     //
     // Only the amber one is a decision made here. The point at which this
     // interrupts you belongs to BatteryAlerts, which is where both battery
@@ -65,8 +66,8 @@ Rectangle {
     }
 
     // A separate glyph while charging, because the percentage alone cannot say
-    // which way it is going -- and "30%" means two opposite things depending
-    // on whether the cable is in.
+    // which way it is going -- and "30%" means two opposite things depending on
+    // whether the cable is in.
     readonly property string glyph: {
         if (root.charging)
             return Icons.batteryCharging;
@@ -75,44 +76,23 @@ Rectangle {
         return Icons.battery;
     }
 
-    readonly property string remaining: {
-        const seconds = root.charging
-            ? (root.device?.timeToFull ?? 0)
-            : (root.device?.timeToEmpty ?? 0);
-
-        // Zero is "no estimate yet", which is most of the first minute after a
-        // cable moves. A line saying nothing is better than one saying zero.
-        if (!seconds || seconds <= 0)
-            return "";
-
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.round((seconds % 3600) / 60);
-        const spelled = hours > 0 ? `${hours} h ${minutes} min` : `${minutes} min`;
-
-        return root.charging ? `${spelled} until full` : `${spelled} left`;
-    }
+    readonly property int padH: Theme.barPadding
 
     visible: root.present
 
-    implicitWidth: reading.implicitWidth + 12
-    implicitHeight: Theme.groupHeight - 8
-    radius: height / 2
+    boxWidth: reading.implicitWidth + root.padH * 2
 
-    // The same tinted pill the peripheral widget uses when something is nearly
-    // flat, at the same alpha and for the same reason: on a bar where
-    // everything is a translucent pill over glass, a solid block of colour
-    // reads as an error dialog that got loose.
-    color: root.alerting ? Qt.alpha(Theme.critical, 0.18) : "transparent"
-
-    Behavior on color {
-        ColorAnimation { duration: Theme.animDuration }
-    }
+    // A READING AND NOT A DOOR, so it neither takes clicks nor washes under the
+    // pointer. Windows' own battery icon does both, because there it opens Quick
+    // Settings; this one has nothing behind it, and a hover fill on an item that
+    // cannot be clicked is an affordance promising something that is not there.
+    interactive: false
 
     Row {
         id: reading
 
         anchors.centerIn: parent
-        spacing: 5
+        spacing: Theme.itemSpacing
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
@@ -121,10 +101,6 @@ Rectangle {
             font.family: Theme.fontFamily
             font.pointSize: Theme.iconSize
             color: root.tint
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
         }
 
         Text {
@@ -132,13 +108,10 @@ Rectangle {
 
             text: `${root.charge}%`
             font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize
-            font.weight: Theme.fontWeight
+            font.pointSize: Fluent.captionSize
+            font.weight: Fluent.normalWeight
+            font.features: ({ "tnum": 1 })
             color: root.tint
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
         }
     }
 
@@ -147,9 +120,9 @@ Rectangle {
     // ONCE PER CROSSING, AND ONCE PER MACHINE. This used to hold its own
     // `warned` flag and send its own notify-send, which is one flag per Bar --
     // and shell.qml builds a Bar per screen. Two monitors carrying a bar meant
-    // two critical notifications, which do not expire, for one battery
-    // crossing one line. The state and the sending are in BatteryAlerts now;
-    // this file reports a reading and nothing more.
+    // two critical notifications, which do not expire, for one battery crossing
+    // one line. The state and the sending are in BatteryAlerts now; this file
+    // reports a reading and nothing more.
     //
     // STILL ON EVERY READING and not only on the ones that cross the line: the
     // check has to see the value climb back up as well, or it never re-arms.
@@ -164,9 +137,9 @@ Rectangle {
 
         BatteryAlerts.consider({
             // ONE KEY FOR THE MACHINE, and it does not come off the device:
-            // UPower's DisplayDevice is an aggregate with a synthetic path,
-            // and there is exactly one of it. A fixed string is what makes
-            // every bar's call land on the same entry.
+            // UPower's DisplayDevice is an aggregate with a synthetic path, and
+            // there is exactly one of it. A fixed string is what makes every
+            // bar's call land on the same entry.
             key: "system",
             label: "Battery",
             charge: root.charge,

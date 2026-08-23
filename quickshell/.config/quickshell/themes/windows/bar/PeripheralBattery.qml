@@ -67,6 +67,7 @@ import Quickshell.Services.UPower
 import QtQuick
 import qs
 import qs.modules.bar
+import ".."
 
 Row {
     id: root
@@ -566,14 +567,12 @@ Row {
         return Theme.textOnSurface;
     }
 
-    // ONE DEVICE IS A DIFFERENT PICTURE FROM TWO, and the pill around this
-    // reads it. With a single peripheral there is nothing to tell apart, so
-    // the whole group takes the colour and the reading inside it stays plain
-    // -- a tinted pill inside a tinted pill is two edges saying one thing.
-    // With two or more the tint has to be on the row that is actually low,
-    // because "one of these is nearly flat" is only useful if it says which.
-    readonly property bool alertingAlone: root.entries.length === 1
-        && root.isAlerting(root.entries[0].charge, root.entries[0].charging)
+    // `alertingAlone` USED TO LIVE HERE AND IT WENT WITH THE PILL. It answered
+    // one question -- does the tint belong on the group's background or on the
+    // one row that is actually low -- and under this theme there is no group
+    // background to tint: each reading is its own taskbar item and each one
+    // carries its own colour. Bar.qml read it too, to tint the pill it no
+    // longer draws.
 
     // ---------------- The alert ----------------
     //
@@ -617,58 +616,44 @@ Row {
 
     spacing: Theme.itemSpacing
 
+    // ---------------- What is on the bar ----------------
+    //
+    // ONE TASKBAR ITEM PER PERIPHERAL: a glyph, a percentage, a 4px box that
+    // washes under the pointer and opens the panel. Genesis draws each of these
+    // as a capsule and tints the capsule when the thing is nearly flat; Windows
+    // has no capsule in its notification area and no coloured backplate
+    // anywhere in it, so the alert is carried by the ink instead -- see tintFor
+    // above, which already returns Theme.critical for exactly that case and did
+    // not have to change.
     Repeater {
         model: root.entries
 
-        delegate: Rectangle {
+        TaskbarItem {
             id: entry
 
             required property var modelData
 
-            readonly property bool alerting: root.isAlerting(entry.modelData.charge, entry.modelData.charging)
             readonly property color tint: root.tintFor(entry.modelData.charge, entry.modelData.charging)
 
-            // Every reading, not only the ones that cross the line: the check
-            // has to see the value climb back up as well, or it never re-arms.
-            // The delegate is rebuilt on each reading, which is what makes
-            // this enough on its own.
             Component.onCompleted: root.considerAlert(entry.modelData)
 
             anchors.verticalCenter: parent.verticalCenter
 
-            implicitWidth: reading.implicitWidth + 12
-            implicitHeight: Theme.groupHeight - 8
-            radius: height / 2
+            boxWidth: reading.implicitWidth + Theme.barPadding * 2
 
-            // A pill under the pointer, which the bare glyph did not have: the
-            // reading is a button and has to look like one before it is
-            // touched.
-            //
-            // AND A TINTED ONE WHEN IT IS NEARLY FLAT. Colouring the text
-            // alone was not enough -- a red number among white ones on a bar
-            // full of other marks is something you notice on the second look
-            // -- but the first attempt filled the pill with solid critical and
-            // that was worse: on a bar where everything else is a translucent
-            // pill over glass, one opaque red block reads as an error dialog
-            // that got loose. 0.18 is the same alpha, chosen the same way, as
-            // the settings window's sidebar.
-            //
-            // Suppressed when this is the only device, because the group
-            // behind it has taken the colour instead and doing both stacks one
-            // tint on the other into something twice as loud as either.
-            color: entry.alerting && !root.alertingAlone
-                ? Qt.alpha(Theme.critical, entryMouse.containsMouse ? 0.30 : 0.18)
-                : entryMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
+            // A door, unlike the machine's own battery beside it: there is a
+            // panel behind this with the parts, the estimate and the health in
+            // it, so it takes clicks and washes to say so.
+            onActivated: {
+                root.shownKey = entry.modelData.key;
+                root.popout.toggleAt(entry.mapToItem(null, entry.width / 2, 0).x, detailComponent);
             }
 
             Row {
                 id: reading
 
                 anchors.centerIn: parent
-                spacing: 5
+                spacing: Theme.itemSpacing
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
@@ -677,10 +662,6 @@ Row {
                     font.family: Theme.fontFamily
                     font.pointSize: Theme.iconSize
                     color: entry.tint
-
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.animDuration }
-                    }
                 }
 
                 Text {
@@ -688,49 +669,29 @@ Row {
 
                     text: `${entry.modelData.charge}%`
                     font.family: Theme.fontFamily
-                    font.pointSize: Theme.fontSize
-                    font.weight: Theme.fontWeight
+                    font.pointSize: Fluent.captionSize
+                    font.weight: Fluent.normalWeight
+                    font.features: ({ "tnum": 1 })
                     color: entry.tint
-
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.animDuration }
-                    }
-                }
-            }
-
-            MouseArea {
-                id: entryMouse
-
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-
-                onClicked: {
-                    root.shownKey = entry.modelData.key;
-                    root.popout.toggleAt(entry.mapToItem(null, entry.width / 2, 0).x, detailComponent);
                 }
             }
         }
     }
 
+    // ---------------- What is in the panel ----------------
+    //
+    // The heading, the bar, the pieces, the estimate and the health. It is the
+    // same content genesis showed and the same order; what changed is the type
+    // ramp -- Body for the name, Caption for everything under it, Semibold and
+    // never Bold, which is Windows 11's typography rule in as many words.
     Component {
         id: detailComponent
 
-        // ---------------- The panel ----------------
-        //
-        // EVERYTHING THERE IS TO SAY, which is the point of it: the bar can
-        // only carry one number, and the questions that number raises -- what
-        // is it, is it charging, how long have I got, and for earphones WHICH
-        // of the three the bar is showing -- all have answers, a click away
-        // rather than in a tooltip that cannot be read at leisure.
         Column {
             id: detail
 
             readonly property var entry: root.shownEntry
 
-            // Wide enough for a long product name on two lines rather
-            // than three. Measured against the longest thing connected
-            // here, "DualSense Wireless Controller".
             width: 300
             spacing: Theme.itemSpacing
             visible: detail.entry !== null
@@ -756,32 +717,16 @@ Row {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
 
-                    // GIVEN A WIDTH RATHER THAN LEFT TO FIND ONE. A Row hands
-                    // every child whatever it asks for, so a Column of Text
-                    // asks for the width of its longest line and gets it --
-                    // and "DualSense Wireless Controller" ran straight out of
-                    // the panel. Nothing about the Row being width-bound
-                    // reaches its children on its own.
                     width: heading.width - headingGlyph.width - heading.spacing
 
                     Text {
                         width: parent.width
-                        // WRAPPED AND NOT ELIDED, unlike the line under it.
-                        // This is the device's identity -- "DualSense
-                        // Wireless Cont..." is the one thing on the panel
-                        // that must not be guessed at, and a second line
-                        // costs nothing here.
                         wrapMode: Text.WordWrap
 
-                        // The manufacturer's own name for it. Nothing else on
-                        // this desktop prints it, which is half the reason the
-                        // panel exists: with two wireless things connected,
-                        // the model is how you know WHICH one the bar is
-                        // worried about.
                         text: detail.entry?.label ?? ""
                         font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize
-                        font.weight: Font.Bold
+                        font.pointSize: Fluent.bodySize
+                        font.weight: Fluent.strongWeight
                         color: Theme.textOnSurface
                     }
 
@@ -791,14 +736,16 @@ Row {
 
                         text: `${detail.entry?.charge ?? 0}%  ·  ${detail.entry?.stateText ?? ""}`
                         font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize - 1
+                        font.pointSize: Fluent.captionSize
                         color: Theme.textOnSurfaceVariant
                     }
                 }
             }
 
-            // The bar the panel can afford and the one on the bar cannot: at
-            // this width the number has room to be a picture too.
+            // The bar the panel can afford and the one in the taskbar cannot: at
+            // this width the number has room to be a picture too. WinUI's own
+            // ProgressBar is 1px of track behind a rounded fill; this is thicker
+            // because it is being read across a room rather than inside a form.
             Rectangle {
                 width: parent.width
                 height: 6
@@ -812,7 +759,11 @@ Row {
                     color: root.tintFor(detail.entry?.charge ?? 0, detail.entry?.charging ?? false)
 
                     Behavior on width {
-                        NumberAnimation { duration: Theme.animDuration }
+                        NumberAnimation {
+                            duration: Fluent.fastMs
+                            easing.type: Easing.Bezier
+                            easing.bezierCurve: Fluent.easeOut
+                        }
                     }
                 }
             }
@@ -820,23 +771,20 @@ Row {
             // ---------------- The pieces, when a thing has pieces ----------
             //
             // ONLY EARPHONES HAVE THESE, and they are the reason the panel is
-            // worth opening for them at all: the bar shows the lower of the
-            // two buds, and "which one, and how is the case doing" is exactly
-            // what that number leaves out. A mouse has one battery and gets no
-            // list, because a list of one is a heading.
+            // worth opening for them at all: the bar shows the lower of the two
+            // buds, and "which one, and how is the case doing" is exactly what
+            // that number leaves out. A mouse has one battery and gets no list,
+            // because a list of one is a heading.
             //
-            // ONLY THE ONES THAT ANSWERED. This went back and forth twice and
-            // the second answer is the right one. Dropping an absent component
-            // reads as the panel forgetting the case exists -- so it was shown
-            // saying "not connected", and that turned out worse: the case is
-            // out of range for as long as the earphones are being worn, so
-            // that row is permanent furniture that never once tells you
-            // anything. It is the same rule the whole widget follows, which is
-            // that a reading with nothing to say should not be on screen.
+            // ONLY THE ONES THAT ANSWERED. Dropping an absent component reads as
+            // the panel forgetting the case exists; showing it with a dash reads
+            // as a fault. What is actually true is that nothing was heard from
+            // it, and a row that is not there says that better than a row that
+            // is there saying nothing.
             Repeater {
                 model: (detail.entry?.parts ?? []).filter(p => p.available)
 
-                delegate: Item {
+                Item {
                     id: part
 
                     required property var modelData
@@ -848,13 +796,10 @@ Row {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
 
-                        // "left", "right", "case" as the script writes them,
-                        // capitalised here rather than there: the file is data
-                        // and this is the only place it is read aloud.
                         text: part.modelData.label.charAt(0).toUpperCase()
                             + part.modelData.label.slice(1)
                         font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize - 1
+                        font.pointSize: Fluent.captionSize
                         color: Theme.textOnSurfaceVariant
                     }
 
@@ -866,8 +811,9 @@ Row {
                             ? `${part.modelData.charge}%  ·  charging`
                             : `${part.modelData.charge}%`
                         font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize - 1
-                        font.weight: Theme.fontWeight
+                        font.pointSize: Fluent.captionSize
+                        font.weight: Fluent.strongWeight
+                        font.features: ({ "tnum": 1 })
                         color: root.tintFor(part.modelData.charge, part.modelData.charging)
                     }
                 }
@@ -880,7 +826,7 @@ Row {
                 text: detail.entry?.remaining ?? ""
                 wrapMode: Text.WordWrap
                 font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 1
+                font.pointSize: Fluent.captionSize
                 color: Theme.textOnSurfaceVariant
             }
 
@@ -891,7 +837,7 @@ Row {
                 text: `Battery health ${detail.entry?.health ?? 0}%`
                 wrapMode: Text.WordWrap
                 font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 1
+                font.pointSize: Fluent.captionSize
                 color: Theme.textOnSurfaceVariant
             }
         }

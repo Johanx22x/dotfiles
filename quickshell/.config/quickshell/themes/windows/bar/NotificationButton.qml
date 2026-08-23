@@ -8,12 +8,12 @@
 // reason than that it needed somewhere to live. It has its own place now, and
 // the panel comes out from under the thing you pressed.
 //
-// WHY THIS END OF THE BAR. It shares the pill with the settings and the power
-// buttons, and that pill is for the shell's own controls rather than for
-// readings -- which is exactly what this is. It opens something belonging to
-// the shell; it does not report on the machine. It goes FIRST inside that
-// pill so the power button keeps its place at the very end with nothing new
-// beside it, which is what PowerButton.qml has asked for since it moved there.
+// WHY THE CORNER. Windows has kept the notification centre in the very corner
+// of the taskbar since Windows 10, and it is the right corner for it here for a
+// reason of our own as well: something has to take the bottom-right pixel, the
+// one target a pointer cannot overshoot, and of everything on this bar the
+// least harmful thing to reach by accident is a list of what you already
+// missed. PowerButton.qml's own rule is what pushed it out of that spot.
 //
 // IT SHOWS THE MUTE, and while it is drawn it is the only thing that does.
 //
@@ -41,9 +41,10 @@
 // the badge was built in the first place, and bellOff differs from bell by a
 // thin diagonal across a small monochrome glyph at the end of a bar -- a swap
 // nobody catches out of the corner of an eye. The accent is what makes it
-// survive being read at a glance. A tinted background behind it would be a
-// second background inside a pill that already has one, which is the same
-// reason the count below takes the accent instead of a badge of its own.
+// survive being read at a glance. A tinted backplate behind it is not available
+// to say it instead: every item in a Windows taskbar corner has exactly one
+// fill, the subtle brush its hover uses, and a coloured one would be a state
+// the system does not have.
 //
 // THE COUNT IS A DEBT -- see NotificationState.unread. It was the badge's
 // number first, and the badge gave it up for as long as this widget is drawn
@@ -83,18 +84,20 @@ import qs
 import qs.modules.notifications
 // Relative, because this theme is loaded by path and does not name itself.
 // See the note beside the same pair of imports in Bar.qml.
+import qs.components
+import ".."
 import "../notifications"
 
-Item {
+TaskbarItem {
     id: root
 
     // The bar's shared popout, handed down by Bar.qml exactly as the tray and
     // the peripheral battery get it. One window for the whole bar, moved under
     // whichever widget was clicked -- see components/Popout.qml.
-    required property var popout
+    required property Popout popout
 
-    // How many went by unseen. Read once here so the width, the two colours
-    // and the label all move together off one value.
+    // How many went by unseen. Read once here so the width, the two colours and
+    // the label all move together off one value.
     readonly property int unread: NotificationState.unread
 
     // Whether the mute is on. Read here beside the count for the same reason:
@@ -103,24 +106,28 @@ Item {
     // subscriptions to one fact.
     readonly property bool muted: NotificationState.dnd
 
-    // Matches SettingsButton and PowerButton beside it; the note on why the
-    // disc is six under the pill rather than ten lives in SettingsButton.
-    readonly property int discSize: Theme.groupHeight - 6
+    readonly property int padH: Theme.barPadding
 
-    // A DISC WHILE THERE IS NOTHING TO SAY, A PILL WHEN THERE IS. With no
-    // count this is byte for byte the target the gear next to it draws; with
-    // one, the same rounded shape grows sideways to hold it rather than the
-    // number being stuck to the glyph as a superscript badge. The bar has no
-    // other superscripts and one of them would read as damage.
-    implicitWidth: root.unread > 0 ? content.implicitWidth + 16 : root.discSize
-    implicitHeight: Theme.groupHeight
+    // A SQUARE WHILE THERE IS NOTHING TO SAY, WIDER WHEN THERE IS. With no
+    // count this is byte for byte the box the gear further along draws; with
+    // one, the same rectangle grows sideways to hold it rather than the number
+    // being stuck to the glyph as a superscript badge. The taskbar has no other
+    // superscripts and one of them would read as damage.
+    boxWidth: root.unread > 0
+        ? content.implicitWidth + root.padH * 2
+        : root.boxHeight
 
-    // Animated because the change is caused by something arriving, not by
-    // something being clicked: the pill should grow out of the disc the way
-    // the badges beside the island unfold, rather than the row of controls
-    // jumping sideways.
-    Behavior on implicitWidth {
-        NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
+    // Animated because the change is caused by something ARRIVING and not by
+    // something being clicked -- everything to the left of this shifts when it
+    // happens, and a bar that jumps is a bar somebody clicks the wrong thing
+    // on. WinUI's one spline over its fast duration. Note what is NOT animated:
+    // the fill, on any of these items, ever.
+    Behavior on boxWidth {
+        NumberAnimation {
+            duration: Fluent.fastMs
+            easing.type: Easing.Bezier
+            easing.bezierCurve: Fluent.easeOut
+        }
     }
 
     // WHERE THE PANEL COMES OUT, in screen coordinates. mapToItem(null, ...)
@@ -199,104 +206,73 @@ Item {
         }
     }
 
-    Rectangle {
-        anchors.fill: parent
-        // Kept as tall as the disc rather than as tall as the group, so the
-        // hover target is the same height whichever shape it is in.
-        anchors.topMargin: (root.implicitHeight - root.discSize) / 2
-        anchors.bottomMargin: (root.implicitHeight - root.discSize) / 2
+    // Toggle and not open, the same as every other door on this bar: clicking
+    // the button that opened the panel should put it away again. Named with
+    // THIS bar, because a click lands on one and says so -- and through the
+    // singleton rather than straight at the popout, so what it opens is the one
+    // list that can be moved and closed from anywhere rather than a copy nobody
+    // owns.
+    onActivated: NotificationState.toggleHistoryOn(root.popout.screen?.name ?? "")
 
-        radius: height / 2
-        color: mouse.containsMouse ? Qt.alpha(Theme.primary, 0.18) : "transparent"
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
-    }
+    // RIGHT CLICK SWITCHES THE MUTE, without opening anything. TOGGLE AND NOT
+    // SET, unlike the badge's right button, and the difference is that the
+    // badge only exists while the mute is on -- it has nothing to switch back
+    // to. This button is drawn either way, so a right click that only ever
+    // unmuted would do nothing at all half the time it was tried.
+    onSecondaryActivated: NotificationState.toggle()
 
     Row {
         id: content
 
         anchors.centerIn: parent
-        spacing: 6
+        spacing: Theme.itemSpacing
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
 
-            // THE ONE THING ON THE BAR THAT SAYS THE MUTE IS ON. The same
-            // pair the switch inside the panel draws for the same state, so
-            // the button and the thing it opens are recognisably one setting
-            // rather than two things that happen to be about bells.
+            // THE ONE THING ON THE BAR THAT SAYS THE MUTE IS ON. The same pair
+            // the switch inside the panel draws for the same state, so the
+            // button and the thing it opens are recognisably one setting rather
+            // than two things that happen to be about bells.
             text: root.muted ? Icons.bellOff : Icons.bell
 
             font.family: Theme.fontFamily
-            // Theme.controlSize, matching the two buttons beside it: inside a
-            // shared pill these three have to read as one row of controls.
-            font.pointSize: Theme.controlSize
+            font.pointSize: Theme.iconSize
 
             // ACCENT WHILE THE MUTE IS ON, accent while something is owed, and
             // accent on hover -- three conditions and one meaning each time,
             // because a debt only exists inside a mute (see the header) and
-            // hover promises "this opens something", which a debt is a reason
-            // to do. What would be wrong is a fourth colour, or critical --
-            // nothing here is broken, the mute was asked for.
+            // hover promises "this opens something", which a debt is a reason to
+            // do. What would be wrong is a fourth colour, or critical -- nothing
+            // here is broken, the mute was asked for.
             //
-            // Animated, so switching the mute with SUPER + N from anywhere on
-            // the desktop reads as this glyph changing rather than as a
-            // different glyph having always been there.
-            color: root.muted || root.unread > 0 || mouse.containsMouse
+            // NOT ANIMATED, and that is the one line of this file the redraw
+            // changed. Genesis fades it so that switching the mute with SUPER +
+            // N from anywhere on the desktop reads as this glyph changing rather
+            // than as a different glyph having always been there. Windows swaps
+            // every brush on a DiscreteObjectKeyFrame at time zero and this is
+            // the same taskbar, so what covers the keybind is the island's
+            // acknowledgement flash instead -- which is where the announcement
+            // was always meant to live. See the header.
+            color: root.muted || root.unread > 0 || root.hovered
                 ? Theme.primary
                 : Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
         }
 
         // NOT HIDDEN BEHIND THE HOVER, unlike the labels the badges beside the
-        // island reveal. "There is a list here" is implied by the glyph;
-        // "four things went past you" is not, and a number you only find by
-        // pointing at it is a number you find out about too late. It was the
-        // do-not-disturb badge that made that argument first.
+        // island reveal. "There is a list here" is implied by the glyph; "four
+        // things went past you" is not, and a number you only find by pointing
+        // at it is a number you find out about too late.
         Text {
             anchors.verticalCenter: parent.verticalCenter
 
             visible: root.unread > 0
             text: `${root.unread}`
             font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize
-            font.weight: Font.Bold
+            font.pointSize: Fluent.captionSize
+            font.weight: Fluent.strongWeight
+            font.features: ({ "tnum": 1 })
             color: Theme.primary
-        }
-    }
-
-    MouseArea {
-        id: mouse
-
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-
-        onClicked: mouse => {
-            // TOGGLE AND NOT SET, unlike the badge's right button, and the
-            // difference is that the badge only exists while the mute is on --
-            // it has nothing to switch back to. This button is drawn either
-            // way, so a right click that only ever unmuted would do nothing at
-            // all half the time it was tried.
-            if (mouse.button === Qt.RightButton) {
-                NotificationState.toggle();
-                return;
-            }
-
-            // Toggle and not open, the same as the two buttons beside it:
-            // clicking the button that opened the panel should put it away
-            // again. Named with THIS bar, because a click lands on one and
-            // says so -- and through the singleton rather than straight at the
-            // popout, so what it opens is the one list that can be moved and
-            // closed from anywhere rather than a copy nobody owns.
-            NotificationState.toggleHistoryOn(root.popout.screen?.name ?? "");
         }
     }
 

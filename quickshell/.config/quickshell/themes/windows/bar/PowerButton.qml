@@ -1,66 +1,41 @@
-// Power options. The last thing on the bar, and the only control on it that
-// can end the session. It shares a pill with the settings button -- the two
-// are the shell's own controls -- but keeps a full Theme.groupSpacing from it
-// rather than the tight itemSpacing a group normally uses: nothing should be
-// one slipped click away from this, background or no background.
+// Power options. The only control on this bar that can end the session.
 //
-// It used to live under the Arch logo at the opposite corner. Moving it here
-// costs nothing and buys two things: the logo goes back to being decoration,
-// and the destructive action stops hiding behind a brand mark.
+// IT IS NOT AT THE END OF THE BAR ANY MORE, AND THAT IS THIS FILE'S OWN RULE
+// BEING KEPT. What this button has asked for since it moved out from under the
+// logo is that nothing sit one slipped click from it. On a bar across the top
+// of the screen the far right end satisfied that, because it was the end of a
+// row of controls; on a bar across the BOTTOM the far right end is the
+// bottom-right corner of the screen -- the one target a pointer cannot
+// overshoot, the same fact Logo.qml spends a paragraph on from the other side.
+// Giving the session-ending control the easiest click on the desktop is the
+// opposite of what this file has always asked for. The clock and the
+// notification centre take that corner instead; see Bar.qml.
 //
-// Hover speaks in Theme.critical rather than the usual primary. Every other
-// hover on this bar promises "this opens something"; this one has to promise
-// something else, and colour is the cheapest way to say it before the click.
+// THE FILL IS WINDOWS' AND THE INK IS OURS. Every hover in a Windows taskbar is
+// the same subtle brush whatever the item does, so the backplate here is the
+// one TaskbarItem draws and nothing else. The GLYPH still turns Theme.critical:
+// every other hover in this corner promises "this opens something" and this one
+// has to promise something else, and colour is the cheapest way to say it
+// before the click. That is a deviation from Windows and it is deliberate --
+// Windows has no destructive control on its taskbar to disagree with.
 
 import QtQuick
 import qs
 import qs.modules.powermenu
 
-Item {
+TaskbarItem {
     id: root
 
-    // Matches SettingsButton beside it; the note on the size lives there.
-    readonly property int discSize: Theme.groupHeight - 6
-
-    implicitWidth: discSize
-    implicitHeight: Theme.groupHeight
-
-    Rectangle {
-        anchors.centerIn: parent
-
-        width: root.discSize
-        height: root.discSize
-        radius: height / 2
-        color: mouse.containsMouse ? Qt.alpha(Theme.critical, 0.18) : "transparent"
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
-    }
+    // The shell's own menu, not the wofi script. Toggle and not open: clicking
+    // the button that opened it should put it away again.
+    onActivated: PowerMenuState.toggle()
 
     Text {
         anchors.centerIn: parent
+
         text: Icons.power
         font.family: Theme.fontFamily
-        // Theme.controlSize, matching SettingsButton; the note on the change
-        // lives there. It was logoSize while this was a lone glyph on the
-        // bare bar, where it needed the weight to read as a control.
-        font.pointSize: Theme.controlSize
-        color: mouse.containsMouse ? Theme.critical : Theme.textOnSurfaceVariant
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
-    }
-
-    MouseArea {
-        id: mouse
-
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        // The shell's own menu now, not the wofi script. Toggle and not open:
-        // clicking the button that opened it should put it away again.
-        onClicked: PowerMenuState.toggle()
+        font.pointSize: Theme.iconSize
+        color: root.hovered ? Theme.critical : Theme.textOnSurfaceVariant
     }
 }

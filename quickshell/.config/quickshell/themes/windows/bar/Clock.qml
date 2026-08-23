@@ -1,128 +1,124 @@
-// Clock. Compact and icon-led: a glyph introduces each reading and the
-// numbers carry it, with no separator and no words.
+// The clock, in the corner, in two right-aligned lines.
 //
-// What went away from the old "HH:mm  ·  ddd, dd/MM" label:
+// TWO LINES AND NOT ONE, which is the single most recognisable thing about the
+// Windows taskbar's right-hand end: the time above the date, both right-aligned
+// against the corner, both in Caption. Genesis's clock was one line with a
+// glyph in front of each reading; the glyphs are gone, because Windows has none
+// there and because two rows of 12px type in a 34px box leaves no room for them.
 //
-//   - The weekday. It was the widest part of the label, the only part that
-//     changed width from one day to the next, and the one thing nobody
-//     actually reads off a bar -- the date already says it.
-//   - The middle dot. Two glyphs already mark where one reading ends and the
-//     next begins; a separator on top of that is a third mark doing the same
-//     job.
+// TABULAR FIGURES. `font.features` asks OpenType for `tnum`, which makes every
+// digit the same width, so the reading does not shuffle as the minutes tick.
+// It matters more here than it did on one line: two stacked right-aligned rows
+// are exactly where proportional digits show up as the columns disagreeing with
+// each other. If the user's face has no `tnum` table the request is ignored and
+// nothing breaks -- and the fallback is the same one genesis relied on, a fixed
+// format string, which keeps the CHARACTER count constant even when the widths
+// are not.
 //
-// Both readings are fixed-width ("HH:mm", "dd/MM"), so the group holds a
-// constant size as the clock ticks.
+// IT IS A CONTROL AGAIN. Genesis's note says the clock is a reading with
+// nothing behind it and that the calendar belongs in the dashboard. That is
+// genesis's answer; Windows' is that the clock is the door to the calendar, so
+// this one has its own hover fill like every other item in the corner and
+// opens CalendarView underneath itself. The dashboard still draws its own
+// month -- see island/Dashboard.qml, which instantiates the same file.
 //
-// IT IS A READING, NOT A CONTROL. Clicking it used to open a month calendar
-// in the bar's popout. That moved to the dashboard, which is where a calendar
-// belongs: a thing you go to and read, not a thing that springs out of the
-// corner of the screen when you meant to check the time. The clock is now the
-// only widget on the bar with nothing behind it, which is the point.
-//
-// precision: Minutes means the clock wakes up once a minute instead of once
-// a second. This is the kind of thing that made the shell worth swapping:
-// there is no process, no interval and no script behind it.
+// precision: Minutes means the clock wakes up once a minute instead of once a
+// second. There is no process, no interval and no script behind it.
 
 import Quickshell
 import QtQuick
 import qs
+import qs.components
+import ".."
 
-Item {
+TaskbarItem {
     id: root
 
-    // The gap between a glyph and the number it introduces. Tighter than
-    // Theme.itemSpacing on purpose: the icon and its number are one reading,
-    // and they have to bind more closely to each other than the time binds to
-    // the date.
-    readonly property int glyphGap: 5
+    // The bar's shared popout, handed down by Bar.qml.
+    required property Popout popout
 
-    implicitWidth: content.implicitWidth
-    implicitHeight: Theme.groupHeight
+    // OURS, both of them. The type ramp is Microsoft's -- Caption is 12 and
+    // Fluent.captionSize carries it -- but the taskbar clock's line height and
+    // its side padding are shell chrome and nobody publishes those. 15 is
+    // Caption's 16 pulled in by one so two lines clear a 34px box with a
+    // margin; 12 is measured off a screenshot.
+    readonly property int clockLine: 15
+    readonly property int padH: 12
+
+    boxWidth: Math.max(time.implicitWidth, date.visible ? date.implicitWidth : 0)
+        + root.padH * 2
+
+    onActivated: root.popout.toggleAt(root.mapToItem(null, root.width / 2, 0).x, calendarComponent)
 
     SystemClock {
         id: clock
+
         precision: SystemClock.Minutes
     }
 
-    Row {
-        id: content
+    Column {
+        anchors.right: parent.right
+        anchors.rightMargin: root.padH
+        anchors.verticalCenter: parent.verticalCenter
 
-        anchors.centerIn: parent
-        spacing: Theme.itemSpacing
+        // A Column positions on the y axis only, so anchoring these two to its
+        // right edge is what right-aligns them against each other. Without it
+        // they would sit left-aligned inside a column as wide as the longer one.
+        Text {
+            id: time
 
-        // ---------------- Time ----------------
-        Row {
-            spacing: root.glyphGap
+            anchors.right: parent.right
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Icons.clock
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.iconSize
-                // The glyphs stay muted and the numbers lead: the accent is
-                // spoken for elsewhere on the bar (the logo, today's date,
-                // the active workspace) and a third claim on it would flatten
-                // the hierarchy.
-                color: Theme.textOnSurfaceVariant
+            // "hh:mm AP" and not "h:mm AP": the reading has to keep a constant
+            // width or everything to the left of the clock moves every time the
+            // hour goes from 9 to 10.
+            text: Qt.formatDateTime(clock.date, Config.use24Hour ? "HH:mm" : "hh:mm AP")
 
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
+            font.family: Theme.fontFamily
+            font.pointSize: Fluent.captionSize
+            font.weight: Fluent.normalWeight
+            font.features: ({ "tnum": 1 })
+            color: Theme.textOnSurface
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                // "hh:mm AP" and not "h:mm AP": the reading has to keep a
-                // constant width or the group either side of it moves every
-                // time the hour goes from 9 to 10. A leading zero on a
-                // 12-hour clock is unusual, and it is the price of a bar that
-                // does not twitch.
-                text: Qt.formatDateTime(clock.date, Config.use24Hour ? "HH:mm" : "hh:mm AP")
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                font.weight: Font.Bold
-                color: Theme.textOnSurface
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
+            // Set explicitly, because Windows sets none: WinUI's text styles
+            // carry family, size and weight and nothing else, and the published
+            // line heights are what Segoe's own metrics happen to produce. With
+            // any substitute face they have to be written down or the two rows
+            // drift apart.
+            lineHeightMode: Text.FixedHeight
+            lineHeight: root.clockLine
         }
 
-        // ---------------- Date ----------------
-        //
-        // Hidden as a whole -- glyph and number together. Hiding only the
-        // number would leave a calendar icon introducing nothing.
-        Row {
+        // BOTH LINES IN THE PRIMARY INK. The date is not a caption under the
+        // time; on the real taskbar they are the same colour and the same size,
+        // and the hierarchy between them is which one is on top.
+        Text {
+            id: date
+
+            anchors.right: parent.right
+
             visible: Config.showDate
-            spacing: root.glyphGap
+            text: Qt.formatDateTime(clock.date, "dd/MM/yyyy")
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Icons.calendar
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.iconSize
-                color: Theme.textOnSurfaceVariant
+            font.family: Theme.fontFamily
+            font.pointSize: Fluent.captionSize
+            font.weight: Fluent.normalWeight
+            font.features: ({ "tnum": 1 })
+            color: Theme.textOnSurface
 
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Qt.formatDateTime(clock.date, "dd/MM")
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                // One step down from the time: same reading, lesser urgency.
-                font.weight: Theme.fontWeight
-                color: Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
+            lineHeightMode: Text.FixedHeight
+            lineHeight: root.clockLine
         }
     }
 
+    // THE FLYOUT. It is the same CalendarView the dashboard draws, and the
+    // panel around it belongs to components/Popout.qml -- which anchors itself
+    // to the top of the screen. With the taskbar at the bottom this opens at
+    // the WRONG EDGE, and that is a host facade rather than anything this file
+    // can reach. See the note over the Popout in Bar.qml.
+    Component {
+        id: calendarComponent
+
+        CalendarView {}
+    }
 }
