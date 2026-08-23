@@ -601,7 +601,7 @@ SettingsSection {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: Glyphs.timerSand
+                text: Icons.timerSand
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.iconSize
                 color: Theme.warning
@@ -635,7 +635,7 @@ SettingsSection {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.arrangePending !== null
                 label: "Keep"
-                glyph: Glyphs.contentSave
+                glyph: Icons.contentSave
                 filled: true
                 onActivated: root.keepArrangement()
             }

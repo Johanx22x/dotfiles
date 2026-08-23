@@ -153,7 +153,7 @@ SettingsSection {
 
     // ---------------- What it would be ----------------
     CycleRow {
-        glyph: Glyphs.arrowExpand
+        glyph: Icons.arrowExpand
         label: "Mode"
         value: Monitors.modeLabel(root.spec.mode)
         enabled: !root.locked
@@ -172,7 +172,7 @@ SettingsSection {
     }
 
     CycleRow {
-        glyph: Glyphs.relativeScale
+        glyph: Icons.relativeScale
         label: "Scale"
         value: root.spec.scale.toFixed(2)
         enabled: !root.locked
@@ -207,7 +207,7 @@ SettingsSection {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: Glyphs.screenRotation
+                text: Icons.screenRotation
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.iconSize
                 color: Theme.textOnSurfaceVariant
@@ -334,7 +334,7 @@ SettingsSection {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: Compositor.can("monitorConfigCopy")
                 label: root.draft.copiedFor === root.mon.name ? "Copied" : "Copy config"
-                glyph: root.draft.copiedFor === root.mon.name ? Glyphs.check : Icons.clipboard
+                glyph: root.draft.copiedFor === root.mon.name ? Icons.check : Icons.clipboard
                 onActivated: root.draft.copyConfig(root.mon)
             }
 
@@ -441,7 +441,7 @@ SettingsSection {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: Glyphs.timerSand
+                text: Icons.timerSand
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.iconSize
                 color: Theme.warning
@@ -478,7 +478,7 @@ SettingsSection {
             Chip {
                 anchors.verticalCenter: parent.verticalCenter
                 label: "Keep"
-                glyph: Glyphs.contentSave
+                glyph: Icons.contentSave
                 filled: true
                 onActivated: root.draft.keep()
             }

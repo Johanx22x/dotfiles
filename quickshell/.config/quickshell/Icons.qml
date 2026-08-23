@@ -151,6 +151,50 @@ Singleton {
     readonly property string rounding: String.fromCodePoint(0xF0607)    // nf-md-rounded_corner
     readonly property string swapVertical: String.fromCodePoint(0xF04E2) // nf-md-swap_vertical
 
+    // ---------------- Display page ----------------
+    // The seven the display page used to keep to itself. They lived in
+    // modules/settings/pages/display/Glyphs.qml because this file was being
+    // edited elsewhere at the time; that file said to move them here once it
+    // was free, and this is that move. NOT ONE CODEPOINT CHANGED ON THE WAY.
+    //
+    // They come up here rather than staying beside the page because the page
+    // is about to be split so a theme can draw it, and every one of these sits
+    // inside something a theme would draw. A theme reaches the host with
+    // `import qs`, so it can see this file; reaching into a settings page's
+    // own directory is the coupling the host/theme seam exists to stop.
+    //
+    // All seven were read out of the installed font's cmap rather than looked
+    // up by name, which is the rule this file's own corrections set after two
+    // of its entries turned out to draw a bluetooth speaker and a shower head:
+    //
+    //   python3 -c "from fontTools.ttLib import TTFont; \
+    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
+    //       .getBestCmap()[0xF0141])"
+    //
+    // `chevronLeft` is the one that was actually costing something. This file
+    // has had `chevronRight` and `chevronDown` and no left, so CycleRow drew
+    // its back button from the display page's local set and its forward button
+    // from here -- one control, two sources, over a single missing codepoint.
+    readonly property string chevronLeft: String.fromCodePoint(0xF0141)     // nf-md-chevron_left
+    readonly property string check: String.fromCodePoint(0xF012C)           // nf-md-check
+    readonly property string screenRotation: String.fromCodePoint(0xF0475)  // nf-md-screen_rotation
+    readonly property string relativeScale: String.fromCodePoint(0xF0452)   // nf-md-relative_scale
+    readonly property string arrowExpand: String.fromCodePoint(0xF0616)     // nf-md-arrow_expand
+    readonly property string timerSand: String.fromCodePoint(0xF051F)       // nf-md-timer_sand
+    // For the Keep button, which used to carry a tick. A tick said "yes, this
+    // is fine" and the button now also writes the change to disk, so it says
+    // so. Its undo did NOT need adding: `restore` above is already 0xF099B,
+    // md-restore, and the Forget chip uses that rather than an eighth glyph.
+    readonly property string contentSave: String.fromCodePoint(0xF0193)     // nf-md-content_save
+    //
+    // THERE WAS AN EIGHTH AND IT IS GONE, which is worth recording because it
+    // existed to work around a bug rather than to fill a gap: the cmap check
+    // above is what caught `clipboard` pointing at md-music_box_outline, so
+    // the page carried a local `clipboardText` while the launcher offered to
+    // paste a music box. That entry is corrected further down, so the Copy
+    // config chip uses `clipboard` and the duplicate is deleted, not left to
+    // drift.
+
     // ---------------- Session ----------------
     // The power menu's actions, alongside `power` above. Same Material Design
     // family as the rest, for the reason the old wofi script already

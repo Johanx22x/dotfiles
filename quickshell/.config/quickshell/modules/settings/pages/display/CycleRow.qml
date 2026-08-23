@@ -87,7 +87,7 @@ Rectangle {
 
         StepperButton {
             anchors.verticalCenter: parent.verticalCenter
-            symbol: Glyphs.chevronLeft
+            symbol: Icons.chevronLeft
             enabled: root.enabled
             onTriggered: root.stepped(-1)
         }
