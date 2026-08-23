@@ -57,28 +57,6 @@ SettingsPage {
         "keyboard", "bind", "chord", "conflict", "hyprland", "niri"
     ]
 
-    // ---------------- Glyphs that are not in Icons yet ----------------
-    //
-    // TEMPORARY, and they belong in Icons.qml -- they are here only because
-    // that file is not mine to edit right now. Move them when it is free;
-    // nothing about them should change on the way.
-    //
-    // All three codepoints were read out of the installed font's cmap rather
-    // than looked up by name, which is the rule Icons.qml's own comments set
-    // after two of its entries turned out to be a bluetooth speaker and a
-    // shower head:
-    //
-    //   python3 -c "from fontTools.ttLib import TTFont; \
-    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
-    //       .getBestCmap()[0xF0026])"
-    //
-    // Icons.thermometerAlert is the shell's other alert mark and is wrong
-    // here: it is a temperature that has gone too high, not a warning in
-    // general.
-    readonly property string alert: String.fromCodePoint(0xF0026)        // nf-md-alert
-    readonly property string allClear: String.fromCodePoint(0xF05E1)     // nf-md-check_circle_outline
-    readonly property string unlabelled: String.fromCodePoint(0xF0625)   // nf-md-help_circle_outline
-
     // ---------------- Geometry ----------------
 
     // The chord sits in a fixed-width gutter so every description in the list
@@ -186,13 +164,32 @@ SettingsPage {
     readonly property int chipPadding: 14
     readonly property int chipSpacing: 5
 
-    // The chip label's font, so advanceWidth() above measures the text with
-    // the face it will actually be drawn in. It has to be kept in step with
-    // the Text inside KeyChips by hand -- FontMetrics takes a font, not a
-    // component -- and the check that they agree is the one below: a rendered
-    // KeyChips reports implicitWidth, this computes the same number, and the
-    // commit that added it measured the two against each other over the whole
-    // bind set.
+    // THE CAP'S TWO NUMBERS AS ONE VALUE, which is what the call sites hand
+    // over. components/Chip.qml draws the pill now, and it takes the padding and
+    // the face from whoever is doing the arithmetic rather than choosing them --
+    // its header carries the whole of why. Passed together because they are the
+    // pair the sum above adds up, and a call site that passed the padding and
+    // forgot the face would put the chords back over the edge in exactly the way
+    // this whole model exists to prevent.
+    //
+    // THE SPACING IS NOT IN HERE, and the line is not arbitrary: `padding` and
+    // the font describe ONE CAP, and the spacing is the gap BETWEEN caps. The
+    // chip never sees it -- the Row that holds the chips does.
+    readonly property var chipShape: ({
+        padding: root.chipPadding,
+        font: chipMetrics.font
+    })
+
+    // The chip label's font, so advanceWidth() above measures the text with the
+    // face it will actually be drawn in.
+    //
+    // IT NO LONGER HAS TO BE KEPT IN STEP BY HAND. It did: the Text inside
+    // KeyChips spelled out Theme.fontSize - 1.5 for itself, and the two were the
+    // same face only for as long as somebody remembered to change both. This
+    // font is now handed DOWN to the chip through root.chipShape above, so the
+    // face that is measured and the face that is drawn are one value -- and
+    // measured to be, over 73 key labels, drawn width against
+    // advanceWidth() + padding, with no difference at any of them.
     FontMetrics {
         id: chipMetrics
 
@@ -230,7 +227,7 @@ SettingsPage {
 
     // ---------------- Turning a bind into something readable ----------------
     //
-    // COPIED FROM modules/cheatsheet/Cheatsheet.qml, not shared with it, and
+    // COPIED FROM themes/genesis/cheatsheet/Cheatsheet.qml, not shared with it, and
     // that is now two files that have to agree about what "SUPER" and "Esc"
     // are. The right home is a singleton next to Theme and Icons -- the pair
     // below plus the keyNames table -- and the second caller is what makes
@@ -405,7 +402,7 @@ SettingsPage {
     }
 
     function groupGlyph(name: string): string {
-        return name === "Undescribed" ? root.unlabelled : Icons.category(name);
+        return name === "Undescribed" ? Icons.unlabelled : Icons.category(name);
     }
 
     readonly property var groups: {
@@ -500,12 +497,28 @@ SettingsPage {
         required property var keys
         required property int gutterWidth
 
-        // The chip geometry, from the page. See root.chipPadding for why these
-        // arrive from the call site instead of being written here: the gutter
-        // is computed by adding exactly these two numbers up, so the chip that
-        // is drawn and the chip that is measured have to be the same chip.
-        required property int chipPadding
+        // The chip geometry, from the page. See root.chipPadding and
+        // root.chipShape for why these arrive from the call site instead of
+        // being written here: the gutter is computed by adding exactly these
+        // numbers up, so the chip that is drawn and the chip that is measured
+        // have to be the same chip. `chipShape` carries the cap's padding and
+        // the face it was measured in; the spacing is the gap between caps and
+        // belongs to the Row below rather than to any one of them.
+        required property var chipShape
         required property int chipSpacing
+
+        // The chord, with the answer to "is this the key" already in it. It is
+        // decided HERE, at this level, and not from `chip.index` inside the
+        // Repeater below, because a delegate reading `chips.keys.length` is
+        // reading an id from the component outside it -- which resolves, and
+        // which qmllint cannot follow through. Two reads out of the delegate is
+        // what this is worth: the cap's shape, and nothing else.
+        readonly property var caps: chips.keys.map((key, i) => ({
+            text: key,
+            // The key is the LAST chip, the modifiers everything before it,
+            // which is the order the facade hands the chord over in.
+            isKey: i === chips.keys.length - 1
+        }))
 
         // The gutter IS this item; the chips are what sits at the end of it.
         implicitWidth: chips.gutterWidth
@@ -520,45 +533,29 @@ SettingsPage {
             spacing: chips.chipSpacing
 
             Repeater {
-                model: chips.keys
+                model: chips.caps
 
-                Rectangle {
+                Chip {
                     id: chip
 
-                    required property int index
-                    required property string modelData
+                    required property var modelData
 
-                    // The key is the LAST chip, the modifiers everything before
-                    // it, which is the order the facade hands the chord over in.
-                    readonly property bool isKey: chip.index === chips.keys.length - 1
+                    role: "key"
 
-                    implicitWidth: label.implicitWidth + chips.chipPadding
-                    implicitHeight: 22
-                    radius: height / 2
+                    // `name` and not `label`, which is what keeps roughly two
+                    // hundred key caps out of the settings search. See
+                    // components/Chip.qml.
+                    name: chip.modelData.text
 
-                    color: chip.isKey ? Theme.primaryContainer : Theme.surfaceContainerHighest
+                    // The key takes the accent and the modifiers stay muted --
+                    // the modifier is the part you already know.
+                    filled: chip.modelData.isKey
 
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.recolorDuration }
-                    }
-
-                    Text {
-                        id: label
-
-                        anchors.centerIn: parent
-                        text: chip.modelData
-                        font.family: Theme.fontFamily
-                        // Under the body text: a chip is a label on a key, not
-                        // a sentence, and at the same size the chords compete
-                        // with the descriptions instead of introducing them.
-                        font.pointSize: Theme.fontSize - 1.5
-                        font.weight: Theme.fontWeight
-                        color: chip.isKey ? Theme.textOnPrimaryContainer : Theme.textOnSurfaceVariant
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.recolorDuration }
-                        }
-                    }
+                    // The two numbers the gutter was added up from. `padding`
+                    // is the TOTAL added to the label and not a margin per
+                    // side, because that is what the sum above means by it.
+                    padding: chips.chipShape.padding
+                    labelFont: chips.chipShape.font
                 }
             }
         }
@@ -618,7 +615,7 @@ SettingsPage {
         title: "Conflicts"
         // The heading itself carries the verdict, so the answer is legible
         // before a word of it is read.
-        glyph: root.conflicts.length > 0 ? root.alert : root.allClear
+        glyph: root.conflicts.length > 0 ? Icons.alert : Icons.allClear
 
         Item {
             width: parent.width
@@ -738,7 +735,7 @@ SettingsPage {
 
                     keys: clash.modelData.keys
                     gutterWidth: root.keyGutter
-                    chipPadding: root.chipPadding
+                    chipShape: root.chipShape
                     chipSpacing: root.chipSpacing
                 }
 
@@ -911,7 +908,7 @@ SettingsPage {
                         Repeater {
                             model: group.modelData.binds
 
-                            // Not modules/cheatsheet/BindRow.qml, though it is
+                            // Not components/BindRow.qml, though it is
                             // the same shape: its label is always body text in
                             // textOnSurface, and half the rows here are
                             // undescribed and have to say so in a quieter
@@ -932,7 +929,7 @@ SettingsPage {
 
                                     keys: bind.modelData.keys
                                     gutterWidth: root.keyGutter
-                                    chipPadding: root.chipPadding
+                                    chipShape: root.chipShape
                                     chipSpacing: root.chipSpacing
                                 }
 

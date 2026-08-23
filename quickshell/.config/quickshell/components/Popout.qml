@@ -1,10 +1,22 @@
 // A panel that hangs from the bar and reads as part of it.
+// THIS IS THE HALF THE BAR SEES; the rectangle, the fillets that weld it to
+// the bar and the inset around its content are in
+// themes/<theme>/components/Popout.qml.
+//
+// ALMOST NOTHING HERE IS DRAWING, and the reason is that this is a WINDOW.
+// Everything below is a fact about a Wayland layer surface, about the
+// compositor, or about what a click does -- the namespace, the layer, the
+// keyboard focus, the anchors, the screen-edge clamp, the exclusion mode, the
+// input mask, the size the surface has reserved and the grab that dismisses
+// it. A theme draws inside the window; it does not get to reconfigure it.
 //
 // It starts exactly at the bar's bottom edge, its top corners are square so
 // there is no seam, and a CornerWedge on each side fills the junction with a
 // concave fillet -- the same shape the bar uses where it meets the sides of
 // the screen. The result is one continuous surface that grew downwards,
-// rather than a floating menu that happens to be near the bar.
+// rather than a floating menu that happens to be near the bar. That is a
+// promise about shape and it now lives in the theme file, which is the only
+// place that can keep it.
 //
 // One of these serves the whole bar: `anchorX` moves it under whichever
 // widget was clicked and `contentComponent` swaps what it shows, so there is
@@ -34,6 +46,7 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import qs
+import qs.modules
 
 PanelWindow {
     id: root
@@ -63,9 +76,16 @@ PanelWindow {
     //
     // What to show. Swapping the component is what makes one window serve
     // every widget; it is destroyed when closed, so a popout never keeps
-    // stale state from the last time it was open.
+    // stale state from the last time it was open. The theme loads it, which is
+    // the whole of what crosses the seam in that direction.
     property Component contentComponent: null
 
+    // HOW FAR OUTSIDE THE PANEL THE WELD REACHES, and it stays on this side
+    // even though the theme is what draws it. It is the window that has to be
+    // wide enough to hold a fillet on each side of the panel, and the window
+    // is this file's. A theme that draws no fillets gets a window two radii
+    // wider than what it painted, which costs nothing: everywhere the panel is
+    // not, the window is transparent and takes no input.
     readonly property int fillet: Theme.barCornerRadius
 
     // How much of the panel is hidden ABOVE the top edge.
@@ -76,6 +96,10 @@ PanelWindow {
     // goes to zero and all four corners are drawn -- and the content, the
     // window height and the fillets all have to agree on which of the two it
     // currently is, or the panel gains a square bottom or uneven padding.
+    //
+    // The theme reads it for exactly that reason. It is not a style token: it
+    // is a number this window's own height is computed from, and both ends
+    // have to use the same one.
     readonly property int topSlack: root.barVisible ? Theme.cardRadius : 0
 
 
@@ -104,6 +128,9 @@ PanelWindow {
     // from wlr-foreign-toplevel and reads the same on both flavors; whether it
     // is on screen cannot come from there at all. See the note over
     // fullscreenOutputs in CompositorBackend.qml.
+    //
+    // A FACT ABOUT THE COMPOSITOR AND NOT ABOUT STYLE, which is why a theme
+    // reads it rather than deciding it.
     readonly property bool barVisible: Screens.hasBar(root.screen)
         && !Compositor.hasFullscreenOn(root.screen?.name ?? "")
 
@@ -205,10 +232,10 @@ PanelWindow {
     // content meant sixty of them in a fifth of a second. That is what tore.
     //
     // So the window takes the largest size the content has ever needed and
-    // keeps it. What the user sees changing is `panel` below, an ordinary
-    // Rectangle inside a surface that is not moving; everywhere the panel is
-    // not, the window is transparent and takes no input, because the mask
-    // follows the panel rather than the window.
+    // keeps it. What the user sees changing is the panel the theme draws, an
+    // ordinary Rectangle inside a surface that is not moving; everywhere the
+    // panel is not, the window is transparent and takes no input, because the
+    // mask follows the panel rather than the window.
     //
     // The cost is a window that can be larger than what it draws. Nothing
     // reads it: it is transparent, click-through, and only ever as large as
@@ -225,6 +252,13 @@ PanelWindow {
     //
     // The floors are what make the first frame valid, before any content has
     // reported a size.
+    //
+    // AND THE HIGH-WATER MARK TRACKS THE THEME'S IMPLICIT SIZE AND NOT ITS
+    // WIDTH, which is the difference between one reconfigure and sixty. The
+    // implicit size is where the panel is GOING; `drawing.width` is where it
+    // is on this frame of the animation, and reserving off that would raise
+    // the mark on every frame -- which is exactly the tearing the mark exists
+    // to prevent, arrived at from the other direction.
     implicitWidth: Math.max(root.reservedWidth, Theme.popoutMinWidth) + root.fillet * 2
     implicitHeight: Math.max(root.reservedHeight, Theme.popoutMinWidth) - root.topSlack
 
@@ -235,8 +269,14 @@ PanelWindow {
 
     // Input stops at the panel: the fillets are decoration, and a click on
     // them belongs to the window underneath.
+    //
+    // THE LOADER IS THE PANEL, which is what makes this line still true after
+    // the split. It is sized to what the theme reports and sits where the
+    // rectangle used to sit, so masking it masks the panel -- and it is a real
+    // Item on a real type, where `Loader.item` is declared QObject and would
+    // cost an `[incompatible-type]` on this very assignment.
     mask: Region {
-        item: panel
+        item: drawing
     }
 
     // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
@@ -268,60 +308,32 @@ PanelWindow {
             root.close()
     }
 
-    // The two fillets that weld the panel to the bar. Same colour as the
-    // panel, and outside it so they are not clipped by its own rounding.
+    // ---------------- The panel, which the theme draws ----------------
     //
-    // Named, because the blur region above is built from them: it reads each
-    // one's `radius`, `corner`, `visible` and position rather than being told
-    // any of it twice.
-    CornerWedge {
-        id: leftFillet
-
-        visible: root.barVisible
-
-        // Anchored to the PANEL and not to the window: the window is now
-        // larger than what is drawn, and a fillet at its edge would weld the
-        // bar to thin air. The blur region inherits that for free -- it reads
-        // this item's x, which the anchor keeps on the panel's edge through
-        // the width animation.
-        anchors.right: panel.left
-        anchors.top: parent.top
-        corner: "topRight"
-        radius: root.fillet
-        fillColor: panel.color
-    }
-
-    CornerWedge {
-        id: rightFillet
-
-        visible: root.barVisible
-
-        anchors.left: panel.right
-        anchors.top: parent.top
-        corner: "topLeft"
-        radius: root.fillet
-        fillColor: panel.color
-    }
-
-    Rectangle {
-        id: panel
+    // Placed exactly where the rectangle used to be: centred in the window,
+    // and grown UPWARDS by the slack so its top corners round off outside the
+    // visible area and the edge that meets the bar comes out straight.
+    //
+    // THE TWO Behaviors ARE ON THIS SIDE AND THAT IS DELIBERATE, because three
+    // things have to read one geometry: the mask above, the reservation below,
+    // and the fillets the theme anchors to this item's edges. Animated in the
+    // theme's own file instead, the panel would be somewhere the mask was not
+    // for the length of every resize, and a click near its edge would fall
+    // through to the window underneath. The duration is the host's token
+    // either way.
+    //
+    // Animating a Rectangle inside the surface and NOT the surface: the window
+    // is not being reconfigured while this moves, which is the whole of the
+    // note above.
+    Loader {
+        id: drawing
 
         anchors.horizontalCenter: parent.horizontalCenter
+        y: -root.topSlack
 
-        readonly property int targetWidth: Math.max(holder.implicitWidth + Theme.groupPadding * 2, Theme.popoutMinWidth)
-        readonly property int targetHeight: holder.implicitHeight + Theme.groupPadding * 2 + root.topSlack
+        width: drawing.implicitWidth
+        height: drawing.implicitHeight
 
-        onTargetWidthChanged: root.reservedWidth = Math.max(root.reservedWidth, targetWidth)
-        onTargetHeightChanged: root.reservedHeight = Math.max(root.reservedHeight, targetHeight)
-        Component.onCompleted: {
-            root.reservedWidth = Math.max(root.reservedWidth, targetWidth);
-            root.reservedHeight = Math.max(root.reservedHeight, targetHeight);
-        }
-
-        width: panel.targetWidth
-
-        // Animated here and NOT on the window: this is a Rectangle inside a
-        // surface that is not being reconfigured, so it can move freely.
         Behavior on width {
             NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
         }
@@ -330,44 +342,30 @@ PanelWindow {
             NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
         }
 
-        // Grown UPWARDS by one radius and pushed the same amount above the
-        // window, so its top corners round off outside the visible area and
-        // the edge that meets the bar comes out straight.
-        //
-        // Why not topLeftRadius/topRightRadius at 0 and be done: Rectangle's
-        // per-corner radius path is NOT antialiased -- `antialiasing: true`
-        // makes no difference to it -- and the rounded corners come out as
-        // 2-3px stair steps. A uniform `radius` is antialiased properly, so
-        // the square edges are made by clipping rather than by geometry.
-        // Grown upwards only while it is welded to the bar. Detached, the top
-        // corners have to be visible, so the rectangle sits where it is drawn.
-        y: -root.topSlack
-        height: panel.targetHeight
+        onImplicitWidthChanged: root.reservedWidth = Math.max(root.reservedWidth, drawing.implicitWidth)
+        onImplicitHeightChanged: root.reservedHeight = Math.max(root.reservedHeight, drawing.implicitHeight)
 
-        radius: Theme.cardRadius
-        antialiasing: true
+        readonly property string drawingUrl: Themes.surface("components/Popout.qml")
 
-        color: Theme.glass(Theme.surface)
+        function build(): void {
+            if (String(drawing.source) === drawing.drawingUrl)
+                return;
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
+            drawing.setSource(drawing.drawingUrl, {
+                row: root
+            });
         }
 
-        Item {
-            id: holder
-
-            // Centred on the visible area: the rectangle extends one radius
-            // above the window, and centring on it would push the content up.
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.top: parent.top
-            anchors.topMargin: root.topSlack + Theme.groupPadding
-            implicitWidth: childrenRect.width
-            implicitHeight: childrenRect.height
-
-            Loader {
-                active: root.isOpen
-                sourceComponent: root.contentComponent
-            }
+        Component.onCompleted: {
+            drawing.build();
+            // The theme's first report can land while this Loader is being
+            // built, before the two handlers above are connected. Seeding the
+            // mark here is what the Rectangle's own Component.onCompleted used
+            // to do, and for the same reason.
+            root.reservedWidth = Math.max(root.reservedWidth, drawing.implicitWidth);
+            root.reservedHeight = Math.max(root.reservedHeight, drawing.implicitHeight);
         }
+
+        onDrawingUrlChanged: drawing.build()
     }
 }

@@ -153,7 +153,7 @@ SettingsSection {
 
     // ---------------- What it would be ----------------
     CycleRow {
-        glyph: Glyphs.arrowExpand
+        glyph: Icons.arrowExpand
         label: "Mode"
         value: Monitors.modeLabel(root.spec.mode)
         enabled: !root.locked
@@ -172,7 +172,7 @@ SettingsSection {
     }
 
     CycleRow {
-        glyph: Glyphs.relativeScale
+        glyph: Icons.relativeScale
         label: "Scale"
         value: root.spec.scale.toFixed(2)
         enabled: !root.locked
@@ -207,7 +207,7 @@ SettingsSection {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: Glyphs.screenRotation
+                text: Icons.screenRotation
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.iconSize
                 color: Theme.textOnSurfaceVariant
@@ -334,7 +334,7 @@ SettingsSection {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: Compositor.can("monitorConfigCopy")
                 label: root.draft.copiedFor === root.mon.name ? "Copied" : "Copy config"
-                glyph: root.draft.copiedFor === root.mon.name ? Glyphs.check : Icons.clipboard
+                glyph: root.draft.copiedFor === root.mon.name ? Icons.check : Icons.clipboard
                 onActivated: root.draft.copyConfig(root.mon)
             }
 
@@ -405,92 +405,24 @@ SettingsSection {
 
     // ---------------- The way back ----------------
     //
-    // WHY NOT ConfirmButton. That one arms on the first click and acts
-    // on the second, so the dangerous thing happens only if you
-    // confirm it -- which is the right shape for Reset and the wrong
-    // shape here. The dangerous thing has ALREADY happened by the time
-    // this row appears: the mode is live, and what the click buys is
-    // permission to keep it -- and, since keep() writes, permission to
-    // write it down. Silence has to undo, not do nothing. Its
-    // countdown is also a border draining away with no number on it,
-    // and the number is the one thing worth reading when you are
-    // waiting to find out whether the screen comes back.
-    Rectangle {
-        width: parent.width - 8
-        x: 4
-        implicitHeight: Theme.groupHeight
-        radius: Theme.groupRadius
+    // WHY NOT ConfirmButton, what the amber means, and why the clock that
+    // counts these seconds is in DisplayDraft.qml rather than anywhere near
+    // the thing that draws them: all three are in
+    // PendingBanner.qml, which is where that reasoning went when the drawing
+    // crossed the seam.
+    //
+    // THE SECONDS ARE A READING, exactly as they were: this asks for a number
+    // and never counts one. The revert timer is DisplayDraft's, bound to the
+    // pending state and not to this row's `visible`, because the case it
+    // exists for is the one where the screen went black and nobody is looking
+    // at this page at all.
+    PendingBanner {
         visible: root.pending
 
-        // The shell's amber, the same one the Wi-Fi hardware-switch
-        // line uses: this is not an error, it is a state that is about
-        // to end by itself.
-        color: Qt.alpha(Theme.warning, 0.16)
-        border.width: 1
-        border.color: Theme.warning
+        question: "Keep this display setting?"
+        seconds: root.draft.secondsLeft
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
-
-        Row {
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.groupPadding
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Theme.itemSpacing
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Glyphs.timerSand
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.iconSize
-                color: Theme.warning
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: `Keep this display setting? Reverting in ${root.draft.secondsLeft}s`
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 1
-                font.weight: Font.Bold
-                color: Theme.textOnSurface
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-        }
-
-        Row {
-            anchors.right: parent.right
-            anchors.rightMargin: Theme.groupPadding - 4
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Theme.itemSpacing
-
-            // "Keep" and a save glyph, because this one press does both
-            // things: it stops the countdown AND it is what writes the
-            // change to the generated file. A tick here would say the
-            // change was merely accepted.
-            Chip {
-                anchors.verticalCenter: parent.verticalCenter
-                label: "Keep"
-                glyph: Glyphs.contentSave
-                filled: true
-                onActivated: root.draft.keep()
-            }
-
-            // The same thing the timer is about to do, for when you
-            // can already see it is wrong and would rather not sit
-            // through the countdown.
-            Chip {
-                anchors.verticalCenter: parent.verticalCenter
-                label: "Revert now"
-                onActivated: root.draft.revert()
-            }
-        }
+        onKept: root.draft.keep()
+        onReverted: root.draft.revert()
     }
 }

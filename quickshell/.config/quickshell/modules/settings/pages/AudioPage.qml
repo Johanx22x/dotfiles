@@ -352,7 +352,10 @@ SettingsPage {
             // Wide enough for the longest thing it ever says, so the slider
             // beside it keeps one length instead of breathing in and out as
             // the number crosses 100 or the row is muted.
-            width: Math.max(mutedMetrics.width, loudMetrics.width)
+            //
+            // MEASURED BY THE THING THAT DRAWS. See the two hidden Texts
+            // below for why they are not TextMetrics any more.
+            width: Math.max(mutedMetrics.implicitWidth, loudMetrics.implicitWidth)
             horizontalAlignment: Text.AlignRight
 
             text: line.muted ? mutedMetrics.text : `${Math.round(line.volume * 100)}%`
@@ -366,16 +369,47 @@ SettingsPage {
                 ColorAnimation { duration: Theme.animDuration }
             }
 
-            TextMetrics {
+            // HIDDEN Texts AND NOT TextMetrics, which is the same call
+            // themes/genesis/island/ReplayControl.qml makes and for the same
+            // measured reason: a TextMetrics and a Text do not agree about the
+            // width of one string in one font, and the Text is the one that is
+            // right, because the Text is the one that draws.
+            //
+            // THIS IS THE WORST OF THE FIVE PLACES THE SHELL DID IT, and the
+            // only one whose ink actually crossed its own edge at the SHIPPED
+            // font size rather than only at a larger one, so the numbers are
+            // worth writing down. "muted" in this face, bold, at fontSize 11:
+            //
+            //   TextMetrics.width  43.00      <- what was reserved
+            //   Text.implicitWidth 45.00      <- what is laid out
+            //   painted ink        44 px      <- counted from a grab
+            //
+            // The ink is the row that settles it, and it does not fit in 43.
+            // There is no elide here, so nothing clipped and nothing looked
+            // broken -- a Text with less width than it needs and AlignRight
+            // simply paints out past its own left edge. The word crossed into
+            // the gap the slider was anchored to leave, by a pixel, in exactly
+            // the state the pointer had just clicked into.
+            //
+            // 2 px AND NOT A ROUNDING ERROR: five characters of a monospaced
+            // face at 9.00 px of advance each is 45, and TextMetrics answers
+            // 43. It is a different measurement of the same font, not the same
+            // measurement rounded.
+            //
+            // `visible: false` and nothing else -- an invisible Text still
+            // lays its string out, and these two are in no layout to disturb.
+            Text {
                 id: mutedMetrics
 
+                visible: false
                 font: percent.font
                 text: "muted"
             }
 
-            TextMetrics {
+            Text {
                 id: loudMetrics
 
+                visible: false
                 font: percent.font
                 text: "150%"
             }
@@ -423,296 +457,6 @@ SettingsPage {
             peak: line.peak
             active: line.showMeter && !line.muted
             accent: line.accent
-        }
-    }
-
-    // ---------------- One device in a list of them ----------------
-    component DeviceRow: Rectangle {
-        id: device
-
-        property var node: null
-        property bool isDefault: false
-        property string glyph: ""
-
-        signal chosen
-
-        readonly property bool muted: device.node?.audio?.muted ?? false
-
-        width: parent ? parent.width : 320
-        implicitHeight: 32
-        radius: Theme.groupRadius
-        color: deviceMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
-
-        Text {
-            id: deviceGlyph
-
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.groupPadding
-            anchors.verticalCenter: parent.verticalCenter
-
-            text: device.glyph
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.iconSize
-            // The accent marks the one in use and nothing else, exactly as
-            // the network list marks the connected network.
-            color: device.isDefault ? Theme.primary : Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-        }
-
-        Text {
-            anchors.left: deviceGlyph.right
-            anchors.leftMargin: Theme.itemSpacing
-            anchors.right: state.left
-            anchors.rightMargin: Theme.itemSpacing
-            anchors.verticalCenter: parent.verticalCenter
-
-            // `description` and not `nickname`, because it is the string
-            // wpctl and pavucontrol both print -- a settings window that
-            // renames the devices disagrees with every other tool on the
-            // machine the moment something goes wrong.
-            text: device.node?.description ?? ""
-            elide: Text.ElideRight
-
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize
-            font.weight: device.isDefault ? Font.Bold : Theme.fontWeight
-            color: device.isDefault ? Theme.primary : Theme.textOnSurface
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-        }
-
-        Row {
-            id: state
-
-            anchors.right: parent.right
-            anchors.rightMargin: Theme.groupPadding
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 6
-
-            // WORTH ITS OWN MARK, and this machine is the argument: two of
-            // its four outputs sit at zero and muted. Switching to one of
-            // them and hearing nothing is a minute of thinking the change
-            // failed, and the row knew all along.
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                visible: device.muted
-
-                text: Icons.volumeMuted
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 1
-                color: Theme.outline
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-
-            // Says what this row IS, or what a click would do to it. The same
-            // shape the network list uses, and the same reason: repeating
-            // what the row already shows teaches nobody anything.
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-
-                text: device.isDefault ? "default" : deviceMouse.containsMouse ? "use" : ""
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 2
-                color: Theme.outline
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-        }
-
-        MouseArea {
-            id: deviceMouse
-
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: device.chosen()
-        }
-    }
-
-    // ---------------- One application making noise ----------------
-    component StreamRow: Item {
-        id: stream
-
-        property var node: null
-        property string label: ""
-        property string route: ""
-        // The preposition differs and the row would read as nonsense with the
-        // wrong one: sound goes TO a pair of headphones and comes FROM a
-        // microphone.
-        property string routePrefix: ""
-        property string glyph: ""
-        property string mutedGlyph: ""
-
-        readonly property var audio: stream.node?.audio ?? null
-        readonly property bool muted: stream.audio?.muted ?? false
-        readonly property real volume: stream.audio?.volume ?? 0
-
-        // NO HOVER FILL ON THE ROW ITSELF, unlike the device rows above. The
-        // row is not a target -- there is nowhere for a click on it to go,
-        // since this page cannot reroute a stream -- and InfoRow's rule
-        // applies: the cheapest way to tell a control from a reading is that
-        // a control lights up. The two things here that DO respond, the glyph
-        // and the slider, light up on their own.
-        width: parent ? parent.width : 320
-        implicitHeight: 52
-
-        Rectangle {
-            id: streamMute
-
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.groupPadding - 6
-            anchors.top: parent.top
-            anchors.topMargin: 3
-
-            width: 30
-            height: 30
-            radius: height / 2
-            color: streamMuteMouse.containsMouse ? Theme.surfaceContainerHighest : "transparent"
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-
-            Text {
-                anchors.centerIn: parent
-                text: stream.muted ? stream.mutedGlyph : stream.glyph
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.iconSize - 1
-                color: stream.muted ? Theme.outline : Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
-            }
-
-            MouseArea {
-                id: streamMuteMouse
-
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    if (stream.audio)
-                        stream.audio.muted = !stream.audio.muted;
-                }
-            }
-        }
-
-        Text {
-            id: streamPercent
-
-            anchors.right: parent.right
-            anchors.rightMargin: Theme.groupPadding
-            anchors.verticalCenter: streamMute.verticalCenter
-
-            width: streamMutedMetrics.width
-            horizontalAlignment: Text.AlignRight
-
-            text: stream.muted ? streamMutedMetrics.text : `${Math.round(stream.volume * 100)}%`
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 1
-            color: stream.muted ? Theme.outline : Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-
-            TextMetrics {
-                id: streamMutedMetrics
-
-                font: streamPercent.font
-                text: "muted"
-            }
-        }
-
-        // The name and where the sound is going, on ONE line. They were two
-        // for a version, with the route underneath, and it made every
-        // application three rows tall for a fact that fits in the gap at the
-        // end of the first one.
-        Row {
-            anchors.left: streamMute.right
-            anchors.leftMargin: Theme.itemSpacing
-            anchors.right: streamPercent.left
-            anchors.rightMargin: Theme.itemSpacing
-            anchors.verticalCenter: streamMute.verticalCenter
-            spacing: 6
-
-            Text {
-                id: streamLabel
-
-                anchors.verticalCenter: parent.verticalCenter
-
-                // Bounded rather than left to elide against the Row, which
-                // hands every child the width it asks for -- an application
-                // with a long name would push the route off the end instead
-                // of giving way to it.
-                width: Math.min(implicitWidth, parent.width * 0.5)
-                elide: Text.ElideRight
-
-                text: stream.label
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                font.weight: Theme.fontWeight
-                color: stream.muted ? Theme.outline : Theme.textOnSurface
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                visible: stream.route !== ""
-
-                width: Math.min(implicitWidth, parent.width - streamLabel.width - parent.spacing)
-                elide: Text.ElideRight
-
-                text: `· ${stream.routePrefix} ${stream.route}`
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 2
-                color: Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-        }
-
-        VolumeSlider {
-            wheelEnabled: false
-
-            anchors.left: streamMute.right
-            anchors.leftMargin: Theme.itemSpacing
-            anchors.right: streamPercent.right
-            anchors.top: streamMute.bottom
-            anchors.topMargin: -2
-
-            value: stream.volume
-            maximum: 1.5
-            notch: 1
-            accent: stream.muted ? Theme.outline : Theme.primary
-
-            onMoved: value => {
-                if (!stream.audio)
-                    return;
-                stream.audio.volume = value;
-                if (stream.muted && value > 0)
-                    stream.audio.muted = false;
-            }
         }
     }
 
@@ -1067,13 +811,38 @@ SettingsPage {
             Repeater {
                 model: root.sinks
 
-                delegate: DeviceRow {
+                delegate: ListRow {
                     required property var modelData
 
-                    node: modelData
-                    isDefault: modelData === root.sink
+                    // `description` and not `nickname`, because it is the
+                    // string wpctl and pavucontrol both print -- a settings
+                    // window that renames the devices disagrees with every
+                    // other tool on the machine the moment something goes
+                    // wrong.
+                    //
+                    // AND `name` AND NOT `label`, which is the property that
+                    // decides whether the settings search indexes this row.
+                    // An output is machine data and was never in that index;
+                    // components/ListRow.qml carries the whole of why the
+                    // choice is spelled out at the call site.
+                    name: modelData?.description ?? ""
                     glyph: Icons.outputGlyph(`${modelData?.name ?? ""} ${modelData?.description ?? ""}`,
                         false, 1)
+                    selected: modelData === root.sink
+
+                    // Says what this row IS, or what a click would do to it.
+                    // The same shape the network list uses, and the same
+                    // reason: repeating what the row already shows teaches
+                    // nobody anything.
+                    mark: "default"
+                    hoverMark: "use"
+
+                    // WORTH ITS OWN MARK, and this machine is the argument:
+                    // two of its four outputs sit at zero and muted.
+                    // Switching to one of them and hearing nothing is a
+                    // minute of thinking the change failed, and the row knew
+                    // all along.
+                    markGlyph: (modelData?.audio?.muted ?? false) ? Icons.volumeMuted : ""
 
                     // Verified against a live machine rather than assumed:
                     // writing this property moved the default off the
@@ -1144,12 +913,19 @@ SettingsPage {
             Repeater {
                 model: root.sources
 
-                delegate: DeviceRow {
+                delegate: ListRow {
                     required property var modelData
 
-                    node: modelData
-                    isDefault: modelData === root.source
+                    // `name` and not `label`, and `description` and not
+                    // `nickname`: see the outputs above, where both are
+                    // written out.
+                    name: modelData?.description ?? ""
                     glyph: Icons.microphone
+                    selected: modelData === root.source
+
+                    mark: "default"
+                    hoverMark: "use"
+                    markGlyph: (modelData?.audio?.muted ?? false) ? Icons.volumeMuted : ""
 
                     onChosen: Pipewire.preferredDefaultAudioSource = modelData
                 }

@@ -42,9 +42,12 @@
      grep -o '@define-color [a-z_0-9]*' \
        /usr/share/themes/adw-gtk3-dark/gtk-3.0/gtk.css | sort -u
 
-   Values are the same Tokyo Night as gtk4-colors.css, on purpose: the two
-   toolkits have to be indistinguishable on screen. Only the accent follows
-   the wallpaper. */
+   Both toolkits read the SAME ROLES, on purpose: they have to be
+   indistinguishable on screen, and naming the same role in both files is what
+   keeps them so through a scheme change -- the values were literal Tokyo Night
+   in both until `desktop-scheme` existed, and matching hex by hand is what that
+   arrangement cost. The surfaces and text are the scheme's `ui_*`, the alerts
+   its `sem_*`, and only the accent follows the wallpaper. */
 
 
 /* ==================================================================
@@ -52,29 +55,38 @@
    ================================================================== */
 
 /* ---- Surfaces ---- */
-@define-color window_bg_color   #1a1b26;
-@define-color window_fg_color   #c0caf5;
+@define-color window_bg_color   {{colors.ui_bg.default.hex}};
+@define-color window_fg_color   {{colors.ui_text.default.hex}};
 
-/* The view (lists, content areas) goes one step darker than the window: it
-   lifts the content off the chrome. Same reasoning and the same values as
-   in GTK4, where the gap was widened from #15161e to #101119.
+/* The view (lists, content areas) goes one step away from the window: it
+   lifts the content off the chrome. Same reasoning and the same ROLE as in
+   GTK4, `ui_bg_view`, which is how the two stay equal without either file
+   holding the other's hex.
+
+   The step was widened from #15161e to #101119 when both were literals here,
+   and that pair is the measurement, not the current value: each scheme names
+   its own `ui_bg_view` now, and Tokyo Night publishes #0c0e14 for it -- deeper
+   than the tone the numbers below were read off. Nor is the view necessarily
+   the darker of the two; schemes/README.md 4.3 is where that is argued.
 
    One caveat on "indistinguishable on screen", which is the goal stated at
    the top of this file: it holds for every app EXCEPT Nautilus. Nautilus
    alone carries opacity 0.82 in hyprland.lua, so there these same values
    get composited over the blurred wallpaper and the step reads weaker.
-   #101119 was chosen to survive that blend. In an opaque app -- every GTK3
-   one, plus Loupe and Celluloid on the GTK4 side -- it lands at full
-   strength, which is a slightly firmer content/chrome step than Nautilus
-   shows. Matching the numbers is what keeps the toolkits in sync;
-   compensating per-app is what would put them out of sync. */
-@define-color view_bg_color     #101119;
-@define-color view_fg_color     #c0caf5;
+   #101119 was chosen to survive that blend, and surviving it is what a scheme
+   inherits the requirement to do: a `ui_bg_view` a hair off its `ui_bg` will
+   look right in every other app and flat in Nautilus. In an opaque app --
+   every GTK3 one, plus Loupe and Celluloid on the GTK4 side -- it lands at
+   full strength, which is a slightly firmer content/chrome step than Nautilus
+   shows. Naming the same role in both files is what keeps the toolkits in
+   sync; compensating per-app is what would put them out of sync. */
+@define-color view_bg_color     {{colors.ui_bg_view.default.hex}};
+@define-color view_fg_color     {{colors.ui_text.default.hex}};
 
-@define-color headerbar_bg_color        #1a1b26;
-@define-color headerbar_fg_color        #c0caf5;
-@define-color headerbar_border_color    #414868;
-@define-color headerbar_backdrop_color  #1a1b26;
+@define-color headerbar_bg_color        {{colors.ui_bg.default.hex}};
+@define-color headerbar_fg_color        {{colors.ui_text.default.hex}};
+@define-color headerbar_border_color    {{colors.ui_border.default.hex}};
+@define-color headerbar_backdrop_color  {{colors.ui_bg.default.hex}};
 @define-color headerbar_shade_color     rgba(0, 0, 0, 0.15);
 
 /* The full sidebar_* set, and three of these five were MISSING before --
@@ -94,28 +106,28 @@
 
      grep -m1 '@define-color <name> ' \
        /usr/share/themes/adw-gtk3-dark/gtk-3.0/gtk.css */
-@define-color sidebar_bg_color        #1a1b26;
-@define-color sidebar_fg_color        #c0caf5;
-@define-color sidebar_backdrop_color  #1a1b26;
+@define-color sidebar_bg_color        {{colors.ui_bg.default.hex}};
+@define-color sidebar_fg_color        {{colors.ui_text.default.hex}};
+@define-color sidebar_backdrop_color  {{colors.ui_bg.default.hex}};
 @define-color sidebar_border_color    transparent;
 @define-color sidebar_shade_color     rgba(0, 0, 0, 0.18);
 
-@define-color card_bg_color     #292e42;
-@define-color card_fg_color     #c0caf5;
+@define-color card_bg_color     {{colors.ui_bg_raised.default.hex}};
+@define-color card_fg_color     {{colors.ui_text.default.hex}};
 @define-color card_shade_color  rgba(0, 0, 0, 0.36);
 
-@define-color dialog_bg_color   #1a1b26;
-@define-color dialog_fg_color   #c0caf5;
+@define-color dialog_bg_color   {{colors.ui_bg.default.hex}};
+@define-color dialog_fg_color   {{colors.ui_text.default.hex}};
 
-@define-color popover_bg_color  #292e42;
-@define-color popover_fg_color  #c0caf5;
+@define-color popover_bg_color  {{colors.ui_bg_raised.default.hex}};
+@define-color popover_fg_color  {{colors.ui_text.default.hex}};
 
-@define-color thumbnail_bg_color #292e42;
-@define-color thumbnail_fg_color #c0caf5;
+@define-color thumbnail_bg_color {{colors.ui_bg_raised.default.hex}};
+@define-color thumbnail_fg_color {{colors.ui_text.default.hex}};
 
 @define-color shade_color   rgba(0, 0, 0, 0.36);
 @define-color scrim_color   rgba(0, 0, 0, 0.5);
-@define-color borders       #414868;
+@define-color borders       {{colors.ui_border.default.hex}};
 
 /* content_view_bg exists only in the GTK3 port: it is what an icon view or a
    file list paints behind the items. Left equal to the view so a file chooser
@@ -124,16 +136,16 @@
    panel_bg_color / panel_fg_color are the other two the port hardcodes
    rather than deriving: their defaults are literally "black" and "white",
    which is how a menubar or panel ends up as a pure-black strip in the
-   middle of a Tokyo Night window. Pinned to the chrome.
+   middle of a window no scheme paints black. Pinned to the chrome.
 
    Not listed here because the theme already derives them from the names
    above, so they follow on their own: theme_base_color, theme_bg_color,
    theme_fg_color, theme_text_color, theme_selected_bg_color and
    text_view_bg. */
-@define-color content_view_bg   #101119;
+@define-color content_view_bg   {{colors.ui_bg_view.default.hex}};
 
-@define-color panel_bg_color    #1a1b26;
-@define-color panel_fg_color    #c0caf5;
+@define-color panel_bg_color    {{colors.ui_bg.default.hex}};
+@define-color panel_fg_color    {{colors.ui_text.default.hex}};
 
 /* ---- Backdrop ----
    GTK3 keeps a separate set of colours for a window WITHOUT focus, and with
@@ -145,21 +157,21 @@
    This is the same shift that the old selector patch fought with a whole
    :backdrop section. Here it is eight lines and it cannot be beaten on
    specificity, because it is not a rule. */
-@define-color theme_unfocused_bg_color            #1a1b26;
-@define-color theme_unfocused_fg_color            #c0caf5;
-@define-color theme_unfocused_base_color          #101119;
-@define-color theme_unfocused_text_color          #c0caf5;
+@define-color theme_unfocused_bg_color            {{colors.ui_bg.default.hex}};
+@define-color theme_unfocused_fg_color            {{colors.ui_text.default.hex}};
+@define-color theme_unfocused_base_color          {{colors.ui_bg_view.default.hex}};
+@define-color theme_unfocused_text_color          {{colors.ui_text.default.hex}};
 @define-color theme_unfocused_selected_bg_color   {{colors.primary.default.hex}};
 @define-color theme_unfocused_selected_fg_color   {{colors.on_primary.default.hex}};
-@define-color unfocused_borders                   #414868;
+@define-color unfocused_borders                   {{colors.ui_border.default.hex}};
 
 /* ---- Disabled ----
    The text dims, the background does NOT lighten. Lightening it on a dark
    theme is exactly what makes a disabled widget unreadable. */
-@define-color insensitive_bg_color      #1a1b26;
-@define-color insensitive_fg_color      #565f89;
-@define-color insensitive_base_color    #101119;
-@define-color unfocused_insensitive_color #565f89;
+@define-color insensitive_bg_color      {{colors.ui_bg.default.hex}};
+@define-color insensitive_fg_color      {{colors.ui_text_muted.default.hex}};
+@define-color insensitive_base_color    {{colors.ui_bg_view.default.hex}};
+@define-color unfocused_insensitive_color {{colors.ui_text_muted.default.hex}};
 
 /* ---- Accent: the only thing that follows the wallpaper ----
    accent_color    = for TEXT and icons over the window background.
@@ -174,26 +186,31 @@
 @define-color accent_bg_color  {{colors.primary.default.hex}};
 @define-color accent_fg_color  {{colors.on_primary.default.hex}};
 
-/* ---- Semantic: NOT harmonised ----
-   An alert has to look the same always, even over a red wallpaper: for
-   these four the colour IS the meaning, so deriving them from the image
-   would throw away the only thing they carry. The same call is made in
-   quickshell/Theme.qml, which hardcodes `warning` and `critical` rather than
-   reading M3's error role, and it is written out under [config] in
-   config.toml. (That comment used to point at waybar's #custom-system.
-   waybar is gone.) */
-@define-color destructive_color     #f7768e;
-@define-color destructive_bg_color  #f7768e;
-@define-color destructive_fg_color  #1a1b26;
+/* ---- Semantic: from the scheme, never from the image ----
+   An alert has to mean the same thing over a red wallpaper as over a blue
+   one: for these four the colour IS the meaning, so deriving them from the
+   image would throw away the only thing they carry. They come from the
+   scheme's `sem_*` roles instead -- a scheme is picked by hand and moves only
+   when the user moves it, which is fixed enough, and it is what lets a
+   Gruvbox desktop show Gruvbox's red instead of Tokyo Night's.
 
-@define-color success_color     #9ece6a;
-@define-color success_bg_color  #9ece6a;
-@define-color success_fg_color  #1a1b26;
+   The same call is made everywhere else that paints an alert: zathura, qt6ct,
+   cship, and quickshell/Theme.qml, which reads `warning` and `critical` out of
+   colors.json rather than M3's `error` role -- that role is the one that IS
+   derived per image. The argument is written out under [config] in config.toml.
+   (That comment used to point at waybar's #custom-system. waybar is gone.) */
+@define-color destructive_color     {{colors.sem_critical.default.hex}};
+@define-color destructive_bg_color  {{colors.sem_critical.default.hex}};
+@define-color destructive_fg_color  {{colors.sem_on_critical.default.hex}};
 
-@define-color warning_color     #e0af68;
-@define-color warning_bg_color  #e0af68;
-@define-color warning_fg_color  #1a1b26;
+@define-color success_color     {{colors.sem_success.default.hex}};
+@define-color success_bg_color  {{colors.sem_success.default.hex}};
+@define-color success_fg_color  {{colors.sem_on_success.default.hex}};
 
-@define-color error_color       #f7768e;
-@define-color error_bg_color    #f7768e;
-@define-color error_fg_color    #1a1b26;
+@define-color warning_color     {{colors.sem_warning.default.hex}};
+@define-color warning_bg_color  {{colors.sem_warning.default.hex}};
+@define-color warning_fg_color  {{colors.sem_on_warning.default.hex}};
+
+@define-color error_color       {{colors.sem_critical.default.hex}};
+@define-color error_bg_color    {{colors.sem_critical.default.hex}};
+@define-color error_fg_color    {{colors.sem_on_critical.default.hex}};

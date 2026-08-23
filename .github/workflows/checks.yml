@@ -119,6 +119,19 @@ jobs:
           # `import PyQt6.QtQuick` fails and the check dies before its first
           # assertion.
           #
+          # matugen for tests/scheme-pinning.sh, and it is the first check here
+          # that renders a palette instead of reading one. It is in [extra], it
+          # is the same 4.2.0 the desktop runs, and it is what turns "the state
+          # file says gruvbox" into "the colour the shell would read is
+          # gruvbox's". jq comes with it as a dependency of nothing -- it is
+          # pulled in explicitly below, because that check parses the schemes
+          # and the manifests with it and `desktop-scheme` reads a label with
+          # it on every `list`.
+          #
+          # NO WALLPAPER AND NO IMAGE DECODER NEEDED: that check seeds the
+          # render with `matugen color hex`, the same form `desktop-scheme
+          # accent-args` reduces an image to before the render ever runs.
+          #
           # NO FONT PACKAGE, checked rather than assumed: that bench was run
           # against an empty fontconfig and passed. Its entries carry Text
           # items, but nothing it measures is a text size -- the rail's height
@@ -126,7 +139,8 @@ jobs:
           # a font package would be weight for nothing.
           pacman -Syu --needed --noconfirm \
             git python python-yaml lua shellcheck actionlint stow hyprland \
-            niri curl quickshell labwc mesa python-pyqt6 qt6-declarative
+            niri curl quickshell labwc mesa python-pyqt6 qt6-declarative \
+            matugen jq
 
       - uses: actions/checkout@v7
 
@@ -158,6 +172,63 @@ jobs:
         if: ${{ !cancelled() }}
         run: tests/config-syntax.sh
 
+      # THE ONE CHECK STANDING BETWEEN A SCHEME FILE AND A DESKTOP THAT CANNOT
+      # RE-THEME ITSELF. matugen resolves every role a template names and
+      # writes NONE of the eleven files if one is missing, so a scheme that has
+      # dropped a role is not a wrong colour, it is no colour at all -- and
+      # until the templates stop carrying the base palette as hex literals, an
+      # incomplete scheme renders perfectly and says nothing. The header of the
+      # script has the rest.
+      #
+      # No new package: it is Python, which is already installed above for
+      # bind-parity.py and workflows.py.
+      - name: The schemes fill the colour vocabulary
+        if: ${{ !cancelled() }}
+        run: tests/scheme-roles.py
+
+      # AND THE ONE THING THE CHECK ABOVE SAYS IT CANNOT SEE: whether the
+      # palette actually renders. Its header records that as measured by hand
+      # because "that needs matugen and a wallpaper, neither of which a runner
+      # has". Half of that has stopped being true -- matugen is in [extra] and
+      # is installed above -- and the other half never had to be: `matugen
+      # color hex` seeds a render from a colour instead of an image, which is
+      # what `desktop-scheme accent-args` reduces every wallpaper to anyway.
+      # So this one RENDERS, into a sandbox, and reads the colour back out.
+      #
+      # WHAT IT IS FOR is the other half of the two keys `desktop-scheme`
+      # keeps. `scheme` is what renders and `chosen` is what the person picked;
+      # the second exists so that a theme can pin a scheme for as long as it is
+      # on and leaving it gives the person theirs back.
+      # tests/fixtures/theme-probe's manifest pins gruvbox-dark, and this check
+      # enters and leaves that theme.
+      #
+      # AND IT ENTERS IT THE WAY A PERSON DOES, which is what changed when the
+      # wiring was built. It starts a real shell in the headless compositor two
+      # steps down and writes `theme` into the config.json that shell is
+      # watching; Theme.qml reads the pin off the manifest of the theme being
+      # drawn and Config.qml spawns the script. So the transitions are the
+      # shell's, not the check's -- it used to run `pin` and `unpin` itself and
+      # carry a tripwire waiting for the wiring, and that tripwire now points the
+      # other way: it fails if the shell stops being the thing that pins.
+      #
+      # IT ASSERTS ON THE RENDERED FILE AND NOT ON THE STATE FILE, and it
+      # deletes that file before every transition, because the failure worth
+      # guarding against here is a step that records a name, renders nothing,
+      # and passes against whatever the previous step left on disk. It also
+      # runs the same phases against three deliberately broken copies of
+      # `desktop-scheme` and requires all three to be caught.
+      #
+      # THE THIRD OF THOSE IS A FRESH INSTALL, which is the one case the round
+      # trip cannot reach: it starts with the person picking a scheme, and a
+      # machine that has never picked one is every fresh clone. A `pin` there
+      # used to record ITSELF as the person's own choice.
+      #
+      # SO IT NEEDS quickshell AND labwc as well as matugen, all three of which
+      # are installed above for the shell steps further down.
+      - name: A theme that pins a scheme gives the desktop back
+        if: ${{ !cancelled() }}
+        run: tests/scheme-pinning.sh
+
       # THE FIRST TWO CHECKS THAT READ quickshell/ AT ALL. Before these, 125
       # files and 40,592 lines of QML -- half the repository, and three
       # quarters of its commits -- were parsed, linted, loaded and run by
@@ -172,10 +243,56 @@ jobs:
       # wrong screen both loaded cleanly, resolved every name and logged
       # nothing. These are a floor under the tree, not a statement that it
       # works.
-      - name: The shell loads in a headless compositor
+      # NOW ONCE PER THEME, AND THE SECOND THEME IS A FIXTURE. It used to start
+      # the shell once, on whatever theme Config.qml defaults to, which
+      # answered a question about genesis rather than about the tree. It copies
+      # the shell tree into a sandbox, drops tests/fixtures/theme-probe/ in as
+      # a second theme, and cold-starts the shell on each -- then changes the
+      # theme under a running shell and asserts that the surfaces came back and
+      # that "Configuration Loaded" was printed exactly once.
+      #
+      # THAT LAST PHASE NAMES A BUG THAT WAS ALREADY PAID FOR.
+      # modules/ThemeSurface.qml's header records that a BoundComponent fixes
+      # its source at creation -- "BoundComponent.url cannot be set after
+      # creation" -- so the theme changed and THE OLD ONE STAYED ON SCREEN.
+      # Found by hand, on a desktop; nothing in tests/ could have found it,
+      # because the shell comes up, every name resolves and the six log strings
+      # stay silent.
+      - name: The shell loads in a headless compositor, on every theme
         if: ${{ !cancelled() }}
         run: tests/shell-load.sh
 
+      # THE OTHER HALF OF THE SAME PROBLEM, and it is the cheap half: a theme
+      # is loaded by URL, so a file missing from one is not a load failure at
+      # all. themes/genesis/components/README.md is explicit that there is no
+      # per-file fallback -- a theme missing components/ToggleRow.qml gets a
+      # Loader in Loader.Error and one warning per row, the settings window
+      # still opens, and it draws twenty-eight rows of nothing. The step above
+      # comes up green on that: none of its six strings is what a Loader that
+      # cannot find a file prints.
+      #
+      # It derives the list of files from the HOST -- shell.qml's ThemeSurface
+      # paths and every Themes.surface("...") call site -- rather than keeping
+      # one. A hand-written list was the obvious alternative and there is
+      # direct evidence against it in this branch: the "Nineteen components"
+      # list at the top of themes/genesis/components/README.md was one short
+      # before it was a day old, because ScrollBar was split after it was
+      # written.
+      - name: Every theme implements the whole interface
+        if: ${{ !cancelled() }}
+        run: tests/theme-interface.py
+
+      # AND IT READS THE THEMES TOO, WHICH IT DID NOT USED TO. It swept
+      # quickshell/.config/quickshell and nothing else, so genesis was read
+      # because of where it sits and tests/fixtures/theme-probe -- a theme by
+      # the same definition, 27 .qml files -- was read by nothing.
+      #
+      # BOTH ITS RULES HAVE THEIR SUBJECT INSIDE A THEME, which is the evidence
+      # that this was the wrong scope rather than merely a narrow one. One of
+      # the repository's two WheelHandlers and the ONLY FolderListModel whose
+      # rows are read both live in themes/genesis/wallpaper/WallpaperCarousel.qml;
+      # move genesis out from under quickshell/ and this step does not lose
+      # coverage quietly, it fails with "has the rule outlived its subject?".
       - name: The QML tree keeps to its rules
         if: ${{ !cancelled() }}
         run: tests/qml-rules.sh
@@ -194,6 +311,23 @@ jobs:
       # synthesis off and become a second place every component has to be
       # registered. It gates per category at what the tree measured rather than
       # at zero, which nobody can reach today.
+      #
+      # PER SCOPE AS WELL AS PER CATEGORY, AND A THEME IS A SCOPE. It used to
+      # hold one total for one directory, so a theme was linted only if it
+      # happened to live inside that directory -- genesis did, the fixture did
+      # not. That is not an ordinary gap: rule 1 of
+      # themes/genesis/components/README.md ("required property <Facade> row",
+      # never "property var row") is justified entirely by a measurement taken
+      # with this script, and it was being measured on one theme. Three
+      # misspelled reads were put into the fixture and the old sweep answered
+      # "306 warnings, none of them new" and exited 0.
+      #
+      # Now a theme is any directory with a manifest.json, it is dropped into
+      # the sandbox where genesis already sits so it gets identical qmldirs and
+      # identical imports, and it carries its own budget. A theme nobody has
+      # budgeted is compared against zero, so a theme added to this repository
+      # cannot fold its warnings into a number written about the shell -- it
+      # turns the run red under its own name.
       #
       # AND IT WOULD NOT HAVE CAUGHT EITHER OF THIS WEEK'S TWO BREAKAGES, which
       # is measured in the script rather than assumed: with the launcher fix of

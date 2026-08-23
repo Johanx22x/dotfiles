@@ -6,7 +6,10 @@
 # include another file from zathurarc, so "config" and "colours" cannot be
 # split in two. That is why zathura has no stow package.
 #
-# Fixed Tokyo Night base, matugen accent. Same roles as everywhere else:
+# The scheme's base, the wallpaper's accent -- the same two halves every other
+# application here is painted from. The base is the `ui_*` and `sem_*` roles out
+# of the scheme file (it was a fixed Tokyo Night written out in hex until the
+# schemes existed), and the accents are the same roles as everywhere else:
 # primary for the active thing, tertiary for the secondary one.
 
 # ---- Document ----
@@ -14,26 +17,26 @@
 # colour of figures and photos instead of flattening everything to two tones.
 set recolor                   true
 set recolor-keephue           true
-set recolor-lightcolor        "#1a1b26"
-set recolor-darkcolor         "#c0caf5"
+set recolor-lightcolor        "{{colors.ui_doc_bg.default.hex}}"
+set recolor-darkcolor         "{{colors.ui_doc_fg.default.hex}}"
 
 # Ctrl+R toggles recolor. Turning it off shows the PDF as its author made it,
 # which is needed when the document carries signatures, stamps or colour
 # graphics.
 
 # ---- Chrome ----
-set default-bg                "#1a1b26"
-set default-fg                "#c0caf5"
-set statusbar-bg              "#15161e"
-set statusbar-fg              "#c0caf5"
-set inputbar-bg               "#15161e"
-set inputbar-fg               "#c0caf5"
-set completion-bg             "#292e42"
-set completion-fg             "#c0caf5"
-set completion-group-bg       "#15161e"
-set completion-group-fg       "#565f89"
+set default-bg                "{{colors.ui_bg.default.hex}}"
+set default-fg                "{{colors.ui_text.default.hex}}"
+set statusbar-bg              "{{colors.ui_bg_bar.default.hex}}"
+set statusbar-fg              "{{colors.ui_text.default.hex}}"
+set inputbar-bg               "{{colors.ui_bg_bar.default.hex}}"
+set inputbar-fg               "{{colors.ui_text.default.hex}}"
+set completion-bg             "{{colors.ui_bg_raised.default.hex}}"
+set completion-fg             "{{colors.ui_text.default.hex}}"
+set completion-group-bg       "{{colors.ui_bg_bar.default.hex}}"
+set completion-group-fg       "{{colors.ui_text_muted.default.hex}}"
 set completion-highlight-bg   "{{colors.primary.default.hex}}"
-set completion-highlight-fg   "#15161e"
+set completion-highlight-fg   "{{colors.ui_on_accent.default.hex}}"
 
 # ---- Search ----
 # The match under the cursor gets the accent; the rest get the secondary one.
@@ -46,12 +49,12 @@ set highlight-color           "rgba({{colors.tertiary.default.red}},{{colors.ter
 set highlight-active-color    "rgba({{colors.primary.default.red}},{{colors.primary.default.green}},{{colors.primary.default.blue}},0.55)"
 
 # ---- Notifications ----
-set notification-bg           "#15161e"
-set notification-fg           "#c0caf5"
-set notification-warning-bg   "#e0af68"
-set notification-warning-fg   "#15161e"
-set notification-error-bg     "#f7768e"
-set notification-error-fg     "#15161e"
+set notification-bg           "{{colors.ui_bg_bar.default.hex}}"
+set notification-fg           "{{colors.ui_text.default.hex}}"
+set notification-warning-bg   "{{colors.sem_warning.default.hex}}"
+set notification-warning-fg   "{{colors.sem_on_warning.default.hex}}"
+set notification-error-bg     "{{colors.sem_critical.default.hex}}"
+set notification-error-fg     "{{colors.sem_on_critical.default.hex}}"
 
 # ---- Behaviour ----
 set window-title-basename     true

@@ -1,0 +1,399 @@
+{
+  "_meta": {
+    "label": "Catppuccin Mocha",
+    "source": "catppuccin/catppuccin, the Mocha flavour; the sixteen ANSI slots as catppuccin/kitty publishes them in mocha.conf",
+    "variant": "dark"
+  },
+  "colors": {
+    "fb_on_primary": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "fb_on_primary_container": {
+      "default": {
+        "color": "#cdd6f4"
+      }
+    },
+    "fb_on_secondary_container": {
+      "default": {
+        "color": "#cdd6f4"
+      }
+    },
+    "fb_on_surface": {
+      "default": {
+        "color": "#cdd6f4"
+      }
+    },
+    "fb_on_surface_variant": {
+      "default": {
+        "color": "#bac2de"
+      }
+    },
+    "fb_on_tertiary": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "fb_outline": {
+      "default": {
+        "color": "#6c7086"
+      }
+    },
+    "fb_outline_variant": {
+      "default": {
+        "color": "#45475a"
+      }
+    },
+    "fb_primary": {
+      "default": {
+        "color": "#89b4fa"
+      }
+    },
+    "fb_primary_container": {
+      "default": {
+        "color": "#45475a"
+      }
+    },
+    "fb_secondary": {
+      "default": {
+        "color": "#cba6f7"
+      }
+    },
+    "fb_secondary_container": {
+      "default": {
+        "color": "#585b70"
+      }
+    },
+    "fb_surface": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "fb_surface_container": {
+      "default": {
+        "color": "#313244"
+      }
+    },
+    "fb_surface_container_high": {
+      "default": {
+        "color": "#45475a"
+      }
+    },
+    "fb_surface_container_highest": {
+      "default": {
+        "color": "#585b70"
+      }
+    },
+    "fb_tertiary": {
+      "default": {
+        "color": "#f5c2e7"
+      }
+    },
+    "sem_critical": {
+      "default": {
+        "color": "#f38ba8"
+      }
+    },
+    "sem_info": {
+      "default": {
+        "color": "#89dceb"
+      }
+    },
+    "sem_on_critical": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "sem_on_success": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "sem_on_warning": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "sem_success": {
+      "default": {
+        "color": "#a6e3a1"
+      }
+    },
+    "sem_warning": {
+      "default": {
+        "color": "#f9e2af"
+      }
+    },
+    "term_bell_border": {
+      "default": {
+        "color": "#f9e2af"
+      }
+    },
+    "term_bg": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "term_black": {
+      "default": {
+        "color": "#45475a"
+      }
+    },
+    "term_blue": {
+      "default": {
+        "color": "#89b4fa"
+      }
+    },
+    "term_border_inactive": {
+      "default": {
+        "color": "#45475a"
+      }
+    },
+    "term_bright_black": {
+      "default": {
+        "color": "#585b70"
+      }
+    },
+    "term_bright_blue": {
+      "default": {
+        "color": "#89b4fa"
+      }
+    },
+    "term_bright_cyan": {
+      "default": {
+        "color": "#94e2d5"
+      }
+    },
+    "term_bright_green": {
+      "default": {
+        "color": "#a6e3a1"
+      }
+    },
+    "term_bright_magenta": {
+      "default": {
+        "color": "#f5c2e7"
+      }
+    },
+    "term_bright_red": {
+      "default": {
+        "color": "#f38ba8"
+      }
+    },
+    "term_bright_white": {
+      "default": {
+        "color": "#a6adc8"
+      }
+    },
+    "term_bright_yellow": {
+      "default": {
+        "color": "#f9e2af"
+      }
+    },
+    "term_cursor": {
+      "default": {
+        "color": "#f5e0dc"
+      }
+    },
+    "term_cursor_text": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "term_cyan": {
+      "default": {
+        "color": "#94e2d5"
+      }
+    },
+    "term_fg": {
+      "default": {
+        "color": "#cdd6f4"
+      }
+    },
+    "term_green": {
+      "default": {
+        "color": "#a6e3a1"
+      }
+    },
+    "term_magenta": {
+      "default": {
+        "color": "#f5c2e7"
+      }
+    },
+    "term_red": {
+      "default": {
+        "color": "#f38ba8"
+      }
+    },
+    "term_selection_bg": {
+      "default": {
+        "color": "#585b70"
+      }
+    },
+    "term_selection_fg": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "term_tab_bg": {
+      "default": {
+        "color": "#181825"
+      }
+    },
+    "term_tab_inactive_fg": {
+      "default": {
+        "color": "#7f849c"
+      }
+    },
+    "term_url": {
+      "default": {
+        "color": "#94e2d5"
+      }
+    },
+    "term_white": {
+      "default": {
+        "color": "#bac2de"
+      }
+    },
+    "term_yellow": {
+      "default": {
+        "color": "#f9e2af"
+      }
+    },
+    "ui_bevel_dark": {
+      "default": {
+        "color": "#181825"
+      }
+    },
+    "ui_bevel_mid": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "ui_bevel_midlight": {
+      "default": {
+        "color": "#45475a"
+      }
+    },
+    "ui_bg": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "ui_bg_alt_row": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "ui_bg_bar": {
+      "default": {
+        "color": "#181825"
+      }
+    },
+    "ui_bg_button": {
+      "default": {
+        "color": "#313244"
+      }
+    },
+    "ui_bg_control": {
+      "default": {
+        "color": "#313244"
+      }
+    },
+    "ui_bg_dim": {
+      "default": {
+        "color": "#181825"
+      }
+    },
+    "ui_bg_field": {
+      "default": {
+        "color": "#181825"
+      }
+    },
+    "ui_bg_raised": {
+      "default": {
+        "color": "#313244"
+      }
+    },
+    "ui_bg_shadow": {
+      "default": {
+        "color": "#11111b"
+      }
+    },
+    "ui_bg_view": {
+      "default": {
+        "color": "#11111b"
+      }
+    },
+    "ui_border": {
+      "default": {
+        "color": "#585b70"
+      }
+    },
+    "ui_border_dim": {
+      "default": {
+        "color": "#45475a"
+      }
+    },
+    "ui_doc_bg": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "ui_doc_fg": {
+      "default": {
+        "color": "#cdd6f4"
+      }
+    },
+    "ui_on_accent": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "ui_selection_disabled": {
+      "default": {
+        "color": "#313244"
+      }
+    },
+    "ui_surface": {
+      "default": {
+        "color": "#11111b"
+      }
+    },
+    "ui_surface_container": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "ui_surface_container_high": {
+      "default": {
+        "color": "#313244"
+      }
+    },
+    "ui_surface_container_highest": {
+      "default": {
+        "color": "#585b70"
+      }
+    },
+    "ui_text": {
+      "default": {
+        "color": "#cdd6f4"
+      }
+    },
+    "ui_text_dim": {
+      "default": {
+        "color": "#7f849c"
+      }
+    },
+    "ui_text_muted": {
+      "default": {
+        "color": "#6c7086"
+      }
+    },
+    "ui_text_variant": {
+      "default": {
+        "color": "#bac2de"
+      }
+    }
+  }
+}

@@ -1,11 +1,17 @@
 // How the desktop looks: how solid its surfaces are, what it is set in, how
 // its windows are spaced and what the pointer looks like.
 //
-// EVERY SETTING ON THIS PAGE REACHES PAST THE SHELL, which is why they are
-// here together rather than filed under the bar or the window. Each is a file
-// under ~/.local/state that a script writes and several programs read; the
-// shell is only the first of those readers. See Config.qml for the shape and
-// bin/desktop-opacity for the sibling that started it.
+// NEARLY EVERY SETTING ON THIS PAGE REACHES PAST THE SHELL, which is why they
+// are here together rather than filed under the bar or the window. Each is a
+// file under ~/.local/state that a script writes and several programs read;
+// the shell is only the first of those readers. See Config.qml for the shape
+// and bin/desktop-opacity for the sibling that started it.
+//
+// THE THEME AT THE TOP IS THE EXCEPTION, and it is here because a person
+// looking for how the desktop looks looks here, not because it shares the
+// plumbing. Nothing outside the shell owns it, so it is on the JsonAdapter in
+// Config.qml rather than in a state file -- the section beside `theme` there
+// argues that against the rule WallpaperPage.qml's header states.
 //
 // Nothing here is a Theme constant, and the line between the two is the one
 // Config.qml's header draws: Theme.qml is a design system whose values are
@@ -17,6 +23,10 @@ import Quickshell.Io
 import QtQuick
 import qs
 import qs.components
+// Themes, which is what knows the themes on disk and which one is drawn. A
+// singleton is not in scope just because it is one -- its directory has to be
+// imported, and this one lives a level above the settings modules.
+import qs.modules
 import qs.modules.settings
 
 SettingsPage {
@@ -24,9 +34,13 @@ SettingsPage {
 
     title: "Appearance"
     glyph: Icons.palette
+    // "genesis" for the same reason the three scheme names are here: the words
+    // somebody searches with are the names of the things, not the headings
+    // this page prints over them.
     keywords: ["opacity", "transparency", "glass", "font", "type", "size",
         "gaps", "spacing", "rounding", "corners", "border", "cursor",
-        "pointer", "mouse pointer"]
+        "pointer", "mouse pointer", "colour", "color", "scheme", "palette",
+        "theme", "genesis", "tokyo night", "catppuccin", "gruvbox"]
 
     // The installed cursor themes, asked for once when the page is
     // looked at. `desktop-tweak themes` lists the icon themes that have a
@@ -34,9 +48,18 @@ SettingsPage {
     // icon set, and offering it would produce a choice that does nothing.
     property var cursorThemes: []
 
+    // The schemes the repository ships, in the same way and for the same
+    // reason: they are files in `schemes/`, so the list is whatever is on disk
+    // and a copy of it written here would be wrong the day one is added.
+    // `{ name, label }` per entry -- the name is what the script takes, the
+    // label is what a person reads.
+    property var schemes: []
+
     onVisibleChanged: {
         if (visible && !themeQuery.running)
             themeQuery.running = true;
+        if (visible && !schemeQuery.running)
+            schemeQuery.running = true;
     }
 
     Process {
@@ -47,6 +70,187 @@ SettingsPage {
         stdout: StdioCollector {
             onStreamFinished: root.cursorThemes =
                 (text || "").split("\n").filter(line => line.trim() !== "")
+        }
+    }
+
+    Process {
+        id: schemeQuery
+
+        command: ["desktop-scheme", "list"]
+
+        stdout: StdioCollector {
+            // NAME<TAB>Label. Split on the FIRST tab only, the same rule
+            // Config.qml's readers of these stores follow -- a label is free
+            // text and nothing stops one carrying another.
+            onStreamFinished: root.schemes = (text || "").split("\n")
+                .filter(line => line.trim() !== "")
+                .map(line => {
+                    const at = line.indexOf("\t");
+                    return at < 0
+                        ? ({ name: line.trim(), label: line.trim() })
+                        : ({ name: line.slice(0, at), label: line.slice(at + 1).trim() });
+                })
+        }
+    }
+
+    // ---------------- Theme ----------------
+    //
+    // FIRST ON THE PAGE, and it took the place the colour scheme below used to
+    // hold. The argument written there is still the right one and it just
+    // points somewhere else now: the scheme decides what the desktop is MADE
+    // of, and the theme decides what draws it at all -- the bar, the launcher,
+    // the notifications, this window. It is the only setting in the shell that
+    // changes which QML is loaded rather than what some of it evaluates to.
+    //
+    // A LIST, FOR THE SAME REASON THE SCHEMES BELOW ARE ONE and with less room
+    // for argument. ChoiceRow's ceiling is about four options, a picker was
+    // deleted from this very page for walking past it, and the set here is a
+    // DIRECTORY LISTING -- `cp -r genesis tokyo` is a second theme, which the
+    // header of modules/Themes.qml says out loud as a design goal. There are
+    // one or two today and the number is not the shell's to know. That there
+    // are two lists of this shape stacked on one page is the trade, and it is
+    // the same trade the scheme picker already took.
+    //
+    // NO "Applying…" HERE, unlike the schemes. A scheme ends in a matugen
+    // render over fourteen files and a second of waiting; a theme is a
+    // property write that re-sources some loaders, and it is done before the
+    // click is finished. A busy state would be a control going quiet for a
+    // wait that does not happen.
+    SettingsSection {
+        width: parent.width
+        // NOT Icons.palette, which is two rows down and is the colour's. There
+        // is no theme glyph in Icons.qml and adding one is another change's to
+        // make; md-widgets is the honest one of the ones there, since a theme
+        // IS the set of surfaces that draws the desktop. BarPage uses it for
+        // the widgets on the bar, which are a handful of what a theme draws.
+        glyph: Icons.widgets
+        title: "Theme"
+
+        Repeater {
+            model: Themes.available
+
+            PickRow {
+                required property var modelData
+
+                glyph: Icons.widgets
+                // The manifest's title and not the directory name, the same
+                // call the scheme rows make about their identifiers: `genesis`
+                // is what `Config.theme` holds and what
+                // themes/genesis/README.md documents, and a settings window is
+                // not where it belongs.
+                label: modelData.title
+
+                // WHAT IS DRAWN AND NOT WHAT IS CONFIGURED, which is the rule
+                // Config.qml states at `scheme` and WallpaperPage at
+                // `currentPath`: a reading, never a prediction. The two differ
+                // in exactly one case and it is the case worth being right
+                // about -- a configured theme whose manifest stopped being
+                // readable falls back, and the picker then marks the theme
+                // that is actually on screen.
+                picked: Themes.name === modelData.name
+
+                // A THEME THIS SHELL CANNOT DRAW IS SHOWN AND NOT HIDDEN.
+                // Themes.qml falls back for one, so offering it would be a row
+                // that silently does nothing -- but dropping it from the list
+                // is the same silence one step earlier, and the person it
+                // happens to is somebody who just put a theme in themes/ and
+                // is looking here to find out why nothing changed. The row is
+                // where that answer goes. `enabled` is Item's own, so it
+                // reaches the MouseArea inside without being passed: no hover
+                // highlight, no "use", no click.
+                enabled: modelData.fault === ""
+                note: modelData.fault === "interface" ? "unsupported"
+                    : modelData.fault === "unreadable" ? "unreadable" : ""
+
+                // ONE PROPERTY, ONE WRITE. Config.qml's saveTimer section is
+                // the reason that is worth saying: two writes in one
+                // synchronous turn and the first is reverted, in memory and on
+                // disk. There is nothing else to write -- Themes reads this
+                // and everything that draws reads Themes.
+                onChosen: Config.theme = modelData.name
+            }
+        }
+
+        // ONLY WHEN THERE IS SOMETHING GREYED OUT TO EXPLAIN. A permanent line
+        // about what a theme is and where one comes from would be a settings
+        // window teaching the filesystem -- the same thing the note above
+        // `pickLabel` refused to do when it took the identifier off the row.
+        // A greyed-out row is different: it is a question the window itself
+        // raised, and this is the only place the answer can go.
+        SectionNote {
+            visible: Themes.available.some(entry => entry.fault !== "")
+
+            topPadding: 4
+            text: "A theme that is greyed out is on disk but cannot be drawn "
+                + "by this shell: its manifest asks for an interface this "
+                + "version does not speak, or cannot be read at all."
+        }
+    }
+
+    // ---------------- Colour ----------------
+    //
+    // THE SECOND-LARGEST THING ON THE PAGE, and it was the first until the
+    // theme above it arrived: everything BELOW moves a number, and this
+    // decides what the desktop is made of.
+    //
+    // ONE CONTROL, AND IT USED TO BE TWO. Beside this list there was an
+    // "Accent from" row -- wallpaper, scheme, or a colour typed into a field
+    // underneath -- and it is gone rather than hidden. The accent is the
+    // wallpaper's contribution to the desktop, a blue picture giving a blue
+    // desktop; the scheme is what the desktop is MADE of. Neither of the other
+    // two sources was answering a question anybody had. What came out with it
+    // is in bin/desktop-scheme, above `accent_args`.
+    SettingsSection {
+        width: parent.width
+        glyph: Icons.palette
+        title: "Colour"
+
+        // A LIST AND NOT A ChoiceRow, which every other choice on this page is.
+        //
+        // ChoiceRow puts its own ceiling at about four options (see the note at
+        // the top of it), and the cursor theme picker was deleted from this
+        // very page for walking past it -- at a pack's worth of themes the
+        // segments were dots. The set here is OPEN in exactly the same way: a
+        // scheme is a JSON file dropped into `schemes/`, the list is read from
+        // `desktop-scheme list` rather than written down, and the release this
+        // sits on already took it from one to three. A control that cannot grow
+        // past four is the wrong shape for a set whose size is a directory
+        // listing.
+        //
+        // The trade accepted is vertical space and one page holding two shapes
+        // of picker. The font row below stays segments because ITS set is
+        // closed and always three: the Nerd Font variants, and nothing else can
+        // ever be offered there without filling the shell with tofu.
+        Repeater {
+            model: root.schemes
+
+            PickRow {
+                required property var modelData
+
+                glyph: Icons.palette
+                label: modelData.label
+                picked: Config.scheme === modelData.name
+
+                // THE ROW THAT WAS CLICKED IS THE ROW THAT SAYS SO. A spinner
+                // at the top of the section would be true and useless: it
+                // cannot answer the only question there is while the desktop is
+                // mid-change, which is whether it took the one that was pressed.
+                applying: Config.schemeApplying === modelData.name
+
+                // AND EVERY ROW GOES QUIET, not only that one. Applying ends in
+                // `wallpaper-switch reapply` -- a full matugen render over
+                // fourteen files and several applications signalled afterwards
+                // -- so there is a second or more in which three clicks in a row
+                // are three renders writing the same files, with the last to
+                // FINISH winning rather than the last to be asked for.
+                // Config.setScheme refuses the second one as well; this is what
+                // makes the refusal visible instead of silent. `enabled` is
+                // Item's own, so it reaches the MouseArea below it without
+                // being passed: no hover highlight, no "use", no click.
+                enabled: Config.schemeApplying === ""
+
+                onChosen: Config.setScheme(modelData.name)
+            }
         }
     }
 
@@ -269,6 +473,236 @@ SettingsPage {
             hint: "Only Nerd Font variants are offered: every icon in this "
                 + "shell is a glyph from this font, and a family without them "
                 + "would leave empty boxes everywhere."
+        }
+    }
+
+    // ---------------- One thing, offered ----------------
+    //
+    // AN INLINE COMPONENT AND NOT components/ListRow.qml, AND THIS IS NO
+    // LONGER A DEFERRAL. The note here used to say that a THIRD list of this
+    // shape would be the moment to lift it out, and that the lifting was the
+    // next change rather than that one. Both halves have since happened. The
+    // theme picker at the top of this page was the third list; ListRow is
+    // where four other lists went -- the sound page's DeviceRow, the recording
+    // page's own PickRow, and the updates page's UnitRow and PkgRow -- and the
+    // recording page no longer has a copy of anything, it draws ListRows. So
+    // the question was finally asked properly, and the answer is no.
+    //
+    // MEASURED, NOT ARGUED. Both rows were built side by side in one process,
+    // under one Theme, at one width -- genesis, 420 px, fontSize 11 -- and
+    // this row was compared against the obvious translation of it,
+    // `ListRow { selected: picked; mark: applying ? applyingLabel : "";
+    // interactive: !busy }`:
+    //
+    //                       PickRow                  ListRow translation
+    //   applying, height    32.00                    36.00
+    //   applying, the word  "Applying…", 64.7 px,    NOTHING DRAWN
+    //                       Theme.primary
+    //   "in use", the word  64.7 px, right-aligned   43.1 px, left-aligned in
+    //                       in a fixed gutter        a column that collapses
+    //   an inert sibling    opacity 0.50             opacity 1.00
+    //
+    // THE WORD IS THE ONE THAT DECIDES IT. ListRow's mark is gated on
+    // `selected` -- themes/genesis/components/ListRow.qml draws
+    // `selected ? mark : hovered ? hoverMark : ""` -- and `applying` is
+    // deliberately not `picked`, for the reason the property below gives. In
+    // the only window that matters, after the click and before the state file
+    // catches up, the row is NOT selected, so the word does not draw at all
+    // and the row says nothing while it is the one thing happening.
+    //
+    // The height is the second fault, and it is the lever rather than the
+    // component: `interactive: false` in ListRow does not mean disabled, it
+    // selects the READING SHAPE, so a busy row grows four pixels and reflows
+    // the section under the pointer at the instant of the click. `enabled` is
+    // the right lever and is what this row uses -- but ListRow has no opacity
+    // treatment at all, so the siblings would not step back either.
+    //
+    // CLOSING THE GAP TAKES FOUR CHANGES AND NOT ONE: a mark rank that
+    // outranks `selected`, an accent colour for it, a reserved gutter, and a
+    // dim while disabled. Three of the four change how the nine ListRows on
+    // the sound, recording and updates pages already draw. Four sources were
+    // absorbed into that component deliberately; a fifth that only fits once
+    // it has grown a second personality is a fifth that should stay out.
+    //
+    // WHAT WAS SCHEME-SHAPED AND IS NOW A PROPERTY: the glyph, which was
+    // Icons.palette in the file; the word shown while something is being
+    // applied, which not every list has; and `note`, which is new and is how a
+    // row says why it cannot be chosen.
+    component PickRow: Rectangle {
+        id: pick
+
+        property string glyph: ""
+        property string label: ""
+        property bool picked: false
+        // This row's answer is the one being applied right now. NOT the
+        // opposite of `picked` and not exclusive with it: `desktop-scheme`
+        // writes its state file before it starts the render, so a row becomes
+        // the one in use a moment before it stops being the one being applied.
+        //
+        // A list whose choice lands immediately -- the themes above -- leaves
+        // both this and `applyingLabel` alone and never draws either.
+        property bool applying: false
+        property string applyingLabel: "Applying…"
+
+        // WHY THIS ROW CANNOT BE CHOSEN, in one word, or "" for a row that
+        // can. It sits where "use" would and it is what makes a disabled row
+        // an explanation rather than a row that has stopped working: a
+        // disabled row takes no hover events, so without this there is nothing
+        // in the column at all.
+        property string note: ""
+
+        signal chosen
+
+        width: parent ? parent.width : 320
+        implicitHeight: Math.max(32, pickLabel.implicitHeight + 12)
+
+        radius: Theme.groupRadius
+        color: pickMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+
+        // THE ROWS THAT ARE NOT HAPPENING STEP BACK, and the one that is stays
+        // where it was. Disabling on its own is invisible until the pointer is
+        // over a row and nothing lights up, which is feedback that arrives
+        // after the click rather than before it.
+        opacity: pick.enabled || pick.applying ? 1 : 0.5
+
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.animDuration }
+        }
+
+        Behavior on color {
+            ColorAnimation { duration: Theme.animDuration }
+        }
+
+        Text {
+            id: pickGlyph
+
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.groupPadding
+            anchors.verticalCenter: parent.verticalCenter
+
+            text: pick.glyph
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.iconSize
+            // The accent marks the one in use and nothing else, which is what
+            // every other list in this window does.
+            color: pick.picked ? Theme.primary : Theme.textOnSurfaceVariant
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.animDuration }
+            }
+        }
+
+        // THE NAME, AND NOTHING UNDER IT. There was a second line here
+        // carrying the scheme's identifier -- `tokyo-night` beneath `Tokyo
+        // Night` -- and it was a filename shown to somebody choosing a colour.
+        // The identifier has not gone anywhere: it is still what
+        // `desktop-scheme <name>` takes in a terminal and schemes/README.md
+        // still documents it. A settings window is not where it belongs.
+        Text {
+            id: pickLabel
+
+            anchors.left: pickGlyph.right
+            anchors.leftMargin: Theme.itemSpacing
+            anchors.right: mark.left
+            anchors.rightMargin: Theme.itemSpacing
+            anchors.verticalCenter: parent.verticalCenter
+
+            text: pick.label
+            elide: Text.ElideRight
+
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize
+            font.weight: pick.picked ? Font.Bold : Theme.fontWeight
+            color: pick.picked ? Theme.primary : Theme.textOnSurface
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.animDuration }
+            }
+        }
+
+        // WIDE ENOUGH FOR THE LONGEST OF THE WORDS, always, so the name beside
+        // it is not re-elided at the instant of the click -- the same call
+        // WallpaperPage.qml's "Change" chip makes and for the same reason: this
+        // is right-anchored, so growing eats leftwards into the label.
+        //
+        // WHICH WORD IS LONGEST IS THE CALL SITE'S NOW, so it is chosen here
+        // rather than written down: "Applying…" was the only candidate while
+        // this was the scheme's row, and a theme's "unsupported" is longer.
+        // "use" is not in the list because "in use" contains it. Compared by
+        // CHARACTER COUNT, which is a proxy for width -- these are short words
+        // in one font at one size, and the column only has to be big enough.
+        //
+        // AND IT IS A HIDDEN Text AND NOT A TextMetrics, which is the same
+        // call themes/genesis/island/ReplayControl.qml makes and for the same
+        // measured reason: the two do not agree about the width of one string
+        // in one font, and the Text is the one that is right, because the Text
+        // is the one that draws. Measured offscreen in this face, at the
+        // shipped size, this column's three longest candidates:
+        //
+        //   "unsupported"   TextMetrics 78.00   Text 79.06   ink 78 px
+        //   "unreadable"    TextMetrics 71.00   Text 71.88   ink 71 px
+        //   "Applying…"     TextMetrics 65.00   Text 64.69   ink 64 px
+        //
+        // TextMetrics comes back whole-numbered at every size tried and lands
+        // on whichever side it likes -- under the Text for the first two, over
+        // it for the third. Under is the one that costs something. There is no
+        // elide in this column, so a reservation that is short does not clip
+        // the word: the Text is right-aligned in a box narrower than its own
+        // layout, and it paints out past its own left edge -- into the gap
+        // `pickLabel` was elided to leave, and at the instant a theme row goes
+        // grey. At the shipped size the ink still just fits; at a fontSize of
+        // 16 the reservation is 2.3 px short and a rendered "unsupported" puts
+        // a painted pixel outside it.
+        //
+        // `visible: false` and nothing else -- an invisible Text still lays
+        // its string out, and this one is not in any layout to disturb.
+        Text {
+            id: markMetrics
+
+            visible: false
+            font: mark.font
+            text: [pick.applyingLabel, pick.note, "in use"]
+                .reduce((widest, word) => word.length > widest.length ? word : widest, "")
+        }
+
+        Text {
+            id: mark
+
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.groupPadding
+            anchors.verticalCenter: parent.verticalCenter
+
+            width: markMetrics.implicitWidth
+            horizontalAlignment: Text.AlignRight
+
+            // APPLYING BEATS IN USE while both are true, because it is the one
+            // about to stop being true. `use` is only the hover affordance, and
+            // it disappears on its own: a disabled row takes no hover events.
+            //
+            // AND `note` SITS BELOW "in use" rather than above it, which only
+            // matters for a theme that is being drawn and has since stopped
+            // being drawable. What is on screen is the more useful of the two
+            // things to say, and the row is disabled either way.
+            text: pick.applying ? pick.applyingLabel
+                : pick.picked ? "in use"
+                : pick.note !== "" ? pick.note
+                : pickMouse.containsMouse ? "use" : ""
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize - 2
+            color: pick.applying ? Theme.primary : Theme.outline
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
+            }
+        }
+
+        MouseArea {
+            id: pickMouse
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: pick.chosen()
         }
     }
 }

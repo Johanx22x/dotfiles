@@ -11,7 +11,6 @@
 //                             transforms, specs, and the saved-override text.
 //                             Pure, and a singleton so it can stay typed.
 //     HyprlandBlock.qml       the Lua that Copy config puts on the clipboard.
-//     Glyphs.qml              the codepoints Icons.qml has not taken yet.
 //     MonitorSource.qml       everything asked of desktop-monitors that does
 //                             not need a countdown, and the readings it fills.
 //     DisplayDraft.qml        what WOULD be, and the ten seconds to say so.

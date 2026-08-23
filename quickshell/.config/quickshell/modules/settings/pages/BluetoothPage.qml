@@ -51,36 +51,6 @@ SettingsPage {
     // looking for is the object on the desk, not the word "device".
     keywords: ["bluetooth", "bt", "pair", "pairing", "headphones", "headset", "airpods", "controller", "gamepad", "mouse", "keyboard", "speaker", "device"]
 
-    // ---------------- Glyphs that are not in Icons yet ----------------
-    //
-    // TEMPORARY, and they belong in Icons.qml -- they are here only because
-    // that file is being edited elsewhere right now. Move them when it is
-    // free; nothing else about them should change.
-    //
-    // Every codepoint below was read out of the installed font's cmap rather
-    // than looked up by name, which is the rule that file's own comments set
-    // after two of its entries turned out to be a bluetooth speaker and a
-    // shower head:
-    //
-    //   python3 -c "from fontTools.ttLib import TTFont; \
-    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
-    //       .getBestCmap()[0xF0208])"
-    //
-    // Solid eye, not md-eye_outline (0xF06D0). It sits in the same card as the
-    // bluetooth mark on the row above it, and an outlined glyph next to a solid
-    // one reads as the disabled version of it rather than as a different thing
-    // -- the call the `settings` glyph in Icons.qml already makes, for the same
-    // reason.
-    readonly property string eye: String.fromCodePoint(0xF0208)         // nf-md-eye
-
-    // The device-type marks. Icons already has headphones, headset, gamepad
-    // and keyboard; these four are what is missing to cover the rest of what
-    // BlueZ hands out.
-    readonly property string mouse: String.fromCodePoint(0xF037D)       // nf-md-mouse
-    readonly property string speaker: String.fromCodePoint(0xF04C3)     // nf-md-speaker
-    readonly property string cellphone: String.fromCodePoint(0xF011C)   // nf-md-cellphone
-    readonly property string laptop: String.fromCodePoint(0xF0322)      // nf-md-laptop
-
     // ---------------- The adapter ----------------
     //
     // May be null, and not only on a machine with no bluetooth: BlueZ arrives
@@ -220,18 +190,18 @@ SettingsPage {
             return Icons.headphones;
         case "audio-card":
         case "multimedia-player":
-            return root.speaker;
+            return Icons.speaker;
         case "input-gaming":
             return Icons.gamepad;
         case "input-keyboard":
             return Icons.keyboard;
         case "input-mouse":
         case "input-tablet":
-            return root.mouse;
+            return Icons.mouse;
         case "phone":
-            return root.cellphone;
+            return Icons.cellphone;
         case "computer":
-            return root.laptop;
+            return Icons.laptop;
         default:
             return Icons.bluetooth;
         }
@@ -303,7 +273,7 @@ SettingsPage {
         ToggleRow {
             visible: root.radioOn
 
-            glyph: root.eye
+            glyph: Icons.eye
             label: "Visible to other devices"
             checked: root.adapter?.discoverable ?? false
 

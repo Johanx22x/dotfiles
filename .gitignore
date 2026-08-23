@@ -1,4 +1,18 @@
 # ---------------------------------------------------------------------------
+# Agent worktrees: whole checkouts of this repository, inside this repository.
+#
+# `.claude/worktrees/` is where a git worktree per agent gets created while
+# work is running, and each one is a complete second copy of the tree with its
+# own .git file. Untracked and unignored, they showed up on every `git status`
+# and one of them was picked up by a `git add -A` as an embedded repository --
+# which is the failure this rule exists to stop, not the noise.
+#
+# It also matters to the checks: `tests/qml-lint.sh` and `tests/theme-interface.py`
+# discover themes with `git ls-files` rather than `find` for exactly this reason.
+# A `find` from the root reported six theme manifests where there are two, the
+# other four being copies of the same two inside here.
+.claude/
+
 # Generated files: written by a program, never versioned
 #
 # Two sets, from three writers. matugen renders the first from the current
@@ -27,6 +41,22 @@ gtk/.config/gtk-4.0/gtk.css
 ranger/.config/ranger/accent
 quickshell/.config/quickshell/colors.json
 
+# From the colour SCHEME, by matugen, in the same render as the accents above.
+# Same writer, different source: `desktop-scheme` picks the file the colours
+# come out of and the wallpaper has no say in them. They are separate outputs
+# and not extra lines in the files above because the tracked config includes
+# them in a different position -- the base first, the accents over it.
+kitty/.config/kitty/scheme.conf
+shell/.config/cship.toml
+
+# shell/.config/cship.toml is the one entry here that USED TO BE VERSIONED, and
+# it needs the rule for a second reason on top of the folding one. The whole
+# config is generated now (cship cannot include a second file), so the stow link
+# in ~/.config points at a path this repository no longer has. matugen writing
+# through a dangling link creates the file at the far end of it -- inside the
+# checkout. `install.sh apply symlinks` removes stale links and is the fix; this
+# line is what keeps the accident out of a commit until somebody runs it.
+
 # From the settings window, by desktop-opacity and desktop-font. The configs
 # that include them -- kitty.conf and userChrome.css -- are versioned; these
 # are not.
@@ -35,9 +65,12 @@ kitty/.config/kitty/font.conf
 
 # Zen writes outside .config: its chrome/ only counts inside the profile,
 # ~/.zen/rice. The versioned part is userChrome.css (zen/.zen/rice/chrome/),
-# which imports both of these.
+# which imports all three of these -- the accent, the opacity and the scheme's
+# surfaces. It is the only file Firefox reads chrome from, so the imports have
+# to live in it even though it now declares nothing of its own.
 zen/.zen/rice/chrome/colors.css
 zen/.zen/rice/chrome/opacity.css
+zen/.zen/rice/chrome/scheme.css
 
 # zathura and fastfetch are generated WHOLE from a template: they have no stow
 # package of their own. See matugen/.config/matugen/config.toml.

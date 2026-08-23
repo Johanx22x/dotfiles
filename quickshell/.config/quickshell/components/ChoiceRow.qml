@@ -1,20 +1,42 @@
-// A settings row with a small closed set of answers, shown as segments.
+// A settings row with a small closed set of answers. THIS IS THE HALF THE
+// PAGES SEE; the pixels are in themes/<theme>/components/ChoiceRow.qml.
 //
-// SEGMENTS AND NOT A DROPDOWN. A dropdown hides every option but the chosen
-// one behind a click, which is the right trade when there are twenty of them
-// and the wrong one when there are three: here the alternatives are the
-// information. It also needs a popup surface, a focus grab and a way out of
-// it, none of which this shell has -- the tray menus are the only popup in it
-// and they come off D-Bus.
+// WHAT AN OPTION IS, AND WHY THAT STAYED HERE. `options` is either a list of
+// plain strings or a list of objects with `label` and `value`, and valueOf()
+// and labelOf() below are the whole of that contract. It is not drawing: the
+// font picker on AppearancePage stores "JetBrainsMono Nerd Font Propo" and
+// shows "Propo", and a theme that reimplemented the unpacking could get that
+// pair the wrong way round and be wrong about which font is selected rather
+// than about how the selection looks. Themes read the two functions; nobody
+// else has to know the shape.
 //
-// The ceiling is about four options at this width. Past that the segments get
-// too narrow to label and the answer is a different control, not a smaller
-// font.
+// SEGMENTS RATHER THAN A DROPDOWN, and the ceiling that goes with it -- about
+// four options at this width -- are the theme's now. They are a statement
+// about what this control looks like and how much of it fits, which is the
+// half of the seam that draws. themes/genesis/components/ChoiceRow.qml carries
+// the reasoning; what stays here is that the set is CLOSED and SMALL, which is
+// what makes this type the right one to reach for at a call site.
+//
+// It knows nothing about Config, the same as every other row: it takes a
+// `value` and emits `chosen` to ask for a different one. The theme inherits
+// that whole -- it reads `row.value` and calls `row.chosen()`, and writes to
+// neither.
+//
+// WHY THE ROOT IS AN Item AND NOT A Rectangle. It was a Rectangle for `radius`
+// and a hover fill, and both of those are drawing. The test ToggleRow's header
+// sets out was run over all 10 call sites -- 9 written as `ChoiceRow {` and one
+// as the `sourceComponent` of a Loader in BarPage.qml, which is the site that
+// would have been missed by reading rather than extracting -- and NOTHING
+// OUTSIDE THIS FILE SETS `color`, `radius` OR `border`. So none of the three is
+// public API and all three moved behind the seam. What the call sites do set
+// stayed: `glyph`, `label`, `options`, `value`, `hint`, `onChosen`, and the
+// ordinary Item properties `visible` and `enabled`, which an Item carries too.
 
 import QtQuick
 import qs
+import qs.modules
 
-Rectangle {
+Item {
     id: root
 
     property string glyph: ""
@@ -31,6 +53,10 @@ Rectangle {
 
     signal chosen(var value)
 
+    // THE TWO HALVES OF AN OPTION, UNPACKED HERE AND NOT IN THE THEME. See the
+    // header: this is the API's own contract about what a caller may put in
+    // `options`, so it is checked, tested and fixed in one place rather than
+    // once per theme.
     function valueOf(option: var): var {
         return option !== null && typeof option === "object" ? option.value : option;
     }
@@ -39,198 +65,48 @@ Rectangle {
         return option !== null && typeof option === "object" ? option.label : String(option);
     }
 
-    // See the note in ToggleRow: the parent supplies the width.
+    // See the note in ToggleRow: the parent supplies the width, and binding
+    // implicitWidth to it instead would be a loop.
     width: parent ? parent.width : implicitWidth
     implicitWidth: 320
-    // Taller than the other rows, because the segments sit under the label
-    // rather than beside it. Side by side they were squeezed into whatever
-    // was left after "Interface font", which made a three-way choice look
-    // like an afterthought.
-    implicitHeight: Theme.groupHeight + segments.height - 4
 
-    radius: Theme.groupRadius
-    color: mouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+    // THE THEME DRIVES THE HEIGHT, WITH A FLOOR UNDER IT, and this row is the
+    // clearest case in the set for why the height crosses the seam upwards at
+    // all. Before the split it read `Theme.groupHeight + segments.height - 4`
+    // -- the label line, plus the segment track under it, less the overlap --
+    // and every term after the first is a measurement of something that has
+    // moved. There is no arithmetic left here that could stand in for it: a
+    // theme drawing this control some other way has a different second storey
+    // or none, and only it knows how tall that is.
+    //
+    // The floor is Theme.groupHeight, which is what a row of this shell is when
+    // a theme reports nothing at all -- see ToggleRow for the two ways that
+    // happens and for why this reads the Loader's implicit size rather than the
+    // loaded item's.
+    implicitHeight: Math.max(Theme.groupHeight, drawing.implicitHeight)
 
-    Behavior on color {
-        ColorAnimation { duration: Theme.animDuration }
-    }
-
-    opacity: root.enabled ? 1 : 0.4
-
-    MouseArea {
-        id: mouse
+    // Identical to ToggleRow's loader, and deliberately not factored out: see
+    // themes/genesis/components/README.md on why the sixteen lines are copied
+    // into each facade rather than shared through a base type.
+    Loader {
+        id: drawing
 
         anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.NoButton
-    }
 
-    Row {
-        id: labelRow
+        readonly property string drawingUrl: Themes.surface("components/ChoiceRow.qml")
 
-        anchors.top: parent.top
-        anchors.topMargin: 8
-        anchors.left: parent.left
-        anchors.leftMargin: Theme.groupPadding
-        spacing: Theme.itemSpacing
+        function build(): void {
+            if (String(drawing.source) === drawing.drawingUrl)
+                return;
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            visible: root.glyph !== ""
-            text: root.glyph
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.iconSize
-            color: Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
+            drawing.setSource(drawing.drawingUrl, {
+                row: root
+            });
         }
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.label
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize
-            font.weight: Theme.fontWeight
-            color: Theme.textOnSurface
+        Component.onCompleted: drawing.build()
+        onDrawingUrlChanged: drawing.build()
 
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
-        }
-
-        Item {
-            id: hintMark
-
-            anchors.verticalCenter: parent.verticalCenter
-            visible: root.hint !== ""
-            implicitWidth: Theme.groupHeight - 12
-            implicitHeight: Theme.groupHeight - 12
-
-            Text {
-                anchors.centerIn: parent
-                text: Icons.info
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.iconSize
-                color: hintMouse.containsMouse ? Theme.primary : Theme.outline
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
-            }
-
-            MouseArea {
-                id: hintMouse
-
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.NoButton
-            }
-        }
-    }
-
-    // THE BAND IS THE LABEL LINE AND NOT THE WHOLE ROW, which is what makes
-    // this row different from the others. A ChoiceRow is two storeys: the
-    // label with its mark on top, the segment track underneath. A note
-    // measured off the whole row would open below the segments, a long way
-    // from the mark that asked for it and with a control in between; measured
-    // off the label line it opens right under the words it is explaining, and
-    // covers the segments, which is fine -- they are still there when it
-    // fades.
-    //
-    // Which is also why the band matters rather than just a y: when there is
-    // no room below, Tooltip flips it above the LABEL LINE, not above the
-    // segments, so the note stays attached to the same end of the row either
-    // way.
-    Tooltip {
-        text: root.hint
-        shown: hintMouse.containsMouse
-
-        x: Theme.groupPadding
-        anchorY: labelRow.y
-        anchorHeight: labelRow.height
-        gap: 2
-        z: 200
-    }
-
-    // The track behind the segments, so the unchosen ones read as part of one
-    // control rather than as three loose buttons.
-    Rectangle {
-        id: segments
-
-        anchors.top: labelRow.bottom
-        anchors.topMargin: 6
-        anchors.left: parent.left
-        anchors.leftMargin: Theme.groupPadding
-        anchors.right: parent.right
-        anchors.rightMargin: Theme.groupPadding
-
-        height: Theme.groupHeight - 8
-        radius: height / 2
-        color: Qt.alpha(Theme.surfaceContainerHighest, 0.5)
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
-
-        Row {
-            anchors.fill: parent
-            anchors.margins: 3
-
-            Repeater {
-                model: root.options
-
-                Rectangle {
-                    id: segment
-
-                    required property var modelData
-                    required property int index
-
-                    readonly property bool current: root.valueOf(modelData) === root.value
-
-                    // Equal shares of the track, minus nothing: the segments
-                    // touch, which is what makes them one control. A gap here
-                    // and it is a row of pills again.
-                    width: segments.width / Math.max(1, root.options.length) - 6 / Math.max(1, root.options.length)
-                    height: parent.height
-                    radius: height / 2
-
-                    color: segment.current ? Theme.primary
-                        : segmentMouse.containsMouse ? Theme.surfaceContainerHigh
-                        : "transparent"
-
-                    Behavior on color {
-                        ColorAnimation { duration: Theme.animDuration }
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        width: parent.width - 8
-                        horizontalAlignment: Text.AlignHCenter
-                        elide: Text.ElideRight
-                        text: root.labelOf(segment.modelData)
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize - 1
-                        font.weight: segment.current ? Font.Bold : Theme.fontWeight
-                        color: segment.current ? Theme.textOnPrimary : Theme.textOnSurfaceVariant
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.animDuration }
-                        }
-                    }
-
-                    MouseArea {
-                        id: segmentMouse
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        enabled: root.enabled
-                        onClicked: root.chosen(root.valueOf(segment.modelData))
-                    }
-                }
-            }
-        }
+        // See ToggleRow for why there is no status handler here either.
     }
 }

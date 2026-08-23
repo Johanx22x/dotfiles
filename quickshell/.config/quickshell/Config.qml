@@ -416,6 +416,178 @@ Singleton {
             root.fontFamily = family;
     }
 
+    // ---------------- The colour scheme ------------------------------------
+    //
+    // ONE SETTING, ONE STORE, AND IT IS NOT KEPT HERE. The rule is the one
+    // WallpaperPage.qml's header states: a value that already has an owner
+    // outside the shell must not get a copy in this file, or the two disagree
+    // the first time it is changed from somewhere else. `desktop-scheme` is
+    // that owner -- it writes ~/.local/state/desktop-scheme and it is what a
+    // keybind, a terminal and a theme all go through -- so `scheme` below is a
+    // READ of its file and `setScheme` is a PUSH into its script. Nothing here
+    // is declared on the JsonAdapter.
+    //
+    // WHAT IT IS. The scheme is the BASE: surfaces, text, the sixteen ANSI
+    // slots every terminal in the session inherits. The ACCENTS are the
+    // wallpaper's and are not a setting -- there were briefly two more sources
+    // and a colour field beside them, and the note above `accent_args` in
+    // bin/desktop-scheme is where their removal is argued.
+    //
+    // The default repeated here is the script's own (`DEFAULT_SCHEME` in
+    // bin/desktop-scheme). A fresh machine has no state file at all, and both
+    // sides have to answer the same thing about it.
+    readonly property string schemeDefault: "tokyo-night"
+
+    // A READING AND NOT A PREDICTION. It follows the state file, which
+    // `desktop-scheme set` writes once it has accepted the name -- so it does
+    // not move for a name the script refused, which is the case where being
+    // right matters. Same rule, and the same wording, as `currentPath` in
+    // WallpaperPage.qml: moving it on the click would be quicker and would be
+    // a lie exactly when the truth is worth having.
+    property string scheme: root.schemeDefault
+
+    // WHICH SCHEME IS BEING APPLIED RIGHT NOW, or "" when none is. Applying one
+    // ends in `wallpaper-switch reapply` -- a full matugen render over fourteen
+    // files, plus the applications that have to be signalled afterwards -- so
+    // there is a second or more between the click and the desktop changing, and
+    // the settings window has to be able to say so on the row that was clicked.
+    //
+    // BOUND TO THE PROCESS AND NEVER TO A TIMER. What ends the wait is the
+    // script exiting, whatever it took: the render may get slower or faster,
+    // and a duration guessed here would either free the rows early or hold them
+    // after the work was done. A crash or a `die` ends it too, which is what
+    // keeps the picker from staying stuck on a scheme that failed.
+    readonly property string schemeApplying: schemeApply.running
+        ? root.schemeRequested : ""
+
+    // What was asked for. Only meaningful while `schemeApply` is running, which
+    // is why `schemeApplying` above is what the rest of the shell reads.
+    property string schemeRequested: ""
+
+    // NO "IT IS ALREADY THAT ONE" GUARD, deliberately. `desktop-scheme set`
+    // writes two keys -- what renders and what the PERSON chose -- and the
+    // second one is the answer a theme's `unpin` comes back to, so picking the
+    // scheme already in effect is a real thing to record. The script is what
+    // decides whether anything needs re-rendering, and it already declines when
+    // nothing moved.
+    //
+    // THE ONE GUARD THERE IS refuses a second apply while the first is still
+    // running. Two of these overlapping are two matugen renders writing the
+    // same fourteen files, and the one that finishes last wins -- which need
+    // not be the one the person asked for second. The settings window stops
+    // the click before it gets here; this is the backstop for every other
+    // caller, and the reason it can exist at all is that the push is a Process
+    // rather than an `execDetached`. WallpaperPage.qml makes the same trade for
+    // the same reason at its `picker`.
+    function setScheme(name: string): void {
+        if (name === "" || schemeApply.running)
+            return;
+
+        root.schemeRequested = name;
+        schemeApply.command = ["desktop-scheme", "set", name];
+        schemeApply.running = true;
+    }
+
+    // ---------------- And the two a THEME goes through ----------------
+    //
+    // A THEME CAN NAME A SCHEME AND THE WHOLE DESKTOP THEN WEARS IT, which is
+    // what `"palette": { "source": "pinned", "scheme": "gruvbox-dark" }` in a
+    // manifest means. Theme.qml is what reads that declaration and what decides
+    // when a theme has been entered or left; these two are the push, and they
+    // are here rather than there for the reason the section above gives -- this
+    // file is the shell's one seam into `desktop-scheme`, so there is one place
+    // that spawns it and one place to look when it did not run.
+    //
+    // WHY THEY ARE NOT `setScheme` WITH A FLAG. The three commands mean
+    // different things to the store the script keeps: `set` writes what renders
+    // AND what the person chose, `pin` writes only the first, `unpin` copies the
+    // second back over the first. A person picking Gruvbox and a theme bringing
+    // Gruvbox with it are not the same event, and the difference between them is
+    // the whole of what makes leaving a theme give the desktop back.
+    //
+    // THE SAME PROCESS AND THE SAME GUARD as `setScheme`, deliberately. Each of
+    // these ends in `wallpaper-switch reapply`, so two of them overlapping are
+    // two matugen renders writing the same fourteen files and the one that
+    // finishes last wins. The cost of the guard is that a theme changed during a
+    // render that is already running does not pin at all -- the desktop then
+    // wears the scheme it had, until the theme is entered again or a scheme is
+    // picked. A queue behind this would be a second mechanism for a window of
+    // about a second, and nothing has asked for one.
+    function pinScheme(name: string): void {
+        if (name === "" || schemeApply.running)
+            return;
+
+        root.schemeRequested = name;
+        schemeApply.command = ["desktop-scheme", "pin", name];
+        schemeApply.running = true;
+    }
+
+    function unpinScheme(): void {
+        if (schemeApply.running)
+            return;
+
+        // NOTHING IS NAMED AS APPLYING, and that is the honest answer rather
+        // than a missing one. What an unpin restores is `chosen`, which lives in
+        // the script's store; this file does not read that key and guessing at
+        // it would put a row of the scheme picker into its "applying" state on
+        // the strength of a prediction. The same rule as `currentPath` in
+        // WallpaperPage.qml: quicker, and a lie in exactly the case where the
+        // truth is worth having. `scheme` still follows the store, so the row
+        // that ends up marked as current is the one the script actually landed
+        // on.
+        root.schemeRequested = "";
+        schemeApply.command = ["desktop-scheme", "unpin"];
+        schemeApply.running = true;
+    }
+
+    // Deliberately no onExited handler. `scheme` above follows the state file,
+    // which the script has already written by the time it returns, and the
+    // failure case is a file that never changed rather than one to read again.
+    Process {
+        id: schemeApply
+    }
+
+    FileView {
+        id: schemeFile
+
+        path: `${root.stateDir}/desktop-scheme`
+        watchChanges: true
+        // Absent until the script has run once, which is not an error: the
+        // properties already hold the same defaults the script does.
+        printErrors: false
+
+        onFileChanged: reload()
+        onLoaded: root.adoptScheme()
+    }
+
+    // The same tab-separated store `adoptTweaks` reads, and parsed the same
+    // way. A value is NOT validated against the list of schemes on disk: this
+    // file is what the script wrote, the script already refused a name it had
+    // no file for, and a shell that second-guessed it would be a settings
+    // window disagreeing with the terminal about what is on screen.
+    //
+    // NOTHING IS HELD BACK WHILE A PUSH IS IN FLIGHT ANY MORE. There used to be
+    // an early return here for exactly that, and it was there to defend an
+    // optimistic value: `setScheme` wrote `scheme` on the click and this would
+    // otherwise have overwritten it with the store the script had not reached
+    // yet. There is no such value now -- the click starts a process and nothing
+    // else -- so the newest thing on disk is always the better answer, and a
+    // reader that declined to take it would be the settings window arguing with
+    // the file it is showing.
+    function adoptScheme(): void {
+        const parsed = ({});
+
+        for (const line of (schemeFile.text() || "").split("\n")) {
+            const at = line.indexOf("\t");
+            if (at < 0)
+                continue;
+
+            parsed[line.slice(0, at)] = line.slice(at + 1).trim();
+        }
+
+        root.scheme = parsed["scheme"] || root.schemeDefault;
+    }
+
     // ---------------- What the compositor is told ----------------
     //
     // NOT Theme CONSTANTS, and this is the clearest case on the page for why
@@ -979,6 +1151,38 @@ Singleton {
         }
         onLoadFailed: root.wallpaperInterval = root.wallpaperIntervalDefault
     }
+
+    // ---------------- Which theme draws the desktop ----------------
+    //
+    // THE NAME OF A DIRECTORY UNDER themes/, and that is the whole contract.
+    // The shell loads its surfaces out of themes/<this>/ at runtime instead of
+    // importing them, so this is the only setting that decides what the
+    // desktop looks like rather than how it behaves. modules/Themes.qml is
+    // what turns the name into paths, and what happens when it names nothing.
+    //
+    // THE DEFAULT IS THE ANSWER BEFORE THE FILE IS READ, and that matters more
+    // here than anywhere else in this file. config.json is read
+    // asynchronously; every other setting arrives late and moves a binding,
+    // while this one decides which windows exist. Declaring "genesis" as the
+    // adapter's default means the shell builds the shipped theme immediately
+    // and rebuilds only for someone who has chosen a different one -- and a
+    // config written before this key existed reads exactly as it always did.
+    //
+    // ON THE ADAPTER, WHERE THE SCHEME TWO SECTIONS UP IS NOT, and the rule
+    // that separates them is WallpaperPage.qml's: a value that already has an
+    // owner outside the shell must not get a copy in this file. `desktop-scheme`
+    // is such an owner -- a keybind, a terminal and a theme all go through it
+    // -- so `scheme` is a reading of its state file. Nothing owns the theme but
+    // the shell. No script writes it, nothing else reads it, and the only thing
+    // it decides is which QML this process loads; a state file for it would be
+    // a file with exactly one writer and one reader, both of them here.
+    //
+    // WRITTEN BY ONE CLICK AND NOTHING ELSE. The picker on AppearancePage
+    // assigns this directly, the way every other plain adapter value on that
+    // side is assigned -- there is no setTheme() because there is nothing for
+    // one to do. That is also what keeps it clear of the trap the saveTimer
+    // section below sets out at length: one property, one write, one turn.
+    property alias theme: adapter.theme
 
     // ---------------- Which monitor is which ----------------
     //
@@ -1684,6 +1888,10 @@ Singleton {
             property bool nightLightScheduled: false
             property int nightLightFrom: 1200
             property int nightLightTo: 420
+            // The directory under themes/ that draws the desktop. See the
+            // theme section above for why this one has a real default rather
+            // than an empty "decide for me".
+            property string theme: "genesis"
             // See the monitor section above for what goes in these three and
             // why the empty values mean "decide for me" rather than "nothing".
             property string mainMonitor: ""

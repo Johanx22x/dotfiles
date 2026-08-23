@@ -91,8 +91,11 @@ such control: every row of its table said "lands", including the rows that were
 wrong.
 
 WHAT IS REAL HERE AND WHAT IS NOT. The two components are imported out of
-quickshell/ by relative path and are the shipping files, byte for byte; the
-geometry is the settings window's own. Two things are stood in for:
+quickshell/ by relative path and are the shipping files, byte for byte; so is
+the theme file ScrollList's own scrollbar loads, which is reached through the
+sandbox `qs.components` and the Themes stub below rather than by copying
+anything. The geometry is the settings window's own. Two things are stood in
+for:
 
   Theme, because quickshell/.config/quickshell/Theme.qml opens with
   `import Quickshell` and reads the wallpaper's palette through a FileView,
@@ -105,7 +108,9 @@ geometry is the settings window's own. Two things are stood in for:
   import then succeeds and contributes nothing, and every name it would have
   provided falls through to the root context, where Theme is handed in as a
   context property -- which is looked up exactly when a name is not a type.
-  The components are not edited and do not know the difference.
+  The components are not edited and do not know the difference. `qs.modules`
+  and `qs.components` live in the same import root and are NOT empty -- see
+  qs_modules() for what each one carries and why a split component needs both.
 
 WHAT IS NOT ASKED HERE. The scrollbar, which #159 measured separately and
 which the rail places from outside this component; the hand-back to the page
@@ -176,6 +181,13 @@ TESTS = Path(__file__).resolve().parent
 SCENE = TESTS / "wheel-and-click.qml"
 THEME_STUB = TESTS / "theme-stub.qml"
 
+SHELL = TESTS.parent / "quickshell" / ".config" / "quickshell"
+COMPONENTS = SHELL / "components"
+SETTINGS = SHELL / "modules" / "settings"
+# The theme that draws whatever the components under test load. Hard-coded for
+# the reason tests/scrollbar-target.py gives beside the same line.
+DRAWN_BY = SHELL / "themes" / "genesis"
+
 # One notch. Qt's wheel unit is an eighth of a degree and every mouse on this
 # desk reports 15 degrees a notch, which is the 120 every toolkit special-cases.
 NOTCH = 120
@@ -213,14 +225,16 @@ def check(condition: bool, message: str) -> bool:
 _theme = None
 
 
-def empty_qs_module(root: Path) -> Path:
-    """Builds an import root under which `import qs` resolves to nothing.
+def qs_modules(root: Path) -> Path:
+    """Builds an import root carrying the three `qs` modules under test.
 
-    The components under test open with `import qs`, which in the real shell is
-    the config root -- Config, Theme, Icons and the rest. Here it has to resolve
-    to a module that exists and declares no types, so that the import succeeds
-    and every name it would have provided falls through to the root context,
-    where Theme is waiting.
+    `qs` ITSELF RESOLVES TO NOTHING. The components under test open with
+    `import qs`, which in the real shell is the config root -- Config, Theme,
+    Icons and the rest. Here it has to resolve to a module that exists and
+    declares no types, so that the import succeeds and every name it would have
+    provided falls through to the root context, where Theme is waiting. That
+    holds for the theme's own files as well, which are loaded by URL and reach
+    the same root context.
 
     IT CANNOT BE EMPTY, which is the one surprise here. A `qmldir` carrying
     nothing but `module qs` is not a module Qt will load: the import fails with
@@ -236,11 +250,114 @@ def empty_qs_module(root: Path) -> Path:
     for 'root:/'" the moment a qmldir is found there. The tree now imports by
     module name, so the scheme is gone and so is the machinery that stood in
     for it.
+
+    AND THREE SUBMODULES THAT DO RESOLVE TO SOMETHING, because ScrollList holds
+    a ScrollBar and ScrollBar is now a facade: it keeps the press target and the
+    position arithmetic and loads its pill out of
+    themes/<theme>/components/ScrollBar.qml. Without the first two the scene
+    does not come up at all -- "module qs.modules is not installed", then "Type
+    ScrollBar unavailable", then "Type ScrollList unavailable", then
+    Status.Error and a bench that measures nothing:
+
+      qs.modules      the facade calls Themes.surface() to find its theme's
+                      file. The real modules/Themes.qml opens `import
+                      Quickshell`, reads a manifest through a FileView and
+                      builds its URL with Quickshell.shellPath, so what stands
+                      in for it here is the one function of it that is asked
+                      for -- pointed at the real theme directory, so what the
+                      rail scrolls is the bar this repository ships.
+      qs.components   the theme's file declares `required property ScrollBar
+                      row`, a type it can only name by importing the host's
+                      components. The qmldir names each one by a relative path
+                      back into quickshell/, so this import and the scene's own
+                      relative one resolve to the same document and the initial
+                      property the facade hands down is accepted.
+      qs.modules.settings
+                      the same thing again for SettingsNavItem, which became a
+                      facade of its own: its theme file declares `required
+                      property SettingsNavItem row` and can only name that type
+                      by importing the directory the facade lives in. WITHOUT
+                      IT THIS BENCH STAYS GREEN AND MEASURES A RAIL OF BLANK
+                      ROWS -- the facade keeps the MouseArea and floors its own
+                      height, so every wheel notch, every drag and every click
+                      below behaves identically with the drawing missing. That
+                      is the quiet failure named at the end of this docstring,
+                      and `railDrawn` in the scene is what turns it loud.
+
+    THE SAME FOUR MODULES ARE BUILT IN tests/scrollbar-target.py, which
+    measures that bar directly. The two sandboxes are deliberately not shared
+    -- that one registers Theme as a singleton in `qs` and this one hands it in
+    as a context property -- but the modules are the same modules: add one here
+    and it belongs there too, and the other way round. A bench missing
+    qs.components still loads and still measures every wheel notch correctly,
+    with a bar that draws nothing, which is the quiet failure the paint
+    assertion in that file is there to catch.
     """
     module = root / "qs"
     module.mkdir(parents=True, exist_ok=True)
     (module / "Placeholder.qml").write_text("import QtQuick\nQtObject {}\n")
     (module / "qmldir").write_text("module qs\nPlaceholder 1.0 Placeholder.qml\n")
+
+    components = module / "components"
+    components.mkdir()
+    (components / "qmldir").write_text(
+        "module qs.components\n" + "".join(
+            # Fuzzy.qml is `pragma Singleton` and a qmldir that said otherwise
+            # would refuse it at the moment something used it. Read rather than
+            # listed, so the next singleton under components/ needs no edit.
+            ("singleton " if "pragma Singleton" in qml.read_text() else "")
+            + f"{qml.stem} 1.0 {os.path.relpath(qml, components)}\n"
+            for qml in sorted(COMPONENTS.glob("*.qml"))
+        )
+    )
+
+    modules = module / "modules"
+    modules.mkdir()
+    (modules / "Themes.qml").write_text(
+        "pragma Singleton\n"
+        "import QtQuick\n"
+        "QtObject {\n"
+        "    function surface(file: string): string {\n"
+        f'        return "file://" + encodeURI("{DRAWN_BY}/" + file);\n'
+        "    }\n"
+        "}\n"
+    )
+    (modules / "qmldir").write_text(
+        "module qs.modules\nsingleton Themes 1.0 Themes.qml\n"
+    )
+
+    # The same relative-path trick as qs.components, for the directory the
+    # settings window's own facades live in.
+    #
+    # AND THE SINGLETONS ARE LEFT OUT, which is the opposite of what the module
+    # above does and is not a shortcut. A COMPOSITE SINGLETON DECLARED IN A
+    # qmldir IS CREATED WHEN A DOCUMENT THAT IMPORTS THE MODULE IS CREATED, not
+    # when something first names it -- and two of the files in here are
+    # singletons that open `import Quickshell`. Measured: declaring them turns
+    # every one of the fourteen entries into
+    #
+    #   themes/genesis/components/SettingsNavItem.qml: Type SessionInfo unavailable
+    #   modules/settings/SessionInfo.qml:18:1: module "Quickshell" plugin
+    #       "quickshell-coreplugin" not found
+    #
+    # and a rail that draws nothing -- which `railDrawn` in the scene now
+    # reports rather than passing over. qs.components has singletons too and
+    # needs no such rule: Fuzzy.qml is plain QtQuick, and nothing in there
+    # reaches for the shell's own plugin.
+    #
+    # The scene's relative directory import of the same directory is unaffected
+    # by any of this: a directory with no qmldir has no singleton declarations,
+    # so those two files are ordinary types there and nothing instantiates
+    # them.
+    settings = modules / "settings"
+    settings.mkdir()
+    (settings / "qmldir").write_text(
+        "module qs.modules.settings\n" + "".join(
+            f"{qml.stem} 1.0 {os.path.relpath(qml, settings)}\n"
+            for qml in sorted(SETTINGS.glob("*.qml"))
+            if "pragma Singleton" not in qml.read_text()
+        )
+    )
     return root
 
 
@@ -391,6 +508,9 @@ def settle(app: QGuiApplication, milliseconds: int) -> None:
 CONTENT_HEIGHT = 530.0
 VIEWPORT_HEIGHT = 452.0
 BOTTOM = CONTENT_HEIGHT - VIEWPORT_HEIGHT  # 78, the hidden two entries
+# The rail's subjects, and therefore how many labels a rail that drew has on
+# it. The scene lists them by name; this is the same count from this side.
+ENTRIES = 14
 
 # device name, synthesized, and whether ScrollList's handler should take it.
 WHEEL_SHAPES = (
@@ -405,7 +525,7 @@ def shape_name(device: str, synthesized: bool) -> str:
     return f"{device}{', synthesized' if synthesized else ''}"
 
 
-def check_geometry(rail: object, plain: object) -> None:
+def check_geometry(scene: object, rail: object, plain: object) -> None:
     note("the scene is the settings rail at 820x580")
     check(rail.property("contentHeight") == CONTENT_HEIGHT,
           f"the rail's entries are {rail.property('contentHeight')} tall, "
@@ -415,6 +535,23 @@ def check_geometry(rail: object, plain: object) -> None:
     check(plain.property("contentHeight") == CONTENT_HEIGHT,
           "the calibration Flickable is not the same size as the rail, so it is "
           "not answering the same question")
+
+    # AND THE ENTRIES ARE VISIBLE, which nothing else here would notice.
+    # SettingsNavItem loads its pill, its glyph and its label out of the theme
+    # at runtime; the facade keeps the height floor and the MouseArea, so a
+    # theme file that did not load leaves every wheel, drag and click row below
+    # passing over a rail of blank rows. See `railDrawn` in the scene.
+    #
+    # PROVEN TO DISCRIMINATE, like everything else here. With the theme's file
+    # renamed away this row reads "0 of the rail's 14 entries drew" and goes
+    # red, and every other row in this file stays green and says the click
+    # landed.
+    drawn = scene.property("railDrawn")
+    if check(drawn == ENTRIES,
+             f"{drawn} of the rail's {ENTRIES} entries drew -- the theme's "
+             "SettingsNavItem.qml did not load, so everything below is measured "
+             "against entries that are not there"):
+        note(f"all {ENTRIES} entries drew, so the rail below is the drawn one")
 
 
 def check_wheel(app: QGuiApplication, view: QQuickView, scene: object, rail: object,
@@ -588,7 +725,7 @@ def main() -> int:
     devices()
 
     with tempfile.TemporaryDirectory() as import_root:
-        root = empty_qs_module(Path(import_root))
+        root = qs_modules(Path(import_root))
 
         # A view of its own for each measurement; see the header for why one
         # cannot be reused. Every one of them is torn down before the next is
@@ -606,7 +743,7 @@ def main() -> int:
             view.close()
             app.processEvents()
 
-        measure(lambda view, scene, rail, plain: check_geometry(rail, plain))
+        measure(lambda view, scene, rail, plain: check_geometry(scene, rail, plain))
 
         note("one wheel notch, four device shapes")
         for device, synthesized, accepted in WHEEL_SHAPES:

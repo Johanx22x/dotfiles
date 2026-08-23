@@ -44,8 +44,16 @@
 /* ---- Surfaces ----
    Two tones only, and the split is chrome vs content:
 
-     #1a1b26  chrome   -- window, sidebar and BOTH top bars
-     #101119  content  -- the view: file list, grid
+     ui_bg       chrome   -- window, sidebar and BOTH top bars
+     ui_bg_view  content  -- the view: file list, grid
+
+   Every hex printed in this block is Tokyo Night's, the scheme this was
+   measured against while both tones were literals in the file: #1a1b26 chrome
+   and #101119 content. The roles are what the file reads now, each scheme
+   fills them itself, and Tokyo Night's `ui_bg_view` has since moved to
+   #0c0e14 -- so treat the numbers as the record of a measurement rather than
+   as what is on screen today. What carries over unchanged is the requirement
+   they were chosen to meet, which is the Hyprland blend two paragraphs down.
 
    WHICH COLOUR ACTUALLY PAINTS WHAT IN NAUTILUS. This is not what the names
    suggest, and it was established by setting each one to a garish colour,
@@ -96,12 +104,18 @@
    Now the tone step does the separating and the divider is only a hint.
    Note this is the opposite of upstream Adwaita, where the sidebar is
    LIGHTER than the window (#2e2e32 over #222226); here the chrome is one
-   flat surface and the content is what steps back. */
-@define-color window_bg_color   #1a1b26;
-@define-color window_fg_color   #c0caf5;
+   flat surface and the content is what steps back.
 
-@define-color view_bg_color     #101119;
-@define-color view_fg_color     #c0caf5;
+   THE STEP IS REQUIRED, ITS DIRECTION IS NOT. `ui_bg_view` is defined as one
+   clear step AWAY from `ui_bg`, not below it: all three schemes that ship go
+   down, but Gruvbox's own idiom is a lighter card over its window and a
+   hard-contrast variant would have nowhere darker to go. schemes/README.md 4.3
+   is where that was decided and is the place to argue with it. */
+@define-color window_bg_color   {{colors.ui_bg.default.hex}};
+@define-color window_fg_color   {{colors.ui_text.default.hex}};
+
+@define-color view_bg_color     {{colors.ui_bg_view.default.hex}};
+@define-color view_fg_color     {{colors.ui_text.default.hex}};
 
 /* headerbar_shade_color: in a plain headerbar this is the "inset 0 -1px"
    underline, but Nautilus's headerbars live inside AdwToolbarViews and
@@ -119,10 +133,10 @@
    The other half of this lives in hyprland.lua: its opacity field is
    "active inactive", and an inactive value below the active one re-creates
    exactly the same problem from the compositor side. */
-@define-color headerbar_bg_color        #1a1b26;
-@define-color headerbar_fg_color        #c0caf5;
-@define-color headerbar_border_color    #414868;
-@define-color headerbar_backdrop_color  #1a1b26;
+@define-color headerbar_bg_color        {{colors.ui_bg.default.hex}};
+@define-color headerbar_fg_color        {{colors.ui_text.default.hex}};
+@define-color headerbar_border_color    {{colors.ui_border.default.hex}};
+@define-color headerbar_backdrop_color  {{colors.ui_bg.default.hex}};
 @define-color headerbar_shade_color     rgba(0, 0, 0, 0.15);
 
 /* sidebar_border_color: TRANSPARENT, and it must stay defined to be so.
@@ -143,9 +157,9 @@
    background does not says the class is present and something app-side is
    overriding only the background. Not worth chasing: window_bg_color
    already paints the sidebar the intended colour. */
-@define-color sidebar_bg_color        #1a1b26;
-@define-color sidebar_fg_color        #c0caf5;
-@define-color sidebar_backdrop_color  #1a1b26;
+@define-color sidebar_bg_color        {{colors.ui_bg.default.hex}};
+@define-color sidebar_fg_color        {{colors.ui_text.default.hex}};
+@define-color sidebar_backdrop_color  {{colors.ui_bg.default.hex}};
 @define-color sidebar_border_color    transparent;
 @define-color sidebar_shade_color     rgba(0, 0, 0, 0.18);
 
@@ -153,28 +167,28 @@
    pane. Nautilus does not use it today, but if it is left undefined it
    falls back to Adwaita's grey (#28282c) and a 36% divider, which would
    show up as a foreign colour the day some dialog does use it. */
-@define-color secondary_sidebar_bg_color        #1a1b26;
-@define-color secondary_sidebar_fg_color        #c0caf5;
-@define-color secondary_sidebar_backdrop_color  #1a1b26;
+@define-color secondary_sidebar_bg_color        {{colors.ui_bg.default.hex}};
+@define-color secondary_sidebar_fg_color        {{colors.ui_text.default.hex}};
+@define-color secondary_sidebar_backdrop_color  {{colors.ui_bg.default.hex}};
 @define-color secondary_sidebar_border_color    rgba(0, 0, 0, 0.15);
 @define-color secondary_sidebar_shade_color     rgba(0, 0, 0, 0.18);
 
-@define-color card_bg_color     #292e42;
-@define-color card_fg_color     #c0caf5;
+@define-color card_bg_color     {{colors.ui_bg_raised.default.hex}};
+@define-color card_fg_color     {{colors.ui_text.default.hex}};
 @define-color card_shade_color  rgba(0, 0, 0, 0.36);
 
-@define-color dialog_bg_color   #1a1b26;
-@define-color dialog_fg_color   #c0caf5;
+@define-color dialog_bg_color   {{colors.ui_bg.default.hex}};
+@define-color dialog_fg_color   {{colors.ui_text.default.hex}};
 
-@define-color popover_bg_color  #292e42;
-@define-color popover_fg_color  #c0caf5;
+@define-color popover_bg_color  {{colors.ui_bg_raised.default.hex}};
+@define-color popover_fg_color  {{colors.ui_text.default.hex}};
 
-@define-color thumbnail_bg_color #292e42;
-@define-color thumbnail_fg_color #c0caf5;
+@define-color thumbnail_bg_color {{colors.ui_bg_raised.default.hex}};
+@define-color thumbnail_fg_color {{colors.ui_text.default.hex}};
 
 @define-color shade_color   rgba(0, 0, 0, 0.36);
 @define-color scrim_color   rgba(0, 0, 0, 0.5);
-@define-color borders       #414868;
+@define-color borders       {{colors.ui_border.default.hex}};
 
 /* ---- Accent: the only thing that follows the wallpaper ----
    accent_color    = for TEXT and icons over the window background.
@@ -189,29 +203,34 @@
 @define-color accent_bg_color  {{colors.primary.default.hex}};
 @define-color accent_fg_color  {{colors.on_primary.default.hex}};
 
-/* ---- Semantic: NOT harmonised ----
-   An alert has to look the same always, even over a red wallpaper: for
-   these four the colour IS the meaning, so deriving them from the image
-   would throw away the only thing they carry. The same call is made in
-   quickshell/Theme.qml, which hardcodes `warning` and `critical` rather than
-   reading M3's error role, and it is written out under [config] in
-   config.toml. (That comment used to point at waybar's #custom-system.
-   waybar is gone.) */
-@define-color destructive_color     #f7768e;
-@define-color destructive_bg_color  #f7768e;
-@define-color destructive_fg_color  #1a1b26;
+/* ---- Semantic: from the scheme, never from the image ----
+   An alert has to mean the same thing over a red wallpaper as over a blue
+   one: for these four the colour IS the meaning, so deriving them from the
+   image would throw away the only thing they carry. They come from the
+   scheme's `sem_*` roles instead -- a scheme is picked by hand and moves only
+   when the user moves it, which is fixed enough, and it is what lets a
+   Gruvbox desktop show Gruvbox's red instead of Tokyo Night's.
 
-@define-color success_color     #9ece6a;
-@define-color success_bg_color  #9ece6a;
-@define-color success_fg_color  #1a1b26;
+   The same call is made everywhere else that paints an alert: zathura, qt6ct,
+   cship, and quickshell/Theme.qml, which reads `warning` and `critical` out of
+   colors.json rather than M3's `error` role -- that role is the one that IS
+   derived per image. The argument is written out under [config] in config.toml.
+   (That comment used to point at waybar's #custom-system. waybar is gone.) */
+@define-color destructive_color     {{colors.sem_critical.default.hex}};
+@define-color destructive_bg_color  {{colors.sem_critical.default.hex}};
+@define-color destructive_fg_color  {{colors.sem_on_critical.default.hex}};
 
-@define-color warning_color     #e0af68;
-@define-color warning_bg_color  #e0af68;
-@define-color warning_fg_color  #1a1b26;
+@define-color success_color     {{colors.sem_success.default.hex}};
+@define-color success_bg_color  {{colors.sem_success.default.hex}};
+@define-color success_fg_color  {{colors.sem_on_success.default.hex}};
 
-@define-color error_color       #f7768e;
-@define-color error_bg_color    #f7768e;
-@define-color error_fg_color    #1a1b26;
+@define-color warning_color     {{colors.sem_warning.default.hex}};
+@define-color warning_bg_color  {{colors.sem_warning.default.hex}};
+@define-color warning_fg_color  {{colors.sem_on_warning.default.hex}};
+
+@define-color error_color       {{colors.sem_critical.default.hex}};
+@define-color error_bg_color    {{colors.sem_critical.default.hex}};
+@define-color error_fg_color    {{colors.sem_on_critical.default.hex}};
 
 
 /* ==================================================================
@@ -415,9 +434,13 @@ window.view .content-pane popover scrolledwindow {
    That single widget was the whole of what still changed when the window
    lost focus.
 
-   Both states are pinned to the same value. #24283b is a deliberate step
-   ABOVE the #1a1b26 chrome: the pill is a control and should read as
-   raised, unlike the panes, which are surfaces and stay flat.
+   Both states are pinned to the same value, `ui_bg_control`, which every
+   scheme fills with a deliberate step ABOVE its own chrome: the pill is a
+   control and should read as raised, unlike the panes, which are surfaces and
+   stay flat. It was the literal #24283b over the #1a1b26 chrome when this was
+   decided -- Tokyo Night Storm's `bg`, borrowed for the step it gave rather
+   than for belonging to this palette, which is why Tokyo Night now names
+   #222534 for the role instead (schemes/README.md 4.1).
 
    The same rule catches the linked button groups at the right end of the
    header, which is intended -- they are the same kind of control and were
@@ -425,5 +448,5 @@ window.view .content-pane popover scrolledwindow {
 
 window.view .content-pane .top-bar box.linked,
 window.view .content-pane .top-bar box.linked:backdrop {
-  background-color: #24283b;
+  background-color: {{colors.ui_bg_control.default.hex}};
 }

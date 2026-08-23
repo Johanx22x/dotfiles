@@ -4,7 +4,7 @@
 // WHAT THIS PAGE IS NOT IS A PICKER. It carried a grid of thumbnails once,
 // and choosing from it meant judging a 4K photograph at a hundred pixels
 // across in a pane the width of a sidebar. Picking happens in the carousel
-// now -- SUPER + SHIFT + W, modules/wallpaper -- and what is left here is
+// now -- SUPER + SHIFT + W, themes/genesis/wallpaper -- and what is left here is
 // everything AROUND the collection: where it lives, how often it changes by
 // itself, and the name of the one currently on the desktop.
 //
@@ -44,23 +44,6 @@ SettingsPage {
     // the same reason: the footer below says "folder".
     keywords: ["wallpaper", "background", "rotation", "timer", "random",
         "shuffle", "image", "folder", "directory", "collection"]
-
-    // NOT IN Icons.qml, and not because it does not belong there -- that file
-    // is off limits to this change. It was read out of the installed font's
-    // cmap rather than off the Nerd Fonts chart, which is the rule Icons.qml
-    // itself spells out after three glyphs turned out to draw a music box, a
-    // shield and a bluetooth speaker:
-    //
-    //   python -c "from fontTools.ttLib import TTFont; \
-    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
-    //       .getBestCmap()[0xF024F])"
-    //
-    // 0xF024F answers md-folder_image.
-    //
-    // ITS COMPANION 0xF0770 (md-folder_open) WAS DELETED WITH THE PILL IT SAT
-    // IN. The footer's action is a bare word now; a glyph at both ends of one
-    // muted line is the kind of furniture this page was carrying too much of.
-    readonly property string folderGlyph: String.fromCodePoint(0xF024F)
 
     // ---------------- What is applied right now ----------------
     //
@@ -473,10 +456,14 @@ SettingsPage {
         width: parent.width
         title: "Wallpaper"
 
-        // NOT a ConfirmButton, wherever it lives. That component is for the
-        // click you should not be able to take by accident, and this one is
-        // undone by browsing to the picture you had -- arming it would be
-        // ceremony around a change that costs a second to reverse.
+        // NOT AN ARM-THEN-CONFIRM BUTTON. There was a ConfirmButton in
+        // components/ when this note was written and there is not one now --
+        // its only call site had gone and it was deleted after it -- but the
+        // shape is the point and the shape outlives the file: a control that
+        // arms on the first click and acts on the second is for the click you
+        // should not be able to take by accident, and this one is undone by
+        // browsing to the picture you had. Arming it would be ceremony around
+        // a change that costs a second to reverse.
         actionText: "Random"
         actionGlyph: Icons.shuffle
 
@@ -578,7 +565,7 @@ SettingsPage {
                 anchors.leftMargin: Theme.groupPadding
                 anchors.verticalCenter: originText.verticalCenter
 
-                text: root.folderGlyph
+                text: Icons.folderImage
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.iconSize - 2
                 color: Theme.textOnSurfaceVariant
@@ -646,7 +633,10 @@ SettingsPage {
                 // growing means it eats leftwards into the path beside it and
                 // re-elides that line, all at the instant of the click, which
                 // is exactly when the eye is on it.
-                width: Math.max(idleMetrics.width, busyMetrics.width)
+                //
+                // MEASURED BY THE THING THAT DRAWS. See the two hidden Texts
+                // below for why they are not TextMetrics any more.
+                width: Math.max(idleMetrics.implicitWidth, busyMetrics.implicitWidth)
                     + Theme.groupPadding * 1.6
                 height: footer.lineHeight
                 radius: height / 2
@@ -660,16 +650,49 @@ SettingsPage {
                     ColorAnimation { duration: Theme.animDuration }
                 }
 
-                TextMetrics {
+                // HIDDEN Texts AND NOT TextMetrics, which is the same call
+                // themes/genesis/island/ReplayControl.qml makes and for the
+                // same measured reason: a TextMetrics and a Text do not agree
+                // about the width of one string in one font, and the Text is
+                // the one that is right, because the Text is the one that
+                // draws. Measured offscreen in this face, "Choosing…" at the
+                // shipped size:
+                //
+                //   TextMetrics.width  70.00      <- what was reserved
+                //   Text.implicitWidth 70.17      <- what is laid out
+                //   painted ink        70 px      <- counted from a grab
+                //
+                // TextMetrics comes back whole-numbered at every size tried,
+                // and it lands under the Text as often as over it: at a
+                // fontSize of 16 it reads 105.00 against the Text's 107.86.
+                //
+                // THE CHIP DOES NOT RESIZE EITHER WAY -- both candidates are
+                // measured, so the max is the same in both states, and the
+                // invariant the paragraph above is about was never the one at
+                // risk here. The label is centred at its own full width and
+                // there is no elide, so nothing clipped either. What the short
+                // reservation was quietly spending is the padding: this chip
+                // asks for 9.6 px a side and the busy state got 9.5 at the
+                // shipped font and 8.2 at 16. This is the mildest of the five
+                // places the shell made this mistake, and it is corrected here
+                // because the same construct is wrong in all five.
+                //
+                // `visible: false` and nothing else. They are children of the
+                // chip rather than of any layout, so nothing positions them
+                // and nothing draws them -- but an invisible Text still lays
+                // its string out, which is the whole point.
+                Text {
                     id: idleMetrics
 
+                    visible: false
                     font: changeLabel.font
                     text: "Change"
                 }
 
-                TextMetrics {
+                Text {
                     id: busyMetrics
 
+                    visible: false
                     font: changeLabel.font
                     text: "Choosing…"
                 }

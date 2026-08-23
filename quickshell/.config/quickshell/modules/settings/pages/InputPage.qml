@@ -464,7 +464,45 @@ SettingsPage {
                     //
                     // The chips are the keybinds page's, down to the sizes:
                     // the key takes the accent and the modifier stays muted,
-                    // because the modifier is the part you already know.
+                    // because the modifier is the part you already know. They
+                    // ARE that page's chip now rather than a Rectangle drawn to
+                    // look like it -- components/Chip.qml, role "key", the same
+                    // pill the keybinds page and the cheatsheet put a chord in.
+                    //
+                    // THE TWO NUMBERS BELOW LOOK LIKE DECORATION AND ARE NOT,
+                    // and the reason is not the one the other two call sites
+                    // give. Those size a chord GUTTER by adding chips up --
+                    // `spacing * (n - 1)` plus, per key,
+                    // `advanceWidth(key) + padding` -- so a chip drawn with any
+                    // other padding or face drifts away from the model
+                    // silently. Nothing here measures anything: this chord sits
+                    // in a Row as wide as its own content, with the layout name
+                    // beside it eliding. That drift cannot happen on this page.
+                    //
+                    // WHAT CAN is that the theme's own key is not this cap.
+                    // Left unset, themes/genesis draws one with the BUTTON's
+                    // padding: `Math.round(groupPadding * 2)`, 24 against 14.
+                    //
+                    // IT USED TO GET THE FACE WRONG AS WELL, out of a
+                    // `Qt.font({pointSize: Theme.fontSize - 1.5})` that came
+                    // back 9 and not 9.5 because Qt.font() takes an int point
+                    // size. That is gone: components/Chip.qml in that theme
+                    // writes the same size through the font group properties
+                    // now, and they keep the half point.
+                    //
+                    // SO THE REMAINING GAP IS PADDING ALONE, AND IT IS WIDER
+                    // THAN THE ONE THIS COMMENT USED TO DESCRIBE. Measured
+                    // offscreen against the Rectangle that used to be here:
+                    // handed over, this chord is 83.30 px wide and every cap
+                    // matches the old one to the pixel; left at the theme's
+                    // defaults it is 103.29. The caps are drawn in an
+                    // IDENTICAL face on both sides -- measured, same family,
+                    // same point size, same weight, each label the same width
+                    // to four decimals -- so every one of those twenty pixels
+                    // is the ten per chip that the padding adds, and none of
+                    // it is a face that came back short. Twenty pixels is a
+                    // row whose layout name elides sooner, in a picker where
+                    // nothing else changed.
                     Row {
                         visible: cycleEntry.isNext
                         anchors.verticalCenter: parent.verticalCenter
@@ -473,37 +511,64 @@ SettingsPage {
                         Repeater {
                             model: ["SUPER", "K"]
 
-                            Rectangle {
+                            Chip {
                                 id: keyChip
 
                                 required property int index
                                 required property string modelData
 
-                                readonly property bool isKey: keyChip.index === 1
+                                role: "key"
 
-                                implicitWidth: keyChipLabel.implicitWidth + 14
-                                implicitHeight: 22
-                                radius: height / 2
+                                // `name` and not `label`, for the reason
+                                // components/Chip.qml gives: a key cap is not
+                                // a setting and has no business in the
+                                // settings search index.
+                                name: keyChip.modelData
 
-                                color: keyChip.isKey ? Theme.primaryContainer : Theme.surfaceContainerHighest
+                                // The key is the LAST chip and the modifiers
+                                // everything before it, which is the order
+                                // every other chord in this shell is built in.
+                                filled: keyChip.index === 1
 
-                                Behavior on color {
-                                    ColorAnimation { duration: Theme.recolorDuration }
-                                }
+                                // The TOTAL added to the label, not a margin
+                                // per side. See the header of Chip.qml.
+                                padding: 14
 
-                                Text {
-                                    id: keyChipLabel
+                                labelFont: capFace.font
 
-                                    anchors.centerIn: parent
-                                    text: keyChip.modelData
+                                // A FontMetrics PER CAP, INSIDE THE DELEGATE,
+                                // and both halves of that are deliberate.
+                                //
+                                // A FontMetrics even though nothing here
+                                // measures anything with it, which is what
+                                // makes it look like the wrong tool. It is the
+                                // spelling that KEEPS THE HALF POINT: font
+                                // group properties carry 9.5, where Qt.font()
+                                // takes an int point size and would hand back
+                                // 9. The theme's own default is that same 9.5
+                                // now, so this is no longer standing in for a
+                                // face that came back short -- it is what
+                                // makes the face drawn here provably the face
+                                // this page chose, rather than two files that
+                                // spell Theme.fontSize - 1.5 the same way
+                                // today.
+                                //
+                                // Inside the delegate because a Repeater
+                                // delegate is its own component, and an id
+                                // reached from the document around it is an
+                                // [unqualified] read that tests/qml-lint.sh
+                                // budgets and does not let grow. Two QtObjects
+                                // for two caps is what that costs here; a
+                                // KeybindsPage-shaped answer -- one metrics
+                                // object, handed down as a required property --
+                                // needs an inline component, and this chord is
+                                // two chips in a Row.
+                                FontMetrics {
+                                    id: capFace
+
                                     font.family: Theme.fontFamily
                                     font.pointSize: Theme.fontSize - 1.5
                                     font.weight: Theme.fontWeight
-                                    color: keyChip.isKey ? Theme.textOnPrimaryContainer : Theme.textOnSurfaceVariant
-
-                                    Behavior on color {
-                                        ColorAnimation { duration: Theme.recolorDuration }
-                                    }
                                 }
                             }
                         }

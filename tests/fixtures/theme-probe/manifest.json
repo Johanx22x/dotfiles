@@ -1,0 +1,9 @@
+{
+    "name": "theme-probe",
+    "title": "Probe",
+    "interface": 1,
+    "palette": {
+        "source": "pinned",
+        "scheme": "gruvbox-dark"
+    }
+}

@@ -50,7 +50,7 @@ Singleton {
             // NO LONGER A PICKER. This used to open a strip of small
             // thumbnails inside the launcher panel; it now closes the launcher
             // and raises the carousel, which shows the pictures at a size you
-            // can actually judge them at. See modules/wallpaper.
+            // can actually judge them at. See themes/genesis/wallpaper.
             picker: ""
         },
         {

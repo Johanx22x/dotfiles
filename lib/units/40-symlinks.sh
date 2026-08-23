@@ -236,8 +236,29 @@ symlinks_stale() {
 # a plain file by every test, reached through a link one level up. Asking
 # `readlink -f` where the destination really lands covers folded directories,
 # links to links, and the plain case, all with the same comparison.
+#
+# WHERE THE MISSING FILES ARE, WHICH A COUNT ON ITS OWN CANNOT SAY. "226 not
+# linked" is a machine that has never been stowed; "30 not linked" is one
+# directory somebody added to the repository this morning. Nothing but the size
+# of the number tells them apart, and the second is the one a person is standing
+# there trying to explain to themselves. So the walk narrows a common parent as
+# it goes -- the deepest directory every missing destination is under -- and the
+# note names it when it is deeper than $HOME. A first stow leaves it at $HOME
+# and the note stays a bare count; a theme copied into
+# quickshell/.config/quickshell/themes/ and not yet stowed makes it
+# `~/.config/quickshell/themes/<name>`, which is the whole answer. All three
+# were measured in a scratch home: 226 with no location, `1 not linked under
+# ~/.config/hypr` for a single link removed by hand, and `30 not linked under
+# ~/.config/quickshell/themes/probe` for the theme.
+#
+# IT NARROWS IN PLACE, IN THE CALLER'S OWN LOOP, and that is why there is no
+# function for it. The obvious shape is a helper printing the common parent of
+# two paths -- and a helper that prints is a helper called in `$(...)`, which is
+# a fork per missing file: all 226 of them on a machine that has never been
+# stowed, to answer a question about two strings. Four lines inline cost
+# nothing at all.
 symlinks_check() {
-  local pkg src rel dst target note=""
+  local pkg src rel dst dir target note="" missing_in=""
   local missing=0 blocked=0 elsewhere=0 stale=0
   local stale_links=()
 
@@ -250,6 +271,17 @@ symlinks_check() {
 
       if [[ ! -e $dst && ! -L $dst ]]; then
         missing=$(( missing + 1 ))
+        dir="${dst%/*}"
+        if [[ -z $missing_in ]]; then
+          missing_in="$dir"
+        else
+          # Shorten what is held until it is this file's directory or a parent
+          # of it. Both are under $HOME, so it stops there at the very latest.
+          while [[ $dir != "$missing_in" && $dir != "$missing_in"/* ]]; do
+            [[ $missing_in == */?* ]] || break
+            missing_in="${missing_in%/*}"
+          done
+        fi
         continue
       fi
 
@@ -282,7 +314,13 @@ symlinks_check() {
   # left over from before, has something to say about all three.
   (( blocked ))   && note+="${note:+, }$blocked in the way"
   (( stale ))     && note+="${note:+, }$stale left by deleted files"
-  (( missing ))   && note+="${note:+, }$missing not linked"
+  if (( missing )); then
+    note+="${note:+, }$missing not linked"
+    # Only when it says something a count does not. $HOME is where everything
+    # lands, so naming it would be a longer way of writing "somewhere".
+    [[ -n $missing_in && $missing_in != "$HOME" ]] \
+      && note+=" under ~/${missing_in#"$HOME"/}"
+  fi
   (( elsewhere )) && note+="${note:+, }$elsewhere linked to another checkout"
 
   if (( blocked || elsewhere || stale )); then

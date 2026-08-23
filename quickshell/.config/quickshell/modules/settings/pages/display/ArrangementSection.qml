@@ -432,75 +432,39 @@ SettingsSection {
         Repeater {
             model: root.source.monitors
 
-            delegate: Rectangle {
+            // WHAT A SCREEN LOOKS LIKE IS THE THEME'S; WHERE IT IS, IS NOT.
+            // MonitorTile.qml is the facade and its header has the whole of
+            // this argument. Everything below is arithmetic: the coordinate
+            // transform, the logical size, and whether this screen has moved
+            // since the last apply. The tile is handed the answers, never the
+            // model -- so a theme can draw a screen and cannot read its mode,
+            // its override or its transform, and cannot put it anywhere.
+            delegate: MonitorTile {
                 id: screen
 
                 required property var modelData
 
                 readonly property var at: root.arrangedPosition(screen.modelData)
                 readonly property var logical: root.logicalSize(screen.modelData)
-                readonly property bool moved: screen.at.x !== (screen.modelData.x ?? 0)
-                    || screen.at.y !== (screen.modelData.y ?? 0)
 
                 x: map.toMapX(screen.at.x)
                 y: map.toMapY(screen.at.y)
                 width: Math.max(8, screen.logical.w * map.factor)
                 height: Math.max(8, screen.logical.h * map.factor)
 
-                radius: 6
-
-                // The one being dragged leads in the accent, the ones that
-                // have moved since the last apply are tinted, and the rest
-                // are plain. Three states because they answer three
-                // different questions, and the middle one is the only way
-                // to see what Apply is about to send.
-                color: dragArea.pressed || screen.moved
-                    ? Qt.alpha(Theme.primary, 0.28)
-                    : Theme.surfaceContainerHigh
-
-                border.width: screen.modelData.focused ? 2 : 1
-                border.color: dragArea.pressed || screen.moved
-                    ? Theme.primary
-                    : Theme.outlineVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
-
-                Column {
-                    anchors.centerIn: parent
-                    spacing: 2
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: screen.modelData.name ?? ""
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize - 1
-                        font.weight: Font.Bold
-                        color: Theme.textOnSurface
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.recolorDuration }
-                        }
-                    }
-
-                    // The logical size and not the mode, because that is
-                    // what the rectangle is drawn from: a rotated 1080p
-                    // panel reads 1080 × 1920 here and the number matches
-                    // the shape it is written on.
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        visible: screen.height > 44
-                        text: `${Math.round(screen.logical.w)} × ${Math.round(screen.logical.h)}`
-                        font.family: Theme.fontFamily
-                        font.pointSize: Theme.fontSize - 2
-                        color: Theme.textOnSurfaceVariant
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.recolorDuration }
-                        }
-                    }
-                }
+                connector: screen.modelData.name ?? ""
+                logicalWidth: screen.logical.w
+                logicalHeight: screen.logical.h
+                // `?? false` and not the bare read the border used to do: this
+                // is a typed bool now, and a monitor record without the field
+                // would be one "Unable to assign [undefined] to bool" per
+                // screen -- which is one of the six strings
+                // tests/shell-load.sh fails on.
+                focused: screen.modelData.focused ?? false
+                moved: screen.at.x !== (screen.modelData.x ?? 0)
+                    || screen.at.y !== (screen.modelData.y ?? 0)
+                // A bool and not the MouseArea itself. See the facade.
+                dragging: dragArea.pressed
 
                 // NO drag.target, which is the obvious way to write this
                 // and the wrong one here. Handing the rectangle to the
@@ -510,6 +474,16 @@ SettingsSection {
                 // would leave it there. The pointer is followed by hand
                 // instead and the answer goes into the draft, so the
                 // rectangle is always drawn from the model.
+                //
+                // AND THAT IS WHY IT DID NOT CROSS THE SEAM WITH THE DRAWING.
+                // Every line of it reads `map`, `root.snapPosition`,
+                // `root.setArranged` and `root.normaliseArrangement`, which
+                // are this section's; a theme owning the dragger would own
+                // where a screen goes, and the tile is deliberately handed
+                // four readings and no model. It is a child of the tile, so
+                // it still covers exactly the rectangle that is drawn, and
+                // `mapToItem(map, ...)` is measured from the same place it
+                // always was. MonitorTile.qml's header is the rest of it.
                 MouseArea {
                     id: dragArea
 
@@ -586,6 +560,23 @@ SettingsSection {
     // The buttons, and the banner that replaces them once something is
     // provisional. Same grammar as the monitor cards below: Apply while
     // there is a difference, then a question with a countdown on it.
+    //
+    // AND IT IS NOT PendingBanner, WHICH IS A DECISION AND NOT AN OVERSIGHT.
+    // The card's version of this is now
+    // themes/<theme>/components/PendingBanner.qml, and the two are the same
+    // sentence in a different container: the card's is a framed amber
+    // rectangle of Theme.groupHeight, inset four pixels, shown INSTEAD of its
+    // actions row, and this one has no frame and no fill at all -- one
+    // 44-pixel Item holding both states at once, with the Keep and Revert
+    // chips sharing a Row with Reset and Apply and each child carrying its
+    // own `visible`.
+    //
+    // Folding this into that component would put an amber frame around the
+    // arrangement's countdown or take it off the card's, and change the height
+    // of one of the two. That is genesis pixels moving, on a change whose whole
+    // claim is that none did, and it is a question about how this page should
+    // look rather than about where its drawing lives. Left alone, said out
+    // loud, and said again in PendingBanner.qml's own header.
     Item {
         width: parent.width
         implicitHeight: 44
@@ -601,7 +592,7 @@ SettingsSection {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: Glyphs.timerSand
+                text: Icons.timerSand
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.iconSize
                 color: Theme.warning
@@ -635,7 +626,7 @@ SettingsSection {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.arrangePending !== null
                 label: "Keep"
-                glyph: Glyphs.contentSave
+                glyph: Icons.contentSave
                 filled: true
                 onActivated: root.keepArrangement()
             }

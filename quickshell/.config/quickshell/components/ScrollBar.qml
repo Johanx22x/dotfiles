@@ -1,9 +1,11 @@
-// The bar that says there is more, and how much further down you are.
+// The bar that says there is more, and how much further down you are. THIS IS
+// THE HALF THE CALL SITES SEE; the pixels are in
+// themes/<theme>/components/ScrollBar.qml.
 //
 // Hand-drawn, for the same reason the volume slider and the switches are: a
 // QtQuick.Controls ScrollBar arrives with its own style, and putting that back
-// into this palette is more code than the two rectangles below. Nothing else
-// in this shell imports Controls either.
+// into this palette is more code than the two rectangles the theme draws.
+// Nothing else in this shell imports Controls either.
 //
 // IT ANSWERS TWO QUESTIONS, and the view underneath cannot answer either on
 // its own. "Is there more below" -- a row cut off by the bottom edge looks
@@ -63,10 +65,78 @@
 // exactly that. Measured, not read off the docs, in tests/scrollbar-target.py
 // -- and it is the reason those seven never suffered the fault the rail and
 // the launcher did, rather than any care taken about their margins.
+//
+// ---------------------------------------------------------------------------
+// THE SEAM RUNS THE OTHER WAY ROUND HERE, AND THAT IS THE WHOLE DESIGN
+// ---------------------------------------------------------------------------
+//
+// Every other split in components/ hands the theme the drawing AND whatever
+// input goes with it: themes/genesis/components/VolumeSlider.qml owns its own
+// MouseArea and reports back where along its own rail the pointer landed,
+// because the inset that widens a thin rail into a fair target is a fact about
+// how THAT theme drew the rail.
+//
+// THIS ONE KEEPS THE TARGET IN THE HOST. The two grab margins below are not a
+// fact about a pill; they are a rule about who hears a press at the edge of
+// every scrolling view in the shell, arrived at twice by finding the defect
+// first, and they are the thing tests/scrollbar-target.py exists to hold. A
+// theme that drew the same four pixels and widened them by seven on both
+// sides would put the launcher's third column back where it was -- silently,
+// with nothing failing to load and nothing failing a test that a theme file
+// is even allowed to move. So the MouseArea, the two margins and the position
+// arithmetic stay here, and the theme is handed a thumb to draw rather than a
+// ratio to interpret.
+//
+// WHAT CROSSES UPWARD IS TWO NUMBERS, both of them measurements of the
+// drawing and both of them read the way rule 2 of
+// themes/genesis/components/README.md says to read one -- off the Loader,
+// never off `Loader.item`:
+//
+//   implicitWidth   how wide the theme drew the pill. It is 4 in genesis, and
+//                   it is the number the target is widened AROUND: 3 + 4 + 11
+//                   is the eighteen pixels the note further down is about.
+//                   Two call sites lay themselves out against it --
+//                   NotificationHistory gives up `scrollBar.width + 8` and the
+//                   cheatsheet centres the bar in its card padding -- so a
+//                   theme with a wider bar moves its gutter with it, which is
+//                   the right answer and the reason this is not a constant up
+//                   here.
+//
+//   implicitHeight  THE SHORTEST TRACK THE THEME'S THUMB CAN LIVE IN, which is
+//                   the thumb's floor and is 30 in genesis. It is NOT how tall
+//                   this bar wants to be -- nothing lays a scrollbar out by its
+//                   implicit height, every call site gives it a height or two
+//                   anchors -- and a theme that reported `root.height` here
+//                   instead would floor the thumb at the whole track and draw
+//                   a bar that never moves.
+//
+// WHAT CROSSES DOWNWARD IS THE THUMB ITSELF -- `thumbY` and `thumbHeight`
+// below -- rather than the ratio it was computed from, and that is the part
+// that has to be this way. The press treats the pointer as the MIDDLE of the
+// thumb and the floor means the thumb has less room to travel than the content
+// does; both of those arithmetics need the length the thumb was actually drawn
+// at. Handed a ratio, a theme would apply its own floor, and this file's press
+// maths would then be correcting for a length nobody here knows. The thumb
+// would land a few pixels from where it was grabbed, which is precisely the
+// class of fault nothing but a bench can see. So the floor comes up, the
+// geometry is computed once, here, and goes back down.
+//
+// AND THE BENCH FOLLOWED IT ACROSS, which is what this split was waiting for
+// and is written down so the next one does not have to find it again. A facade
+// loads its theme through Themes.surface(), which is `import qs.modules`, and
+// the theme file declares `required property ScrollBar row`, which is
+// `import qs.components`. Neither module exists inside the sandbox `qs` that
+// tests/scrollbar-target.py and tests/wheel-and-click.py build, so both benches
+// now build both -- the second one as a qmldir pointing back at THESE files, so
+// the type the theme requires is the same document the bench instantiated -- and
+// the Themes stub resolves into the real themes/ directory rather than a fake
+// one. The last assertion in scrollbar-target.py still grabs the window and
+// reads the bar's four pixels; what those pixels prove is now that the theme
+// half loaded and painted over the row, which is more than they proved before.
 import QtQuick
-import qs
+import qs.modules
 
-Rectangle {
+Item {
     id: root
 
     // What this describes and drives. Required rather than defaulted: a bar
@@ -74,8 +144,11 @@ Rectangle {
     // at, and would silently draw a full-height track over anything.
     required property Flickable view
 
-    width: 4
-    radius: width / 2
+    // THE WIDTH IS THE THEME'S, and the two call sites that lay themselves out
+    // against it read it back off here. See the header on what a theme that
+    // reports nothing costs, and `enabled` on the MouseArea for what stops it
+    // being a strip of dead pixels.
+    implicitWidth: drawing.implicitWidth
 
     // A say for the call site, ANDed with the rule below rather than replacing
     // it. A host that draws its own bar somewhere better -- the cheatsheet
@@ -95,54 +168,50 @@ Rectangle {
     visible: root.wanted && root.view.visible && root.view.height > 0
         && root.view.contentHeight > root.view.height
 
-    color: Qt.alpha(Theme.outlineVariant, 0.5)
+    // ---------------- What the theme is handed ----------------
 
-    Behavior on color {
-        ColorAnimation { duration: Theme.recolorDuration }
+    // THE THUMB, IN PIXELS DOWN THE TRACK, and see the header for why it is
+    // computed here and not there.
+    //
+    // As tall a share of the track as the visible part is of the whole, with
+    // the theme's floor under it: proportional alone means fifty entries leave
+    // a four-pixel dot, which is a position indicator you have to hunt for.
+    readonly property real thumbHeight: Math.max(root.thumbFloor,
+        root.height * root.view.visibleArea.heightRatio)
+
+    // The floor is also why the position is not simply
+    // `yPosition * track.height`: once the thumb is taller than its share
+    // it has less room to travel than the content does, so the scroll
+    // position is mapped onto the travel that is actually left. Without
+    // that the bar reaches the bottom before the view does.
+    readonly property real thumbY: {
+        const travel = root.height - root.thumbHeight;
+        const range = 1 - root.view.visibleArea.heightRatio;
+        if (travel <= 0 || range <= 0)
+            return 0;
+        const progress = Math.max(0, Math.min(1, root.view.visibleArea.yPosition / range));
+        return progress * travel;
     }
 
-    Rectangle {
-        id: thumb
+    // The shortest track this theme's thumb can live in, which is the floor it
+    // wants under a proportional thumb. Read off the Loader rather than
+    // `Loader.item` for the reason ToggleRow's header gives: `Loader.item` is
+    // declared QObject and every read through it costs a [missing-property]
+    // that tests/qml-lint.sh gates on.
+    readonly property real thumbFloor: drawing.implicitHeight
 
-        // As tall a share of the track as the visible part is of the whole,
-        // with a floor: proportional alone means fifty entries leave a
-        // four-pixel dot, which is a position indicator you have to hunt for.
-        height: Math.max(30, root.height * root.view.visibleArea.heightRatio)
+    // WHETHER THE BAR IS IN USE -- moved, dragged or pointed at -- which the
+    // theme turns into a colour. WHEN is host state and lives here; WHICH TWO
+    // COLOURS is drawing and lives there.
+    //
+    // Both `moving` and the velocity are asked, because they do not cover the
+    // same gestures: `moving` is a drag or a flick, and a wheel notch on a
+    // desktop is neither -- it moves the view without ever putting the
+    // Flickable into that state.
+    readonly property bool inUse: root.view.moving || root.view.verticalVelocity !== 0
+        || scrollMouse.pressed || scrollMouse.containsMouse
 
-        // The floor is also why the position is not simply
-        // `yPosition * track.height`: once the thumb is taller than its share
-        // it has less room to travel than the content does, so the scroll
-        // position is mapped onto the travel that is actually left. Without
-        // that the bar reaches the bottom before the view does.
-        y: {
-            const travel = root.height - thumb.height;
-            const range = 1 - root.view.visibleArea.heightRatio;
-            if (travel <= 0 || range <= 0)
-                return 0;
-            const progress = Math.max(0, Math.min(1, root.view.visibleArea.yPosition / range));
-            return progress * travel;
-        }
-
-        width: parent.width
-        radius: parent.radius
-
-        // Brighter while it is being used -- moved, dragged or pointed at --
-        // and quiet the rest of the time. At rest this is a hint about the
-        // shape of the view; in the hand it is a control, and the two should
-        // not look the same.
-        //
-        // Both `moving` and the velocity are asked, because they do not cover
-        // the same gestures: `moving` is a drag or a flick, and a wheel notch
-        // on a desktop is neither -- it moves the view without ever putting
-        // the Flickable into that state.
-        color: root.view.moving || root.view.verticalVelocity !== 0 || scrollMouse.pressed || scrollMouse.containsMouse
-            ? Theme.primary
-            : Theme.outline
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
-    }
+    // ---------------- The target ----------------
 
     // How far past the bar a press still counts, AND IT IS TWO NUMBERS,
     // BECAUSE THE TWO SIDES ARE NOT ALIKE. Four pixels is the right width to
@@ -189,6 +258,11 @@ Rectangle {
     // and to x=790 with it off, on the same geometry and the same margins --
     // tests/scrollbar-target.py holds both, and the first is the only reason
     // the outward side is free to be this wide.
+    //
+    // THE FOUR IN THE MIDDLE OF THAT SUM IS THE THEME'S, which is the one
+    // thing the split changed about any of it: the two numbers here are
+    // constants and the width they are measured around is `implicitWidth`
+    // above.
     property int grabMarginInward: 3
     property int grabMarginOutward: 11
 
@@ -206,10 +280,13 @@ Rectangle {
         anchors.leftMargin: -root.grabMarginInward
         anchors.rightMargin: -root.grabMarginOutward
 
-        // Only while there is something to drive. An invisible bar's mouse
-        // area would still take the press, leaving a dead strip down the edge
-        // of every view that fits.
-        enabled: root.visible
+        // Only while there is something to drive, AND ONLY WHILE THERE IS
+        // SOMETHING DRAWN. An invisible bar's mouse area would still take the
+        // press, leaving a dead strip down the edge of every view that fits --
+        // and a theme whose file did not load reports no width, which without
+        // the second half of this would leave fourteen pixels of target down
+        // the edge of every view around a bar nobody can see.
+        enabled: root.visible && root.width > 0
 
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
@@ -222,10 +299,10 @@ Rectangle {
         // pressed on ends up under your finger rather than starting there and
         // sliding down by half a thumb.
         function scrollTo(y: real): void {
-            const travel = root.height - thumb.height;
+            const travel = root.height - root.thumbHeight;
             if (travel <= 0)
                 return;
-            const progress = Math.max(0, Math.min(1, (y - thumb.height / 2) / travel));
+            const progress = Math.max(0, Math.min(1, (y - root.thumbHeight / 2) / travel));
             root.view.contentY = progress * (root.view.contentHeight - root.view.height);
         }
 
@@ -234,5 +311,36 @@ Rectangle {
             if (pressed)
                 scrollMouse.scrollTo(mouse.y);
         }
+    }
+
+    // Identical to ToggleRow's loader, and deliberately not factored out: see
+    // themes/genesis/components/README.md on why the sixteen lines are copied
+    // into each facade rather than shared through a base type.
+    //
+    // DECLARED AFTER THE MouseArea AND THAT IS NOT AN ACCIDENT: later siblings
+    // are above, so the target is above the drawing rather than under it. It
+    // makes no difference today -- the theme puts no input handler in the pill
+    // and rule 7 of that README is where it is told not to -- and it is the
+    // order that survives one that does.
+    Loader {
+        id: drawing
+
+        anchors.fill: parent
+
+        readonly property string drawingUrl: Themes.surface("components/ScrollBar.qml")
+
+        function build(): void {
+            if (String(drawing.source) === drawing.drawingUrl)
+                return;
+
+            drawing.setSource(drawing.drawingUrl, {
+                row: root
+            });
+        }
+
+        Component.onCompleted: drawing.build()
+        onDrawingUrlChanged: drawing.build()
+
+        // See ToggleRow for why there is no status handler here either.
     }
 }

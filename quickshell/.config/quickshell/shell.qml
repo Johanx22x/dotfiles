@@ -17,11 +17,13 @@
 //
 // It does NOT reload when a file is REPLACED: `git pull`, `git checkout`, an
 // editor that writes a temp file and renames it. The watch was on the inode
-// that got unlinked, so it dies, and nothing is logged when it does. After a
-// pull the count of live file watches here goes from 122 to zero and NOTHING
-// on the filesystem brings them back -- not touching, not chmod, not creating
-// or deleting files in the watched directories, not `stow -R`. Only starting
-// the process again, which then re-registers all 159 watches:
+// that got unlinked, so it dies, and nothing is logged when it does. A running
+// shell holds 152 watches inside this tree -- one per .qml file, 126 of them,
+// plus 26 on the directories that hold them -- and a pull takes every FILE
+// watch to zero. The directory watches survive and do not help: nothing on the
+// filesystem re-arms a file watch from them, not touching, not chmod, not
+// creating or deleting files in the watched directories, not `stow -R`. Only
+// starting the process again, which registers all 152 afresh:
 //
 //   qs kill && qs -d --no-duplicate
 //
@@ -37,14 +39,80 @@
 import Quickshell
 import QtQml
 import qs.modules
-import qs.modules.bar
-import qs.modules.cheatsheet
-import qs.modules.notifications
-import qs.modules.launcher
-import qs.modules.powermenu
 import qs.modules.recorder
 import qs.modules.settings
-import qs.modules.wallpaper
+// EVERYTHING ABOVE IS THE HOST: the arbiter, the state singletons, the
+// services and the settings window -- everything that decides what exists.
+// What DRAWS is a directory under themes/, and nothing below instantiates a
+// type out of one: the surfaces are `ThemeSurface`, loaded out of the current
+// theme by path at runtime. Config.theme is the name, modules/Themes.qml turns
+// it into URLs, modules/ThemeSurface.qml is what loads one, and the README
+// beside a theme is the account of what a theme may and may not be.
+//
+// SO THE LINES BELOW DECLARE WHICH THEMES EXIST, AND Config.theme DECIDES
+// WHICH ONE RUNS. They are the two halves of a sentence and neither is the
+// other: nothing here builds a genesis type, and setting Config.theme to
+// something else swaps every surface without touching this file.
+//
+// THEY ARE HERE FOR THE WATCHES. The scan that registers Quickshell's file
+// watches is the same one that follows the imports out of this file, so a
+// directory nothing imports is a directory nothing watches -- and between the
+// commit that moved the theme out of modules/ and this one, editing any of the
+// 32 files under themes/ reloaded nothing at all. A static import restores the
+// watch even though the file is still loaded dynamically, because the import
+// exists for the SCAN and not for instantiation. Measured on this tree in a
+// headless compositor: 112 watched files and directories without these lines
+// and 152 with them, and an edit in each of the eight directories below now
+// reloads where none of them did before.
+//
+// AND IT DOES NOT MAKE A BROKEN THEME FATAL, which is the thing worth knowing
+// before adding a line here, because it is what you would expect and it is not
+// what happens. QML compiles a type when something USES it, so importing a
+// directory lists its files without parsing them. Measured with a line of
+// garbage appended to themes/genesis/bar/Clock.qml -- the same line
+// tests/shell-load.sh describes breaking Config.qml with -- and probe as the
+// active theme: the cold start printed "Configuration Loaded" and logged
+// nothing at all, byte for byte the same result as the same tree with these
+// imports removed. A broken file in the theme that IS drawing costs the widget
+// that uses it and a "Syntax error" warning, exactly as it did before. The
+// only cold start that still exits 255 is a broken SINGLETON in the host
+// chain, which is what the paragraph above is about.
+//
+// NO CURLY BRACE ANYWHERE IN THIS HEADER, and that is why the paragraph above
+// describes the broken line instead of quoting it. A brace in a comment before
+// the imports ends the import list as far as Quickshell's scanner is
+// concerned: the ENGINE still reads every line below and resolves them, so the
+// file loads and then dies with "module qs.themes.genesis is not installed"
+// for all eight at once -- an error about the imports that is really about a
+// comment thirty lines above them. It cost a run here. modules/Themes.qml
+// carries the same warning over its own header for the same reason and a
+// different symptom.
+//
+// A THEME NOT LISTED HERE STILL RUNS. It is loaded by URL, so `cp -r genesis
+// tokyo` and a Config.theme of "tokyo" draws the copy with no line added --
+// measured, with no config reload. What it gives up is the watch, and the host
+// modules that only it imports (see keptInScope in modules/Themes.qml). A
+// theme that lives in this repository belongs on the list; one dropped into
+// themes/ by hand does not have to be.
+//
+// AND qmllint IS RIGHT THAT THEY ARE UNUSED, which is why it is silenced for
+// these eight lines and only these eight. "Unused" is the point: an import
+// nothing instantiates is exactly what a theme's directories are here for, so
+// the finding is correct and the code is deliberate. Silenced here rather than
+// budgeted in tests/qml-lint.sh because that budget is per category across the
+// whole tree, and a budget of eight would hide the ninth unused import
+// wherever it appeared.
+//qmllint disable unused-imports
+import qs.themes.genesis
+import qs.themes.genesis.bar
+import qs.themes.genesis.cheatsheet
+import qs.themes.genesis.components
+import qs.themes.genesis.island
+import qs.themes.genesis.launcher
+import qs.themes.genesis.notifications
+import qs.themes.genesis.powermenu
+import qs.themes.genesis.wallpaper
+//qmllint enable unused-imports
 
 ShellRoot {
     // THE INSTANT REPLAY ARMS ITSELF, and this line is what lets it.
@@ -125,6 +193,13 @@ ShellRoot {
         Component.onCompleted: Surfaces.armed
     }
 
+    // EVERY SURFACE BELOW IS THE SAME SHAPE, and the shape is the seam. This
+    // file says WHAT exists and on which screens; the `file` is a path inside
+    // whatever theme is current and is the only thing that changes between
+    // them. A theme that draws a bar differently changes nothing here; a theme
+    // that has no bar at all cannot say so yet -- the list of surfaces is
+    // written out below rather than read off the theme's manifest.
+
     // A Bar on each screen that is meant to have one -- the main screen alone
     // until the Bar page says otherwise. See Screens.qml for how the main one
     // is chosen and why it is no longer a model name written out five times.
@@ -135,7 +210,9 @@ ShellRoot {
     Variants {
         model: Screens.barScreens
 
-        Bar {}
+        ThemeSurface {
+            file: "bar/Bar.qml"
+        }
     }
 
     // The notification daemon, on the same screen as the bar. It takes the
@@ -143,7 +220,9 @@ ShellRoot {
     Variants {
         model: Screens.mainOnly
 
-        Notifications {}
+        ThemeSurface {
+            file: "notifications/Notifications.qml"
+        }
     }
 
     // The launcher, on the same screen as the bar. One monitor only, like the
@@ -152,7 +231,9 @@ ShellRoot {
     Variants {
         model: Screens.grabScreens
 
-        Launcher {}
+        ThemeSurface {
+            file: "launcher/Launcher.qml"
+        }
     }
 
     // The power menu, on the same screen as the bar. Filtered to one monitor
@@ -161,7 +242,9 @@ ShellRoot {
     Variants {
         model: Screens.grabScreens
 
-        PowerMenu {}
+        ThemeSurface {
+            file: "powermenu/PowerMenu.qml"
+        }
     }
 
     // The wallpaper carousel, on the same screen as the bar. One monitor for
@@ -170,7 +253,9 @@ ShellRoot {
     Variants {
         model: Screens.grabScreens
 
-        WallpaperCarousel {}
+        ThemeSurface {
+            file: "wallpaper/WallpaperCarousel.qml"
+        }
     }
 
     // The keybind cheatsheet, on the same screen as the bar. One monitor for
@@ -180,7 +265,9 @@ ShellRoot {
     Variants {
         model: Screens.grabScreens
 
-        Cheatsheet {}
+        ThemeSurface {
+            file: "cheatsheet/Cheatsheet.qml"
+        }
     }
 
     // The settings window. NOT wrapped in Variants, and it is the only thing
@@ -194,6 +281,8 @@ ShellRoot {
     Variants {
         model: Quickshell.screens
 
-        ScreenCorners {}
+        ThemeSurface {
+            file: "ScreenCorners.qml"
+        }
     }
 }

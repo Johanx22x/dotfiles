@@ -44,36 +44,6 @@ SettingsPage {
     // the field below is for even though the row calls it nothing.
     keywords: ["wifi", "wi-fi", "wireless", "internet", "connection", "network", "ssid", "password", "hotspot", "ethernet"]
 
-    // ---------------- Glyphs that are not in Icons yet ----------------
-    //
-    // TEMPORARY, and they belong in Icons.qml -- they are here only because
-    // that file is being edited elsewhere right now. Move them when it is
-    // free; nothing else about them should change.
-    //
-    // Every codepoint below was read out of the installed font's cmap rather
-    // than looked up by name, which is the rule that file's own comments set
-    // after two of its entries turned out to be a bluetooth speaker and a
-    // shower head:
-    //
-    //   python3 -c "from fontTools.ttLib import TTFont; \
-    //     print(TTFont('/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf') \
-    //       .getBestCmap()[0xF091F])"
-    //
-    // The four strength glyphs are consecutive-ish but NOT contiguous -- the
-    // alert and lock variants are interleaved between them -- so they cannot
-    // be computed from a base codepoint, which is exactly the kind of shortcut
-    // that produces a wrong glyph here.
-    readonly property string wifi1: String.fromCodePoint(0xF091F)      // nf-md-wifi_strength_1
-    readonly property string wifi2: String.fromCodePoint(0xF0922)      // nf-md-wifi_strength_2
-    readonly property string wifi3: String.fromCodePoint(0xF0925)      // nf-md-wifi_strength_3
-    readonly property string wifiFaint: String.fromCodePoint(0xF092F)  // nf-md-wifi_strength_outline
-
-    // Solid, not md-lock_outline (0xF0341). This sits at label size next to a
-    // network name, and at that size an outlined padlock is four grey strokes
-    // that read as a smudge. Same call the `settings` glyph in Icons.qml makes,
-    // for the same reason.
-    readonly property string lock: String.fromCodePoint(0xF033E)       // nf-md-lock
-
     // ---------------- The adapter ----------------
     readonly property var wifiDevice: Networking.devices.values.find(d => d.type === DeviceType.Wifi) ?? null
 
@@ -208,12 +178,12 @@ SettingsPage {
         if (strength >= 0.75)
             return Icons.wifi;
         if (strength >= 0.5)
-            return root.wifi3;
+            return Icons.wifi3;
         if (strength >= 0.25)
-            return root.wifi2;
+            return Icons.wifi2;
         if (strength > 0)
-            return root.wifi1;
-        return root.wifiFaint;
+            return Icons.wifi1;
+        return Icons.wifiFaint;
     }
 
     // Plain words, not ConnectionFailReason.toString(). That returns the
@@ -462,7 +432,7 @@ SettingsPage {
                                         anchors.verticalCenter: parent.verticalCenter
                                         visible: entry.secured
 
-                                        text: root.lock
+                                        text: Icons.lock
                                         font.family: Theme.fontFamily
                                         font.pointSize: Theme.fontSize - 2
                                         color: Theme.outline
