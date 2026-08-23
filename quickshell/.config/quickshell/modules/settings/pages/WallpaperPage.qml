@@ -646,7 +646,10 @@ SettingsPage {
                 // growing means it eats leftwards into the path beside it and
                 // re-elides that line, all at the instant of the click, which
                 // is exactly when the eye is on it.
-                width: Math.max(idleMetrics.width, busyMetrics.width)
+                //
+                // MEASURED BY THE THING THAT DRAWS. See the two hidden Texts
+                // below for why they are not TextMetrics any more.
+                width: Math.max(idleMetrics.implicitWidth, busyMetrics.implicitWidth)
                     + Theme.groupPadding * 1.6
                 height: footer.lineHeight
                 radius: height / 2
@@ -660,16 +663,49 @@ SettingsPage {
                     ColorAnimation { duration: Theme.animDuration }
                 }
 
-                TextMetrics {
+                // HIDDEN Texts AND NOT TextMetrics, which is the same call
+                // themes/genesis/island/ReplayControl.qml makes and for the
+                // same measured reason: a TextMetrics and a Text do not agree
+                // about the width of one string in one font, and the Text is
+                // the one that is right, because the Text is the one that
+                // draws. Measured offscreen in this face, "Choosing…" at the
+                // shipped size:
+                //
+                //   TextMetrics.width  70.00      <- what was reserved
+                //   Text.implicitWidth 70.17      <- what is laid out
+                //   painted ink        70 px      <- counted from a grab
+                //
+                // TextMetrics comes back whole-numbered at every size tried,
+                // and it lands under the Text as often as over it: at a
+                // fontSize of 16 it reads 105.00 against the Text's 107.86.
+                //
+                // THE CHIP DOES NOT RESIZE EITHER WAY -- both candidates are
+                // measured, so the max is the same in both states, and the
+                // invariant the paragraph above is about was never the one at
+                // risk here. The label is centred at its own full width and
+                // there is no elide, so nothing clipped either. What the short
+                // reservation was quietly spending is the padding: this chip
+                // asks for 9.6 px a side and the busy state got 9.5 at the
+                // shipped font and 8.2 at 16. This is the mildest of the five
+                // places the shell made this mistake, and it is corrected here
+                // because the same construct is wrong in all five.
+                //
+                // `visible: false` and nothing else. They are children of the
+                // chip rather than of any layout, so nothing positions them
+                // and nothing draws them -- but an invisible Text still lays
+                // its string out, which is the whole point.
+                Text {
                     id: idleMetrics
 
+                    visible: false
                     font: changeLabel.font
                     text: "Change"
                 }
 
-                TextMetrics {
+                Text {
                     id: busyMetrics
 
+                    visible: false
                     font: changeLabel.font
                     text: "Choosing…"
                 }

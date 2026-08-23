@@ -599,9 +599,35 @@ SettingsPage {
         // "use" is not in the list because "in use" contains it. Compared by
         // CHARACTER COUNT, which is a proxy for width -- these are short words
         // in one font at one size, and the column only has to be big enough.
-        TextMetrics {
+        //
+        // AND IT IS A HIDDEN Text AND NOT A TextMetrics, which is the same
+        // call themes/genesis/island/ReplayControl.qml makes and for the same
+        // measured reason: the two do not agree about the width of one string
+        // in one font, and the Text is the one that is right, because the Text
+        // is the one that draws. Measured offscreen in this face, at the
+        // shipped size, this column's three longest candidates:
+        //
+        //   "unsupported"   TextMetrics 78.00   Text 79.06   ink 78 px
+        //   "unreadable"    TextMetrics 71.00   Text 71.88   ink 71 px
+        //   "Applying…"     TextMetrics 65.00   Text 64.69   ink 64 px
+        //
+        // TextMetrics comes back whole-numbered at every size tried and lands
+        // on whichever side it likes -- under the Text for the first two, over
+        // it for the third. Under is the one that costs something. There is no
+        // elide in this column, so a reservation that is short does not clip
+        // the word: the Text is right-aligned in a box narrower than its own
+        // layout, and it paints out past its own left edge -- into the gap
+        // `pickLabel` was elided to leave, and at the instant a theme row goes
+        // grey. At the shipped size the ink still just fits; at a fontSize of
+        // 16 the reservation is 2.3 px short and a rendered "unsupported" puts
+        // a painted pixel outside it.
+        //
+        // `visible: false` and nothing else -- an invisible Text still lays
+        // its string out, and this one is not in any layout to disturb.
+        Text {
             id: markMetrics
 
+            visible: false
             font: mark.font
             text: [pick.applyingLabel, pick.note, "in use"]
                 .reduce((widest, word) => word.length > widest.length ? word : widest, "")
@@ -614,7 +640,7 @@ SettingsPage {
             anchors.rightMargin: Theme.groupPadding
             anchors.verticalCenter: parent.verticalCenter
 
-            width: markMetrics.width
+            width: markMetrics.implicitWidth
             horizontalAlignment: Text.AlignRight
 
             // APPLYING BEATS IN USE while both are true, because it is the one

@@ -6,7 +6,7 @@
 // It was the fifth candidate for that merge and it was left out on purpose. A
 // ListRow is a mark, a line of text and a word at the right end. This carries a
 // VolumeSlider, a round mute button of its own, and a percentage whose width is
-// pinned by a TextMetrics on the literal "muted" so the number does not jog
+// pinned to a hidden Text on the literal "muted" so the number does not jog
 // sideways when the word replaces it. Folding it in would have made one
 // component carry five unrelated shapes and would have put a slider behind a
 // property that four rows out of five never set.

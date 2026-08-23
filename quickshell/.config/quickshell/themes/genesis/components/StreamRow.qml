@@ -98,9 +98,9 @@ Item {
         anchors.rightMargin: Theme.groupPadding
         anchors.verticalCenter: mute.verticalCenter
 
-        // See the header: this is the whole reason the TextMetrics below
+        // See the header: this is the whole reason the hidden Text below
         // exists.
-        width: mutedMetrics.width
+        width: mutedMetrics.implicitWidth
         horizontalAlignment: Text.AlignRight
 
         text: root.muted ? mutedMetrics.text : `${Math.round(root.row.volume * 100)}%`
@@ -112,9 +112,31 @@ Item {
             ColorAnimation { duration: Theme.animDuration }
         }
 
-        TextMetrics {
+        // A HIDDEN Text AND NOT A TextMetrics, which is the same call
+        // island/ReplayControl.qml makes in this theme and for the same
+        // measured reason: the two do not agree about the width of one string
+        // in one font, and the Text is the one that is right, because the Text
+        // is the one that draws. Measured offscreen in this face, "muted":
+        //
+        //   fontSize 11   TextMetrics 39.00   Text 38.98    <- a wash
+        //   fontSize 14   TextMetrics 49.00   Text 50.94    <- 1.94 short
+        //   fontSize 16   TextMetrics 58.00   Text 59.92    <- 1.92 short
+        //
+        // So the shipped size was the one size this happened to get right, and
+        // the fault only appeared for somebody who had turned the type up. A
+        // reservation that is short does not clip here -- there is no elide --
+        // it paints the word out past its own left edge and into the gap the
+        // name beside it was bounded to leave.
+        //
+        // THE MEASUREMENT STAYS INSIDE THE THEME, exactly where the header
+        // says the literal belongs: it is still this file, still this file's
+        // font, and a second theme that draws this row some other way owes
+        // nothing to this line. What changed is which of Qt's two answers is
+        // asked for, not who is asking.
+        Text {
             id: mutedMetrics
 
+            visible: false
             font: percent.font
             text: "muted"
         }
