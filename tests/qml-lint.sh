@@ -141,7 +141,11 @@
 # linter could read it; 19 of those were cheap and are gone, which made it 307,
 # and one more went with the notification card's split -- see unresolved-type
 # below -- so the shell tree and genesis together are 306. The fixture adds the
-# 6 it was always going to add once anything looked at it, so the sweep is 312.
+# 6 it was always going to add once anything looked at it, which made the sweep
+# 312; the windows theme adds genesis's 160 a second time because it IS genesis
+# a second time, and the sweep is 471. That last number is the one that should
+# fall: a theme redrawn is a theme that need not inherit the shapes these
+# warnings are counting.
 # Gating at zero would mean gating at a number nobody can reach today, so this
 # gates at what is there and refuses to let it grow.
 #
@@ -156,10 +160,24 @@
 #
 # The split is measured, not apportioned by eye:
 #
-#          shell  genesis  probe
-#   145      145        -      -   the shell tree, 96 files
-#   160        -      160      -   genesis, 50 files
-#     6        -        -      6   theme-probe, 27 files
+#          shell  genesis  windows  probe
+#   145      145        -        -      -   the shell tree
+#   160        -      160        -      -   genesis
+#   160        -        -      160      -   windows
+#     6        -        -        -      6   theme-probe
+#
+# WINDOWS IS GENESIS'S NUMBERS TWICE AND THAT IS WHAT IT SHOULD BE AT THIS
+# COMMIT: the theme was created with `cp -r genesis windows`, so it is the same
+# files and therefore the same findings, category for category. The pair will
+# come apart as the theme is redrawn, and the direction it comes apart in is
+# the interesting part -- 128 of genesis's 130 unqualified reads are one shape,
+# a delegate naming an id from outside itself, and a component written fresh
+# does not have to be written that way. If the windows column tracks genesis's
+# all the way to the end, nothing was learned from writing a second theme.
+#
+# THE FILE COUNTS ARE NOT WRITTEN DOWN HERE ANY MORE. They said 96, 50 and 27,
+# and the sweep line above prints the real ones on every run. Two of the three
+# were already stale.
 #
 # and by category, which is the shape that matters more than the total:
 #
@@ -270,7 +288,7 @@ QMLLINT=/usr/lib/qt6/bin/qmllint
 # comparison, so that the way it stops failing a run is that the file is fixed
 # and not that a number was written here.
 declare -A BASELINE=(
-    # --- the shell tree, themes excluded: 96 files, 145 warnings -------------
+    # --- the shell tree, themes excluded: 145 warnings -----------------------
     [shell:unqualified]=115
     [shell:signal-handler-parameters]=16
     [shell:unresolved-type]=7
@@ -281,14 +299,33 @@ declare -A BASELINE=(
     [shell:unused-imports]=0
     [shell:duplicate-property-binding]=0
 
-    # --- genesis: 50 files, 160 warnings ------------------------------------
+    # --- genesis: 160 warnings ----------------------------------------------
     [genesis:unqualified]=130
     [genesis:missing-property]=17
     [genesis:unresolved-type]=6
     [genesis:uncreatable-type]=6
     [genesis:signal-handler-parameters]=1
 
-    # --- theme-probe: 27 files, 6 warnings ----------------------------------
+    # --- windows: genesis's account, twice ----------------------------------
+    #
+    # Identical to genesis because the theme IS genesis at this commit, file
+    # for file. Every one of these five is expected to move as components are
+    # redrawn, and the ones worth watching are the two that a fresh component
+    # need not inherit: `unqualified`, which is almost entirely the delegate
+    # shape described in the table above, and `missing-property`, which is
+    # rule 1 of themes/genesis/components/README.md doing its job -- a
+    # misspelled read against a TYPED facade lands here, and against a
+    # `property var row` it lands nowhere at all.
+    #
+    # Lower these as they fall. A budget left above the real number is a budget
+    # that hides the next regression underneath it.
+    [windows:unqualified]=130
+    [windows:missing-property]=17
+    [windows:unresolved-type]=6
+    [windows:uncreatable-type]=6
+    [windows:signal-handler-parameters]=1
+
+    # --- theme-probe: 6 warnings --------------------------------------------
     #
     # ALL SIX ARE "PanelWindow is not creatable", one per surface, which is the
     # Quickshell artefact the table above carries nine of. The fixture has no
