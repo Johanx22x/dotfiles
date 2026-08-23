@@ -400,6 +400,19 @@ Seven are not, and the difference matters:
 | `tests/` | the checks CI runs — every one of them on every pull request, except `xwayland-satellite-watch.sh`, which is a weekly cron asking whether the patched package can be deleted yet |
 | `assets/` | the screenshots at the top of this file |
 
+**A new file in a package needs `stow` again**, which is invisible almost all
+the time — what usually changes is a file that is already linked, and editing
+that file *is* editing the repository. It stops being invisible where a program
+finds its features by listing a directory, and
+`quickshell/.config/quickshell/themes/` is the one that bites: the shell reads
+`~/.config/quickshell/themes`, which `stow --no-folding` fills with one symlink
+per file, so a theme copied into the checkout is **not** offered by the settings
+window and nothing on screen says why until `./install.sh apply symlinks` has
+linked it. `check` is what sees it — it reports the files a package has that
+`$HOME` does not, and the directory they are in. `schemes/` in the table above
+is the opposite case, and that is what "read out of the checkout" earns it: a
+new colour scheme is picked up with no `stow` at all.
+
 `bin/` holds the scripts that own everything the shell can change at runtime —
 the wallpaper, the palette, the opacity, the monitors — so any of it can be
 driven from a terminal and the settings window follows.
