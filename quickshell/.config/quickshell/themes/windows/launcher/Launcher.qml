@@ -445,28 +445,28 @@ PanelWindow {
             ListView {
                 id: list
 
-                // THE VALUES THE DELEGATE READS, HOISTED. Inside a delegate,
-                // `root.anything` is out of scope as far as qmllint is
-                // concerned -- it resolves at runtime and is checked by
-                // nothing, which is the single largest source of unqualified
-                // reads in the genesis tree. Read once here, and the delegate
-                // reaches them through its `ListView.view` attached property,
-                // which IS in scope.
-                property int sel: root.selected
-                property bool commands: root.commandMode
-
-                function headerFor(i: int): string {
-                    return root.sectionAt(i);
-                }
-
-                function choose(i: int): void {
-                    root.selected = i;
-                    root.activate();
-                }
-
-                function hover(i: int): void {
-                    root.selected = i;
-                }
+                // HANGING THE DELEGATE'S READS OFF THE VIEW WAS A WORSE
+                // TRADE AND IT IS UNDONE. The idea was sound -- inside a
+                // delegate `root.anything` is out of scope as far as qmllint
+                // is concerned, and it is the single largest source of
+                // unqualified reads in this tree -- but the fix moved five
+                // reads out of [unqualified] and into [missing-property],
+                // because qmllint types `ListView.view` as QQuickListView and
+                // knows nothing of properties added to it.
+                //
+                // Those two categories are not interchangeable.
+                // [missing-property] is the one that catches a MISSPELLED read
+                // through a typed facade; it is what rule 1 of
+                // themes/genesis/components/README.md exists to enable, and
+                // five permanent false positives sitting in it are five places
+                // a real typo can hide. [unqualified] is a documented,
+                // tree-wide shape that this repository has already decided to
+                // carry.
+                //
+                // So the reads below go back through `root`, and the one that
+                // could be improved honestly was: `isCurrentItem` is a REAL
+                // attached property with a real type, so selection costs
+                // nothing at all.
 
                 visible: root.picker === "" && root.count > 0
                 width: layout.width
@@ -495,9 +495,10 @@ PanelWindow {
 
                     // Hoisted off the view rather than off `root`: see the
                     // note on `sel` above.
-                    readonly property bool current: cell.ListView.view.sel === cell.index
-                    readonly property string header: cell.ListView.view.headerFor(cell.index)
-                    readonly property bool isCommand: cell.ListView.view.commands
+                    // A real attached property, typed, and checked.
+                    readonly property bool current: cell.ListView.isCurrentItem
+                    readonly property string header: root.sectionAt(cell.index)
+                    readonly property bool isCommand: root.commandMode
 
                     width: ListView.view.width
 
@@ -654,8 +655,11 @@ PanelWindow {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
 
-                            onEntered: cell.ListView.view.hover(cell.index)
-                            onClicked: cell.ListView.view.choose(cell.index)
+                            onEntered: root.selected = cell.index
+                            onClicked: {
+                                root.selected = cell.index;
+                                root.activate();
+                            }
                         }
                     }
                 }

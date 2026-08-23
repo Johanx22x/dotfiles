@@ -308,19 +308,33 @@ declare -A BASELINE=(
 
     # --- windows: genesis's account, twice ----------------------------------
     #
-    # Identical to genesis because the theme IS genesis at this commit, file
-    # for file. Every one of these five is expected to move as components are
-    # redrawn, and the ones worth watching are the two that a fresh component
-    # need not inherit: `unqualified`, which is almost entirely the delegate
-    # shape described in the table above, and `missing-property`, which is
-    # rule 1 of themes/genesis/components/README.md doing its job -- a
-    # misspelled read against a TYPED facade lands here, and against a
-    # `property var row` it lands nowhere at all.
+    # THE THEME IS DRAWN NOW AND THE TWO NUMBERS THAT COULD MOVE, MOVED.
+    # They started as genesis's, because the theme started as a copy of
+    # genesis; the pair coming apart is the only evidence there is that writing
+    # a second theme taught anybody anything.
+    #
+    #   unqualified       130 -> 96   (genesis 130)
+    #   missing-property   17 -> 14   (genesis 17)
+    #
+    # Almost all of genesis's 130 are one shape -- a delegate naming an id from
+    # the component outside it -- and a component written fresh does not have
+    # to be written that way. Where it still is, it is because the honest
+    # alternative was worse: an attempt to hang the launcher delegate's reads
+    # off the ListView instead moved five of them out of [unqualified] and into
+    # [missing-property], and those two are not interchangeable.
+    # [missing-property] is what catches a MISSPELLED read through a typed
+    # facade, which is the whole return on rule 1; five permanent false
+    # positives in it are five places a real typo can hide.
+    #
+    # The three that did not move are the three that cannot: they are Quickshell
+    # C++ types not exposed declaratively, PanelWindow's registration, and a Qt
+    # private enum on an onExited handler. Nothing in this repository can fix
+    # any of them.
     #
     # Lower these as they fall. A budget left above the real number is a budget
     # that hides the next regression underneath it.
-    [windows:unqualified]=130
-    [windows:missing-property]=17
+    [windows:unqualified]=96
+    [windows:missing-property]=14
     [windows:unresolved-type]=6
     [windows:uncreatable-type]=6
     [windows:signal-handler-parameters]=1
