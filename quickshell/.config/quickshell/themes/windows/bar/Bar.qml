@@ -30,6 +30,7 @@ import QtQuick
 import qs
 import qs.components
 import qs.modules
+import qs.modules.settings
 
 PanelWindow {
     id: root
@@ -150,9 +151,17 @@ PanelWindow {
     Component {
         id: quickSettings
 
-        Item {
-            implicitWidth: Theme.popoutMinWidth
-            implicitHeight: Theme.popoutMinWidth
+        QuickSettings {
+            onDismissRequested: barPopout.close()
+            onSubPageRequested: page => {
+                // The sub-pages Windows opens inside this panel -- the Wi-Fi
+                // picker, the Bluetooth list, the cast target -- are pages
+                // this shell already has in its settings window. Sending
+                // somebody there is honest; drawing a second, thinner copy of
+                // a list that already exists is not.
+                barPopout.close();
+                SettingsState.open();
+            }
         }
     }
 
