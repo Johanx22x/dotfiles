@@ -50,7 +50,7 @@ import qs
 import qs.modules.powermenu
 // Fluent lives one directory up, and without this line the failure is at
 // runtime, per read: "ReferenceError: Fluent is not defined".
-import ".."
+import qs.themes.windows
 
 PanelWindow {
     id: root

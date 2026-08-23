@@ -28,7 +28,7 @@ import Quickshell.Services.SystemTray
 import QtQuick
 import qs
 import qs.components
-import ".."
+import qs.themes.windows
 
 TaskbarItem {
     id: root

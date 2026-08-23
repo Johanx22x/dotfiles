@@ -42,7 +42,7 @@ import qs
 // and not this file, even though a QML document implicitly imports its own
 // directory. The explicit import wins.
 import qs.modules.settings.pages.display
-import ".."
+import qs.themes.windows
 
 Rectangle {
     id: root

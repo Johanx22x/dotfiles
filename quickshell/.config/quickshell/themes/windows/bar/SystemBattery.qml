@@ -25,7 +25,7 @@ import Quickshell.Services.UPower
 import QtQuick
 import qs
 import qs.modules.bar
-import ".."
+import qs.themes.windows
 
 TaskbarItem {
     id: root

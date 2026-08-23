@@ -327,19 +327,25 @@ fi
 #
 #     import ".."
 #
-# WITHOUT IT THE FAILURE IS AT RUNTIME, PER READ. Measured: two copies of one
-# component in a scratch tree under labwc, one with the import and one without.
-# With it the read returns its value. Without it:
+# WITHOUT IT THE FAILURE IS AT RUNTIME AND SILENT. `Fluent` still resolves --
+# `typeof Fluent` is "object" -- but it resolves to the TYPE rather than to the
+# singleton instance, so every property reads `undefined` and what reaches the
+# log is one line per binding naming the CONSUMER, never the singleton:
 #
-#     WARN scene: @themes/windows/components/Chip.qml[3:-1]:
-#                 ReferenceError: Fluent is not defined
+#     WARN scene: .../components/ScrollBar.qml[109:5]:
+#                 Unable to assign [undefined] to double
 #
-# qmllint CATCHES THIS TOO, as [unqualified], so this rule is not covering a
-# blind spot -- it is covering a moving number. [windows:unqualified] is 130
-# today and will move on almost every commit while that theme is being drawn,
-# which makes a missing import +1 against a figure somebody is already editing
-# for other reasons. A rule that names the file and the singleton survives that;
-# a count folded into a baseline edit does not.
+# THIS RULE ENFORCED THE WRONG IMPORT FIRST. It required `import ".."`, which
+# is what genesis uses to reach its own directories and what qmllint is happy
+# with. The relative form works when a file is loaded as a TYPE FROM A MODULE
+# and fails when it is loaded BY URL -- and every theme file is loaded by URL,
+# because ThemeSurface calls setSource on the surfaces and every facade calls
+# setSource on its component. So the one path that works is the one no theme
+# file is ever on.
+#
+# Measured both ways on a whole theme under labwc, selected and fully built:
+# relative imports 2240 of those warnings in eighteen seconds, module imports
+# zero.
 #
 # IT IS GENERAL AND NOT ABOUT `Fluent`. Any `pragma Singleton` at any theme's
 # root is checked, because the next theme's will have another name and the
@@ -363,11 +369,19 @@ for theme in "${themes[@]}"; do
 
     while IFS= read -r -d '' file; do
         for name in "${roots[@]}"; do
-            sed -e 's://.*::' "$file" \
-                | grep -qE "(^|[^A-Za-z0-9_])${name}\." || continue
+            # NOT `sed ... | grep -q`. `grep -q` exits on the first match and
+            # kills `sed` with SIGPIPE, and under `set -o pipefail` that turns
+            # a MATCH into a non-zero pipeline -- sometimes. Whether the write
+            # lands before grep leaves is a race, and this sweep flickered
+            # between 41 and 42 readers across runs on an unchanged tree until
+            # it was chased down. A test whose number moves on its own is a
+            # test nobody can read.
+            stripped="$(sed -e 's://.*::' "$file")"
+            grep -qE "(^|[^A-Za-z0-9_])${name}\." <<<"$stripped" || continue
             singleton_readers=$(( singleton_readers + 1 ))
-            grep -qE '^[[:space:]]*import[[:space:]]+"\.\."[[:space:]]*$' "$file" \
-                || singleton_missing+=("${file#"$REPO"/} reads ${name}. and does not import \"..\"")
+            theme_module="qs.themes.$(basename "$theme")"
+            grep -qE "^[[:space:]]*import[[:space:]]+${theme_module//./\\.}[[:space:]]*$" "$file" \
+                || singleton_missing+=("${file#"$REPO"/} reads ${name}. and does not import ${theme_module}")
         done
     done < <(find "$theme" -mindepth 2 -name '*.qml' -type f -print0 | sort -z)
 done
@@ -375,11 +389,13 @@ done
 if (( ${#singleton_missing[@]} > 0 )); then
     fail "${#singleton_missing[@]} file(s) read a theme singleton they never imported"
     printf 'qml-rules:   %s\n' "${singleton_missing[@]}" >&2
-    echo "qml-rules: add   import \"..\"   -- qmllint will call it unused; it is not" >&2
+    echo "qml-rules: add   import qs.themes.<theme>   and NOT import \"..\"" >&2
+    echo "qml-rules: the relative form resolves the TYPE, not the singleton, when" >&2
+    echo "qml-rules: the file is loaded by URL -- which every theme file is" >&2
 elif (( singleton_names == 0 )); then
     note "no theme keeps a singleton at its root -- nothing to check"
 else
-    note "$singleton_readers read(s) of $singleton_names theme singleton(s) all import their directory"
+    note "$singleton_readers read(s) of $singleton_names theme singleton(s) all import their theme module"
 fi
 
 if [[ $failed -eq 0 ]]; then

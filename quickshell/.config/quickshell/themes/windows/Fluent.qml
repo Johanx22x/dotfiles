@@ -51,35 +51,41 @@ pragma Singleton
 
 // HOW A COMPONENT REACHES THIS FILE, AND THE ONE LINE IT MUST CARRY.
 //
-//     import ".."
+//     import qs.themes.windows
 //
-// A file under components/ has an implicit import of components/ and of
-// nothing else. Without that line `Fluent` is not in scope, and the way it
-// fails is at RUNTIME, per read:
+// AND NOT `import ".."`, WHICH LOOKS RIGHT, PASSES EVERY STATIC CHECK, AND
+// FAILS SILENTLY. This is worth the space because it cost a full round of
+// wrong conclusions and because nothing in the tree would have caught it.
 //
-//     WARN scene: @themes/windows/components/Chip.qml[3:-1]:
-//                 ReferenceError: Fluent is not defined
+// The relative import works when a file is loaded as a TYPE FROM A MODULE, and
+// does not when the same file is loaded BY URL. Every theme file is loaded by
+// URL: ThemeSurface calls setSource on the seven surfaces, and each of the
+// twenty-nine facades calls setSource on its component. So the one path that
+// works is the one no theme file is ever on.
 //
-// MEASURED, NOT ASSUMED. Two copies of one component in a scratch tree under
-// labwc, one with the import and one without. With it the read returns 4.
-// Without it, the ReferenceError above.
+// The failure has no error attached to it. `Fluent` still resolves --
+// `typeof Fluent` is "object" -- but it resolves to the TYPE rather than to
+// the singleton instance, so every property reads `undefined`. What reaches
+// the log is one line per binding, naming the consumer and never this file:
 //
-// qmllint DOES catch it, as [unqualified], and the import is NOT reported
-// unused once something actually reads through it -- both directions checked
-// the same way, by putting a real read into a real component and running
-// tests/qml-lint.sh over it. An earlier note here claimed the opposite in both
-// directions and it was wrong: the edit that was supposed to insert the read
-// had been anchored on a string the file does not contain, so what got
-// measured was an import with nothing using it. Which is the failure this
-// repository keeps meeting from the other side -- a harness that passes over
-// nothing -- arriving this time in the measurement rather than in the test.
+//     WARN scene: .../components/ScrollBar.qml[109:5]:
+//                 Unable to assign [undefined] to double
 //
-// tests/qml-rules.sh checks the pairing anyway, and the reason is the budget
-// rather than the coverage: [windows:unqualified] sits at 130 today and is
-// going to move on almost every commit while this theme is being drawn, so a
-// missing import is +1 against a number somebody is already editing. A rule
-// that names the file and the singleton does not get absorbed into a baseline
-// edit the way a single count does.
+// MEASURED BOTH WAYS on the whole theme under labwc, with the theme selected
+// and everything built: relative imports 2240 of those warnings in eighteen
+// seconds, module imports ZERO. Not a sample, not a reading of one file.
+//
+// WHAT IT COSTS, SAID PLAINLY. A theme that spells its own name in an import
+// cannot be copied with `cp -r` -- the copy keeps importing THIS theme's
+// singleton, which is the exact hazard genesis avoids by reaching its own
+// parts relatively. Genesis is unaffected because it imports its own
+// directories for TYPES, and a type resolves either way; only a singleton's
+// properties need the module. If this theme is ever the seed for another, the
+// import line is the thing to rewrite, and there are forty-four of them.
+//
+// tests/qml-rules.sh enforces the pairing and it enforced the WRONG ONE for a
+// while: written before this was measured, it required `import ".."` and would
+// have sent anyone who fixed the bug back into it.
 //
 import QtQuick
 import qs

@@ -47,7 +47,7 @@
 import QtQuick
 import qs
 import qs.components
-import ".."
+import qs.themes.windows
 
 Rectangle {
     id: root

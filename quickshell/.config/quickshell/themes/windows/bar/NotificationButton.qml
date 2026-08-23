@@ -85,7 +85,7 @@ import qs.modules.notifications
 // Relative, because this theme is loaded by path and does not name itself.
 // See the note beside the same pair of imports in Bar.qml.
 import qs.components
-import ".."
+import qs.themes.windows
 import "../notifications"
 
 TaskbarItem {

@@ -51,7 +51,7 @@
 import Quickshell
 import QtQuick
 import qs
-import ".."
+import qs.themes.windows
 
 Item {
     id: root

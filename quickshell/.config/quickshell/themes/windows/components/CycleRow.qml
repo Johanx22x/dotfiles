@@ -28,7 +28,7 @@ import qs.components
 // not this file, even though a QML document implicitly imports its own
 // directory. The explicit import wins; see the note in ToggleRow.qml.
 import qs.modules.settings.pages.display
-import ".."
+import qs.themes.windows
 
 Rectangle {
     id: root

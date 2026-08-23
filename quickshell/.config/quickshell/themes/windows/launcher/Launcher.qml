@@ -48,7 +48,7 @@ import qs.components
 import qs.modules.launcher
 import qs.modules.powermenu
 import qs.modules.settings
-import ".."
+import qs.themes.windows
 
 PanelWindow {
     id: root

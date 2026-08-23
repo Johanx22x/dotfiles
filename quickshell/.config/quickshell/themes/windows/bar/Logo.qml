@@ -23,7 +23,7 @@
 import QtQuick
 import qs
 import qs.modules.launcher
-import ".."
+import qs.themes.windows
 
 TaskbarItem {
     id: root

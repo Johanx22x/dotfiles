@@ -90,7 +90,7 @@ import qs
 import qs.modules.settings
 // Fluent lives one directory up. Without this line every `Fluent.` below is a
 // ReferenceError at runtime, once per read; tests/qml-rules.sh checks the pair.
-import ".."
+import qs.themes.windows
 
 Column {
     id: root

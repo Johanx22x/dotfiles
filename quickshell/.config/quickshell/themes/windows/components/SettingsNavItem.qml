@@ -58,7 +58,7 @@ import qs
 import qs.modules.settings
 // Fluent lives one directory up; see the note at the top of Fluent.qml on the
 // ReferenceError this line prevents.
-import ".."
+import qs.themes.windows
 
 Item {
     id: root

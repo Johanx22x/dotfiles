@@ -51,7 +51,7 @@ import qs.modules.settings
 // Fluent lives one directory up and a file under components/ has an implicit
 // import of components/ and of nothing else. Without this line the failure is
 // at runtime, per read: `ReferenceError: Fluent is not defined`.
-import ".."
+import qs.themes.windows
 
 Item {
     id: root
