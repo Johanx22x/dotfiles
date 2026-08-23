@@ -26,7 +26,8 @@ SettingsPage {
     glyph: Icons.palette
     keywords: ["opacity", "transparency", "glass", "font", "type", "size",
         "gaps", "spacing", "rounding", "corners", "border", "cursor",
-        "pointer", "mouse pointer"]
+        "pointer", "mouse pointer", "colour", "color", "scheme", "palette",
+        "accent", "theme", "tokyo night", "catppuccin", "gruvbox"]
 
     // The installed cursor themes, asked for once when the page is
     // looked at. `desktop-tweak themes` lists the icon themes that have a
@@ -34,9 +35,18 @@ SettingsPage {
     // icon set, and offering it would produce a choice that does nothing.
     property var cursorThemes: []
 
+    // The schemes the repository ships, in the same way and for the same
+    // reason: they are files in `schemes/`, so the list is whatever is on disk
+    // and a copy of it written here would be wrong the day one is added.
+    // `{ name, label }` per entry -- the name is what the script takes, the
+    // label is what a person reads.
+    property var schemes: []
+
     onVisibleChanged: {
         if (visible && !themeQuery.running)
             themeQuery.running = true;
+        if (visible && !schemeQuery.running)
+            schemeQuery.running = true;
     }
 
     Process {
@@ -47,6 +57,118 @@ SettingsPage {
         stdout: StdioCollector {
             onStreamFinished: root.cursorThemes =
                 (text || "").split("\n").filter(line => line.trim() !== "")
+        }
+    }
+
+    Process {
+        id: schemeQuery
+
+        command: ["desktop-scheme", "list"]
+
+        stdout: StdioCollector {
+            // NAME<TAB>Label. Split on the FIRST tab only, the same rule
+            // Config.qml's readers of these stores follow -- a label is free
+            // text and nothing stops one carrying another.
+            onStreamFinished: root.schemes = (text || "").split("\n")
+                .filter(line => line.trim() !== "")
+                .map(line => {
+                    const at = line.indexOf("\t");
+                    return at < 0
+                        ? ({ name: line.trim(), label: line.trim() })
+                        : ({ name: line.slice(0, at), label: line.slice(at + 1).trim() });
+                })
+        }
+    }
+
+    // ---------------- Colour ----------------
+    //
+    // FIRST ON THE PAGE because it is the largest thing on it: everything
+    // below moves a number, and this decides what the desktop is made of.
+    //
+    // TWO CONTROLS AND THEY ARE NOT THE SAME QUESTION. The scheme is the BASE
+    // -- surfaces, text, the sixteen ANSI slots every terminal in the session
+    // inherits. The accent source is where the seventeen Material 3 roles come
+    // from. Setting only the first is what this desktop did until now, and it
+    // is why a scheme whose base already looked familiar seemed to do nothing:
+    // its accent was on disk and nothing read it.
+    SettingsSection {
+        width: parent.width
+        glyph: Icons.palette
+        title: "Colour"
+
+        // A LIST AND NOT A ChoiceRow, which every other choice on this page is.
+        //
+        // ChoiceRow puts its own ceiling at about four options (see the note at
+        // the top of it), and the cursor theme picker was deleted from this
+        // very page for walking past it -- at a pack's worth of themes the
+        // segments were dots. The set here is OPEN in exactly the same way: a
+        // scheme is a JSON file dropped into `schemes/`, the list is read from
+        // `desktop-scheme list` rather than written down, and the release this
+        // sits on already took it from one to three. A control that cannot grow
+        // past four is the wrong shape for a set whose size is a directory
+        // listing.
+        //
+        // The trade accepted is vertical space and one page holding two shapes
+        // of picker. The font row below stays segments because ITS set is
+        // closed and always three: the Nerd Font variants, and nothing else can
+        // ever be offered there without filling the shell with tofu.
+        Repeater {
+            model: root.schemes
+
+            SchemeRow {
+                required property var modelData
+
+                label: modelData.label
+                // The name is what `desktop-scheme <name>` takes in a terminal,
+                // so showing it is the difference between a settings window and
+                // a settings window you can act on somewhere else.
+                detail: modelData.name
+                picked: Config.scheme === modelData.name
+                onChosen: Config.setScheme(modelData.name)
+            }
+        }
+
+        ChoiceRow {
+            glyph: Icons.tune
+            label: "Accent from"
+            options: [
+                { label: "Wallpaper", value: "wallpaper" },
+                { label: "Scheme", value: "scheme" },
+                { label: "Custom", value: "hex" }
+            ]
+            value: Config.accentSource
+            // ONE CALL AND NOT TWO ASSIGNMENTS. Config cannot take two property
+            // writes in one synchronous turn -- see the note above `saveTimer`
+            // in Config.qml -- so the source and the colour move together
+            // through one setter. An empty seed here means "the one already
+            // stored", which is what the script does with a bare `accent hex`.
+            onChosen: value => Config.setAccent(value, "")
+
+            hint: "Wallpaper is how this desktop has always worked. Scheme "
+                + "uses the accent the scheme was written with — that is what "
+                + "makes one look like itself rather than like the picture "
+                + "behind it."
+        }
+
+        // ONLY WHEN IT IS THE ANSWER. A colour field standing next to a
+        // wallpaper-driven accent is a control that changes nothing, which is
+        // the same fault as a segment nobody can hit.
+        SeedRow {
+            visible: Config.accentSource === "hex"
+
+            label: "Accent colour"
+            stored: Config.accentSeed
+            onCommitted: value => Config.setAccent("hex", value)
+        }
+
+        InfoRow {
+            visible: Config.accentSource !== "wallpaper"
+
+            glyph: Icons.image
+            label: "The wallpaper still sets itself"
+            description: "Only the accent stops following it. The picture, the "
+                + "rotation and the pointer are unchanged — and the base "
+                + "palette comes from the scheme either way."
         }
     }
 
@@ -269,6 +391,322 @@ SettingsPage {
             hint: "Only Nerd Font variants are offered: every icon in this "
                 + "shell is a glyph from this font, and a family without them "
                 + "would leave empty boxes everywhere."
+        }
+    }
+
+    // ---------------- One scheme, offered ----------------
+    //
+    // AN INLINE COMPONENT AND NOT A FILE IN components/, the same call the
+    // recording page makes about its own PickRow: it is used once, on this
+    // page, and the two are near enough alike that sharing them would mean a
+    // component that knows about both PipeWire nodes and colour schemes. If a
+    // third list of this shape ever appears, that is the moment to lift it out
+    // -- not before.
+    component SchemeRow: Rectangle {
+        id: pick
+
+        property string label: ""
+        // The name the script takes. Muted, under the label.
+        property string detail: ""
+        property bool picked: false
+
+        signal chosen
+
+        width: parent ? parent.width : 320
+        implicitHeight: Math.max(32, column.implicitHeight + 12)
+
+        radius: Theme.groupRadius
+        color: pickMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+
+        Behavior on color {
+            ColorAnimation { duration: Theme.animDuration }
+        }
+
+        Text {
+            id: pickGlyph
+
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.groupPadding
+            anchors.top: column.top
+            anchors.topMargin: 1
+
+            text: Icons.palette
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.iconSize
+            // The accent marks the one in use and nothing else, which is what
+            // every other list in this window does.
+            color: pick.picked ? Theme.primary : Theme.textOnSurfaceVariant
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.animDuration }
+            }
+        }
+
+        Column {
+            id: column
+
+            anchors.left: pickGlyph.right
+            anchors.leftMargin: Theme.itemSpacing
+            anchors.right: mark.left
+            anchors.rightMargin: Theme.itemSpacing
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 2
+
+            Text {
+                width: parent.width
+                text: pick.label
+                elide: Text.ElideRight
+
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize
+                font.weight: pick.picked ? Font.Bold : Theme.fontWeight
+                color: pick.picked ? Theme.primary : Theme.textOnSurface
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
+            }
+
+            Text {
+                width: parent.width
+                visible: pick.detail !== ""
+
+                text: pick.detail
+                elide: Text.ElideRight
+
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize - 2
+                color: Theme.textOnSurfaceVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+            }
+        }
+
+        Text {
+            id: mark
+
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.groupPadding
+            anchors.verticalCenter: parent.verticalCenter
+
+            text: pick.picked ? "in use" : pickMouse.containsMouse ? "use" : ""
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize - 2
+            color: Theme.outline
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
+            }
+        }
+
+        MouseArea {
+            id: pickMouse
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: pick.chosen()
+        }
+    }
+
+    // ---------------- A colour, typed ----------------
+    //
+    // The same bare TextInput in a pill the recording page's PathRow is, and
+    // for the reason it gives: nothing in this shell imports QtQuick.Controls,
+    // and one widget that did would arrive with its own palette and metrics.
+    //
+    // COMMITTED ON ENTER OR ON LEAVING THE FIELD, never per keystroke. Every
+    // write here ends in a full palette re-render, and a colour committed
+    // letter by letter would be six of them for `#7aa2f7`.
+    //
+    // THE SWATCH IS THE GLYPH. It sits where every other row on this page puts
+    // an icon, and it is the only thing in this window that shows a colour
+    // rather than being painted in one -- which is what a field of six hex
+    // digits needs beside it to be readable at all. It follows what is being
+    // typed rather than what is stored, so an unfinished value simply keeps
+    // the last colour that parsed.
+    component SeedRow: Item {
+        id: seed
+
+        property string label: ""
+        // What the script has. Empty means nobody has ever picked one.
+        property string stored: ""
+
+        signal committed(string value)
+
+        // The text being edited. It follows `stored` until somebody types,
+        // which breaks the binding -- so onStoredChanged puts it back, and a
+        // colour set from a terminal shows up here instead of leaving the
+        // field on a value nothing uses.
+        property string draft: seed.stored
+
+        onStoredChanged: seed.draft = seed.stored
+
+        // `#rrggbb`, and the `#` is optional exactly as it is on the command
+        // line: it is what every colour picker copies with, and typing it is
+        // the thing people forget. Empty is legal and means "leave it alone",
+        // which is what an untouched field has to mean.
+        readonly property string resolved: {
+            const text = seed.draft.trim().replace(/^#/, "");
+            return /^[0-9a-fA-F]{6}$/.test(text) ? `#${text.toLowerCase()}` : "";
+        }
+
+        readonly property bool valid: seed.draft.trim() === "" || seed.resolved !== ""
+
+        function commit(): void {
+            if (seed.resolved !== "" && seed.resolved !== seed.stored)
+                seed.committed(seed.resolved);
+        }
+
+        width: parent ? parent.width : implicitWidth
+        implicitWidth: 320
+        implicitHeight: Theme.groupHeight + 30
+
+        Row {
+            id: labelRow
+
+            anchors.top: parent.top
+            anchors.topMargin: 8
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.groupPadding
+            spacing: Theme.itemSpacing
+
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+
+                width: Theme.iconSize
+                height: Theme.iconSize
+                radius: width / 2
+
+                color: seed.resolved !== "" ? seed.resolved : Theme.surfaceContainerHighest
+                border.width: 1
+                border.color: Theme.outlineVariant
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.animDuration }
+                }
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: seed.label
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize
+                font.weight: Theme.fontWeight
+                color: Theme.textOnSurface
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+            }
+        }
+
+        Rectangle {
+            anchors.top: labelRow.bottom
+            anchors.topMargin: 6
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: Theme.groupPadding
+            anchors.rightMargin: Theme.groupPadding
+
+            height: 28
+            radius: height / 2
+
+            color: Theme.surfaceContainerHighest
+            border.width: 1
+            border.color: !seed.valid ? Theme.critical
+                : field.activeFocus ? Theme.primary : Theme.outlineVariant
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
+            }
+
+            Behavior on border.color {
+                ColorAnimation { duration: Theme.animDuration }
+            }
+
+            TextInput {
+                id: field
+
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+
+                text: seed.draft
+                onTextEdited: seed.draft = text
+
+                // Six hex digits are not a sentence: an autocapitalised first
+                // letter is a colour that will not parse.
+                inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+
+                font.family: Theme.fontFamily
+                font.pointSize: Theme.fontSize - 1
+                color: Theme.textOnSurface
+                selectionColor: Theme.primary
+                selectedTextColor: Theme.textOnPrimary
+                selectByMouse: true
+
+                Behavior on color {
+                    ColorAnimation { duration: Theme.recolorDuration }
+                }
+
+                onAccepted: seed.commit()
+
+                // LEAVING THE FIELD COMMITS IT: this window has no Save button
+                // and nothing else on this page has one either.
+                onActiveFocusChanged: {
+                    if (!field.activeFocus)
+                        seed.commit();
+                }
+
+                // ESCAPE HAS TO BE SWALLOWED. The settings window's FocusScope
+                // closes the whole window on Escape, so without accepting the
+                // event, abandoning an edit would put the window away instead
+                // of the edit.
+                Keys.onEscapePressed: event => {
+                    seed.draft = seed.stored;
+                    event.accepted = true;
+                }
+
+                // TextInput has no placeholderText -- that belongs to
+                // TextField, which is Controls. Drawn underneath instead.
+                Text {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    visible: seed.draft === ""
+                    text: "#7aa2f7"
+                    width: parent.width
+
+                    font.family: Theme.fontFamily
+                    font.pointSize: Theme.fontSize - 1
+                    color: Theme.outline
+
+                    Behavior on color {
+                        ColorAnimation { duration: Theme.recolorDuration }
+                    }
+                }
+            }
+        }
+
+        Text {
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.groupPadding + 12
+
+            visible: !seed.valid
+            text: "Six hex digits, with or without the #"
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.fontSize - 3
+            color: Theme.critical
+
+            Behavior on color {
+                ColorAnimation { duration: Theme.recolorDuration }
+            }
         }
     }
 }

@@ -1569,23 +1569,54 @@ fi
 SCHEME_FILE="$("$WS_BIN_DIR/desktop-scheme" path)" \
     || die "could not work out which colour scheme to use"
 
+# ---- And the FIRST half, which does not always come from the image either ----
+#
+# `desktop-scheme accent` is the other axis: the accents can come from the
+# wallpaper (the default, and what this desktop has always done), from the
+# scheme's own `fb_*` roles, or from a colour picked by hand. Two of the three
+# still render from the image and the third does not, which is why what comes
+# back is the OPENING WORDS OF THE COMMAND -- `image <file>` or `color hex
+# <seed>`, plus whatever has to be imported over the top -- rather than a flag
+# to append.
+#
+# ASKED FOR RATHER THAN COMPUTED HERE, exactly as the scheme file above is and
+# for the same reason: one script owns that store, and a second reader of it is
+# a second thing to keep in step. It is a pure read, so there is no loop back.
+#
+# ONE WORD PER LINE and read with `mapfile`, because an argument can carry
+# spaces -- a wallpaper's filename does, and the imported JSON is a whole object
+# on one line. Splitting on whitespace would turn either into several arguments.
+# `jq -c` on the other side is what guarantees no argument contains a newline.
+ACCENT_ARGS_TEXT="$("$WS_BIN_DIR/desktop-scheme" accent-args "$PALETTE_SOURCE")" \
+    || die "could not work out where the accents should come from"
+mapfile -t ACCENT_ARGS <<< "$ACCENT_ARGS_TEXT"
+
 # --prefer is mandatory: with no interactive terminal matugen cannot tell
 # which colour to pick when the image has several candidates.
-# saturation gives accents with more character than darkness/lightness.
+# saturation gives accents with more character than darkness/lightness. It is
+# accepted by `matugen color hex` too, where there is only ever one candidate
+# and it therefore decides nothing -- which is why it can stay here, outside the
+# words the accent source chooses, instead of being repeated in two of them.
 #
 # --import-json MERGES THE SCHEME INTO THE PALETTE MATUGEN JUST DERIVED, so the
-# 17 Material 3 roles come from the image and the 74 named in schemes/README.md
-# come from the file, and every template sees all of them in one render. It is
-# one process rather than two because it can be: dumping the palette with
-# `-j hex --dry-run`, merging it with jq and rendering with `matugen json` was
-# measured against all 56 stills in the collection and produced byte-identical
-# output, for an extra process and an extra temporary file.
+# 17 Material 3 roles come from whatever the accent source above chose and the
+# 74 named in schemes/README.md come from the file, and every template sees all
+# of them in one render. It is one process rather than two because it can be:
+# dumping the palette with `-j hex --dry-run`, merging it with jq and rendering
+# with `matugen json` was measured against all 56 stills in the collection and
+# produced byte-identical output, for an extra process and an extra temporary
+# file.
 #
 # THE IMPORTED FILE WINS ON A NAME CLASH -- measured -- which is why every role
 # in a scheme carries a `ui_` / `term_` / `sem_` / `fb_` prefix and why nothing
 # in one may be called `primary`. It is also the door the accent source walks
-# through later: `desktop-scheme accent` will pick the accents out of the scheme
-# or out of a fixed hex by putting them in this same file, with no change here.
+# through: what `accent-args` adds above is a second import carrying exactly
+# those seventeen names, so the scheme's own accent lands on top of the one
+# matugen just derived from the picture.
+#
+# THE ORDER OF THE TWO IMPORTS DOES NOT MATTER because they cannot collide: the
+# scheme file only ever carries prefixed names and the accent overlay only ever
+# carries unprefixed M3 ones.
 #
 # Still `die`, and now it covers one more thing. A missing scheme file, one that
 # is not valid JSON, one of the wrong shape and one missing a role a template
@@ -1594,7 +1625,7 @@ SCHEME_FILE="$("$WS_BIN_DIR/desktop-scheme" path)" \
 # everything around it is `|| true` is at step 7 below and is unchanged: a
 # palette that cannot be generated leaves every app on the machine holding the
 # colours of the wrong image.
-matugen image "$PALETTE_SOURCE" --mode dark --prefer saturation --quiet \
+matugen "${ACCENT_ARGS[@]}" --mode dark --prefer saturation --quiet \
     --import-json "$SCHEME_FILE" \
     || die "matugen failed"
 
