@@ -1,83 +1,128 @@
-// How genesis draws a volume slider. The public half -- the range, the units,
-// what `notch` means and why the wheel is off on the sound page -- is
-// components/VolumeSlider.qml.
-//
-// Built by hand rather than from QtQuick.Controls, for the reason the island's
-// copy already gave: a Controls Slider arrives with its own style, and styling
-// it back into this palette is more code than drawing a bar.
+// How the windows theme draws a volume slider: Windows' own Slider, which is a
+// four-pixel rail with a twenty-two pixel round thumb sitting on it and an
+// accent dot inside the thumb that changes size with the pointer. The public
+// half -- the range, the units, what `notch` means and why the wheel is off on
+// the sound page -- is components/VolumeSlider.qml.
 //
 // THE TWO PROMISES THIS FILE KEEPS, both of which the facade can require no
 // property for:
 //
-//   A CLICK JUMPS AND A DRAG FOLLOWS. `onPressed` and `onPositionChanged`
-//   both report, so there is one gesture and no dead zone on the rail where
-//   pressing does nothing.
+//   A CLICK JUMPS AND A DRAG FOLLOWS. `onPressed` and `onPositionChanged` both
+//   report, so there is one gesture and no dead zone on the rail where pressing
+//   does nothing.
 //
 //   THE WHEEL'S ANSWER IS HANDED BACK. `event.accepted` is assigned what
 //   row.wheel() returned, every time. Dropping it -- or writing an empty
-//   handler, which looks like the same thing -- turns the sound page's
-//   sliders into dead patches that swallow the notch instead of scrolling
-//   the page. The facade's wheel() has the long version.
+//   handler, which looks like the same thing -- turns the sound page's sliders
+//   into dead patches that swallow the notch instead of scrolling the page. The
+//   facade's wheel() has the long version.
 //
-// AND THE ARITHMETIC THAT USED TO BE UPSTAIRS IS DOWN HERE NOW. emit() below
-// converts a pointer x into a share of the rail. Both numbers it needs are
-// this file's own -- the six pixels the hit area is inset by, and the width
-// of the rail this file drew -- which is exactly why the facade stopped doing
-// it. A theme that insets by a different amount changes one line here and
-// nothing anywhere else.
+// AND THE ARITHMETIC THAT USED TO BE UPSTAIRS IS DOWN HERE NOW. moveTo() takes
+// a share of the rail, 0 to 1, and the rail is one this file drew. Under this
+// theme the row is 32 tall -- Windows' own Slider height -- so the hit area is
+// the whole row rather than a thin strip widened by negative margins, and the
+// share is a plain `x / width` with no inset to correct for. A theme that goes
+// back to a thin rail has to put the correction back with it.
+//
+// ---------------------------------------------------------------------------
+// THE INNER DOT, AND MICROSOFT DISAGREEING WITH ITSELF
+// ---------------------------------------------------------------------------
+//
+// The thumb is a 22px circle with a smaller accent circle inside it, and the
+// inner one is 12 at rest, 14 under the pointer and 10 while pressed. Those
+// three numbers are the COMMENTS in Microsoft's own Slider XAML; the scale
+// transforms next to them render 10.3, 14 and 8.5. Fluent.qml carries the
+// intent, for the reason it gives at its own line: the intent is what Windows
+// looks like, and the code is one of the two that is going to be corrected.
+//
+// THE RESIZE IS THE ONE THING HERE THAT ANIMATES, at ControlFasterAnimationDuration
+// -- 83ms on WinUI's single easing spline. Everything else in this file swaps
+// instantly, because hover in Windows 11 is a DiscreteObjectKeyFrame at time
+// zero and Fluent.hoverMs is 0 to say so.
+//
+// ---------------------------------------------------------------------------
+// THE RAIL COLOUR IS THE CALL SITE'S AND MICROSOFT WANTS ANOTHER ONE
+// ---------------------------------------------------------------------------
+//
+// `SliderTrackFill` is `ControlStrongFillColorDefault` #8BFFFFFF, which is the
+// scheme's `Theme.outline`. `row.railColor` defaults to a level below that and
+// is API: the island sets it to `Qt.alpha(ink, 0.18)` because it draws this
+// slider over COVER ART, where a role derived from a scheme has nothing to do
+// with what is behind the rail.
+//
+// A theme cannot tell a default from a choice -- both arrive as a colour on the
+// facade -- so the call site wins and this file reads `row.railColor`. The cost
+// is that a slider nobody parameterised comes out one level darker than Windows
+// draws it. Fixing that properly means the facade distinguishing "unset" from
+// "set to the default", which is a change to the public half and not something
+// to smuggle in from this side.
 
 import QtQuick
 import qs
+// VolumeSlider is components/VolumeSlider.qml -- the facade -- and not this
+// file. The explicit import wins over the directory a document implicitly
+// imports.
 import qs.components
+// Fluent lives one directory up. Without this line every `Fluent.` below is a
+// ReferenceError at runtime, once per read; tests/qml-rules.sh checks the pair.
+import ".."
 
 Item {
     id: root
 
-    // The facade, handed in by its Loader as an initial property. See the note
-    // in this directory's ToggleRow.qml on why it is `required`, why it is
-    // typed rather than `var`, and why `VolumeSlider` here is the facade and
-    // not this file.
+    // The facade, handed in by its Loader as an initial property. Typed and
+    // `required` for the reason rule 1 of README.md sets out.
     required property VolumeSlider row
 
-    // WHAT THE FACADE READS BACK. Twenty is the height of the hit area's
-    // business end, not of the 6px rail: the row is thin and the pointer is
-    // not. The facade floors at the same number.
-    implicitHeight: 20
+    // WHAT THE FACADE READS BACK. Windows' Slider is 32 tall, which is the same
+    // 32 every button, field and combo box in this theme is. The facade floors
+    // at 20, so this raises the row rather than being raised by it. Not derived
+    // from this item's own height.
+    implicitHeight: Fluent.sliderRowHeight
 
-    // ---------------- Rail ----------------
+    // How far along the rail the thumb's CENTRE sits. The thumb overhangs both
+    // ends by half its width, which is what Windows does: the rail runs edge to
+    // edge and the handle is allowed off it.
+    readonly property real centreX: rail.width * root.row.fraction
+
+    // ---------------- The rail ----------------
+    //
+    // Four tall at radius two, which is a capsule. SliderTrackHeight and
+    // SliderTrackCornerRadius, both straight out of Slider_themeresources.xaml.
     Rectangle {
         id: rail
 
         anchors.verticalCenter: parent.verticalCenter
-        width: parent.width
-        height: 6
-        radius: 3
-        color: root.row.railColor
+        anchors.left: parent.left
+        anchors.right: parent.right
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
+        height: Fluent.sliderTrackHeight
+        radius: Fluent.sliderTrackRadius
+        antialiasing: true
+        color: root.row.railColor
     }
 
-    // ---------------- Fill ----------------
+    // ---------------- The filled part ----------------
+    //
+    // AccentFillColorDefault, which under this scheme is SystemAccentColorLight2
+    // -- dark mode's accent is the LIGHT shade of the ramp, not the base one.
     Rectangle {
         anchors.verticalCenter: parent.verticalCenter
-        width: rail.width * root.row.fraction
-        height: 6
-        radius: 3
-        color: root.row.accent
+        anchors.left: parent.left
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
+        width: root.centreX
+        height: Fluent.sliderTrackHeight
+        radius: Fluent.sliderTrackRadius
+        antialiasing: true
+        color: root.row.accent
     }
 
     // ---------------- The mark ----------------
     //
-    // OVER THE FILL AND UNDER THE HANDLE, which is the whole reason it is
-    // written here and not before the fill: painted underneath it would
-    // disappear at exactly the moment it starts to mean something, which is
-    // when the fill has passed it.
+    // OVER THE FILL AND UNDER THE THUMB, which is the whole reason it is written
+    // here and not before the fill: painted underneath it would disappear at
+    // exactly the moment it starts to mean something, which is when the fill has
+    // passed it.
     Rectangle {
         visible: root.row.notch > 0 && root.row.notch < root.row.maximum
 
@@ -85,49 +130,105 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
 
         width: 2
-        height: 12
+        height: Fluent.sliderTrackHeight * 3
         radius: 1
 
         // See notchColor on the facade: it reads as a gap cut through the bar
-        // rather than as a third colour, which works over the rail and over
-        // the fill alike where no ink colour does.
+        // rather than as a third colour, which works over the rail and over the
+        // fill alike where no ink colour does.
         color: root.row.notchColor
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
     }
 
-    // ---------------- Handle ----------------
+    // ---------------- The thumb ----------------
+    //
+    // 22 VISIBLE, WHICH IS AN 18px ELEMENT WITH A BORDER AT Margin="-2". That is
+    // how Slider_themeresources.xaml gets there and it is why the number looks
+    // arbitrary; Fluent.sliderThumb carries the visible one.
+    //
+    // THE LIT EDGE. Windows draws a 1px gradient border round this circle --
+    // ControlElevationBorderBrush, a vertical gradient in ABSOLUTE mapping over
+    // three pixels, brighter at the TOP in dark mode. Absolute mapping is why
+    // the bright stroke stays one pixel wherever the control's height goes, and
+    // it is drawn here as an outer circle carrying the gradient with the fill
+    // circle inset by one inside it. The stops below convert Microsoft's two
+    // absolute offsets into the fractions of this circle they land on.
     Rectangle {
-        x: rail.width * root.row.fraction - width / 2
+        id: thumb
+
+        x: root.centreX - width / 2
         anchors.verticalCenter: parent.verticalCenter
 
-        width: 14
-        height: 14
-        radius: 7
-        color: root.row.accent
+        width: Fluent.sliderThumb
+        height: Fluent.sliderThumb
+        radius: width / 2
+        antialiasing: true
 
-        // Grows under the pointer: the handle is the thing being aimed at and
-        // 14px is small for a mouse.
-        scale: mouse.containsMouse || mouse.pressed ? 1.25 : 1
-
-        Behavior on scale {
-            NumberAnimation { duration: Theme.animDuration }
+        gradient: Gradient {
+            GradientStop {
+                position: 0
+                color: Qt.rgba(1, 1, 1, Fluent.elevationTop)
+            }
+            GradientStop {
+                position: Fluent.elevationStop * Fluent.elevationSpan / Fluent.sliderThumb
+                color: Qt.rgba(1, 1, 1, Fluent.elevationTop)
+            }
+            GradientStop {
+                position: Fluent.elevationSpan / Fluent.sliderThumb
+                color: Qt.rgba(1, 1, 1, Fluent.elevationRest)
+            }
+            GradientStop {
+                position: 1
+                color: Qt.rgba(1, 1, 1, Fluent.elevationRest)
+            }
         }
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
+        // The thumb's own body, one pixel inside the gradient so what shows of
+        // it is the border.
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: 1
+
+            radius: width / 2
+            antialiasing: true
+            color: Theme.surfaceContainerHighest
+        }
+
+        // ---------------- The dot ----------------
+        Rectangle {
+            id: dot
+
+            anchors.centerIn: parent
+
+            width: mouse.pressed ? Fluent.sliderDotPress
+                : mouse.containsMouse ? Fluent.sliderDotHover
+                : Fluent.sliderDotRest
+            height: dot.width
+            radius: width / 2
+            antialiasing: true
+            color: root.row.accent
+
+            // ControlFasterAnimationDuration on ControlFastOutSlowInKeySpline,
+            // which is the only easing resource WinUI ships.
+            Behavior on width {
+                NumberAnimation {
+                    duration: Fluent.fasterMs
+                    easing.type: Easing.Bezier
+                    easing.bezierCurve: Fluent.easeOut
+                }
+            }
         }
     }
 
+    // ---------------- The target ----------------
+    //
+    // THE WHOLE ROW, and no negative margins. genesis insets a thin rail's hit
+    // area by six pixels and then corrects for the six when it reports; a 32px
+    // row is already a fair target, so the correction is gone and the share
+    // below is exact.
     MouseArea {
         id: mouse
 
         anchors.fill: parent
-        // Taller than the 6px rail it covers: the row is thin and the pointer
-        // is not.
-        anchors.margins: -6
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
 
@@ -149,17 +250,9 @@ Item {
     }
 
     // WHERE THE POINTER IS ALONG THE RAIL, 0 TO 1, WHICH IS ALL THE FACADE
-    // WANTS TO KNOW.
-    //
-    // The MouseArea is inset by its negative margins, so its x is 6px to the
-    // left of the rail's; without correcting for that, a press at the very
-    // start of the rail reports a small negative share and one at the end
-    // overshoots. Both of those numbers are this file's -- the inset is right
-    // above, and the rail is one this file drew -- which is why this
-    // arithmetic lives here and the clamp and the range do not. The facade
-    // clamps what comes out of this, so the margins are free to let the
-    // pointer stray past both ends.
+    // WANTS TO KNOW. The facade clamps what comes out of this and multiplies by
+    // a maximum this file has no reason to know.
     function emit(x: real): void {
-        root.row.moveTo((x + mouse.anchors.margins) / rail.width);
+        root.row.moveTo(x / rail.width);
     }
 }
