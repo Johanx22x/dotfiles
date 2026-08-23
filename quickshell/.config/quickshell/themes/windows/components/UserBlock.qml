@@ -66,7 +66,14 @@ Item {
         Item {
             id: avatar
 
+            // INSET BY THE ICON COLUMN'S OWN MARGIN, and not flush with the
+            // pane's padding the way Windows has it. Windows' block is not a
+            // navigation entry and has no accent bar to make room for; this
+            // one does, and a portrait sitting on the pill's left edge would
+            // be drawn straight over it. Twelve is what the entries below
+            // already inset their glyphs by, so the two line up.
             anchors.left: parent.left
+            anchors.leftMargin: (Fluent.navIconColumn - Fluent.navIcon) / 2
             anchors.verticalCenter: parent.verticalCenter
 
             width: Fluent.userAvatar
@@ -181,7 +188,6 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
 
-            cursorShape: Qt.PointingHandCursor
             onClicked: root.row.clicked()
         }
     }

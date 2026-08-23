@@ -149,12 +149,18 @@ Item {
             color: root.row.accent
 
             // 250ms out, 167ms back. Both of Microsoft's, and the asymmetry is
-            // in the source: the PointerOver and Pressed storyboards run at
-            // ControlNormalAnimationDuration and the return to rest at
-            // ControlFastAnimationDuration.
+            // in the source rather than a flourish: the PointerOver and
+            // Pressed storyboards are SplineDoubleKeyFrames at
+            // ControlNormalAnimationDuration and the return to rest is at
+            // ControlFastAnimationDuration. The duration reads the POINTER and
+            // not the dot's current width, so that it is decided by where the
+            // animation is going rather than by where it happens to be when it
+            // is asked.
             Behavior on width {
                 NumberAnimation {
-                    duration: dot.width === Fluent.sliderDotRest ? Fluent.normalMs : Fluent.fastMs
+                    duration: (pointer.containsMouse || pointer.pressed)
+                        ? Fluent.normalMs
+                        : Fluent.fastMs
                     easing.type: Easing.Bezier
                     easing.bezierCurve: Fluent.easeOut
                 }
@@ -174,7 +180,12 @@ Item {
         // ancestor still reports `enabled: true`, so this has to be bound.
         enabled: root.enabled
         hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
+
+        // NO cursorShape, AND THAT IS THE WINDOWS ANSWER. Windows never puts a
+        // pointing hand on a control: not on a slider, a button, a list row, a
+        // menu item or a toggle. The hand is a web habit and the one place the
+        // shell shows it is a hyperlink. Leaving the property unset means the
+        // arrow, which is what a real slider does under the pointer.
 
         function seek(x: real): void {
             if (root.travel <= 0)

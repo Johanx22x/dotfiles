@@ -61,7 +61,6 @@
 
 import QtQuick
 import QtQuick.Effects
-import qs
 import qs.components
 import qs.themes.windows
 
@@ -80,7 +79,9 @@ Item {
     // and it is symmetric so that the clamp at the screen's right edge gets the
     // same air as the bar does.
     //
-    // It doubles as the room the shadow spills into.
+    // It is NOT room for the shadow, which was the first thing it was written
+    // down as: see the note on the effect below for where the shadow ended up
+    // and why it cannot use this gap.
     readonly property int inset: Fluent.flyoutInset
 
     implicitWidth: content.implicitWidth + root.inset * 2
@@ -91,16 +92,39 @@ Item {
     // come from and on why dark mode's shadows are twice light mode's.
     //
     // `blurMax` is MultiEffect's own unit -- `shadowBlur` is a fraction of it --
-    // so the pair below is the closest this gets to "16px of blur". The tail
-    // beyond `inset` is clipped by the layer surface, which is why the number
-    // that matters is the offset and not the spread.
+    // so the pair below is the closest this gets to "16px of blur".
+    //
+    // `autoPaddingEnabled: false`, AND IT IS THE LINE THAT KEEPS THIS HONEST.
+    // MultiEffect DOES NOT DRAW A SHADOW: it draws ITS SOURCE PLUS a shadow.
+    // The copy is invisible only while it lands exactly on top of the real
+    // item, and auto-padding grows the effect's bounds to fit the blur, which
+    // moves it. Photographed with it on: every heading, every line of body
+    // text and every number in the calendar carried a dimmer ghost of itself
+    // about ten pixels up and to the left.
+    //
+    // WHAT THAT COSTS, SAID PLAINLY: the shadow now lives INSIDE the content's
+    // own box. The halo around the outside of the flyout is gone, and what is
+    // left is the part that falls on the theme's own transparent gaps -- under
+    // the media card, into the space between two panels, around each rounded
+    // corner. That is a smaller thing than Windows draws and it is what can be
+    // had without a ghost.
+    //
+    // TWO OTHER WAYS WERE TRIED AND BOTH WERE WORSE, photographed each time.
+    // `layer.effect: MultiEffect` on the Loader draws the content once and
+    // does pad, so the outer halo comes back -- and every pixel of the flyout
+    // came out three levels darker than the same run without it (32,32,32 ->
+    // 29,29,32 on the notification centre's own card), because the effect
+    // re-composites a texture that already has translucency flattened into it.
+    // A hand-set `paddingRect` with matching negative margins moved the copy
+    // instead of aligning it, in both signs. A shadow is not worth a colour
+    // shift in a theme whose whole claim is that its colours are measured.
     MultiEffect {
         anchors.fill: content
 
         source: content
         visible: content.status === Loader.Ready
 
-        autoPaddingEnabled: true
+        autoPaddingEnabled: false
         blurMax: Fluent.flyoutShadowBlur
         shadowEnabled: true
         shadowBlur: 1.0
@@ -125,9 +149,10 @@ Item {
         active: root.row.isOpen
         sourceComponent: root.row.contentComponent
 
-        // MultiEffect needs a texture to sample, and a Loader is not one until
-        // it is layered. The item goes on drawing normally; the effect above
-        // reads the same texture.
+        // MultiEffect needs a texture to sample, and a Loader is not one
+        // until it is layered. The effect above draws that texture a second
+        // time, exactly on top of this one -- see the note on
+        // `autoPaddingEnabled` for what happens when the two stop lining up.
         layer.enabled: true
     }
 }

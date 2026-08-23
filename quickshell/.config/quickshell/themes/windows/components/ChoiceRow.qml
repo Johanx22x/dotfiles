@@ -148,7 +148,15 @@ Item {
             height: Fluent.controlHeight + 2
             radius: Fluent.controlRadius
 
-            color: Qt.rgba(1, 1, 1, Fluent.elevationRest)
+            // TRANSPARENT WITH A FLAT STROKE, and the first pass had it filled.
+            // Filled, the container was a step LIGHTER than the chosen cell --
+            // white at seven per cent over the card comes out above
+            // surfaceContainerHigh -- so the chosen segment read as a dent
+            // rather than as a lift, which is the elevation rule upside down.
+            // Photographed at 0058 against 0051 before the fix.
+            color: "transparent"
+            border.width: 1
+            border.color: Qt.rgba(1, 1, 1, Fluent.elevationRest)
 
             Row {
                 id: cells
@@ -209,7 +217,6 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
 
-                            cursorShape: Qt.PointingHandCursor
                             onClicked: root.choose(cell.modelData.value)
                         }
                     }

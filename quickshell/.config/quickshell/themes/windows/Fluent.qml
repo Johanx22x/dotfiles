@@ -604,4 +604,10 @@ QtObject {
     // in ref/settings-personalization-taskbar.jpg, which is a 1:1 shot -- the
     // nav pill in it is exactly 36 tall.
     readonly property int userAvatar: 60
+
+    // ListViewItemMinHeight, out of the ListViewItem resources. It is the
+    // floor a list row gets when it is drawn as a card of its own -- the shape
+    // Windows gives every list of things in Settings, from installed apps to
+    // paired devices.
+    readonly property int listRowHeight: 40
 }

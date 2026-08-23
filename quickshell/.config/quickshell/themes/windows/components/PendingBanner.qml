@@ -76,38 +76,60 @@ Item {
 
         implicitHeight: Math.max(Fluent.controlHeight, actions.implicitHeight + 2 * Fluent.bannerPadding)
 
-        Row {
+        Text {
+            id: glyph
+
             anchors.left: parent.left
             anchors.leftMargin: Fluent.bannerPadding
+            anchors.verticalCenter: parent.verticalCenter
+
+            text: Icons.timerSand
+            font.family: Theme.fontFamily
+            font.pointSize: Theme.iconSize
+            color: Theme.warning
+        }
+
+        // TWO TEXTS AND NOT ONE STRING, WHICH THE FIRST PHOTOGRAPH CORRECTED.
+        // Written as one sentence with one elide, a card at the width the
+        // settings window actually opens at cut it after "Reverting" -- the
+        // countdown, which is the one thing on this strip worth reading while
+        // you wait to find out whether the screen comes back, was the part
+        // that fell off the end. So the QUESTION is the half that gives way
+        // and the number never does.
+        Text {
+            id: question
+
+            anchors.left: glyph.right
+            anchors.leftMargin: Theme.itemSpacing
+            anchors.right: countdown.left
+            anchors.rightMargin: Theme.itemSpacing
+            anchors.verticalCenter: parent.verticalCenter
+
+            text: root.row.question
+            elide: Text.ElideRight
+
+            font.family: Theme.fontFamily
+            font.pointSize: Fluent.bodySize
+            // Semibold and never Bold: the strip is already carrying the frame
+            // and the colour, so the sentence only has to be the first thing
+            // read inside it.
+            font.weight: Fluent.strongWeight
+            color: Theme.textOnSurface
+        }
+
+        Text {
+            id: countdown
+
             anchors.right: actions.left
             anchors.rightMargin: Fluent.cardActionGutter
             anchors.verticalCenter: parent.verticalCenter
 
-            spacing: Theme.itemSpacing
+            text: `Reverting in ${root.row.seconds}s`
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-
-                text: Icons.timerSand
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.iconSize
-                color: Theme.warning
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-
-                text: `${root.row.question} Reverting in ${root.row.seconds}s`
-                elide: Text.ElideRight
-
-                font.family: Theme.fontFamily
-                font.pointSize: Fluent.bodySize
-                // Semibold and never Bold: the strip is already carrying the
-                // frame and the colour, so the sentence only has to be the
-                // first thing read inside it.
-                font.weight: Fluent.strongWeight
-                color: Theme.textOnSurface
-            }
+            font.family: Theme.fontFamily
+            font.pointSize: Fluent.bodySize
+            font.weight: Fluent.strongWeight
+            color: Theme.textOnSurface
         }
 
         Row {

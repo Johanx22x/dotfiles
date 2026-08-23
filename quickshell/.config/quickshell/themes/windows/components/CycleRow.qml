@@ -88,12 +88,21 @@ Rectangle {
         color: Theme.textOnSurface
     }
 
-    // SettingsCardContentMinWidth is what makes a stack of cards line its
+    // SettingsCardContentMinWidth is a FLOOR AND NOT A WIDTH, which is exactly
+    // how the Community Toolkit applies it: every Slider, ComboBox and TextBox
+    // a card holds is at least this wide, so a stack of cards lines its
     // controls up down the right-hand edge instead of each one ending where
-    // its own content happens to. The value is pinned between the two buttons
-    // rather than sized to itself for the same reason one level down: "1.75"
-    // and "2.00" are different widths, and a number whose buttons move when it
-    // changes is a control that will not stay still under a held finger.
+    // its own content happens to -- and a control with more to say than 120
+    // pixels is wider than that.
+    //
+    // MEASURED, AND THE FIRST TRY HAD IT AS A FIXED WIDTH. A mode reads
+    // "1920 x 1080 - 165 Hz", which is about 145 pixels of Segoe at the
+    // default size: pinned at 120 the commonest value on the page was elided
+    // in the middle of the refresh rate. So the box grows LEFTWARDS from the
+    // floor -- the up button is anchored to the card and never moves, and the
+    // one that shifts by a few pixels when a longer mode comes up is the far
+    // one from wherever the finger is. Qt keeps the grab on a pressed
+    // MouseArea, so a button that moves under a held finger goes on repeating.
     Item {
         id: steppers
 
@@ -101,7 +110,7 @@ Rectangle {
         anchors.rightMargin: Fluent.cardPadding
         anchors.verticalCenter: parent.verticalCenter
 
-        width: Fluent.cardContentMinWidth
+        width: down.implicitWidth + value.width + up.implicitWidth + 2 * Theme.itemSpacing
         height: Math.max(down.implicitHeight, up.implicitHeight)
 
         StepperButton {
@@ -117,9 +126,12 @@ Rectangle {
         }
 
         Text {
-            anchors.left: down.right
-            anchors.right: up.left
+            id: value
+
+            anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
+
+            width: Math.max(Fluent.cardContentMinWidth, value.implicitWidth)
 
             text: root.row.value
             horizontalAlignment: Text.AlignHCenter
