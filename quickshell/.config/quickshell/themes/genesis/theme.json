@@ -1,0 +1,23 @@
+{
+    "barHeight": 48,
+    "barPadding": 16,
+    "itemSpacing": 9,
+    "groupSpacing": 16,
+    "groupPadding": 12,
+    "cardRadius": 24,
+
+    "notificationWidth": 420,
+    "notificationGap": 10,
+    "notificationPadding": 12,
+    "notificationRadius": 18,
+    "notificationIconSize": 38,
+    "popoutMinWidth": 220,
+
+    "fontWeight": 600,
+    "imageSize": 20,
+
+    "screenCornerRadius": 10,
+
+    "animDuration": 220,
+    "recolorDuration": 0
+}

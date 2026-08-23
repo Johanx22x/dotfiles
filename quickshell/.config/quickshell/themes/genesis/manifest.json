@@ -1,5 +1,8 @@
 {
     "name": "genesis",
     "title": "Genesis",
-    "interface": 1
+    "interface": 1,
+    "palette": {
+        "source": "scheme"
+    }
 }
