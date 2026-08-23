@@ -73,209 +73,45 @@ SettingsPage {
     }
 
     // ---------------- Vocabulary ----------------
+    //
+    // THE STATE WORD AND ITS COLOUR, both of which stayed on this page when the
+    // pill they are drawn in became components/Chip.qml. `ok`, `missing`,
+    // `drift` and `na` are the engine's own vocabulary -- they appear in the
+    // check table, in the README and in this repository's commit messages --
+    // and a chip that knew them would be a fourth frontend with an opinion
+    // about what the installer means. The chip takes a word and a colour, and
+    // the function below is where both are decided.
+    //
+    // It is the WORD and not an icon, which is the older half of the same
+    // argument: a page that renamed `missing` and `drift` into pictures would
+    // be a fourth vocabulary for the same four answers.
 
-    // The state word, in the colour the CLI's table gives it. It is the WORD
-    // and not an icon on purpose: `missing` and `drift` are the engine's own
-    // vocabulary, they appear in the check table, in the README and in this
-    // repository's commit messages, and a page that renamed them into pictures
-    // would be a fourth vocabulary for the same four answers.
-    component StateChip: Rectangle {
-        id: chip
-
-        property string kind: ""
-
-        readonly property color tone: {
-            switch (chip.kind) {
-            case "ok":      return Theme.primary;
-            case "missing": return Theme.warning;
-            case "drift":   return Theme.critical;
-            default:        return Theme.textOnSurfaceVariant;
-            }
+    // ONE CALL AND NOT TWO, which is not brevity: the word and the colour are
+    // one fact about a state and a row that fetched them separately could show
+    // `drift` in the colour of `ok`. They are also read from inside a Repeater
+    // delegate, where the row can reach back out to this page exactly once
+    // without qmllint losing sight of it.
+    //
+    // "n/a" and not "na": the CLI prints a column, this prints a word in a
+    // sentence, and the two letters of "na" read as an abbreviation nobody
+    // expands the first time.
+    //
+    // The colour is the CLI table's, which the verdict card below spends its one
+    // colour on as well, and the bar widget after that. Three frontends over one
+    // engine should not disagree about what a state looks like.
+    function stateChip(kind: string): var {
+        let tone;
+        switch (kind) {
+        case "ok":      tone = Theme.primary; break;
+        case "missing": tone = Theme.warning; break;
+        case "drift":   tone = Theme.critical; break;
+        default:        tone = Theme.textOnSurfaceVariant; break;
         }
 
-        implicitWidth: chipText.implicitWidth + 16
-        implicitHeight: 20
-        radius: height / 2
-
-        color: Qt.alpha(chip.tone, 0.16)
-        border.width: 1
-        border.color: Qt.alpha(chip.tone, 0.5)
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
-
-        Text {
-            id: chipText
-
-            anchors.centerIn: parent
-
-            // "n/a" and not "na": the CLI prints a column, this prints a word
-            // in a sentence, and the four letters of "na" read as an
-            // abbreviation nobody expands the first time.
-            text: chip.kind === "na" ? "n/a" : chip.kind
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 3
-            font.weight: Font.Bold
-            color: chip.tone
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
-        }
-    }
-
-    // One row of the check table: the state, the unit's own title, and the
-    // note the unit wrote about itself. Shaped like an InfoRow because it is
-    // one -- no hover, no cursor, nothing to click -- with the chip taking the
-    // place the glyph would have had.
-    component UnitRow: Item {
-        id: unitRow
-
-        required property var modelData
-
-        width: parent ? parent.width : 320
-        implicitHeight: Math.max(Theme.groupHeight, unitColumn.implicitHeight + 14)
-
-        StateChip {
-            id: rowChip
-
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.groupPadding
-            anchors.top: unitColumn.top
-            anchors.topMargin: 2
-
-            kind: unitRow.modelData.kind ?? ""
-        }
-
-        Column {
-            id: unitColumn
-
-            anchors.left: rowChip.right
-            anchors.leftMargin: Theme.itemSpacing
-            anchors.right: parent.right
-            anchors.rightMargin: Theme.groupPadding
-            anchors.verticalCenter: parent.verticalCenter
-
-            spacing: 3
-
-            Text {
-                width: parent.width
-
-                // THE TITLE ALONE. The row used to carry the unit's id after
-                // it -- `GPU driver · gpu`, `User services · services-user` --
-                // on the argument that the id is what you type after
-                // `./install.sh apply`, so it had to be somewhere.
-                //
-                // It did not have to be here. Printing it on every row made a
-                // reading table carry a second column of command arguments
-                // for a reader who, by definition, has already left this page
-                // for a terminal; the dot and the word after it were on
-                // fifteen rows to serve the one visit in twenty where
-                // somebody wanted them. A first pass suppressed only the ids
-                // that repeated their own title, which fixed `Seeds · seeds`
-                // and left every other row still trailing a word that the
-                // title had already said in full.
-                //
-                // WHERE THE ID STILL SURFACES, and it is not a quieter copy of
-                // this: the two hand-off rows below print the exact command
-                // they are about to run, ids and all, and that is the moment
-                // somebody actually needs to read one. The id belongs next to
-                // the command, not next to the state.
-                text: unitRow.modelData.title ?? ""
-                wrapMode: Text.WordWrap
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                font.weight: Theme.fontWeight
-                color: Theme.textOnSurface
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-
-            Text {
-                width: parent.width
-
-                visible: text !== ""
-                // The unit's own sentence, unedited. Nothing on this page
-                // rewrites it: it was written by the code that found the
-                // problem, which is the only thing that knows what it is.
-                text: unitRow.modelData.note ?? ""
-                wrapMode: Text.WordWrap
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 2
-                color: Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-        }
-    }
-
-    // One package inside an opened pack. Deliberately small -- half the height
-    // of a ToggleRow -- because a pack can hold ninety of these and a list of
-    // ninety full rows is a page nobody scrolls to the end of.
-    component PkgRow: Rectangle {
-        id: pkgRow
-
-        required property string group
-        required property string name
-
-        readonly property bool wanted: InstallerState.pkgWanted(pkgRow.group, pkgRow.name)
-
-        width: parent ? parent.width : 320
-        implicitHeight: 26
-        radius: height / 2
-
-        color: pkgMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
-
-        Row {
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.groupPadding
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Theme.itemSpacing
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-
-                text: pkgRow.wanted ? Icons.checkboxOn : Icons.checkboxOff
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                color: pkgRow.wanted ? Theme.primary : Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-
-                text: pkgRow.name
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 2
-                color: pkgRow.wanted ? Theme.textOnSurface : Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-        }
-
-        MouseArea {
-            id: pkgMouse
-
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: InstallerState.setPkgWanted(pkgRow.group, pkgRow.name, !pkgRow.wanted)
-        }
+        return {
+            word: kind === "na" ? "n/a" : kind,
+            tone: tone
+        };
     }
 
     // ---------------- What the machine says ----------------
@@ -301,7 +137,7 @@ SettingsPage {
     Rectangle {
         id: verdictCard
 
-        // The colour rule is StateChip's, which is the CLI table's: `ok` is
+        // The colour rule is stateChip above, which is the CLI table's: `ok` is
         // the accent, `missing` is yellow, `drift` is red, because something
         // that is there and wrong outranks something not there yet. The bar
         // widget spends its one colour the same way. Three frontends over one
@@ -650,8 +486,54 @@ SettingsPage {
         Repeater {
             model: InstallerState.units
 
-            UnitRow {
+            // One row of the check table: the state, the unit's own title, and
+            // the note the unit wrote about itself. Shaped like an InfoRow
+            // because it is one -- `interactive: false` is what says so, and
+            // components/ListRow.qml carries what that promises -- with the
+            // chip taking the place the glyph would have had.
+            ListRow {
+                id: unitRow
+
+                required property var modelData
+
+                readonly property var unitState: root.stateChip(unitRow.modelData.kind ?? "")
+
                 width: parent.width
+                interactive: false
+
+                badge: unitRow.unitState.word
+                badgeTone: unitRow.unitState.tone
+
+                // THE TITLE ALONE. The row used to carry the unit's id after
+                // it -- `GPU driver · gpu`, `User services · services-user` --
+                // on the argument that the id is what you type after
+                // `./install.sh apply`, so it had to be somewhere.
+                //
+                // It did not have to be here. Printing it on every row made a
+                // reading table carry a second column of command arguments for
+                // a reader who, by definition, has already left this page for a
+                // terminal; the dot and the word after it were on fifteen rows
+                // to serve the one visit in twenty where somebody wanted them.
+                // A first pass suppressed only the ids that repeated their own
+                // title, which fixed `Seeds · seeds` and left every other row
+                // still trailing a word that the title had already said in
+                // full.
+                //
+                // WHERE THE ID STILL SURFACES, and it is not a quieter copy of
+                // this: the two hand-off rows below print the exact command
+                // they are about to run, ids and all, and that is the moment
+                // somebody actually needs to read one. The id belongs next to
+                // the command, not next to the state.
+                //
+                // `name` AND NOT `label`, which is what keeps fifteen state
+                // readings out of the settings search. See
+                // components/ListRow.qml.
+                name: unitRow.modelData.title ?? ""
+
+                // The unit's own sentence, unedited. Nothing on this page
+                // rewrites it: it was written by the code that found the
+                // problem, which is the only thing that knows what it is.
+                detail: unitRow.modelData.note ?? ""
             }
         }
 
@@ -999,14 +881,64 @@ SettingsPage {
                         spacing: 1
 
                         Repeater {
-                            model: pack.open ? pack.modelData.packages : []
+                            // EACH ROW CARRIES ITS OWN PACK NAME rather than
+                            // reaching back out for it. `pkgWanted` and
+                            // `setPkgWanted` both take the pack and the
+                            // package, and a delegate that read `pack` for the
+                            // first half would be reading an id from the
+                            // component outside it -- which resolves, and which
+                            // the linter cannot follow, so the two reads would
+                            // be unchecked for ever. The mapping happens at
+                            // this level, where `pack` is this delegate's own
+                            // root and the read IS checked.
+                            model: pack.open
+                                ? pack.modelData.packages.map(name => ({
+                                    group: pack.modelData.name,
+                                    name: name
+                                }))
+                                : []
 
-                            PkgRow {
-                                required property string modelData
+                            // One package inside an opened pack. Deliberately
+                            // small -- `compact`, half the height of a
+                            // ToggleRow -- because a pack can hold ninety of
+                            // these and a list of ninety full rows is a page
+                            // nobody scrolls to the end of.
+                            //
+                            // THE READ AND THE WRITE ARE BOTH HERE NOW, and
+                            // that is a change in behaviour rather than a move.
+                            // Before the merge this row reached into
+                            // InstallerState from inside itself -- reading
+                            // pkgWanted for its own tick and calling
+                            // setPkgWanted from its own MouseArea -- which made
+                            // it the one row in the window that was a second
+                            // writer to a value it also displayed. Every other
+                            // row in this shell has followed the opposite rule
+                            // since before there were themes, and
+                            // components/ToggleRow.qml states it: a row takes a
+                            // value and emits a request to change it. So the
+                            // state is read at the call site and written at the
+                            // call site, and the row in between knows nothing
+                            // about packs.
+                            ListRow {
+                                id: pkgRow
+
+                                required property var modelData
+
+                                readonly property bool wanted: InstallerState.pkgWanted(pkgRow.modelData.group, pkgRow.modelData.name)
 
                                 width: parent.width
-                                group: pack.modelData.name
-                                name: modelData
+                                compact: true
+
+                                glyph: pkgRow.wanted ? Icons.checkboxOn : Icons.checkboxOff
+
+                                // `name` and not `label`: a package name is not
+                                // a setting, and a pack of ninety would be
+                                // ninety entries in the settings search. See
+                                // components/ListRow.qml.
+                                name: pkgRow.modelData.name
+                                selected: pkgRow.wanted
+
+                                onChosen: InstallerState.setPkgWanted(pkgRow.modelData.group, pkgRow.modelData.name, !pkgRow.wanted)
                             }
                         }
                     }

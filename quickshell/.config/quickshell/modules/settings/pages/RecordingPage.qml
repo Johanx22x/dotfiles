@@ -202,7 +202,7 @@ SettingsPage {
             Repeater {
                 model: Screens.all
 
-                PickRow {
+                ListRow {
                     required property var modelData
 
                     glyph: Icons.monitor
@@ -212,8 +212,15 @@ SettingsPage {
                     // stored is the model and serial -- see Config.screenKey --
                     // and neither of those is what the recorder sees.
                     detail: modelData.name
-                    picked: Config.replayMonitor === Config.screenKey(modelData)
+                    selected: Config.replayMonitor === Config.screenKey(modelData)
                         || (Config.replayMonitor === "" && ReplayState.monitor === modelData.name)
+
+                    // Says what this row IS, or what a click would do to it --
+                    // never both, and never a repetition of what the row already
+                    // shows. The same shape the device and network lists use.
+                    mark: "in use"
+                    hoverMark: "use"
+
                     onChosen: ReplayState.setMonitor(Config.screenKey(modelData))
                 }
             }
@@ -299,18 +306,22 @@ SettingsPage {
             // currently calls the input -- which is a real choice and not a gap
             // to be filled in later. It is also the only entry here that cannot
             // stop existing.
-            PickRow {
+            ListRow {
                 glyph: Icons.microphone
                 label: "System default"
                 detail: "Follows whatever the machine is set to"
-                picked: Config.recordingMicrophoneDevice === ""
+                selected: Config.recordingMicrophoneDevice === ""
+
+                mark: "in use"
+                hoverMark: "use"
+
                 onChosen: Config.recordingMicrophoneDevice = ""
             }
 
             Repeater {
                 model: root.sources
 
-                PickRow {
+                ListRow {
                     required property var modelData
 
                     glyph: Icons.microphone
@@ -321,7 +332,11 @@ SettingsPage {
                     // wrong.
                     label: modelData.description || modelData.name
                     detail: modelData.name
-                    picked: Config.recordingMicrophoneDevice === modelData.name
+                    selected: Config.recordingMicrophoneDevice === modelData.name
+
+                    mark: "in use"
+                    hoverMark: "use"
+
                     onChosen: Config.recordingMicrophoneDevice = modelData.name
                 }
             }
@@ -478,24 +493,32 @@ SettingsPage {
             // never been opened on, the codec is whatever gsr thinks is right
             // for the card it finds -- which is a better answer than anything
             // this shell could write down and keep true.
-            PickRow {
+            ListRow {
                 glyph: Icons.gpu
                 label: "Automatic"
                 detail: "Let gpu-screen-recorder choose (h264 today)"
-                picked: Config.recordingCodec === ""
+                selected: Config.recordingCodec === ""
+
+                mark: "in use"
+                hoverMark: "use"
+
                 onChosen: Config.recordingCodec = ""
             }
 
             Repeater {
                 model: RecorderCodecs.videoCodecs
 
-                PickRow {
+                ListRow {
                     required property string modelData
 
                     glyph: Icons.gpu
                     label: modelData
                     detail: RecorderCodecs.caution(modelData)
-                    picked: Config.recordingCodec === modelData
+                    selected: Config.recordingCodec === modelData
+
+                    mark: "in use"
+                    hoverMark: "use"
+
                     onChosen: Config.recordingCodec = modelData
                 }
             }
@@ -563,132 +586,6 @@ SettingsPage {
             description: "Both recorders are started through a `mkdir -p`, so "
                 + "naming somewhere that does not exist yet is not a way to "
                 + "break recording."
-        }
-    }
-
-    // ---------------- One row of a list of answers ----------------
-    //
-    // AN INLINE COMPONENT AND NOT A FILE IN components/, for the reason the
-    // sound page gives for its own: this is used three times and all three are
-    // on this page. It is very nearly that page's DeviceRow, and the difference
-    // is exactly why it is not shared -- DeviceRow knows what a PipeWire node
-    // is and this one knows nothing at all. A monitor, a microphone and a codec
-    // are three unrelated kinds of thing offered in one shape.
-    component PickRow: Rectangle {
-        id: pick
-
-        property string glyph: ""
-        property string label: ""
-        // A second line, muted, and empty is normal: the connector for a
-        // screen, the node name for a microphone, a caution for a codec that
-        // has one. A list where every row has one is a list nobody reads.
-        property string detail: ""
-        property bool picked: false
-
-        signal chosen
-
-        width: parent ? parent.width : 320
-        // Grows for the second line rather than eliding it: an explanation cut
-        // off at the width of a sidebar is one nobody finishes.
-        implicitHeight: Math.max(32, column.implicitHeight + 12)
-
-        radius: Theme.groupRadius
-        color: pickMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
-
-        Text {
-            id: pickGlyph
-
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.groupPadding
-            anchors.top: column.top
-            anchors.topMargin: 1
-
-            text: pick.glyph
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.iconSize
-            // The accent marks the one in use and nothing else, exactly as the
-            // sound page marks the default device and the network page marks
-            // the connected network.
-            color: pick.picked ? Theme.primary : Theme.textOnSurfaceVariant
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.animDuration }
-            }
-        }
-
-        Column {
-            id: column
-
-            anchors.left: pickGlyph.right
-            anchors.leftMargin: Theme.itemSpacing
-            anchors.right: mark.left
-            anchors.rightMargin: Theme.itemSpacing
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
-
-            Text {
-                width: parent.width
-                text: pick.label
-                elide: Text.ElideRight
-
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                font.weight: pick.picked ? Font.Bold : Theme.fontWeight
-                color: pick.picked ? Theme.primary : Theme.textOnSurface
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.animDuration }
-                }
-            }
-
-            Text {
-                width: parent.width
-                visible: pick.detail !== ""
-
-                text: pick.detail
-                wrapMode: Text.WordWrap
-
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 2
-                color: Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-        }
-
-        // Says what this row IS, or what a click would do to it -- never both,
-        // and never a repetition of what the row already shows. The same shape
-        // the device and network lists use.
-        Text {
-            id: mark
-
-            anchors.right: parent.right
-            anchors.rightMargin: Theme.groupPadding
-            anchors.verticalCenter: parent.verticalCenter
-
-            text: pick.picked ? "in use" : pickMouse.containsMouse ? "use" : ""
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 2
-            color: Theme.outline
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
-        }
-
-        MouseArea {
-            id: pickMouse
-
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: pick.chosen()
         }
     }
 
