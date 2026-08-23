@@ -67,15 +67,39 @@ Rectangle {
     // sentence, and at the same size the chords compete with the descriptions
     // instead of introducing them. A Button is two under and takes its weight
     // from whether it is the filled one.
-    readonly property font ownFont: Qt.font({
-        family: Theme.fontFamily,
-        pointSize: root.badge ? Theme.fontSize - 3
-            : root.key ? Theme.fontSize - 1.5
-            : Theme.fontSize - 2,
-        weight: root.badge ? Font.Bold
-            : root.key ? Theme.fontWeight
-            : root.filled ? Font.Bold : Theme.fontWeight
-    })
+    //
+    // THROUGH THE GROUP PROPERTIES AND NOT Qt.font(), WHICH IS THE ONLY THING
+    // ON THIS FILE'S SIDE OF THE SEAM THAT CAN LOSE THE KEY'S HALF POINT.
+    // Qt.font() takes an INT point size. Measured offscreen against this
+    // theme's own tokens: `Qt.font({pointSize: 11 - 1.5}).pointSize` comes back
+    // 9, while the same expression written as `font.pointSize` -- the spelling
+    // a FontMetrics uses, and a FontMetrics is exactly what every live key call
+    // site hands down -- keeps 9.5. Written through Qt.font() this default drew
+    // every cap around two pixels narrow, 4.09 at the widest and 32 px over one
+    // chord of fifteen, against a caller's face measured on the same bench.
+    //
+    // That fault was LATENT rather than visible, and only because the three key
+    // call sites -- KeybindsPage, InputPage and the cheatsheet through BindRow
+    // -- all hand a face down, two of them after being bitten by this exact
+    // rounding. A default that is wrong and never reached is a trap for the
+    // next call site, so it is not a comment saying "keep these integral": the
+    // spelling below CANNOT round, so a fractional size in any of the three
+    // branches survives and the badge and button branches are free to stop
+    // being integers.
+    //
+    // NOT `readonly`, which grouped syntax does not allow, and which is the one
+    // thing given up here. Nothing writes it; the three lines below are the
+    // only bindings on it, and they are live -- measured, a change to
+    // Theme.fontSize or to the role moves all three the way the single Qt.font()
+    // binding used to.
+    property font ownFont
+    ownFont.family: Theme.fontFamily
+    ownFont.pointSize: root.badge ? Theme.fontSize - 3
+        : root.key ? Theme.fontSize - 1.5
+        : Theme.fontSize - 2
+    ownFont.weight: root.badge ? Font.Bold
+        : root.key ? Theme.fontWeight
+        : root.filled ? Font.Bold : Theme.fontWeight
 
     // ---------------- What the facade reads back ----------------
     //

@@ -80,22 +80,59 @@ nothing on the desktop offers it: it is copied into a sandbox by
 had. This file requires it to be complete on the same terms as genesis, which
 is the only thing that keeps it in step.
 
+WHERE A THEME IS LOOKED FOR: NOWHERE IN PARTICULAR, WHICH IS THE POINT, and
+this file was the last check here that did it the other way. It listed
+`themes/` and then APPENDED the fixture by name, so the set of themes it could
+ever check was the set two lines of this file had been told about. A theme is
+`themes/genesis` or it is `tests/fixtures/theme-probe`, and a third one --
+another fixture, a theme kept beside its own tests, a theme not yet moved in --
+was checked by `tests/qml-lint.sh` and by `tests/qml-rules.sh`, both of which
+find themes for themselves, and silently skipped by the one check whose entire
+job is "every theme implements every file". A check that finds nothing says the
+same words as a check that found everything and was happy.
+
+WHAT MAKES A DIRECTORY A THEME IS THE MANIFEST IN IT, NOT ITS PARENT, and that
+definition is not invented here. `modules/Themes.qml` says "A DIRECTORY WITH NO
+MANIFEST IS NOT A THEME AND IS NOT IN HERE"; `themes/genesis/README.md` says
+"manifest.json is what makes a directory a theme"; the manifest branch further
+down this file has said it in those words all along. Being under `themes/` is a
+different and narrower property -- it means a theme the runtime picker may
+OFFER -- and `tests/fixtures/theme-probe/README.md` is explicit that it stays
+out of there on purpose.
+
+THROUGH `git ls-files` AND NOT `rglob`, for a reason that bites on this
+machine. The dotfiles checkout carries `.claude/worktrees/` full of whole
+copies of itself: a walk for `manifest.json` from the repository root finds SIX
+in Johan's checkout and the same two themes over and over, where `git ls-files`
+finds the two that exist. `tests/qml-rules.sh` picks its themes this way and
+`tests/shell-lint.sh` its files; the cost is the same one every check here
+pays, that a theme nobody has `git add`ed yet is not in the repository as far
+as this suite is concerned.
+
+THE FIXTURE IS STILL NAMED, and its name is now an ASSERTION rather than the
+source of it. Discovery finds it because it has a manifest, like any other
+theme; the constant below is what makes its ABSENCE a failure instead of a
+shorter loop -- delete it and the check would otherwise go back to being a
+statement about genesis, in the same words it uses when it means it.
+
 Run it from anywhere:  tests/theme-interface.py
 """
 
 import json
 import re
+import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 REPO = Path(__file__).resolve().parent.parent
 SHELL_DIR = REPO / "quickshell" / ".config" / "quickshell"
 THEMES_DIR = SHELL_DIR / "themes"
 
-# THE FIXTURE, AND WHY IT IS NAMED HERE RATHER THAN FOUND. It is the one theme
-# that is not in themes/, so there is nothing to glob it out of -- and being
-# named is what makes its ABSENCE a failure. A fixture that had to be
-# discovered would take this check back to one theme by being deleted.
+# THE FIXTURE, WHICH IS FOUND LIKE ANY OTHER THEME AND NAMED ANYWAY. Discovery
+# does not need this constant -- theme-probe has a manifest, so it is a theme,
+# so it is swept -- and the assertions below do: that it is still there, and
+# that it has not drifted into themes/ where a picker would offer it. See the
+# header.
 PROBE = REPO / "tests" / "fixtures" / "theme-probe"
 
 # The one file the greps below cannot find, because nothing loads it through
@@ -175,7 +212,27 @@ interface_version = int(match.group(1))
 print(f"theme-interface: this host speaks interface {interface_version}")
 
 # --- Every theme there is ---------------------------------------------------
-themes = sorted(p for p in THEMES_DIR.iterdir() if p.is_dir()) if THEMES_DIR.is_dir() else []
+# Wherever it lives. A directory with a manifest.json in it, discovered through
+# git; see the header for both halves of that and for what each one costs.
+try:
+    tracked = subprocess.run(
+        ["git", "-C", str(REPO), "ls-files", "-z", "--", f"*{MANIFEST}"],
+        check=True, capture_output=True, text=True).stdout
+except (OSError, subprocess.CalledProcessError) as exc:
+    print(f"theme-interface: `git ls-files` failed ({exc}). This check finds "
+          "themes through git and has nothing to fall back on -- a filesystem "
+          "walk would report the worktrees under .claude/ as themes.",
+          file=sys.stderr)
+    sys.exit(2)
+
+# The glob above is git's and matches any path ENDING in manifest.json, so
+# `bar-manifest.json` would come back too. The name is checked here, the way
+# tests/qml-rules.sh checks it beside the same call.
+themes = sorted({
+    REPO / PurePosixPath(path).parent
+    for path in tracked.split("\0")
+    if path and PurePosixPath(path).name == MANIFEST
+})
 
 # THE FIXTURE IS OUTSIDE themes/ AND MUST STAY THERE. It is not a theme
 # anybody may choose; it is a second implementation kept for the checks. A
@@ -186,13 +243,31 @@ if PROBE.parent.resolve() == THEMES_DIR.resolve() or THEMES_DIR in PROBE.parents
          "has moved inside themes/, where a theme picker would offer it. It is "
          "a test fixture and belongs under tests/fixtures/.")
 
-if not PROBE.is_dir():
+# NAMED SO THAT ITS ABSENCE IS A FAILURE AND NOT A SHORTER LOOP. Discovery
+# above would find it and would say nothing at all about it being gone.
+if PROBE not in themes:
     fail("tests/fixtures/theme-probe",
-         "is missing. It is the second implementation of the interface and the "
-         "only thing that makes this check -- and the per-theme startups in "
-         "tests/shell-load.sh -- more than a statement about genesis.")
-else:
-    themes.append(PROBE)
+         "is not among the themes found. It is missing, or it has lost its "
+         f"{MANIFEST}, or its {MANIFEST} was never committed -- and it is the "
+         "second implementation of the interface, the only thing that makes "
+         "this check, and the per-theme startups in tests/shell-load.sh, more "
+         "than a statement about genesis.")
+
+# A DIRECTORY UNDER themes/ THAT IS NOT A THEME IS STILL A FAULT, and the
+# discovery above cannot say so on its own: no manifest, not found, no
+# complaint. It was caught before only as an accident of listing themes/ with
+# iterdir(), and the accident was worth keeping. themes/ is where the runtime
+# picker looks, so a theme dropped in there with its manifest forgotten -- or
+# written and never committed -- is one modules/Themes.qml refuses and draws
+# the fallback over, and it would otherwise pass here by not existing.
+offerable = sorted(p for p in THEMES_DIR.iterdir() if p.is_dir()) \
+    if THEMES_DIR.is_dir() else []
+for offered in offerable:
+    if offered not in themes:
+        fail(offered.relative_to(REPO).as_posix(),
+             "is in themes/, where the picker looks, and has no committed "
+             f"{MANIFEST} -- which is what makes a directory a theme. "
+             "modules/Themes.qml would refuse it and fall back.")
 
 # THE FLOOR ON THE COLLECTION, for the same reason the two above are floors on
 # the greps. One theme is the state this whole file was written to get out of,
@@ -216,6 +291,11 @@ for theme in themes:
         # Said separately from the list above because the consequence is
         # different in kind: no manifest is not a blank widget, it is the whole
         # theme refused and the shipped one drawn in its place.
+        #
+        # NOT DEAD NOW THAT A MANIFEST IS WHAT FINDS A THEME. git still reports
+        # a tracked file that has been deleted from the working tree, so this
+        # is the branch for a manifest removed without `git rm` -- a theme that
+        # is in the repository and is broken on disk.
         fail(where, f"has no {MANIFEST}, which is what makes a directory a theme. "
                     "modules/Themes.qml would refuse it and fall back.")
         continue
