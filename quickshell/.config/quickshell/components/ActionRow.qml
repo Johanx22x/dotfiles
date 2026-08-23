@@ -1,20 +1,40 @@
 // A row that explains something and offers to do it: the reading of an
-// InfoRow with a button on the end.
+// InfoRow with a button on the end. THIS IS THE HALF THE PAGES SEE; the pixels
+// are in themes/<theme>/components/ActionRow.qml.
 //
 // WHY NOT JUST MAKE InfoRow CLICKABLE. Because then every reading in the
 // window becomes a thing you have to test with the pointer to find out
 // whether it does anything. InfoRow's whole contract is that it does not
 // respond -- no hover, no cursor -- and the moment one of them does, that
 // promise is gone for all of them. The button here is the target, and it
-// looks like one.
+// looks like one. That is why this is a separate type rather than a property
+// on that one, and it is the reason a theme must not blur the two: see rule 7
+// in themes/genesis/components/README.md.
+//
+// `actionEnabled` IS NOT `enabled`, AND THE TWO ARE READ SEPARATELY. `enabled`
+// is Qt's, it comes down the item tree, and it means the whole row is out of
+// play. `actionEnabled` means the ROW IS LIVE AND THE BUTTON IS BUSY -- five of
+// the eight call sites turn it off for the duration of the thing they started,
+// so that a second click cannot start a second copy of it, while the label and
+// the description beside it stay perfectly readable. A theme that folded one
+// into the other would grey out a sentence somebody is in the middle of
+// reading, or would leave a button live while its action runs.
 //
 // The action is a WORD and not a glyph. A pencil, a folder and an ellipsis
 // all mean "choose a file" to somebody, and none of them means it to
 // everybody; at the two or three of these a page carries, the width is
-// affordable.
+// affordable. `actionGlyph` is optional and goes BEFORE the word, never
+// instead of it.
+//
+// The root was already an Item, so the question ToggleRow's header answers --
+// whether a Rectangle root was API or drawing -- did not arise here. The check
+// was run anyway over all 8 call sites: they set `glyph`, `label`,
+// `description`, `actionText`, `actionGlyph`, `actionEnabled` and `visible`,
+// and nothing else.
 
 import QtQuick
 import qs
+import qs.modules
 
 Item {
     id: root
@@ -31,135 +51,45 @@ Item {
 
     signal triggered
 
+    // See the note in ToggleRow: the parent supplies the width, and binding
+    // implicitWidth to it instead would be a loop.
     width: parent ? parent.width : implicitWidth
     implicitWidth: 320
-    implicitHeight: Math.max(Theme.groupHeight, column.implicitHeight + 14)
 
-    Text {
-        id: mark
+    // THE THEME DRIVES THE HEIGHT, AND HERE IT ACTUALLY MOVES. Like InfoRow,
+    // this row wraps a description rather than eliding it -- an explanation cut
+    // off at the width of a sidebar is an explanation nobody finishes reading
+    // -- and how many lines that takes is a text metric only the theme has. A
+    // theme that reported a constant here would clip the long ones; the
+    // UpdatesPage descriptions are already two lines at this width.
+    //
+    // The floor is what the row was before the split with the term that moved
+    // taken out. See ToggleRow for the two ways a theme reports nothing and for
+    // why this reads the Loader's implicit size rather than the loaded item's.
+    implicitHeight: Math.max(Theme.groupHeight, drawing.implicitHeight)
 
-        anchors.left: parent.left
-        anchors.leftMargin: Theme.groupPadding
-        anchors.top: column.top
-        anchors.topMargin: 1
+    // Identical to ToggleRow's loader, and deliberately not factored out: see
+    // themes/genesis/components/README.md on why the sixteen lines are copied
+    // into each facade rather than shared through a base type.
+    Loader {
+        id: drawing
 
-        visible: root.glyph !== ""
-        text: root.glyph
-        font.family: Theme.fontFamily
-        font.pointSize: Theme.iconSize
-        color: Theme.textOnSurfaceVariant
+        anchors.fill: parent
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
-    }
+        readonly property string drawingUrl: Themes.surface("components/ActionRow.qml")
 
-    Column {
-        id: column
+        function build(): void {
+            if (String(drawing.source) === drawing.drawingUrl)
+                return;
 
-        anchors.left: mark.right
-        anchors.leftMargin: Theme.itemSpacing
-        anchors.right: action.left
-        anchors.rightMargin: Theme.itemSpacing
-        anchors.verticalCenter: parent.verticalCenter
-
-        spacing: 3
-
-        Text {
-            width: parent.width
-            visible: root.label !== ""
-            text: root.label
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize
-            font.weight: Theme.fontWeight
-            color: Theme.textOnSurface
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
+            drawing.setSource(drawing.drawingUrl, {
+                row: root
+            });
         }
 
-        Text {
-            width: parent.width
-            visible: root.description !== ""
-            text: root.description
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 2
-            color: Theme.textOnSurfaceVariant
+        Component.onCompleted: drawing.build()
+        onDrawingUrlChanged: drawing.build()
 
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
-        }
-    }
-
-    Rectangle {
-        id: action
-
-        anchors.right: parent.right
-        anchors.rightMargin: Theme.groupPadding
-        anchors.verticalCenter: parent.verticalCenter
-
-        implicitWidth: actionRow.implicitWidth + Theme.groupPadding * 2
-        implicitHeight: Theme.groupHeight - 8
-        radius: height / 2
-
-        color: !root.actionEnabled ? "transparent"
-            : actionMouse.containsMouse ? Theme.surfaceContainerHigh
-            : "transparent"
-
-        border.width: 1
-        border.color: Theme.outlineVariant
-
-        opacity: root.actionEnabled ? 1 : 0.4
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.animDuration }
-        }
-
-        Row {
-            id: actionRow
-
-            anchors.centerIn: parent
-            spacing: Theme.itemSpacing - 3
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                visible: root.actionGlyph !== ""
-                text: root.actionGlyph
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.iconSize - 1
-                color: Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.actionText
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 1
-                font.weight: Theme.fontWeight
-                color: Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-        }
-
-        MouseArea {
-            id: actionMouse
-
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            enabled: root.actionEnabled
-            onClicked: root.triggered()
-        }
+        // See ToggleRow for why there is no status handler here either.
     }
 }
