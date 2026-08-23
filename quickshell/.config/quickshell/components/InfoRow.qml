@@ -1,5 +1,6 @@
 // A row that says something instead of doing something: a fact, a limit, or
-// a place to go and do the thing this window will not.
+// a place to go and do the thing this window will not. THIS IS THE HALF THE
+// PAGES SEE; the pixels are in themes/<theme>/components/InfoRow.qml.
 //
 // IT LOOKS LIKE A ROW AND IT IS NOT ONE, which is the whole difficulty. The
 // cheapest way to tell a reading from a control is that a control lights up
@@ -7,12 +8,28 @@
 // to click. Anything that reads like a switch and answers to nothing is worse
 // than plain text.
 //
+// AND THAT IS NOW A RULE THIS FILE CANNOT ENFORCE. The contract of this
+// component is the ABSENCE of behaviour, and absence is the one thing a facade
+// has no way to require: it declares no signal, so a theme that adds a
+// MouseArea has broken nothing that would fail to compile, fail to load, or
+// fail a test. It is written down instead -- rule 7 of
+// themes/genesis/components/README.md, and again at the top of this theme's own
+// implementation -- because a rule kept only by whoever remembers it is a rule
+// with one reader.
+//
 // The second line is optional and muted. When it is there the row grows to
 // fit it rather than eliding: an explanation cut off at the width of a
-// sidebar is an explanation nobody finishes reading.
+// sidebar is an explanation nobody finishes reading. Growing is the theme's
+// job now, and it reaches the layout through implicitHeight below.
+//
+// The root was already an Item, so the question ToggleRow's header answers --
+// whether a Rectangle root was API or drawing -- did not arise here. The check
+// was run anyway over all 13 call sites: they set `glyph`, `label`,
+// `description` and `visible`, and nothing else.
 
 import QtQuick
 import qs
+import qs.modules
 
 Item {
     id: root
@@ -21,67 +38,42 @@ Item {
     property string label: ""
     property string description: ""
 
+    // See the note in ToggleRow: the parent supplies the width, and binding
+    // implicitWidth to it instead would be a loop.
     width: parent ? parent.width : implicitWidth
     implicitWidth: 320
-    implicitHeight: Math.max(Theme.groupHeight, column.implicitHeight + 14)
 
-    Text {
-        id: mark
+    // THE THEME DRIVES THE HEIGHT, AND HERE IT ACTUALLY MOVES. This row is the
+    // reason the facade reads a height back at all: `description` wraps, so
+    // how tall the row is depends on a text metric only the theme has. The
+    // floor is what the row was before the split, and it is the same floor
+    // ToggleRow uses -- see that file for the two ways a theme reports nothing
+    // and for why this reads the Loader's implicit size rather than the loaded
+    // item's.
+    implicitHeight: Math.max(Theme.groupHeight, drawing.implicitHeight)
 
-        anchors.left: parent.left
-        anchors.leftMargin: Theme.groupPadding
-        anchors.top: column.top
-        anchors.topMargin: 1
+    // Identical to ToggleRow's loader, and deliberately not factored out: see
+    // themes/genesis/components/README.md on why the sixteen lines are copied
+    // into each facade rather than shared through a base type.
+    Loader {
+        id: drawing
 
-        visible: root.glyph !== ""
-        text: root.glyph
-        font.family: Theme.fontFamily
-        font.pointSize: Theme.iconSize
-        color: Theme.textOnSurfaceVariant
+        anchors.fill: parent
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
-        }
-    }
+        readonly property string drawingUrl: Themes.surface("components/InfoRow.qml")
 
-    Column {
-        id: column
+        function build(): void {
+            if (String(drawing.source) === drawing.drawingUrl)
+                return;
 
-        anchors.left: mark.right
-        anchors.leftMargin: Theme.itemSpacing
-        anchors.right: parent.right
-        anchors.rightMargin: Theme.groupPadding
-        anchors.verticalCenter: parent.verticalCenter
-
-        spacing: 3
-
-        Text {
-            width: parent.width
-            visible: root.label !== ""
-            text: root.label
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize
-            font.weight: Theme.fontWeight
-            color: Theme.textOnSurface
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
+            drawing.setSource(drawing.drawingUrl, {
+                row: root
+            });
         }
 
-        Text {
-            width: parent.width
-            visible: root.description !== ""
-            text: root.description
-            wrapMode: Text.WordWrap
-            font.family: Theme.fontFamily
-            font.pointSize: Theme.fontSize - 2
-            color: Theme.textOnSurfaceVariant
+        Component.onCompleted: drawing.build()
+        onDrawingUrlChanged: drawing.build()
 
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
-        }
+        // See ToggleRow for why there is no status handler here either.
     }
 }
