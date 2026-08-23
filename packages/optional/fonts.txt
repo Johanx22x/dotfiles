@@ -1,0 +1,32 @@
+# The fonts a THEME asks for and the desktop itself never does. Today that is
+# the two Microsoft faces the Windows 11 theme is drawn with.
+#
+# NOTHING IN THIS REPOSITORY MAY DEPEND ON THIS GROUP, and that is the whole
+# reason it is on this side of the line rather than beside the Noto and Nerd
+# Font entries in required/shell.txt. genesis is the shipped theme, it is drawn
+# in JetBrains Mono Nerd Font, and it must keep working on a machine that never
+# ticks this box -- so no host file, no bin/ script and no genesis QML may name
+# these families. Promoting either of them to required/ would make a proprietary
+# download a condition of having a desktop at all, which is exactly the trade
+# this repository does not make.
+#
+# THE THEME DEGRADES, IT DOES NOT BREAK. Qt substitutes a missing family rather
+# than failing: without ttf-segoe-ui-variable the Windows theme renders in
+# whatever sans-serif fontconfig hands over, and without ttf-segoe-fluent-icons
+# the codepoints its themes/windows/icons.json names have no glyph and draw as
+# the replacement box. Both are ugly and neither stops the shell, which is why
+# this is a group somebody ticks and not a dependency somebody satisfies.
+#
+# THEY ARE PROPRIETARY MICROSOFT FONTS AND THEY ARE NOT REDISTRIBUTED HERE.
+# Neither PKGBUILD ships a font file: each one downloads the face from
+# Microsoft at build time, from the Windows design downloads page. The licence
+# they arrive under is Microsoft's own, and what it grants is use in developing
+# software for Microsoft platforms -- it is not a free font licence, this
+# repository has no right to hand the files on, and a machine that ticks this
+# group is accepting Microsoft's terms and not this repository's.
+#
+# The installer ticks a group as one box, and can be opened to pick packages
+# out of it one at a time.
+
+ttf-segoe-fluent-icons
+ttf-segoe-ui-variable
