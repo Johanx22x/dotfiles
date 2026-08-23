@@ -22,8 +22,10 @@ then use it.
 ## The files
 
 ```
-schemes/README.md          this file: the vocabulary and the substitution worksheets
-schemes/tokyo-night.json   the default scheme, and the one the desktop shipped as literals
+schemes/README.md              this file: the vocabulary and the substitution worksheets
+schemes/tokyo-night.json       the default scheme, and the one the desktop shipped as literals
+schemes/catppuccin-mocha.json  Catppuccin Mocha
+schemes/gruvbox-dark.json      Gruvbox Dark Medium
 ```
 
 `schemes/` is not a stow package — it holds no dotfile, so `install.sh` and
@@ -151,6 +153,20 @@ to hold.
 `color7`'s `subtext1 #bac2de`. Verified against the official `catppuccin/kitty`
 mocha theme: that is their published mapping, and it ships as written.
 
+Re-verified when `catppuccin-mocha.json` was written, and the answer holds —
+`themes/mocha.conf` has `color7 #bac2de` / `color15 #a6adc8`, and its Whiskers
+source `templates/kitty.tera` emits `subtext1` then `subtext0` deliberately
+rather than by accident. `catppuccin/alacritty` inverts the pair the same way,
+so it is the terminal-port convention and not a kitty quirk. **Upstream is not
+self-consistent about it, though**, and a future scheme author will find the
+contradiction: `catppuccin/palette`'s `palette.json` (`mocha.ansiColors`) and
+the style guide's terminal table both assign `color7` → subtext0 and `color15`
+→ subtext1, i.e. the other way round. The published *terminal themes* are the
+authority here, because they are what a terminal actually ships. Same source
+disagrees on the six bright chromatics — the style guide generates distinct
+brighter variants where kitty and alacritty repeat the normal hex — and this
+scheme follows kitty there too.
+
 **No shadow-tint role.** The `rgba(0,0,0,·)` shades and scrims in both GTK
 templates stay alpha-on-black. A warm scheme wanting brown shadows would need
 `ui_shadow_tint`, and there is no evidence anyone does.
@@ -230,7 +246,7 @@ wallpaper. The prefixes make that collision impossible by construction.
 | role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | meaning | consumed at |
 |---|---|---|---|---|---|
 | `ui_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | Window / chrome background: the flat surface every app frame sits on. | gtk3 x9, gtk4 x8, zathura:25, userChrome x3, qt6ct idx10/17 |
-| `ui_bg_dim` | `#16161e` | `#181825` | `#1d2021` | A quiet chrome strip that must recede behind ui_bg (kitty tab bar). | kitty-colors:22, kitty.conf:122,123 |
+| `ui_bg_dim` | `#16161e` | `#181825` | `#1d2021` | A quiet chrome strip that must recede behind ui_bg. | **nothing today** — the kitty tab bar reads `term_tab_bg` |
 | `ui_bg_bar` | `#15161e` | `#181825` | `#3c3836` | Secondary bar / strip inside a window: statusbar, inputbar, notification, group header. | zathura:27,29,33,49 |
 | `ui_bg_field` | `#15161e` | `#181825` | `#1d2021` | Background of an editable field or a scrolling list (Qt Base). | qt6ct idx9 x3 |
 | `ui_bg_view` | `#101119` | `#11111b` | `#1d2021` | The content pane, set one clear step away from ui_bg so content lifts off chrome. NOT necessarily darker -- see the ladder notes. | gtk3:71,133,150,161; gtk4:103 |
@@ -243,15 +259,30 @@ wallpaper. The prefixes make that collision impossible by construction.
 | `ui_bevel_mid` | `#1f2335` | `#1e1e2e` | `#282828` | Qt 3D bevel, mid shade (QPalette::Mid). | qt6ct idx5 x3 |
 | `ui_bevel_midlight` | `#363b54` | `#45475a` | `#504945` | Qt 3D bevel, light-mid shade (QPalette::Midlight). | qt6ct idx3 x3 |
 | `ui_border` | `#414868` | `#585b70` | `#665c54` | Visible 1px divider or frame between surfaces; Qt bevel lit edge (QPalette::Light). | gtk3:76,118,154; gtk4:124,177; qt6ct idx2 x3, idx14/15 disabled |
-| `ui_border_dim` | `#3b4261` | `#45475a` | `#504945` | A weaker divider: an unfocused window split. | kitty-colors:18, kitty.conf:116 |
+| `ui_border_dim` | `#3b4261` | `#45475a` | `#504945` | A weaker divider: an unfocused window split. | **nothing today** — the unfocused split reads `term_border_inactive` |
 | `ui_text` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | Primary text and icons on any ui_bg* surface. | gtk3 x12, gtk4 x9, zathura x6, qt6ct idx0/6/8/19, fastfetch:46 |
 | `ui_text_variant` | `#a9b1d6` | `#bac2de` | `#d5c4a1` | Secondary / less important text that still has to be read. | cship:43 |
-| `ui_text_dim` | `#545c7e` | `#7f849c` | `#a89984` | Text of an inactive-but-clickable element (inactive tab label). | kitty-colors:23, kitty.conf:121 |
+| `ui_text_dim` | `#545c7e` | `#7f849c` | `#a89984` | Text of an inactive-but-clickable element. | **nothing today** — the inactive tab label reads `term_tab_inactive_fg` |
 | `ui_text_muted` | `#565f89` | `#6c7086` | `#928374` | Disabled text, placeholder text, group headings -- present but not readable as content. | gtk3:160,162; zathura:34; qt6ct disabled idx0/6/7/8/13/19/20 |
 | `ui_on_accent` | `#1a1b26` | `#1e1e2e` | `#282828` | Text/glyphs drawn ON TOP of a full-strength accent or semantic fill. Never a surface. | gtk3:187,191,195,199; gtk4:202,206,210,214; kitty-colors:12,21; kitty.conf:107,119; zathura:36 |
 | `ui_doc_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | The page of a recoloured document (what zathura turns white paper into). | zathura:17 |
 | `ui_doc_fg` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | The ink of a recoloured document. | zathura:18 |
 | `ui_selection_disabled` | `#292e42` | `#313244` | `#504945` | Selection fill inside a DISABLED widget: present but must not shout. | qt6ct:58 idx12 |
+
+**Three of these rows have no reader, and that is not an oversight.**
+`ui_bg_dim`, `ui_border_dim` and `ui_text_dim` name the *general* "dimmed
+chrome" idea; the only place the desktop currently expresses it is kitty, and
+kitty got its own `term_` twins — `term_tab_bg`, `term_border_inactive`,
+`term_tab_inactive_fg` — precisely so a scheme can dim a terminal tab bar
+without dimming every strip on the desktop. The templates were written from
+§5.3 and read the `term_` names, so `kitty-colors.conf:18,22,23` and
+`kitty.conf:116,121,122,123` belong to those three and appear against them in
+§1.2, not here. Verify with `grep -rn ui_bg_dim matugen/` — no hit.
+
+The three `ui_*_dim` roles stay in the vocabulary anyway: every scheme already
+fills them, dropping them would be a breaking change to all three files, and
+the first non-terminal dimmed strip this desktop grows is the reader they were
+named for.
 
 ### 1.2 terminal — the sixteen ANSI slots plus fg/bg/cursor/selection
 
