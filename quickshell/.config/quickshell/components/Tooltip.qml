@@ -1,4 +1,10 @@
 // A hover note, for the row that needs a sentence the label has no room for.
+// THIS IS THE HALF THE CALL SITES SEE; the box, the border and the wrapped
+// text are in themes/<theme>/components/Tooltip.qml.
+//
+// ALMOST NOTHING HERE IS DRAWING, which is why the split leaves so little on
+// the other side. What this component is FOR is the decision about where the
+// note goes, and every line of that decision is below.
 //
 // IT IS A CHILD OF WHAT IT EXPLAINS, not a window-level overlay, so it is
 // clipped by the first ancestor with clip: true -- which in the settings
@@ -27,23 +33,38 @@
 // Opaque, unlike almost everything else this shell draws. A translucent note
 // over a translucent window over a wallpaper is three layers of image behind
 // two lines of small text, and the point of the thing is that it can be read
-// at a glance.
+// at a glance. That is a promise about shape and it now lives in the theme
+// file, which is the only place that can keep it.
 
 import QtQml
 import QtQuick
 import qs
+import qs.modules
 
-Rectangle {
+Item {
     id: root
 
-    property alias text: label.text
+    // A PLAIN STRING AND NO LONGER AN ALIAS. It used to be
+    // `property alias text: label.text`, and the Text it pointed at is in the
+    // theme's file now, where an alias cannot reach: an alias is resolved when
+    // this document is parsed and `drawing.item.label` does not exist then.
+    //
+    // Turning an alias into a plain property is only safe when nothing reads
+    // it back -- otherwise this becomes a second copy of a value the theme
+    // also holds -- and that was checked rather than assumed: all three call
+    // sites (StepperRow, ChoiceRow, KeybindsPage) ASSIGN it and none of them
+    // reads it. So the value lives here, the theme binds its Text to it, and
+    // it travels in one direction only.
+    property string text: ""
+
     // Set by whatever is being hovered. Not `visible` directly: the fade
     // needs something to animate, and an item that is not visible does not
     // animate at all.
     property bool shown: false
 
     // Wide enough for a sentence over two or three lines. Wider and the eye
-    // has to travel back across the row it is explaining.
+    // has to travel back across the row it is explaining. The theme reads it;
+    // it is the one measurement a caller can impose on the drawing.
     property int maxWidth: 320
 
     // ---------------- Where it goes ----------------
@@ -83,6 +104,13 @@ Rectangle {
     // each of them; reparenting or turning clip on somewhere up the chain
     // re-runs this. That matters at startup more than later, because the
     // chain is not complete at the moment this object is constructed.
+    //
+    // AND THE CHAIN IS TWO ITEMS LONGER SINCE THE SPLIT, on the two call
+    // sites that are themselves theme files: a themed row loads its drawing
+    // through a Loader, so this note now sits inside the theme's item inside
+    // that Loader. Both of them are at y = 0 and neither clips, so every sum
+    // below is unchanged; nothing here had to learn about it, which is the
+    // whole reason the walk is a walk.
     readonly property Item viewport: root.clipperOf(root)
 
     function clipperOf(item: Item): Item {
@@ -183,15 +211,29 @@ Rectangle {
             : -root.viewportY;                                      // flush top
     }
 
-    implicitWidth: Math.min(label.implicitWidth + Theme.groupPadding * 2, maxWidth)
-    implicitHeight: label.implicitHeight + Theme.groupPadding
-
-    radius: 10
-    color: Theme.surfaceContainerHighest
-    border.width: 1
-    border.color: Theme.outlineVariant
+    // BOTH DIRECTIONS, WHICH RULE 2 OF THE THEME README FORBIDS FOR A ROW AND
+    // CANNOT FORBID HERE. That rule is about a row inside a Column: width goes
+    // down from the column, height comes up from the row, and a row that
+    // reported a width would be a loop. A note has no column. It is placed by
+    // `x` and `y` in its parent's coordinates and is as wide as one sentence
+    // wrapped at maxWidth, so its width has nowhere to come from except the
+    // text, and the text is drawn on the other side of the seam.
+    //
+    // AND IT IS implicitHeight AND NOT height, which matters more than it
+    // looks: `aboveY` and `fitsBelow` both read `root.height`, and an Item's
+    // height follows its implicitHeight of its own accord. Bound the other way
+    // round -- height from the Loader -- the implicit height would be 0, the
+    // first evaluation of the flip arithmetic would run against a note of no
+    // height, and it would decide there was room below for something with no
+    // size. Read off the Loader and not off `Loader.item`, for the reason in
+    // ToggleRow's header.
+    implicitWidth: drawing.implicitWidth
+    implicitHeight: drawing.implicitHeight
 
     // Above the rows it overlaps, including the one below it in the card.
+    // Stacking is behaviour, not drawing: this and the Instantiator below are
+    // the two halves of one fix, and one call site (ChoiceRow) raises it to
+    // 200 to clear the segment track it opens over.
     z: 100
 
     // AND `z: 100` IS NOT ENOUGH FOR A FLIPPED ONE, which is the half of this
@@ -235,6 +277,11 @@ Rectangle {
         }
     }
 
+    // THE FADE IS ON THIS SIDE and it is not an oversight about motion. The
+    // Instantiator above is armed off `visible`, and `visible` is false only
+    // because `opacity` reached zero -- so the two are one mechanism, and a
+    // theme that animated the fade in its own file could leave every ancestor
+    // in this chain lifted to z: 1000 after the note had gone.
     visible: opacity > 0
     opacity: root.shown ? 1 : 0
 
@@ -242,23 +289,26 @@ Rectangle {
         NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
     }
 
-    Behavior on color {
-        ColorAnimation { duration: Theme.recolorDuration }
-    }
+    // Identical to ToggleRow's loader, and deliberately not factored out: see
+    // themes/genesis/components/README.md on why the sixteen lines are copied
+    // into each facade rather than shared through a base type.
+    Loader {
+        id: drawing
 
-    Text {
-        id: label
+        anchors.fill: parent
 
-        anchors.centerIn: parent
-        width: Math.min(implicitWidth, root.maxWidth - Theme.groupPadding * 2)
+        readonly property string drawingUrl: Themes.surface("components/Tooltip.qml")
 
-        wrapMode: Text.WordWrap
-        font.family: Theme.fontFamily
-        font.pointSize: Theme.fontSize - 1
-        color: Theme.textOnSurface
+        function build(): void {
+            if (String(drawing.source) === drawing.drawingUrl)
+                return;
 
-        Behavior on color {
-            ColorAnimation { duration: Theme.recolorDuration }
+            drawing.setSource(drawing.drawingUrl, {
+                row: root
+            });
         }
+
+        Component.onCompleted: drawing.build()
+        onDrawingUrlChanged: drawing.build()
     }
 }
