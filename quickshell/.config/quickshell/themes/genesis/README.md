@@ -30,9 +30,14 @@ it:
 modules/notifications/NotificationState.qml   the host's half: the daemon's
                                               store, the mute, the IpcHandler
 themes/genesis/notifications/                 this theme's half: the daemon
-                                              window, the card, the history
-                                              panel, the DND pill
+                                              window, the history panel, the
+                                              DND pill
 ```
+
+The card is not in that list any more: it is a shared component now, drawn at
+`components/NotificationCard.qml` in here and specified by the facade of the
+same name under the host's `components/`. The notification window still builds
+it -- what moved is where it is drawn, not who stacks it.
 
 The dependency only ever runs one way. A theme file imports `qs.modules.<name>`
 to reach the state it draws; **no file under `modules/` imports anything under
@@ -41,7 +46,7 @@ even `shell.qml`, which loads its surfaces out of whatever directory
 `Config.theme` points at. That asymmetry is the seam -- if it ever stops being
 true, the split has stopped meaning anything.
 
-`shell.qml` does *name* this directory, in eight import lines, and that is not
+`shell.qml` does *name* this directory, in nine import lines, and that is not
 the same thing. The imports exist so Quickshell watches these files and an edit
 in here reloads the shell; they build nothing. The header there says which half
 is which.
@@ -55,9 +60,14 @@ spell your own name in here and the copy draws the original's island instead.
 
 ## WHAT IS DELIBERATELY NOT IN HERE
 
-**`components/`.** Buttons, rows, scrollbars, the popout, the focus grab. They
-are shared and they stay shared; giving a theme its own copy is a decision for
-its own change, not a side effect of this one.
+**`components/` USED TO BE THE FIRST ENTRY HERE**, on the argument that buttons,
+rows, scrollbars, the popout and the focus grab are shared and stay shared, and
+that giving a theme its own copy was a decision for its own change rather than a
+side effect of the move. That change came: twenty of them are drawn in here now,
+each one facing a host facade of the same name, and `components/README.md` in
+this directory is where the split is argued and where the ones that did NOT
+cross are named. The half that never moved is still the half that argument was
+about -- the objects with nothing to draw, the windows, the grabs.
 
 **`modules/settings/`, pages included.** A settings page is content: it is a
 list of what can be changed, and every row of it is wired to a property
@@ -114,7 +124,7 @@ with a surface of its own has no way to offer one. `modules/Surfaces.qml` will
 already take an extra member through `register()`; nothing hands it one.
 
 **A theme is only watched if `shell.qml` names it.** Quickshell watches the
-files it reached by following imports out of `shell.qml`, so the eight import
+files it reached by following imports out of `shell.qml`, so the nine import
 lines there are what make an edit in here reload the shell. A theme dropped
 into `themes/` by hand still runs -- it is loaded by URL and `Config.theme` is
 all it needs -- but nothing watches it, so editing it needs
@@ -132,15 +142,23 @@ in CI, and it is worth knowing where its floor is -- it asserts on
 `ReferenceError`, `TypeError`, `Unable to assign` and `is not a type`, none of
 which a bare syntax error in a theme file produces.
 
-**There is no facade in front of `components/`.** A theme draws with the
-shell's buttons, rows, scrollbars and popout, and cannot replace them.
+**Fourteen of the shared components still have no theme half.** This paragraph
+read "there is no facade in front of `components/`" and that is over: twenty of
+them are drawn in here, each facing a facade, listed and argued in
+`components/README.md` next door. What is left of the limit is the remainder --
+a theme draws those fourteen exactly as the shell wrote them and cannot replace
+them. Only `MenuView.qml` says in its own header why it did not cross; the
+other thirteen never raised the question, and that silence is not a decision in
+either direction.
 
 **One thing sits on the wrong side and is left there.**
 `notifications/Notifications.qml` owns `org.freedesktop.Notifications` -- the
-bus name, the daemon, the whole reason dunst is gone -- as well as drawing the
-cards. Being the daemon is a host job by every reading of the rule above.
-Splitting it means moving a `NotificationServer` and rewiring what claims a
-notification, which is logic and not a move, so it waits.
+bus name, the daemon, the whole reason dunst is gone -- as well as being the
+window the cards are stacked in. Being the daemon is a host job by every
+reading of the rule above. Splitting it means moving a `NotificationServer` and
+rewiring what claims a notification, which is logic and not a move, so it
+waits. The card itself is no longer part of that knot: it went across the seam
+as a shared component, and what this file builds is the facade.
 
 ## WHY "genesis"
 
@@ -149,5 +167,11 @@ would have been a promise this repository cannot keep -- the colours are not the
 theme's. `Theme.qml` reads them live out of `colors.json`, which matugen
 rewrites on every wallpaper change, so genesis is already a different colour
 today than it was yesterday and the same theme throughout. What a theme owns is
-shape, layout and motion; the palette belongs to the wallpaper and stays in the
-host.
+shape, layout and motion; the palette stays in the host.
+
+**And the palette is no longer the wallpaper's alone**, which is the other
+reason a colour name would have been a bad one. Only the accents follow the
+image now; the surfaces, the text, the outlines and the two alert colours come
+from the scheme `desktop-scheme` picks, through the same `colors.json`. So
+genesis under Gruvbox and genesis under Tokyo Night are further apart than two
+wallpapers ever made it, and both are still genesis.

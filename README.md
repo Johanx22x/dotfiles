@@ -388,13 +388,14 @@ gtk   media   openrgb     systemd     bin     ranger   icons   zen
 gaming        backup
 ```
 
-Six are not, and the difference matters:
+Seven are not, and the difference matters:
 
 | | |
 |---|---|
 | `seeds/` | **copied**, once, and never again — `seeds/README.md` opens by forbidding `stow seeds` in bold. These are the files applications rewrite, so a symlink into the repo would mean a dirty tree on every machine |
 | `system/` | the `/etc` layer, which pacman owns and would leave `.pacnew` files beside. Copies and recipes, **documentation and applied by hand** — the installer has no unit for them, and half of them describe this one machine. See `system/README.md` |
 | `packages/` | the package lists, grouped by what they are for |
+| `schemes/` | the colour schemes and the vocabulary that names their roles. Read out of the checkout by `desktop-scheme`, not linked anywhere — they are repository content, not machine state |
 | `lib/` | the installer's own code: the unit registry and one file per unit |
 | `tests/` | the checks CI runs — every one of them on every pull request, except `xwayland-satellite-watch.sh`, which is a weekly cron asking whether the patched package can be deleted yet |
 | `assets/` | the screenshots at the top of this file |
@@ -413,16 +414,16 @@ with it: pick your own. The default collection is `~/Pictures/wallpapers` — th
 installer creates it and then fails that step, by name, if nothing is in it —
 and the settings window can point it somewhere else.
 
-`wallpaper-switch` sets the wallpaper and runs matugen, which renders eleven
+`wallpaper-switch` sets the wallpaper and runs matugen, which renders fourteen
 untracked files for kitty, GTK 3/4, Hyprland, **niri**, Qt, zathura, ranger,
-fastfetch, Zen and the shell. Only the **accents** come from the image, so
-contrast never depends on which wallpaper is set.
+fastfetch, Zen, cship and the shell. Only the **accents** come from the image,
+so contrast never depends on which wallpaper is set.
 
 The other half — surfaces, text, outlines, the sixteen ANSI slots, the alert
 colours — is a **scheme**, and `desktop-scheme` is the dial for it. A scheme is
 a JSON file in `schemes/`; matugen is handed it alongside the wallpaper and
 merges the two into one render, which is why one command re-themes everything
-at once. `schemes/README.md` names all 74 colour roles and is the authority on
+at once. `schemes/README.md` names all 78 colour roles and is the authority on
 what each one means — read it before writing a scheme or touching a template.
 Tokyo Night is what ships and what a fresh clone gets.
 
