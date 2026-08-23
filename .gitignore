@@ -1,4 +1,18 @@
 # ---------------------------------------------------------------------------
+# Agent worktrees: whole checkouts of this repository, inside this repository.
+#
+# `.claude/worktrees/` is where a git worktree per agent gets created while
+# work is running, and each one is a complete second copy of the tree with its
+# own .git file. Untracked and unignored, they showed up on every `git status`
+# and one of them was picked up by a `git add -A` as an embedded repository --
+# which is the failure this rule exists to stop, not the noise.
+#
+# It also matters to the checks: `tests/qml-lint.sh` and `tests/theme-interface.py`
+# discover themes with `git ls-files` rather than `find` for exactly this reason.
+# A `find` from the root reported six theme manifests where there are two, the
+# other four being copies of the same two inside here.
+.claude/
+
 # Generated files: written by a program, never versioned
 #
 # Two sets, from three writers. matugen renders the first from the current
