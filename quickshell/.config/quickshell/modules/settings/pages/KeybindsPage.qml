@@ -930,7 +930,7 @@ SettingsPage {
                         Repeater {
                             model: group.modelData.binds
 
-                            // Not themes/genesis/cheatsheet/BindRow.qml, though it is
+                            // Not components/BindRow.qml, though it is
                             // the same shape: its label is always body text in
                             // textOnSurface, and half the rows here are
                             // undescribed and have to say so in a quieter

@@ -8,11 +8,46 @@ what was deliberately left out of the split:
 > **There is no facade in front of `components/`.** A theme draws with the
 > shell's buttons, rows, scrollbars and popout, and cannot replace them.
 
-That sentence is now half true. `ToggleRow` and `InfoRow` are split; the other
-twenty-odd are not. This file is how to split the rest, and why each part of
-the shape is the shape it is. Everything below was measured on this machine
-against Qt 6.11.2 and Quickshell 0.3.1, under a headless labwc, with the real
-settings window open. Where a number is quoted, it was read off a run.
+That sentence is now mostly false, and this file is what replaced it.
+
+**Nineteen components have a theme half**, which is every `.qml` in this
+directory:
+
+```
+ActionRow          BindRow            Chip               ChoiceRow
+CornerWedge        InfoRow            LevelMeter         ListRow
+MenuRow            NotificationCard   Popout             SearchField
+SettingsSection    StepperButton      StepperRow         StreamRow
+ToggleRow          Tooltip            VolumeSlider
+```
+
+**Fifteen under `components/` do not**, and only two of them say why in their
+own headers -- `MenuView.qml`, because a component that is a delegate end to
+end gets no checking from the seam and pays the full price of it, and
+`ScrollBar.qml`, because it is the one component with a bench of its own and
+the bench cannot follow it across the seam. The other thirteen never raise the
+question at all: two objects with nothing to draw, two windows, two grabs, and
+seven widgets nobody has looked at yet. Do not read that silence as a decision
+in either direction.
+
+Two of the nineteen are worth knowing about before you copy anything:
+
+- **`SettingsSection`'s facade is not under `components/`.** It is
+  `modules/settings/SettingsSection.qml`, and its implementation is here
+  anyway, because `shell.qml` imports this directory for the file watcher and
+  that is what makes a theme file reload -- see the last section of this file.
+  The seam does not care where a facade lives.
+- **`Popout`'s facade is a `PanelWindow` and not an `Item`.** Every other one
+  is an Item. The diagram below is drawn from `ToggleRow` and does not
+  represent that shape at all: a window's facade keeps a layer surface, a
+  keyboard focus mode, an input mask and a screen-edge clamp, and hands the
+  theme one rectangle to draw inside it. `components/ScreenCorner.qml` is the
+  same shape taken to its end -- a window whose one drawn thing is a component
+  that is itself split, so it has no theme file at all.
+
+Everything below was measured on this machine against Qt 6.11.2 and Quickshell
+0.3.1, under a headless labwc, with the real settings window open. Where a
+number is quoted, it was read off a run.
 
 ## THE SEAM, IN ONE SENTENCE
 
@@ -84,11 +119,79 @@ idempotent. At 28 rows in an open settings window that is 28 objects not built.
 
 **It is copied into each facade rather than shared through a base type.** A
 `ThemedComponent` base under `components/` would remove sixteen duplicated
-lines and would cost the thing the next section is about: a facade has to BE
+lines and would cost the thing rule 1 below is about: a facade has to BE
 the type its call sites name, with that type's properties on it, and a base
 class that owned the Loader would still leave every property declaration in the
 subclass. Sixteen lines against a second layer of indirection in the file
 somebody opens to find out what `ToggleRow` is.
+
+## THE SECOND MECHANISM: A SLOT, FOR AN OBJECT THE FACADE KEEPS
+
+The sixteen lines above carry VALUES across the seam. Two components have to
+carry an OBJECT, and they do it with a mechanism the ToggleRow shape does not
+cover.
+
+Both have a `default property alias` or something that behaves like one, and an
+alias cannot reach across a Loader: it is resolved when the file is parsed, and
+`drawing.item.rows` does not exist then.
+
+- `modules/settings/SettingsSection.qml` owns the `Column` its pages fill --
+  `default property alias content: rows.data`, which every settings page in the
+  shell writes into.
+- `components/SearchField.qml` owns its `TextInput`, because nine call sites
+  read `input.text` and call `input.clear()` on it directly.
+
+So the object stays on the facade, is published as a typed read-only property,
+and the theme puts it where it wants it:
+
+```qml
+// components/SearchField.qml -- the facade keeps it
+readonly property TextInput input: input
+
+// themes/genesis/components/SearchField.qml -- the theme places it
+Item {
+    id: inputArea
+    // ... anchors, margins, whatever shape this theme wants ...
+    data: [root.row.input]
+}
+```
+
+**The Loader call does not change.** It still passes `{ row: root }` and
+nothing else -- checked in both files. The extra channel is not a bigger
+`setSource` payload; it is a typed property read after `row` arrives, and one
+`data:` line. The theme writes to its own item and reads the facade, which is
+the ordinary direction and keeps rule 4 intact.
+
+**WHAT IT COSTS, and both facades say it out loud where the cost falls.**
+Whatever is inside the object is not the theme's:
+
+> The spacing between rows is set below and a theme cannot pick another one --
+> only where the column sits and what is drawn around it. It is the same trade
+> `SearchField` makes with the input's font, and it is what keeping the alias
+> costs. The margins around the column ARE the theme's: they are the slot's,
+> not this Column's.
+>
+> -- `modules/settings/SettingsSection.qml:35-40`
+
+> The text's own font and ink are set below, from `Theme`, and a theme cannot
+> give this input a different size or colour -- only somewhere else to sit and
+> something else around it.
+>
+> -- `components/SearchField.qml:58-65`
+
+So: `SettingsSection`'s row spacing is 2 for every theme there will ever be,
+and `SearchField`'s input is drawn at `Theme.fontSize` in `Theme.fontFamily`
+for every theme there will ever be. That is the whole price of the alias, it is
+paid per component rather than across the seam, and the day a theme genuinely
+needs its own type in that input is the day this becomes a third channel --
+not before.
+
+**AND THE SLOT IS THE ONE THING A FACADE CANNOT REQUIRE.** A theme that leaves
+the `data:` line out still loads and still draws: `SearchField` gets a pill
+with its text lying across the whole width underneath the glyph, and
+`SettingsSection` gets its rows at full width with no card behind them. There
+is no property that could have been made `required` to prevent it, because the
+slot is an item and not a value. It is rule 7 in a different costume.
 
 ## THE RULES A THEME IMPLEMENTATION LIVES BY
 
@@ -164,6 +267,41 @@ So there are two things to do and they are both cheap:
 - **Run it.** For whatever cannot be hoisted, the linter is not evidence. Open
   the thing and look at it, or measure it in a bench.
 
+#### AND A `Loader`'s INLINE COMPONENT IS THE SAME EDGE, WEARING A DISGUISE
+
+This one was found twice, independently, by `ListRow` and then by `Chip`, and
+neither of them has a Repeater in the part of the file it is about.
+
+Anything inside a `Loader { Component { ... } }` -- or a `sourceComponent` with
+its body written in place -- is a NESTED COMPONENT. `root` is out of scope
+there in exactly the way it is out of scope inside a delegate, and every read
+of it comes back `[unqualified]`. So a theme file that wraps three lines in a
+Loader to make them conditional has moved those three lines outside the
+checking that the typed `row` exists to provide.
+
+Both files reached the same answer and wrote it down: **use bindings, not a
+Loader**, where the thing being decided is a handful of properties.
+`themes/genesis/components/Chip.qml:184-202` is the clearest example -- the
+three lines that decide whether a pill is a control at all are
+
+```qml
+enabled: root.enabled && root.button
+hoverEnabled: root.button
+cursorShape: root.button ? Qt.PointingHandCursor : Qt.ArrowCursor
+```
+
+side by side and checked, rather than a `Loader { active: root.button }` that
+would have put all three somewhere nothing reads them.
+
+There is a third face of the same edge and it is the one that costs a warning
+rather than losing one: an unqualified read of a member whose TYPE Qt does not
+expose declaratively costs an `[unresolved-type]` **per read**. The notification
+card read `notification.actions` twice -- once for `visible`, once for the
+Repeater's `model` -- and hoisting it into one `readonly property var actions`
+took `tests/qml-lint.sh` from 307 to 306. The hoist that rule 1 asks for is not
+only about checking; it is also about not asking the same unanswerable question
+twice.
+
 And when you are deciding whether a component needs a theme half at all, put
 this on the scale: a component that is a delegate end to end -- `MenuView` is,
 its rows come out of a `QsMenuOpener` -- gets no checking from the seam and
@@ -185,6 +323,32 @@ by the Loader and is handed that width. Do not bind anything upward.
 **Never derive `implicitHeight` from your own `height`.** Your height comes
 from the facade, whose height comes from your `implicitHeight`. That is a loop
 and QML will say so, at runtime, once per row.
+
+#### THE RULE IS ABOUT A LOOP AND NOT ABOUT A WIDTH
+
+Read literally, "never `implicitWidth`" is now broken by four components on
+record, and every one of them was right to. The reason in the paragraph above
+is a LOOP -- a row fills its parent Column, a Column sizes itself to its widest
+child -- and four components are not in that shape:
+
+| | why the loop cannot form |
+| --- | --- |
+| `Chip` | it fills nothing. It is content-sized inside a Row that packs it, and how wide a word in a pill is, is a text metric -- which belongs to whoever chose the font |
+| `MenuRow` | its parent Column has no width of its own. The width has to come from somewhere and the only somewhere is the row |
+| `StepperButton` | it is not a row. Both directions are floored at 26 |
+| `Tooltip` | a note has no column |
+
+So the test is not "is this a width" but **"is there a parent whose size
+depends on mine?"** If there is, the width comes down and only down. If there
+is not, say so in the file the way those four do, and report it.
+
+`CornerWedge` is the same test answered from the other end, and it is the one
+component where NOTHING crosses upwards -- not even the height. Its facade
+declares the box (`radius` square) and never reads the Loader, because the
+theme is allowed to draw nothing at all and an empty `Item` reports zero. A
+facade that took its size from that theme would collapse every fillet in the
+shell the moment a theme declined to draw one. See WHEN THE RIGHT
+IMPLEMENTATION IS EMPTY, below.
 
 ### 3. Do not re-declare `label`, `title` or `glyph`
 
@@ -226,6 +390,21 @@ A theme implementation is inside that rule, not beside it:
   `Config`: a second writer to a value the same object also displays.
 - `Config.setTweak(...)` from in here -- **never.** A theme does not know what
   a row is wired to. It does not know there is a `Config`.
+
+**AND IT HOLDS FOR STATE THE FACADE OWNS OUTRIGHT**, which is where the rule
+first looked like it might not. A notification card is expanded or collapsed;
+nothing outside it sets that, so there is no config to be a second writer to
+and `row.expanded = !row.expanded` from the chevron would have been harmless
+today. It is still not what `components/NotificationCard.qml` does. The clock
+that decides when the notification leaves the screen is bound to `expanded`, on
+the facade, with the timeout it counts -- so the facade exposes
+`toggleExpanded()` and the theme calls it, and the value keeps exactly one
+writer. The shape generalises: **if a theme has to change something, the facade
+gives it a function**, whether the value ends up in a `Config` or stays on the
+facade. `dismiss()` on the same file is the same move for a different reason --
+there the function is also where the choice between `dismiss()` and `expire()`
+lives, which is a fact about the notification protocol and not something a
+theme should be answering.
 
 ### 5. `Theme` and `Icons` come from `import qs`, and only those
 
@@ -292,10 +471,83 @@ keep:
   property to leave unread. `components/ActionRow.qml` exists precisely so that
   a reading with something to press is a different type; do not turn this one
   into that one.
+- `NotificationCard` -- **the whole card is the target, and what the click
+  means is `dismiss()`.** There is no close button and there never was one. A
+  theme that reached past the facade and called `expire()` on the notification
+  instead would clear the screen in exactly the same way and tell the sending
+  application the opposite thing -- and an application that thinks you never
+  closed its notification sends it again.
 
 When you split the next component, read its header, find the sentence that is a
 promise about behaviour, and copy it into the theme file. That is not
 documentation for its own sake -- it is the only place the promise can now live.
+
+## WHEN THE RIGHT IMPLEMENTATION IS EMPTY
+
+`themes/genesis/components/CornerWedge.qml` draws the concave fillet behind
+every joint in this shell. A theme with square screen corners and a bar that
+meets the screen edge at ninety degrees implements it as:
+
+```qml
+Item {}
+```
+
+and that is not a stub, a placeholder or a file somebody forgot to finish. It
+is the correct implementation of "this theme has no rounded corners", and it is
+the first one in the tree for which an empty implementation is the right
+answer. What follows is the rule that makes it safe, because it is not safe by
+default.
+
+**AN EMPTY IMPLEMENTATION REPORTS ZERO FOR EVERYTHING.** No `implicitHeight`,
+no `implicitWidth`, no children, no colour. Rule 2 has the facade read a height
+back off the Loader and floor it, and that floor is exactly what keeps an empty
+theme from dropping a row out of its section. Which gives the rule two halves:
+
+1. **A component whose empty implementation is legitimate must not need
+   anything back across the seam.** `CornerWedge`'s box is `radius` square and
+   is declared on the FACADE for this reason and no other. Eleven wedges in
+   this shell are placed by anchors against that box -- the bar's two, the
+   launcher's two, the popout's two, the notification panel's one and the four
+   screen corners -- and a box of zero moves every one of them. A floor would
+   not have been enough here: `Math.max(radius, drawing.implicitHeight)` is the
+   same number and says the theme has a say in it, which it does not.
+2. **Everything the empty case still has to keep must be on the host side.**
+   The four `ScreenCorner` windows go on existing whatever their wedge draws:
+   they are still Top-layer layer surfaces, still `ExclusionMode.Ignore`, still
+   `mask: Region {}`, and still `Theme.screenCornerRadius` square.
+
+   Measured rather than argued. This theme's `CornerWedge.qml` was replaced by
+   `Item {}` and the shell read back under a headless labwc:
+
+   ```
+   corner[topLeft]  window 10x10  anchors top,left   exclusion Ignore zone 0
+                    mask empty=true   wedge 10x10 drawnChildren=0
+   corner[topRight] window 10x10  anchors top,right  ... and so on, all four
+   ```
+
+   Every window, anchor, exclusion mode and mask identical to the run with the
+   wedge drawing; the wedge itself still 10 by 10 with nothing under it. The
+   cards and the cheatsheet rows in the same run came back byte for byte
+   unchanged, which is the other half of the claim -- an empty implementation
+   of one component does not disturb the rest. A shell that lays out
+   identically with the drawing removed is what "the theme draws exactly one
+   thing" means when it is true.
+
+**AND IT IS NOT THE SAME AS A MISSING FILE.** There is no per-file fallback in
+this directory -- the last section of this file says why -- so a theme that
+ships no `CornerWedge.qml` at all gets a Loader in `Loader.Error` and one
+Quickshell warning per wedge naming the path. Same pixels, and a log that says
+somebody made a mistake. `Item {}` is how a theme says it meant it.
+
+There is a **third** way a theme reports nothing, and `SettingsSection` found
+it: its floor is not a number at all. A theme that never slots the column
+leaves it anchored to the facade's own item, laying its rows out at full width
+with no card behind them -- legible, and what a section with no card would look
+like anyway. So when you ask what your component does with an empty
+implementation, the answer is one of three: a floor takes over (`ToggleRow`),
+the host kept the number (`CornerWedge`), or the content degrades to something
+that still reads (`SettingsSection`). If it is none of those, the empty case is
+not safe and the component is not one a theme may decline to draw.
 
 ## HOW TO SPLIT THE NEXT ONE
 
@@ -350,6 +602,38 @@ documentation for its own sake -- it is the only place the promise can now live.
    the real settings window in a sandbox and compare the geometry of one row
    both ways; both of these came out `620x36` and `620x69` against the pre-split
    files, which is the only evidence that says the move moved nothing.
+
+   **A clean number is not a guarantee, and the point is to CHARACTERISE the
+   drift rather than to collect a green tick.** `ListRow` was checked harder
+   than that -- twenty before-and-after pairs grabbed under a headless run and
+   compared pixel by pixel -- and nineteen came back byte for byte identical.
+   The twentieth did not: a `PickRow` with an empty `detail`, where the glyph
+   moves UP BY THREE PIXELS and nothing else on the row moves at all (121
+   pixels differ, all of them inside the glyph's own box, x 12..26). That is
+   worth more than twenty clean pairs would have been, because it is the only
+   reason anybody knows the difference is three pixels of glyph and not
+   something else.
+
+   A root size is a coarse instrument. Where a component has internal geometry
+   somebody could get wrong -- a chord of chips whose widths an arithmetic
+   model elsewhere depends on, a card that grows when it is expanded -- walk
+   the item tree and compare every leaf's position and size in the root's own
+   coordinates, both ways. That is how the cheatsheet's key gutter was checked
+   when `BindRow` was split -- 2, 3 and 4-chip chords, every chip's box, and
+   the sheet's own `chipSpacing * (n - 1) + sum(advanceWidth + chipPadding)`
+   model printed beside the width the chips actually came out:
+
+   ```
+   SUPER S              model  79.781   drawn  79.781   delta 0
+   SUPER SHIFT S        model 137.766   drawn 137.766   delta 0
+   SUPER CTRL SHIFT Left model 211.344  drawn 211.344   delta 0
+   ```
+
+   identical before and after, with the chip pill swapped for
+   `components/Chip.qml` underneath. The index path in the walk moves -- there
+   is a Loader and a theme item between the root and everything under it now --
+   and nothing else does: every leaf's position, size, colour, text and font
+   came back byte for byte.
 
 ## WHAT IT COSTS
 
