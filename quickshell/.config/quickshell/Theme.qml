@@ -119,15 +119,99 @@ Singleton {
     property color tertiary: palette.tertiary ?? "#e0bbdd"
     property color textOnTertiary: palette.on_tertiary ?? "#1a1b26"
 
-    // ---------------- Semantic, NOT from the wallpaper ----------------
-    // Alerts keep their meaning across every wallpaper: amber is "watch out"
-    // and red is "something is wrong". M3's error role would be tinted by the
-    // image, and over a red wallpaper a critical warning would blend into the
-    // rest of the bar. Same reasoning as the [config.custom_colors] comment
-    // in matugen's config.toml.
-    readonly property color warning: "#e0af68"
-    readonly property color critical: "#f7768e"
-    readonly property color textOnCritical: "#1a1b26"
+    // ---------------- Semantic: the SCHEME's, never the wallpaper's ----------
+    // THE ARGUMENT THAT PUT THEM HERE IS UNCHANGED. An alert keeps its meaning
+    // across every wallpaper: amber is "watch out" and red is "something is
+    // wrong". M3's error role is derived from the image, so over a red picture
+    // a critical reading would come out the hue of the rest of the bar, and
+    // that is why quickshell-colors.json still passes no error/on_error through
+    // at all -- see `_no_error_role` in it. Nothing below weakens that. These
+    // three are still outside the accent half of the palette and must stay
+    // there.
+    //
+    // WHAT THAT ARGUMENT NEVER SAID IS "HARDCODED", and the two were written
+    // here as if they were one thing. They are not. "Not derived per wallpaper"
+    // is a claim about WHEN a colour may move; "a Tokyo Night literal" is a
+    // claim about who gets to pick it, and only the first one was ever
+    // reasoned for. A scheme is not a wallpaper: it is chosen by hand and it
+    // moves only when the user moves it, so an alert taken from a scheme is
+    // still as fixed as anything on screen is. So the three read sem_warning /
+    // sem_critical / sem_on_critical now -- the same roles GTK, Qt and zathura
+    // already paint their alerts from -- and the shell stops being the last
+    // surface on this desktop wearing Tokyo Night red on a Gruvbox base.
+    //
+    // MEASURED, AND IT IS NOT ALL ONE WAY. Rendered under all three schemes and
+    // graded against all four surface levels. `warning` improves everywhere:
+    // its worst pair, on surfaceContainerHighest, goes 3.26 -> 3.84 under
+    // Gruvbox and 3.34 -> 5.25 under Catppuccin. Tokyo Night does not move at
+    // all, because the literals WERE its scheme. Catppuccin's critical improves
+    // (2.52 -> 2.88 on the top container). GRUVBOX'S CRITICAL GETS WORSE:
+    // #fb4934 is darker than #f7768e, so against surfaceContainerHighest
+    // (#665c54, Gruvbox's own bg3) it falls 2.46:1 -> 1.89:1, and against
+    // surfaceContainerHigh 3.33:1 -> 2.56:1. textOnCritical on critical lands
+    // at 4.29:1 there, under the 4.5 floor for body text.
+    //
+    // WHERE THAT ACTUALLY LANDS, because surfaceContainerHighest is never a
+    // large background in this tree -- it is field fills, rails, chips and
+    // hover tints. Red meets it in exactly two places: the invalid save-path
+    // border in RecordingPage.qml:817 over its own field fill (:815), and a
+    // hovered peripheral row (PeripheralBattery.qml:679/:693 over the hover
+    // fill at :661). surfaceContainerHigh is the commoner one and it is the
+    // BAR: every Group pill is glass(surfaceContainerHigh), so the urgent
+    // workspace dot (Workspaces.qml:203), the island's alert text
+    // (Island.qml:669/:690) and the recording dot (:905) all sit on it. Those
+    // are the places to look at under Gruvbox before trusting the grader.
+    //
+    // THAT IS NOT AN ARGUMENT FOR THE LITERALS COMING BACK. #f7768e scored
+    // better on a Gruvbox card only by being a colour Gruvbox does not contain.
+    // The pairing that is actually weak is Gruvbox's own bright red against
+    // Gruvbox's own bg3, and it is weak in every application on this desktop
+    // rather than only here -- GTK, Qt and zathura have paired those two since
+    // the templates were substituted. If it is worth fixing, it is fixed in
+    // schemes/gruvbox-dark.json (sem_critical, or the ui_border the surface
+    // ladder tops out at), where one edit moves the whole desktop at once. A
+    // shell that quietly disagreed with the scheme would only hide it.
+    //
+    // THE ?? FALLBACKS ARE NOT A ROUTE BACK. They are the Tokyo Night literals
+    // these properties used to be, kept for exactly the reason every palette
+    // property above keeps one: a fresh clone with no colors.json has to look
+    // deliberate rather than broken. What is on screen in a running session is
+    // the scheme's.
+    //
+    // No Behavior on these three, unlike the palette above: the Behaviors are
+    // there to ride the wallpaper crossfade, and an alert does not change on a
+    // wallpaper change at all. It changes on a scheme switch, where a fade
+    // timed to an image that did not move would be an animation of the bar's
+    // own invention -- the thing recolorDuration was set to zero to stop.
+    //
+    // WHAT IS DELIBERATELY MISSING, because a property reading a key nothing
+    // draws with is the same defect as a key no property reads.
+    //
+    // NO textOnWarning. Every scheme fills sem_on_warning and GTK paints with
+    // it, but nothing in this tree has anywhere to put it: all 24 sites that
+    // touch `warning` are foregrounds (a Text, a glyph, a border, a meter tick,
+    // a slider fill with nothing on it) or a Qt.alpha() tint of 0.16-0.22 over
+    // a card -- and on none of those four tints does anything switch to an
+    // on-warning ink: what sits on them is either textOnSurface or the amber
+    // itself. No solid amber ground in this tree carries readable content at
+    // all. textOnCritical is here because red does have that shape: hovering a
+    // Forget button fills it solid and flips the glyph
+    // (NetworkPage.qml:524, BluetoothPage.qml:548, Island.qml:952). And it
+    // would be a duplicate anyway -- sem_on_warning and sem_on_critical are the
+    // same hex in all three schemes (#1a1b26, #1e1e2e, #282828), which is
+    // exactly what Chip.qml:22-26 already leans on when it says the two alerts
+    // share one dark ink.
+    //
+    // NO success either. There is no green anywhere in this tree, and the
+    // states that would want one -- an `ok` update verdict, a connected
+    // network, a paired device, a charging battery -- are `primary` today
+    // (UpdatesPage.qml:89 and :315, NetworkPage.qml:406, BluetoothPage.qml:429,
+    // SystemBattery.qml:59, PeripheralBattery.qml:561). Pinning those to a
+    // fixed green is a design change with its own case to argue, and it starts
+    // at those sites; the property would follow it, not lead it.
+    readonly property color warning: palette.warning ?? "#e0af68"
+    readonly property color critical: palette.critical ?? "#f7768e"
+    readonly property color textOnCritical: palette.on_critical ?? "#1a1b26"
 
     // ---------------- Transition ----------------
     // ZERO on purpose. This was 1400ms (matched to the wallpaper crossfade),
