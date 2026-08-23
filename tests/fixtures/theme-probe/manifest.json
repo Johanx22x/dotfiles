@@ -3,6 +3,7 @@
     "title": "Probe",
     "interface": 1,
     "palette": {
-        "source": "scheme"
+        "source": "pinned",
+        "scheme": "gruvbox-dark"
     }
 }

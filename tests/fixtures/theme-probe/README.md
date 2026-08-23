@@ -71,6 +71,29 @@ should keep meaning something.
   lines, one per surface. They are the only reason a theme swap is observable
   from outside the process, and they are why this fixture prints anything at
   all. A real theme would not.
+- **A pinned scheme, and it is the only one in the repository.**
+  `manifest.json` here says `"palette": { "source": "pinned", "scheme":
+  "gruvbox-dark" }`. `bin/.local/bin/desktop-scheme` keeps two keys instead of
+  one -- `scheme` is what renders, `chosen` is what the person last picked --
+  and its header says why: "A theme will later be able to PIN a scheme ... and
+  leaving that theme has to put back whatever was there before". It then ends
+  "Nothing pins anything today and the keys cost two lines", which is a code
+  path with no caller. This is the caller. `tests/scheme-pinning.sh` reads the
+  scheme name out of this file, drives `pin` and `unpin` through a sandboxed
+  copy of the script, and asserts on the colour that reaches the rendered
+  `colors.json` at each step -- not on the state file, which would pass while
+  nothing at all happened. Change the name here and the check follows it;
+  remove the pin and the check fails by name rather than passing with nothing
+  to measure.
+
+  **The key `palette.scheme` is defined here and nowhere else.** No code reads
+  it. `Theme.qml` describes the palette's "pinned" half as returning "a path
+  inside the theme directory", which is a *different* design from
+  `desktop-scheme`'s -- one has the theme carrying its own palette file, the
+  other has the theme naming a scheme the whole desktop then wears. Whichever
+  of the two gets built decides where the scheme's name really goes; this
+  spelling is the fixture's, chosen so there was something concrete to test.
+
 - **The rules.** The seven in `themes/genesis/components/README.md`, kept where
   keeping them costs a line: the typed `row`, the hoists out of anything that
   would be a delegate, `implicitHeight` and never a width that could loop, no
@@ -82,6 +105,27 @@ should keep meaning something.
   notification card means `dismiss()`.
 
 ## WHAT IT DOES NOT COVER, AND SHOULD NOT BE READ AS COVERING
+
+- **Nothing connects the pin above to the desktop.** The theme is chosen inside
+  the shell, by writing `Config.theme`; the scheme is owned by a script outside
+  it. There is no wire between the two: `Theme.qml`'s `adoptPalette` refuses
+  every `palette.source` but `"scheme"` and its `palettePath` switch has one
+  case, `Config.qml`'s only scheme seam is `setScheme` -> `desktop-scheme set`,
+  and the words `pin` and `unpin` appear in no QML file in the tree. So
+  **`tests/shell-load.sh` logs a warning on this theme, on purpose** -- `Theme:
+  theme-probe asks for a palette source called "pinned", which this shell does
+  not know -- reading the scheme`. That line is the missing half said out loud,
+  and it is printed twice in a run -- once at the cold start on this theme and
+  once when the swap phase brings it up again. It matches none of the six
+  strings that check fails on, and it should stay visible until the wiring
+  exists. Measured, not assumed: a run with `grep "palette source"` over the
+  phase logs prints exactly those two lines and nothing else changes.
+
+  What `tests/scheme-pinning.sh` therefore measures is the script half only,
+  with the check itself standing in for the shell at the two transitions. It
+  carries a tripwire that turns red the day `Theme.qml` learns the word or the
+  shell calls `desktop-scheme pin`, so that whoever builds the wiring is told
+  that the test has to be re-aimed at it.
 
 - **It is not linted.** `tests/qml-lint.sh` and `tests/qml-rules.sh` both scope
   themselves to `quickshell/.config/quickshell`, so no linter reads these files

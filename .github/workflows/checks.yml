@@ -119,6 +119,19 @@ jobs:
           # `import PyQt6.QtQuick` fails and the check dies before its first
           # assertion.
           #
+          # matugen for tests/scheme-pinning.sh, and it is the first check here
+          # that renders a palette instead of reading one. It is in [extra], it
+          # is the same 4.2.0 the desktop runs, and it is what turns "the state
+          # file says gruvbox" into "the colour the shell would read is
+          # gruvbox's". jq comes with it as a dependency of nothing -- it is
+          # pulled in explicitly below, because that check parses the schemes
+          # and the manifests with it and `desktop-scheme` reads a label with
+          # it on every `list`.
+          #
+          # NO WALLPAPER AND NO IMAGE DECODER NEEDED: that check seeds the
+          # render with `matugen color hex`, the same form `desktop-scheme
+          # accent-args` reduces an image to before the render ever runs.
+          #
           # NO FONT PACKAGE, checked rather than assumed: that bench was run
           # against an empty fontconfig and passed. Its entries carry Text
           # items, but nothing it measures is a text size -- the rail's height
@@ -126,7 +139,8 @@ jobs:
           # a font package would be weight for nothing.
           pacman -Syu --needed --noconfirm \
             git python python-yaml lua shellcheck actionlint stow hyprland \
-            niri curl quickshell labwc mesa python-pyqt6 qt6-declarative
+            niri curl quickshell labwc mesa python-pyqt6 qt6-declarative \
+            matugen jq
 
       - uses: actions/checkout@v7
 
@@ -171,6 +185,39 @@ jobs:
       - name: The schemes fill the colour vocabulary
         if: ${{ !cancelled() }}
         run: tests/scheme-roles.py
+
+      # AND THE ONE THING THE CHECK ABOVE SAYS IT CANNOT SEE: whether the
+      # palette actually renders. Its header records that as measured by hand
+      # because "that needs matugen and a wallpaper, neither of which a runner
+      # has". Half of that has stopped being true -- matugen is in [extra] and
+      # is installed above -- and the other half never had to be: `matugen
+      # color hex` seeds a render from a colour instead of an image, which is
+      # what `desktop-scheme accent-args` reduces every wallpaper to anyway.
+      # So this one RENDERS, into a sandbox, and reads the colour back out.
+      #
+      # WHAT IT IS FOR is the other half of the two keys `desktop-scheme`
+      # keeps. `scheme` is what renders and `chosen` is what the person picked;
+      # the second exists so that a theme can pin a scheme for as long as it is
+      # on and leaving it gives the person theirs back. The header of that
+      # script ends "Nothing pins anything today and the keys cost two lines",
+      # which is a code path with no caller -- the argument that has kept other
+      # things out of this repository. tests/fixtures/theme-probe's manifest
+      # now pins gruvbox-dark, and this check enters and leaves it.
+      #
+      # IT ASSERTS ON THE RENDERED FILE AND NOT ON THE STATE FILE, and it
+      # deletes that file before every transition, because the failure worth
+      # guarding against here is a step that records a name, renders nothing,
+      # and passes against whatever the previous step left on disk. It also
+      # runs the same round trip against two deliberately broken copies of
+      # `desktop-scheme` and requires both to be caught.
+      #
+      # IT DOES NOT PROVE THAT THE SHELL PINS ANYTHING, because the shell
+      # cannot: nothing reads a manifest's pinned scheme and nothing calls
+      # `desktop-scheme pin`. The file says so at length and carries a tripwire
+      # that goes red the day that changes.
+      - name: A theme that pins a scheme gives the desktop back
+        if: ${{ !cancelled() }}
+        run: tests/scheme-pinning.sh
 
       # THE FIRST TWO CHECKS THAT READ quickshell/ AT ALL. Before these, 125
       # files and 40,592 lines of QML -- half the repository, and three
