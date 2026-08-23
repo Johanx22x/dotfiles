@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# wallpaper-switch - change the wallpaper and regenerate the accent palette
+# wallpaper-switch - change the wallpaper and regenerate the palette
 #
 #   wallpaper-switch next     next one in the collection (alphabetical)
 #   wallpaper-switch prev     previous one
@@ -1554,10 +1554,48 @@ if is_video "$TARGET"; then
         || die "could not extract a frame from $(basename "$TARGET") (is ffmpeg installed?)"
 fi
 
+# ---- The OTHER half of the palette, and it does not come from the image ----
+#
+# The wallpaper supplies the ACCENTS. The BASE -- surfaces, text, outlines, the
+# sixteen ANSI slots, the alert colours -- comes from a scheme file, and used to
+# be Tokyo Night written out as hex literals in every template. `desktop-scheme`
+# owns which one that is; this only has to hand matugen the path.
+#
+# ASKED FOR RATHER THAN COMPUTED HERE. The state file, the default for a fresh
+# clone and the pinning a theme will later do are all one script's business, and
+# a second reader of that store is a second thing to keep in step. `path` is a
+# pure read, so there is no loop back: `desktop-scheme set` calls this script's
+# `reapply`, and `reapply` calls `desktop-scheme path`, which returns.
+SCHEME_FILE="$("$WS_BIN_DIR/desktop-scheme" path)" \
+    || die "could not work out which colour scheme to use"
+
 # --prefer is mandatory: with no interactive terminal matugen cannot tell
 # which colour to pick when the image has several candidates.
 # saturation gives accents with more character than darkness/lightness.
+#
+# --import-json MERGES THE SCHEME INTO THE PALETTE MATUGEN JUST DERIVED, so the
+# 17 Material 3 roles come from the image and the 74 named in schemes/README.md
+# come from the file, and every template sees all of them in one render. It is
+# one process rather than two because it can be: dumping the palette with
+# `-j hex --dry-run`, merging it with jq and rendering with `matugen json` was
+# measured against all 56 stills in the collection and produced byte-identical
+# output, for an extra process and an extra temporary file.
+#
+# THE IMPORTED FILE WINS ON A NAME CLASH -- measured -- which is why every role
+# in a scheme carries a `ui_` / `term_` / `sem_` / `fb_` prefix and why nothing
+# in one may be called `primary`. It is also the door the accent source walks
+# through later: `desktop-scheme accent` will pick the accents out of the scheme
+# or out of a fixed hex by putting them in this same file, with no change here.
+#
+# Still `die`, and now it covers one more thing. A missing scheme file, one that
+# is not valid JSON, one of the wrong shape and one missing a role a template
+# asks for all make matugen exit non-zero having written nothing -- verified
+# against matugen 4.2.0. The reasoning for why this one call is fatal while
+# everything around it is `|| true` is at step 7 below and is unchanged: a
+# palette that cannot be generated leaves every app on the machine holding the
+# colours of the wrong image.
 matugen image "$PALETTE_SOURCE" --mode dark --prefer saturation --quiet \
+    --import-json "$SCHEME_FILE" \
     || die "matugen failed"
 
 # ---------------------------------------------------------------

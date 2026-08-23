@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+# =============================================================
+#  desktop-scheme — which base palette the desktop wears
+#
+#  The colour of this desktop has two halves that move independently. The
+#  ACCENTS -- three of them, plus the Material 3 roles around them -- are
+#  derived from the wallpaper on every change and always have been. The BASE --
+#  surfaces, text, outlines, the sixteen ANSI slots, the alert colours -- was
+#  Tokyo Night written out as 227 hex literals across ten files, and could not
+#  be changed without editing all of them.
+#
+#  This is the dial for that second half:
+#
+#      desktop-scheme                 print the scheme in effect
+#      desktop-scheme tokyo-night     set it
+#      desktop-scheme set NAME        the same, spelled out
+#      desktop-scheme list            NAME<TAB>Label, one per line
+#      desktop-scheme show            every field this script keeps
+#      desktop-scheme path [NAME]     where the scheme file is
+#      desktop-scheme accent [SOURCE] where the ACCENTS come from
+#      desktop-scheme pin NAME        set it WITHOUT changing the user's choice
+#      desktop-scheme unpin           go back to the user's choice
+#
+#  A scheme is a JSON file in the repository's schemes/ directory, and
+#  schemes/README.md is the authoritative list of the 74 role names one has to
+#  fill. Read that before writing a scheme or a template; a name invented at
+#  either end is a palette that cannot be rendered at all.
+#
+#  WHAT IT TOUCHES, and how each one takes it:
+#
+#    the state file  ~/.local/state/desktop-scheme, the tab-separated store the
+#                    library already writes for desktop-tweak and night-light.
+#                    This script writes it; the settings window reads it.
+#    everything else INDIRECTLY, and this is the whole design. Nothing here
+#                    renders a colour. `wallpaper-switch` asks this script for
+#                    the scheme file and hands it to matugen along with the
+#                    wallpaper, which is what writes the eleven generated files.
+#                    So setting a scheme ends in `wallpaper-switch reapply` and
+#                    every consumer picks it up exactly as it does on a
+#                    wallpaper change -- kitty by signal, niri by watching its
+#                    include, GTK and Zen at the next start.
+#
+#  WHY THE USER'S CHOICE IS KEPT SEPARATELY FROM THE ONE IN EFFECT. A theme
+#  will later be able to PIN a scheme -- "this theme is Gruvbox, and while it is
+#  on you get Gruvbox" -- and leaving that theme has to put back whatever was
+#  there before, not the default and not the theme's. One key cannot answer both
+#  questions, so there are two: `scheme` is what renders, `chosen` is what the
+#  person last picked for themselves. `set` writes both; `pin` writes only the
+#  first; `unpin` copies the second over the first. Nothing pins anything today
+#  and the keys cost two lines.
+#
+#  Same shape as desktop-opacity and desktop-font, its siblings: one state file
+#  under ~/.local/state, found through readlink rather than $PATH, written whole
+#  and renamed over the old one.
+# =============================================================
+set -euo pipefail
+
+# FOUND NEXT TO THIS SCRIPT AND NOT THROUGH $PATH, for the reason written out at
+# the top of desktop-lib.sh: the settings window in Quickshell inherits the
+# compositor's environment and ~/.local/bin is not on it. readlink resolves the
+# stow symlink back into the repository, which is also how the schemes below are
+# found -- they are versioned content, not machine state, so they live in the
+# checkout rather than in ~/.config, and only the resolved path can reach them.
+BIN_DIR="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=../lib/desktop-lib.sh
+. "$BIN_DIR/../lib/desktop-lib.sh"
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
+STATE_FILE="$STATE_DIR/desktop-scheme"
+
+# bin/.local/bin -> the repository root. `cd` rather than string surgery so the
+# path is normalised, and so a checkout laid out differently fails here with
+# something readable instead of at the first `[[ -r ]]` three functions down.
+REPO_DIR="$(cd "$BIN_DIR/../../.." && pwd)" \
+    || die "cannot find the repository above $BIN_DIR"
+SCHEME_DIR="$REPO_DIR/schemes"
+
+DEFAULT_SCHEME="tokyo-night"
+
+# WHERE THE ACCENTS COME FROM, which is the other axis and is deliberately not
+# the same setting. Only `wallpaper` is implemented; the other two are named
+# here because the interface has to be able to grow them without changing shape,
+# and because the mechanism already exists -- matugen's --import-json overrides
+# what it derived from the image, so an accent source is a matter of what goes
+# into the imported file, not of how it is rendered. See schemes/README.md.
+DEFAULT_ACCENT="wallpaper"
+ACCENT_SOURCES=(wallpaper)
+
+# ---------------------------------------------------------------------------
+# Reading
+# ---------------------------------------------------------------------------
+
+# A name is a filename, so it is checked before it is ever joined to a path: a
+# `..` or a slash here would read a JSON file from somewhere else entirely and
+# hand it to matugen as a palette.
+valid_name() {
+    [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]
+}
+
+scheme_file() {
+    printf '%s/%s.json\n' "$SCHEME_DIR" "$1"
+}
+
+# Every scheme the repository ships, by name, sorted. LC_ALL=C for the reason
+# the library sorts its store that way: an order that moves with the locale is
+# an order that differs between two machines sharing this repo.
+list_names() {
+    local path name
+    for path in "$SCHEME_DIR"/*.json; do
+        [[ -r "$path" ]] || continue
+        name="${path##*/}"
+        printf '%s\n' "${name%.json}"
+    done | LC_ALL=C sort
+}
+
+# The same list on one line, for the tail of an error message. `paste` rather
+# than `tr '\n' ' '`, which leaves a trailing space inside the closing bracket.
+names_inline() {
+    list_names | paste -sd' ' -
+}
+
+# The human-facing name, out of _meta.label. Falls back to the file's own name
+# rather than failing: a scheme with no label is still a scheme, and a settings
+# window with a blank row in it is worse than one showing `gruvbox-dark-medium`.
+label_of() {
+    local name="$1" label
+    label="$(jq -r '._meta.label // empty' "$(scheme_file "$name")" 2>/dev/null || true)"
+    printf '%s\n' "${label:-$name}"
+}
+
+# The scheme in effect. An unset key and an unreadable store read the same, so a
+# fresh clone answers with the default rather than with nothing.
+current() {
+    local value
+    value="$(state_get "$STATE_FILE" scheme)"
+    printf '%s\n' "${value:-$DEFAULT_SCHEME}"
+}
+
+# The one the PERSON last picked, which is not always the one in effect -- see
+# the note about pinning at the top.
+chosen() {
+    local value
+    value="$(state_get "$STATE_FILE" chosen)"
+    printf '%s\n' "${value:-$(current)}"
+}
+
+accent_source() {
+    local value
+    value="$(state_get "$STATE_FILE" accent)"
+    printf '%s\n' "${value:-$DEFAULT_ACCENT}"
+}
+
+# ---------------------------------------------------------------------------
+# Applying
+# ---------------------------------------------------------------------------
+
+# THROUGH wallpaper-switch AND NOT BY CALLING matugen HERE. matugen has to be
+# handed an image, and working out which image that is means knowing that a
+# video is coloured from a cached frame instead -- `PALETTE_SOURCE` and
+# `frame_for` in wallpaper-switch, twenty lines of it. A second copy of that
+# reasoning is a second place for videos to be wrong.
+#
+# There is no loop back into this script: `reapply` asks for `desktop-scheme
+# path`, and `path` reads a file and returns.
+#
+# NOT FATAL, and the state file is written before this runs. If the re-render
+# fails -- no wallpaper set yet, matugen not installed -- the setting is still
+# set, and the next wallpaper change renders it. Saying so is the whole job
+# here; failing would be claiming the choice did not land when it did.
+rerender() {
+    local ws="$BIN_DIR/wallpaper-switch"
+    if [[ ! -x "$ws" ]]; then
+        warn "wallpaper-switch not found beside this script; nothing was re-rendered"
+        return 0
+    fi
+    if "$ws" reapply >/dev/null; then
+        note "palette: re-rendered from the current wallpaper"
+    else
+        warn "the palette could not be re-rendered; it will follow at the next wallpaper change"
+    fi
+}
+
+# Write the keys, then re-render only if what renders actually moved. The state
+# is written either way: `set` on the scheme already in effect still has to
+# record it as the person's own choice, which is the case that matters the day
+# a theme is pinning something.
+commit() {
+    local before="$1"
+    local after
+    after="$(current)"
+    if [[ "$before" == "$after" ]]; then
+        note "already in effect, nothing to re-render"
+    else
+        rerender
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# The commands
+# ---------------------------------------------------------------------------
+
+set_scheme() {
+    local name="$1" also_chosen="$2" before
+    valid_name "$name" || die "not a scheme name: '$name'"
+    [[ -r "$(scheme_file "$name")" ]] \
+        || die "no such scheme: '$name' (try: $(names_inline))"
+
+    before="$(current)"
+    state_set "$STATE_FILE" scheme "$name"
+    # An `if` and not `[[ ... ]] && ...`: a failed test at the end of a && list
+    # is a non-zero statement, and `set -e` on the first line would take that as
+    # the script failing rather than as the branch not being taken.
+    if [[ "$also_chosen" == chosen ]]; then
+        state_set "$STATE_FILE" chosen "$name"
+    fi
+
+    printf 'Desktop scheme: %s\n' "$(label_of "$name")"
+    commit "$before"
+}
+
+MODE="${1:-}"
+
+case "$MODE" in
+    "")
+        current
+        ;;
+
+    list)
+        # NAME then a tab then the label: the shape the settings window already
+        # parses everywhere else in this layer, and still readable by eye.
+        while read -r name; do
+            printf '%s\t%s\n' "$name" "$(label_of "$name")"
+        done < <(list_names)
+        ;;
+
+    show)
+        printf 'scheme\t%s\n' "$(current)"
+        printf 'chosen\t%s\n' "$(chosen)"
+        printf 'accent\t%s\n' "$(accent_source)"
+        ;;
+
+    path)
+        # The seam wallpaper-switch uses. Defaults to the scheme in effect, so
+        # the caller never has to know how that is stored.
+        name="${2:-$(current)}"
+        valid_name "$name" || die "not a scheme name: '$name'"
+        file="$(scheme_file "$name")"
+        [[ -r "$file" ]] || die "no such scheme: '$name'"
+        printf '%s\n' "$file"
+        ;;
+
+    accent)
+        if (( $# < 2 )); then
+            accent_source
+            exit 0
+        fi
+        source_name="$2"
+        found=0
+        for allowed in "${ACCENT_SOURCES[@]}"; do
+            [[ "$source_name" == "$allowed" ]] && { found=1; break; }
+        done
+        (( found )) || die "accent source not implemented yet: '$source_name' (have: ${ACCENT_SOURCES[*]})"
+        before_accent="$(accent_source)"
+        state_set "$STATE_FILE" accent "$source_name"
+        printf 'Desktop accent source: %s\n' "$source_name"
+        if [[ "$before_accent" == "$source_name" ]]; then
+            note "already in effect, nothing to re-render"
+        else
+            rerender
+        fi
+        ;;
+
+    set)
+        (( $# >= 2 )) || die "which scheme? (try: $(names_inline))"
+        set_scheme "$2" chosen
+        ;;
+
+    pin)
+        # For a theme. Changes what renders and leaves `chosen` alone, so
+        # `unpin` can put the person's own scheme back.
+        (( $# >= 2 )) || die "which scheme? (try: $(names_inline))"
+        set_scheme "$2" keep
+        ;;
+
+    unpin)
+        set_scheme "$(chosen)" chosen
+        ;;
+
+    -h|--help|help)
+        # The header of this file is the help text; printing a second copy of it
+        # is a second copy to keep in step. The two rules of `=` around it are
+        # the frame, not the text, so they are dropped rather than printed.
+        awk 'NR > 1 && /^# =====/ { if (seen++) exit; next }
+             seen { sub(/^# ?/, ""); print }' "$(readlink -f "$0")"
+        ;;
+
+    *)
+        # THE BARE FORM, and it is checked LAST so a scheme can never shadow a
+        # command. Every word above is reserved; tests/scheme-roles.py reads
+        # them back out of this `case` and refuses a scheme file named after
+        # one, so `desktop-scheme list` cannot become ambiguous the day
+        # somebody adds schemes/list.json.
+        set_scheme "$MODE" chosen
+        ;;
+esac

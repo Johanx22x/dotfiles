@@ -158,6 +158,20 @@ jobs:
         if: ${{ !cancelled() }}
         run: tests/config-syntax.sh
 
+      # THE ONE CHECK STANDING BETWEEN A SCHEME FILE AND A DESKTOP THAT CANNOT
+      # RE-THEME ITSELF. matugen resolves every role a template names and
+      # writes NONE of the eleven files if one is missing, so a scheme that has
+      # dropped a role is not a wrong colour, it is no colour at all -- and
+      # until the templates stop carrying the base palette as hex literals, an
+      # incomplete scheme renders perfectly and says nothing. The header of the
+      # script has the rest.
+      #
+      # No new package: it is Python, which is already installed above for
+      # bind-parity.py and workflows.py.
+      - name: The schemes fill the colour vocabulary
+        if: ${{ !cancelled() }}
+        run: tests/scheme-roles.py
+
       # THE FIRST TWO CHECKS THAT READ quickshell/ AT ALL. Before these, 125
       # files and 40,592 lines of QML -- half the repository, and three
       # quarters of its commits -- were parsed, linted, loaded and run by
