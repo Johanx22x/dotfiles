@@ -31,6 +31,27 @@ Item {
     implicitWidth: root.columns * Fluent.trayOverflowCell + Fluent.quickPadding * 2
     implicitHeight: grid.height + Fluent.quickPadding * 2
 
+    // THE PANEL, WHICH THIS FILE DID NOT DRAW AND HAD TO. `components/Popout.qml`
+    // is the window and nothing else -- it stopped painting a ground of its own
+    // so that each of the three things it opens can have the shape the
+    // photograph gives it, Quick Settings and the notification centre being two
+    // different shapes over the same window. Those two grew their own grounds
+    // at the time. This one did not, and what reached the screen was "No hidden
+    // icons" printed on the wallpaper with no flyout around it at all.
+    //
+    // The same material as its siblings: acrylic over surface, the overlay
+    // radius, one pixel of outlineVariant. A flyout that agrees with the other
+    // two is the whole point of them being constants.
+    Rectangle {
+        anchors.fill: parent
+
+        radius: Fluent.overlayRadius
+        antialiasing: true
+        color: Fluent.acrylic(Theme.surface)
+        border.width: 1
+        border.color: Theme.outlineVariant
+    }
+
     Grid {
         id: grid
 
