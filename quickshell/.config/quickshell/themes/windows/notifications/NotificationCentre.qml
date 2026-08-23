@@ -73,17 +73,36 @@ Item {
     // 1280x720 output, which is exactly the case that shows it.
     //
     // The list is what gives, because it is the only part of this panel that
-    // can scroll instead. The floor is the height of the empty state, so it
-    // can never be squeezed to nothing.
+    // can scroll instead. The panel grows UPWARD from a bottom taskbar, so
+    // what runs out of screen is the top of it -- the "Notifications" heading
+    // and "Clear all", which are the two controls on this surface.
     //
     // `Screen` is QtQuick's attached property -- the OUTPUT this item is drawn
     // on -- and not the window's height, which is this content's own height
     // and would be a loop.
+    //
+    // THE FLOOR USED TO BE THE EMPTY STATE'S OWN HEIGHT, "so it can never be
+    // squeezed to nothing", and that was the wrong thing to protect. On the
+    // sandbox's 720p output the calendar and that floor together came to 666
+    // against 660 of room and the panel went six pixels off the TOP, taking
+    // the heading and Clear all with it: a floor under a placeholder, paid for
+    // with the controls. Measured, not guessed -- 720p clips, 1080p leaves 102
+    // and 1440p leaves 462.
+    //
+    // So the screen wins and the list takes what is left. What that costs on a
+    // short screen is a squeezed "No new notifications", which is a message
+    // about nothing; what it buys is a header that is always reachable.
+    //
+    // Windows itself does neither: it scrolls the calendar and the list
+    // together as one column. That is very likely the right answer and it is
+    // not implemented, because no reference photograph here shows this panel
+    // on a screen too short for it and this theme does not guess at states it
+    // has not seen.
     readonly property int listMax: {
         const chrome = Fluent.controlHeight + root.padding * 2 + root.cardInset
             + root.panelGap + calendar.implicitHeight;
         const room = Screen.height - Theme.barHeight - Fluent.flyoutInset * 2 - chrome;
-        return Math.max(Fluent.previewIcon * 2, Math.min(root.listBudget, room));
+        return Math.max(0, Math.min(root.listBudget, room));
     }
 
     readonly property bool empty: NotificationState.history.length === 0
@@ -277,9 +296,17 @@ Item {
                 // Centred in a tall empty area, which is what the photograph
                 // does: the panel keeps its size when there is nothing in it
                 // rather than collapsing to a header.
+                //
+                // THROUGH listMax LIKE THE LIST, and that is the whole reason
+                // the clamp above works. `listMax` says the list is "the only
+                // part of this panel that can scroll instead", but with an
+                // empty history the list is zero high and this box is what
+                // sets the panel's size -- so a bare 128 here walked straight
+                // past the screen budget and pushed the header off the top.
+                // Bounding both means one lever governs what gives.
                 Item {
                     width: parent.width
-                    height: Fluent.previewIcon * 2
+                    height: Math.min(Fluent.previewIcon * 2, root.listMax)
 
                     visible: root.empty
 
