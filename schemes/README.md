@@ -23,7 +23,7 @@ then use it.
 
 ```
 schemes/README.md              this file: the vocabulary and the substitution worksheets
-schemes/tokyo-night.json       the default scheme, and the one the desktop shipped as literals
+schemes/tokyo-night.json       the default scheme, taken from upstream (see "Tokyo Night is Night")
 schemes/catppuccin-mocha.json  Catppuccin Mocha
 schemes/gruvbox-dark.json      Gruvbox Dark Medium
 ```
@@ -134,7 +134,9 @@ trusting a render to fail.
 ## Decisions taken
 
 The B0 survey left eight questions open. All eight are answered; where the
-answer changes a rendered byte it is called out in the worksheet as well.
+answer changes a rendered byte it is called out in the worksheet as well. Two
+later entries — "Tokyo Night is Night" and the alert colours below it — did not
+come from that survey but from checking the default scheme against upstream.
 
 **zathura's on-accent colour is unified.** `zathurarc:36,52,54` used `#15161e`
 where every other file in the desktop uses `#1a1b26` for the same job — text
@@ -148,6 +150,39 @@ colour, so it is filled by judgement in every scheme — but `cship.toml`'s ramp
 is semantic, not terminal, and pointing it at `term_cyan` would make the
 nominal end of a warn/critical ramp inherit whatever the ANSI palette happens
 to hold.
+
+**Tokyo Night is Night, and only Night.** `_meta.source` used to read
+"tokyonight-night (storm-dark)", naming two variants at once, and the file was
+mixed to match: `ui_bg_control #24283b` is Storm's `bg` and `ui_bevel_mid
+#1f2335` is Storm's `bg_dark`, sitting inside a scheme whose background is
+Night's `#1a1b26`. Night is what the background says and Night is what the file
+now is, end to end. Upstream is `folke/tokyonight.nvim`:
+`lua/tokyonight/colors/storm.lua` deep-extended by
+`lua/tokyonight/colors/night.lua` for the palette, `lua/tokyonight/colors/
+init.lua` for the tones the plugin derives (`black`, `bg_visual`, the
+brightened terminal chromatics), and `extras/kitty/tokyonight_night.conf` for
+the sixteen ANSI slots — cross-checked against the wezterm and ghostty extras,
+which agree hex for hex. Sixteen of the 74 roles moved; the other 58 were
+already right. **Where a role has no upstream counterpart at all** — the Qt
+palette slots, mostly — the rule is: take the published Night tone that fills
+that rung of the ladder, and only where the ladder has no published tone
+compute one with upstream's own `Util.blend` over the two neighbours the role
+sits between. Two roles need the second half of that rule; see 4.1(c).
+
+**Two alert colours are left where they are, and the reason is worth writing
+down.** Upstream names its own semantic set in `colors/init.lua`:
+`error = red1 #db4b4b`, `warning = yellow #e0af68`, `info = blue2 #0db9d7`,
+`hint = teal`. `sem_warning` already matches. `sem_critical` (`red #f7768e`)
+and `sem_info` (`cyan #7dcfff`) do not — but those are *editor diagnostic*
+colours, and `sem_*` here paints GTK's `destructive_*`, Qt's `BrightText` and
+a starship ramp, which are a different surface with a different job. Both
+current values are genuine Night entries. The red also has a second argument:
+`#db4b4b` grades 4.17:1 on `ui_bg` and 3.27:1 on `ui_bg_raised`, against
+`#f7768e`'s 6.46:1 and 5.08:1 — adopting it would hand Tokyo Night the same
+weak red Gruvbox already has. The cyan has no such argument (`#0db9d7` grades
+7.27:1 and 5.72:1, both fine), so it rests on the surface distinction alone.
+Left as they are, and recorded as an open question rather than settled by
+taste.
 
 **Catppuccin's `color15` is not a typo.** `subtext0 #a6adc8` is darker than
 `color7`'s `subtext1 #bac2de`. Verified against the official `catppuccin/kitty`
@@ -249,15 +284,15 @@ wallpaper. The prefixes make that collision impossible by construction.
 | `ui_bg_dim` | `#16161e` | `#181825` | `#1d2021` | A quiet chrome strip that must recede behind ui_bg. | **nothing today** — the kitty tab bar reads `term_tab_bg` |
 | `ui_bg_bar` | `#15161e` | `#181825` | `#3c3836` | Secondary bar / strip inside a window: statusbar, inputbar, notification, group header. | zathura:27,29,33,49 |
 | `ui_bg_field` | `#15161e` | `#181825` | `#1d2021` | Background of an editable field or a scrolling list (Qt Base). | qt6ct idx9 x3 |
-| `ui_bg_view` | `#101119` | `#11111b` | `#1d2021` | The content pane, set one clear step away from ui_bg so content lifts off chrome. NOT necessarily darker -- see the ladder notes. | gtk3:71,133,150,161; gtk4:103 |
-| `ui_bg_shadow` | `#0d0e14` | `#11111b` | `#1d2021` | Deepest tone of the palette; Qt bevel drop shadow. | qt6ct idx11 x3 |
+| `ui_bg_view` | `#0c0e14` | `#11111b` | `#1d2021` | The content pane, set one clear step away from ui_bg so content lifts off chrome. NOT necessarily darker -- see the ladder notes. | gtk3:71,133,150,161; gtk4:103 |
+| `ui_bg_shadow` | `#0c0e14` | `#11111b` | `#1d2021` | Deepest tone of the palette; Qt bevel drop shadow. | qt6ct idx11 x3 |
 | `ui_bg_alt_row` | `#1a1b26` | `#1e1e2e` | `#282828` | Alternating table row. Deliberately equal to ui_bg today (no stripe). | qt6ct idx16 x3 |
 | `ui_bg_raised` | `#292e42` | `#313244` | `#3c3836` | Card / popover / tooltip / completion menu: a container floating above ui_bg. | gtk3:103,110,113; gtk4:162,169,172; zathura:31; qt6ct idx18 x3 |
 | `ui_bg_button` | `#292e42` | `#313244` | `#3c3836` | Qt button face (QPalette::Button). | qt6ct idx1 x3 |
-| `ui_bg_control` | `#24283b` | `#313244` | `#3c3836` | A raised inline control (the Nautilus breadcrumb pill, linked button groups). | gtk4:428 |
+| `ui_bg_control` | `#222534` | `#313244` | `#3c3836` | A raised inline control (the Nautilus breadcrumb pill, linked button groups). | gtk4:428 |
 | `ui_bevel_dark` | `#15161e` | `#181825` | `#1d2021` | Qt 3D bevel, darkest shade (QPalette::Dark). | qt6ct idx4 x3 |
-| `ui_bevel_mid` | `#1f2335` | `#1e1e2e` | `#282828` | Qt 3D bevel, mid shade (QPalette::Mid). | qt6ct idx5 x3 |
-| `ui_bevel_midlight` | `#363b54` | `#45475a` | `#504945` | Qt 3D bevel, light-mid shade (QPalette::Midlight). | qt6ct idx3 x3 |
+| `ui_bevel_mid` | `#1a1b26` | `#1e1e2e` | `#282828` | Qt 3D bevel, mid shade (QPalette::Mid). | qt6ct idx5 x3 |
+| `ui_bevel_midlight` | `#353b55` | `#45475a` | `#504945` | Qt 3D bevel, light-mid shade (QPalette::Midlight). | qt6ct idx3 x3 |
 | `ui_border` | `#414868` | `#585b70` | `#665c54` | Visible 1px divider or frame between surfaces; Qt bevel lit edge (QPalette::Light). | gtk3:76,118,154; gtk4:124,177; qt6ct idx2 x3, idx14/15 disabled |
 | `ui_border_dim` | `#3b4261` | `#45475a` | `#504945` | A weaker divider: an unfocused window split. | **nothing today** — the unfocused split reads `term_border_inactive` |
 | `ui_text` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | Primary text and icons on any ui_bg* surface. | gtk3 x12, gtk4 x9, zathura x6, qt6ct idx0/6/8/19, fastfetch:46 |
@@ -292,10 +327,10 @@ named for.
 | `term_fg` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | Default terminal text. | kitty.conf:105 |
 | `term_cursor` | `#c0caf5` | `#f5e0dc` | `#ebdbb2` | Cursor block colour (fallback; matugen overrides with primary). | kitty.conf:110 |
 | `term_cursor_text` | `#1a1b26` | `#1e1e2e` | `#282828` | The character under the cursor block. | kitty.conf:111 |
-| `term_selection_bg` | `#33467c` | `#585b70` | `#504945` | Selection fill (fallback; matugen overrides with primary). | kitty.conf:108 |
-| `term_selection_fg` | `#1a1b26` | `#1e1e2e` | `#282828` | Text inside the selection. Tracks ui_on_accent because the live fill is the accent. | kitty.conf:107 (shared with ui_on_accent -- see collisions) |
+| `term_selection_bg` | `#283457` | `#585b70` | `#504945` | Selection fill (fallback; matugen overrides with primary). | kitty.conf:108 |
+| `term_selection_fg` | `#c0caf5` | `#1e1e2e` | `#282828` | Text inside the selection, over term_selection_bg. | **nothing today** -- `kitty-scheme.conf:41` paints `selection_foreground` from `ui_on_accent` instead; see the note under this table |
 | `term_url` | `#73daca` | `#94e2d5` | `#8ec07c` | Underlined URL (fallback; matugen overrides with tertiary). | kitty.conf:113 |
-| `term_border_inactive` | `#3b4261` | `#45475a` | `#504945` | Border of an unfocused kitty split. | kitty.conf:116 (= ui_border_dim) |
+| `term_border_inactive` | `#292e42` | `#45475a` | `#504945` | Border of an unfocused kitty split. | kitty.conf:116 (no longer = ui_border_dim: upstream publishes `inactive_border_color #292e42`) |
 | `term_tab_bg` | `#16161e` | `#181825` | `#1d2021` | Tab bar background and inactive tab background. | kitty-colors:22, kitty.conf:122,123 |
 | `term_tab_inactive_fg` | `#545c7e` | `#7f849c` | `#a89984` | Label of an inactive tab. | kitty-colors:23, kitty.conf:121 |
 | `term_bell_border` | `#e0af68` | `#f9e2af` | `#fabd2f` | Border flash when a window rings the bell. | kitty.conf:117 |
@@ -308,13 +343,33 @@ named for.
 | `term_cyan` | `#7dcfff` | `#94e2d5` | `#689d6a` | ANSI slot color6. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
 | `term_white` | `#a9b1d6` | `#bac2de` | `#a89984` | ANSI slot color7. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
 | `term_bright_black` | `#414868` | `#585b70` | `#928374` | ANSI slot color8. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_red` | `#f7768e` | `#f38ba8` | `#fb4934` | ANSI slot color9. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_green` | `#9ece6a` | `#a6e3a1` | `#b8bb26` | ANSI slot color10. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_yellow` | `#e0af68` | `#f9e2af` | `#fabd2f` | ANSI slot color11. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_blue` | `#7aa2f7` | `#89b4fa` | `#83a598` | ANSI slot color12. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_magenta` | `#bb9af7` | `#f5c2e7` | `#d3869b` | ANSI slot color13. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_cyan` | `#7dcfff` | `#94e2d5` | `#8ec07c` | ANSI slot color14. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_red` | `#ff899d` | `#f38ba8` | `#fb4934` | ANSI slot color9. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_green` | `#9fe044` | `#a6e3a1` | `#b8bb26` | ANSI slot color10. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_yellow` | `#faba4a` | `#f9e2af` | `#fabd2f` | ANSI slot color11. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_blue` | `#8db0ff` | `#89b4fa` | `#83a598` | ANSI slot color12. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_magenta` | `#c7a9ff` | `#f5c2e7` | `#d3869b` | ANSI slot color13. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_cyan` | `#a4daff` | `#94e2d5` | `#8ec07c` | ANSI slot color14. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
 | `term_bright_white` | `#c0caf5` | `#a6adc8` | `#ebdbb2` | ANSI slot color15. | kitty.conf; inherited by ranger, fzf (--color=16), and every TUI |
+
+**Tokyo Night's six bright chromatics are NOT repeats of the normal ones**, and
+this table said they were until the file was checked against upstream. The
+plugin derives them (`lua/tokyonight/colors/init.lua`, `colors.terminal`) with
+`Util.brighten` — HSLuv lightness +5, saturation +20 — and publishes the result
+in `extras/kitty/tokyonight_night.conf` as `color9`-`color14`. The repeats in
+this repository came from `kitty.conf`'s own literals, which is a fact about
+the desktop's history and not about the palette. `color0`/`color8` and
+`color7`/`color15` are the exception: those four are `black`, `terminal_black`,
+`fg_dark` and `fg`, four separate palette entries rather than a brightened pair.
+
+**`term_selection_fg` has no reader**, because `kitty-scheme.conf:41` paints
+`selection_foreground` from `ui_on_accent`. That was right while the role
+tracked the on-accent colour; it is not right now that the role carries
+upstream's own `selection_foreground` (`#c0caf5`, light text on the dark
+`bg_visual` fill). The pair the template actually renders — `ui_on_accent`
+`#1a1b26` on `term_selection_bg` `#283457` — grades 1.40:1, and only never
+shows because `kitty-colors.conf` overrides both halves with the wallpaper
+accent. Pointing that line at `term_selection_fg` would render 7.57:1 and is a
+one-word change in a file this section does not own.
 
 ### 1.3 semantic
 
@@ -343,7 +398,7 @@ shell boots Tokyo-Night-blue for a second is a visible defect.
 |---|---|---|---|---|---|
 | `fb_surface` | `#1a1b26` | `#1e1e2e` | `#282828` | M3 surface fallback, used only until matugen writes colors.json. | Theme.qml:46 |
 | `fb_surface_container` | `#292e42` | `#313244` | `#3c3836` | M3 surface_container fallback, used only until matugen writes colors.json. | Theme.qml:47 |
-| `fb_surface_container_high` | `#343a52` | `#45475a` | `#504945` | M3 surface_container_high fallback, used only until matugen writes colors.json. | Theme.qml:48 |
+| `fb_surface_container_high` | `#353b55` | `#45475a` | `#504945` | M3 surface_container_high fallback, used only until matugen writes colors.json. | Theme.qml:48 |
 | `fb_surface_container_highest` | `#414868` | `#585b70` | `#665c54` | M3 surface_container_highest fallback, used only until matugen writes colors.json. | Theme.qml:49 |
 | `fb_on_surface` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | M3 on_surface fallback, used only until matugen writes colors.json. | Theme.qml:50 |
 | `fb_on_surface_variant` | `#a9b1d6` | `#bac2de` | `#bdae93` | M3 on_surface_variant fallback, used only until matugen writes colors.json. | Theme.qml:51 |
@@ -356,8 +411,19 @@ shell boots Tokyo-Night-blue for a second is a visible defect.
 | `fb_secondary` | `#bb9af7` | `#cba6f7` | `#d3869b` | M3 secondary fallback, used only until matugen writes colors.json. | Theme.qml:60 |
 | `fb_secondary_container` | `#414868` | `#585b70` | `#665c54` | M3 secondary_container fallback, used only until matugen writes colors.json. | Theme.qml:61 |
 | `fb_on_secondary_container` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | M3 on_secondary_container fallback, used only until matugen writes colors.json. | Theme.qml:62 |
-| `fb_tertiary` | `#e0bbdd` | `#f5c2e7` | `#fe8019` | M3 tertiary fallback, used only until matugen writes colors.json. | Theme.qml:64 |
+| `fb_tertiary` | `#73daca` | `#f5c2e7` | `#fe8019` | M3 tertiary fallback, used only until matugen writes colors.json. | Theme.qml:64 |
 | `fb_on_tertiary` | `#1a1b26` | `#1e1e2e` | `#282828` | M3 on_tertiary fallback, used only until matugen writes colors.json. | Theme.qml:65 |
+
+**Sixteen of these seventeen are consumed by nothing, and the "consumed at"
+column above is aspirational.** `Theme.qml:101-120` writes its fallbacks as
+literals — `palette.surface_container_high ?? "#343a52"`, `palette.tertiary ??
+"#e0bbdd"` — so what a fresh clone shows is not the scheme's `fb_*` block but a
+hardcoded copy of Tokyo Night, whichever scheme is selected. That is exactly
+the defect the block was added to fix, and it is still open: only `fb_primary`
+has a real reader (`kitty-scheme.conf:47,52`). The two literals named above are
+also the two `fb_*` values this scheme had to correct — `#e0bbdd` is not a
+Tokyo Night colour at all — so closing the gap means changing both sides in one
+step, on the QML side, which this file does not own.
 
 ### 1.5 accent — the 17 Material 3 roles the templates already consume
 
@@ -397,6 +463,15 @@ thing it carries. That is why `sem_*` exists.
 ## 2. The collision table
 
 Same hex, different meanings. This is the part that decides the vocabulary.
+
+**Every hex below is a literal that was in this repository's templates**, not a
+claim about Tokyo Night. The distinction matters in 2.7, 2.8 and 2.9, where a
+normal and a bright ANSI slot are counted as one colour: they shared a hex in
+`kitty.conf`, and upstream publishes them apart (see the note under 1.2). The
+collisions those rows argue for are still real — the vocabulary needs
+`sem_warning` separate from `term_yellow` however Gruvbox or Tokyo Night
+happens to fill them — but the count in the heading is a count of what was
+written here, and it is now higher than one for the pairs concerned.
 
 ### 2.1 `#1a1b26` — 46 occurrences, **four** distinct meanings
 
@@ -594,18 +669,26 @@ The alternative is to invent a colour by darkening `blue`, which this vocabulary
 rules out.
 
 **(b) `ui_bg_shadow` — neither other scheme has a step below its darkest
-surface.** Tokyo Night carries a bespoke `#0d0e14`, darker than anything the
-published palette defines. Mocha bottoms out at `crust #11111b`, which is
+surface.** Tokyo Night does: `bg_dark1 #0c0e14`, the one entry `night.lua` adds
+that `storm.lua` does not already carry. It used to be filled with `#0d0e14`, a
+near-miss of that published value with nothing behind it. Mocha bottoms out at `crust #11111b`, which is
 already spent on `ui_bg_view`; Gruvbox bottoms out at `bg0_h #1d2021`, which is
 spent on three roles at once. Both fills therefore repeat. The role is kept
 because Qt's palette has a mandatory `Shadow` slot (`qt6ct-colors.conf:41`,
 index 11) that must be *some* colour, but the vocabulary should document that
-`ui_bg_shadow == ui_bg_view` is a legitimate fill, not a mistake.
+`ui_bg_shadow == ui_bg_view` is a legitimate fill, not a mistake. **All three
+schemes now do it**, Tokyo Night included: below the window it publishes
+`bg_dark #16161e`, `black #15161e` and `bg_dark1 #0c0e14` and nothing between
+the last two, so the content pane and the Qt shadow share the floor.
 
 **(c) `ui_bg_control` vs `ui_bg_raised` — a Tokyo-Night-only distinction.**
-`#24283b` (the Nautilus pill, `gtk4-colors.css:428`) sits deliberately between
-`ui_bg #1a1b26` and `ui_bg_raised #292e42` — a 5-level step the gtk4 comment at
-lines 408-424 argues for at length. Mocha has nothing between `base #1e1e2e`
+`#222534` (the Nautilus pill, `gtk4-colors.css:428`) sits deliberately between
+`ui_bg #1a1b26` and `ui_bg_raised #292e42` — a step the gtk4 comment at
+lines 408-424 argues for at length, and the one place in the base group where
+Night publishes no tone at all, so it is `Util.blend(bg_highlight, 0.5, bg)`,
+upstream's own mixing function on upstream's own two neighbours. It was
+`#24283b` for a long time, which is **Storm's `bg`** — a colour from a
+different variant of the theme. Mocha has nothing between `base #1e1e2e`
 and `surface0 #313244`; Gruvbox has nothing between `bg0 #282828` and
 `bg1 #3c3836`. Both fills collapse the pair onto one value. Verdict: the role
 is too fine-grained for a general vocabulary but harmless — a scheme that
@@ -613,7 +696,13 @@ collapses it loses a distinction that is already near the threshold of
 visibility.
 
 **(d) `term_selection_bg` — Tokyo Night is the only one that publishes a
-selection colour.** `bg_visual #33467c` is a real Tokyo Night entry. Catppuccin
+selection colour.** `bg_visual #283457` is a real Tokyo Night entry —
+`Util.blend_bg(blue0, 0.4)` in `colors/init.lua`, published verbatim as
+`selection_background` by the kitty, wezterm and ghostty extras. It was
+`#33467c` here, which is the *old* upstream `bg_visual`: `colors.lua:141` at
+tag `v1.0.0` reads `util.darken(colors.blue0, 0.7)`, which over Night's `bg` is
+`#33467c` exactly. `v2.0.0` changed the factor to 0.4 and the answer to
+`#283457`. This repository was carrying the v1 value. Catppuccin
 and Gruvbox both leave selection to the terminal's own convention, so the fills
 use a neutral surface step (`surface2` / `bg2`). That is a judgement call, not
 an invented colour, and it barely matters: `kitty-colors.conf:13` overrides
@@ -622,7 +711,12 @@ value is only seen before the first `wallpaper-switch`.
 
 Everything else — all 23 base roles, all 27 terminal roles, all 7 semantic
 roles, 15 of the 17 fallbacks — fills from published values in all three
-palettes.
+palettes, with **two exceptions in Tokyo Night** where the palette has no tone
+in the gap a Qt slot needs: `ui_bg_control` `#222534` and `ui_bevel_midlight`
+`#353b55` (and `fb_surface_container_high`, which mirrors the latter). Both are
+`Util.blend(x, 0.5, y)` — upstream's own mixing function — over the two
+published neighbours the role sits between, so they are derived from the
+palette rather than picked beside it. See "Tokyo Night is Night" below.
 
 ### 4.2 Colours the palettes define that the vocabulary has no slot for
 
@@ -652,13 +746,13 @@ judgement in all three schemes (Tokyo Night `cyan`, Mocha `sky`, Gruvbox
 
 | region | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | resolution |
 |---|---|---|---|---|
-| at or below the window | 5 steps: `0d0e14`, `101119`, `15161e`, `16161e`, `1a1b26` | 3: `crust`, `mantle`, `base` | 2: `bg0_h`, `bg0` | Keep 5 roles (`ui_bg_shadow`, `ui_bg_view`, `ui_bg_field`/`ui_bg_bar`/`ui_bevel_dark`, `ui_bg_dim`, `ui_bg`). Mocha repeats `mantle` 3x and `crust` 2x; Gruvbox repeats `bg0_h` 4x. Repeats are cheap; a missing name is not. |
-| above the window | 4: `24283b`, `292e42`, `363b54`, `414868` | 4: `surface0`, `surface1`, `surface2`, `overlay0` | 4: `bg1`, `bg2`, `bg3`, `bg4` | Even. Gruvbox is the richest here — it is the *lower* half where it runs out. |
+| at or below the window | 4 steps: `0c0e14`, `15161e`, `16161e`, `1a1b26` | 3: `crust`, `mantle`, `base` | 2: `bg0_h`, `bg0` | Keep 5 roles (`ui_bg_shadow`, `ui_bg_view`, `ui_bg_field`/`ui_bg_bar`/`ui_bevel_dark`, `ui_bg_dim`, `ui_bg`). All three repeat: Tokyo Night spends `bg_dark1` twice, Mocha repeats `mantle` 3x and `crust` 2x, Gruvbox repeats `bg0_h` 4x. Repeats are cheap; a missing name is not. |
+| above the window | 2 published (`bg_highlight`, `terminal_black`) + 2 blended (`222534`, `353b55`) | 4: `surface0`, `surface1`, `surface2`, `overlay0` | 4: `bg1`, `bg2`, `bg3`, `bg4` | Gruvbox and Mocha are the rich ones here; Tokyo Night publishes only two tones above the window and the other two are `Util.blend` midpoints of them. It is the *lower* half where the other two run out. |
 | text ramp | 4: `c0caf5`, `a9b1d6`, `545c7e`, `565f89` | 5: `text`, `subtext1`, `subtext0`, `overlay1`, `overlay0` | 5: `fg1`, `fg2`, `fg3`, `fg4`, `gray` | Even, with one spare each. |
-| ANSI 16 | 8 distinct (each normal/bright pair identical) | 10 distinct | **16 distinct** | Keep all 16 slots. This is the "role Tokyo Night fills with a repeat" case, and collapsing to 8 would flatten Gruvbox's entire terminal identity. |
+| ANSI 16 | **16 distinct** (the six bright chromatics are `Util.brighten` of the normals; `color8`/`color15` are `terminal_black` and `fg`, separate palette entries) | 10 distinct | **16 distinct** | Keep all 16 slots. Mocha is the one that fills slots with repeats; collapsing to 8 would flatten both Tokyo Night's brightened chromatics and Gruvbox's entire terminal identity. |
 
 **One assumption the vocabulary deliberately does not bake in.** In Tokyo Night
-the content view is *darker* than the window (`#101119` under `#1a1b26`), and
+the content view is *darker* than the window (`#0c0e14` under `#1a1b26`), and
 `gtk4-colors.css:44-99` spends 50 lines defending that direction. Gruvbox's own
 idiom is the opposite: `bg0` is the window and `bg1` is the *lighter* card. It
 is still expressible — `bg0_h` is one step down — which is why the fill works,
