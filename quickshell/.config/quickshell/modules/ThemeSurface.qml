@@ -55,6 +55,74 @@
 // list in shell.qml is what does, and modules/Themes.qml has the account of
 // why the two are separate. A theme shell.qml does not import loads through
 // this file exactly the same way and is not watched.
+//
+// ---------------------------------------------------------------------------
+// WHAT A SWAP LOOKS LIKE, WHICH IS A DIFFERENT QUESTION FROM WHETHER IT WORKS.
+//
+// Everything above is about the swap being CORRECT. This is about it being
+// watchable, and it is written down because the answer turned out to be an
+// argument for not building anything. Measured by capturing frames out of the
+// headless compositor tests/shell-load.sh already builds -- labwc, pixman, the
+// probe fixture dropped in as a second theme with its barHeight pushed to 120
+// against genesis's 48 so that a swap is unmistakable -- sampled about every
+// 17 ms across 40 swaps in two sessions. ONE swap cannot answer any of this: a
+// state that lasts a single refresh is missed two times in three at that
+// sampling gap, and the first three swaps measured here happened to be the
+// clean ones and said the whole thing was already perfect.
+//
+// THE SEVEN SURFACES CUT TOGETHER, and that was the thing worth checking.
+// Seven independent Loaders is seven chances to stagger, and they do not take
+// them: the seven setSource calls of a swap run back to back with nothing
+// logged between them, 7 to 12 ms end to end -- one pass of one property
+// change, well inside a frame. On screen they move together too. The bar, the
+// rounded corners and a sheet that was open all leave in the same captured
+// frame and all arrive in the same captured frame; no frame has one of them
+// under the old theme beside another under the new.
+//
+// WHAT THE SCREEN SHOWS IS 100 TO 150 ms LONG AND IS NOT THAT. The QML objects
+// exist immediately; their pixels do not. A layer surface has to be created,
+// configured, acked and painted before the compositor has anything to draw,
+// and until then the old one is gone. Thirty-one of the forty swaps showed the
+// whole shell -- bar and rounded corners together -- absent for about an
+// eighth of a second. It is not this file's to shorten: an interval in the
+// same range appears between two themes with IDENTICAL barHeights, which rules
+// out the reflow when the new theme's tokens land, and it did not shrink over
+// twenty-four swaps of the same two themes, which rules out compiling them.
+//
+// AND THE OTHER NINE ARE THE ARGUMENT AGAINST A CROSSFADE. Three had no gap
+// and nothing odd in them at all; the other six had no gap either, because the
+// outgoing surfaces outlived the incoming ones being mapped -- and the one
+// frame where both are up is the ugliest thing in the whole measurement, so
+// the swaps with no gap in them are also the only ones with a fault to see.
+// The new bar maps while the old bar's exclusive zone still
+// stands, so it is placed UNDER it: two bars stacked down the top of the
+// screen, or, when the old one goes first, the new bar floating with a band of
+// bare desktop above it. That is not a near miss, it is what two layer
+// surfaces of two different themes on one screen looks like, photographed --
+// and a crossfade is a machine for producing it deliberately, for 250 ms
+// instead of for one frame. Theme.qml's note beside recolorDuration reaches
+// the same conclusion from the other direction, about colour rather than
+// structure, and it was already measured there.
+//
+// SO NOTHING HERE ANIMATES AND NOTHING HERE OVERLAPS. The cut is the design.
+// What was actually wrong was never the timing, and it is the paragraph below.
+//
+// WHAT AN OPEN SURFACE COSTS, AND WHY build() CLOSES THEM. The four sheets and
+// the bar's popout are drawn by the theme and driven by host state that a swap
+// does not touch, so a sheet open across one is destroyed and rebuilt STILL
+// OPEN -- the power menu was captured going down under genesis and coming back
+// up in the probe, open, in the same place. That reads like the swap being
+// transparent and it is not: everything those surfaces do in the act of
+// OPENING is skipped, because they never open again. The carousel reveals the
+// applied wallpaper from its onVisibleChanged and so returns scrolled to the
+// first thumbnail instead; the launcher clears its field there and so returns
+// looking empty while still holding what was typed; the cheatsheet fetches the
+// binds there and so returns showing whatever was last fetched. Each comes
+// back subtly WRONG rather than plainly gone, which is the worse of the two.
+// modules/Surfaces.qml is the one place that knows what may be on screen, so
+// closeAll() below puts all of it away first -- and that call has to happen
+// here, in the swap itself, rather than in a Connections over there. The note
+// on closeAll() is where the ordering was measured and why it cannot.
 
 import QtQuick
 import qs.modules
@@ -75,6 +143,13 @@ Loader {
     function build(): void {
         if (String(root.source) === root.surfaceUrl)
             return;
+
+        // A SWAP AND NOT THE FIRST BUILD, which is the whole meaning of the
+        // test: nothing is loaded only at startup, and everything below is
+        // about what is already on screen. See WHAT AN OPEN SURFACE COSTS in
+        // the header.
+        if (String(root.source) !== "")
+            Surfaces.closeAll();
 
         root.setSource(root.surfaceUrl, {
             modelData: root.modelData
