@@ -49,6 +49,18 @@
    ordinary system upgrade, and the failure would show up days later with no
    obvious cause. A restart to see the new accent is the cheaper trade. */
 
+/* The base palette -- surfaces -- from the colour scheme rather than from the
+   wallpaper, written by matugen from templates/zen-scheme.css. FIRST of the
+   three because it is the layer the other two are painted over; they set
+   nothing it sets, so today the order costs nothing and states the intent.
+
+   The three declarations it carries were in the :root block below until the
+   scheme existed. They could not stay there even as a fallback, for the reason
+   spelled out at the opacity import underneath: an @import has to precede every
+   rule, so anything declared in this file beats what it imported, and a
+   hardcoded surface would have frozen the scheme out silently. */
+@import url("scheme.css");
+
 @import url("colors.css");
 
 /* The one transparency of the desktop, written by the `desktop-opacity`
@@ -65,6 +77,11 @@
    generated one and the slider would appear to do nothing. */
 @import url("opacity.css");
 
+/* THIS BLOCK NOW DECLARES NOTHING, and that is the change rather than an
+   oversight: the three surfaces it used to set are generated into scheme.css,
+   imported at the top. What is left is the reasoning behind them, which is
+   still this file's to keep -- the notes below are the record of what was
+   measured, and the empty rule is inert. */
 :root {
   /* ---- Surfaces: fixed, Tokyo Night ----
      Zen's dark base is a set of neutral near-blacks (#101010, #171717,
@@ -87,13 +104,10 @@
      Dark mode itself is NOT forced here. Zen follows the XDG portal, which
      already answers "dark" system-wide. If it ever comes up light, the
      problem is the portal, not this file. */
-  --zen-branding-dark: #1a1b26 !important;
-  --zen-main-browser-background: #1a1b26 !important;
 
   /* Dialogs stay OPAQUE on purpose. They are small surfaces that show up
      over a page and ask something; blur behind text you have to read to
      answer is where glass stops being worth it. */
-  --zen-dialog-background: #1a1b26 !important;
 
   /* ---- The glass ----
      zen.widget.linux.transparency (user.js) hands the compositor a real
