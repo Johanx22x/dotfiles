@@ -415,6 +415,14 @@ note("--- the bar beside the list ---")
 
 # modules/settings/Settings.qml:304. Rail 210 wide with 10 of padding, bar
 # inset 3 from its right edge, entries stopping at the padding. Window 820.
+#
+# THOSE TWO NUMBERS ARE GENESIS'S AND NOT THE SHELL'S ANY MORE. The rail is
+# `Theme.railWidth` and `Theme.railPadding`, two tokens a theme.json may set,
+# with 210 and 10 as the fallbacks -- see modules/settings/SettingsChrome.qml.
+# This case is written at genesis's values, so what it asserts is that the three
+# pixels hold THERE. A theme that took railPadding below the bar's own four has
+# no channel left for it and this bench would not notice; that gap is named in
+# the same header and is not closed here.
 check({**BESIDE, "name": "settings rail", "listLeft": 10, "listRight": 200,
        "barX": 203, "sceneWidth": 820},
       bar=(200, 217), content=(10, 199))

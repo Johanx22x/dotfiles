@@ -45,7 +45,12 @@ Item {
     width: 820
     height: 580
 
-    // The rail panel. Settings.qml: width 210, padding 10.
+    // The rail panel, at genesis's numbers. Settings.qml takes both off
+    // modules/settings/SettingsChrome.qml, which reads `Theme.railWidth` and
+    // `Theme.railPadding` -- tokens a theme.json may set, falling back to
+    // exactly these. Written out here rather than read, because this bench is
+    // about a wheel event and a click and needs one fixed rail to measure them
+    // against, not whichever rail the configured theme asks for.
     readonly property int railWidth: 210
     readonly property int railPadding: 10
 

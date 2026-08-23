@@ -487,12 +487,23 @@ theme should be answering.
 
 ### 5. `Theme` and `Icons` come from `import qs`, and only those
 
-Design tokens are the host's and they are the same for every theme --
-`../README.md` is explicit that the palette belongs to the wallpaper and stays
-in the host, which is why this theme is not named after a colour. So a theme
+`Theme` is the one place a design token is read from, whatever the token
+belongs to. The palette belongs to the wallpaper and to the scheme and stays in
+the host -- `../README.md` is explicit about that, and it is why this theme is
+not named after a colour. The GEOMETRY is the theme's own, out of its
+`theme.json`, and it arrives through exactly the same singleton. So a theme
 implementation imports `qs` and reads `Theme.groupPadding`, `Theme.primary`,
 `Icons.wifi` directly. Forty-eight of the fifty files under `themes/genesis`
 already do.
+
+**That sentence read "design tokens are the host's and they are the same for
+every theme", and it is worth keeping rather than deleting.** It was written
+before `theme.json` existed, when every number in `Theme.qml` was a literal and
+the only thing a theme could change was drawing. What it was actually pointing
+at survived: a theme file reads `Theme` and nothing else, and never gets a
+second channel. What died is the claim that two themes see the same numbers:
+`Theme.barHeight` is whatever this theme's `theme.json` says, and
+`Theme.railWidth` is the newest of those.
 
 The alternative -- everything arrives through `row` -- was considered and is
 worse in a specific way: the facade would have to re-export a dozen tokens per
