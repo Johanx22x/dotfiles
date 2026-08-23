@@ -31,6 +31,13 @@ import qs
 import qs.components
 import qs.modules
 import qs.modules.settings
+// The notification centre lives next door in notifications/, because it is
+// that surface's content and not the bar's. A directory import and NOT the
+// module form: `import qs.themes.windows` is the rule for reaching THE THEME'S
+// SINGLETON, where the relative form silently resolves the type instead of the
+// instance. An ordinary type has no such trap, and this is how genesis reaches
+// across its own directories.
+import "../notifications"
 
 PanelWindow {
     id: root
@@ -38,6 +45,14 @@ PanelWindow {
     required property var modelData
 
     readonly property string screenKey: Config.screenKey(root.modelData)
+
+    // The four switches this taskbar can actually obey, and the manifest
+    // declares exactly these four so the Bar page offers no others. A switch
+    // for a widget a theme does not draw is a control that flips, saves,
+    // reloads and changes nothing.
+    function widget(name: string): bool {
+        return Config.barWidget(root.screenKey, name);
+    }
     readonly property var apps: Compositor.windowsOn(root.modelData?.name ?? "")
 
     screen: modelData
@@ -112,6 +127,8 @@ PanelWindow {
     Clock {
         id: clock
 
+        visible: root.widget("clock")
+
         anchors.right: parent.right
         anchors.rightMargin: Theme.barPadding
         anchors.verticalCenter: parent.verticalCenter
@@ -122,10 +139,15 @@ PanelWindow {
     TrayCorner {
         id: corner
 
-        anchors.right: clock.left
+        anchors.right: clock.visible ? clock.left : parent.right
+        anchors.rightMargin: clock.visible ? 0 : Theme.barPadding
         anchors.verticalCenter: parent.verticalCenter
 
         barScreen: root.modelData
+
+        showTray: root.widget("tray")
+        showKeyboardLayout: root.widget("keyboardLayout")
+        showNotifications: root.widget("notifications")
 
         onOverflowRequested: barPopout.openAt(corner.x + corner.width / 2, trayMenu)
         onQuickSettingsRequested: barPopout.openAt(corner.x + corner.width / 2, quickSettings)
@@ -168,10 +190,7 @@ PanelWindow {
     Component {
         id: notificationCentre
 
-        Item {
-            implicitWidth: Theme.notificationWidth
-            implicitHeight: Theme.popoutMinWidth
-        }
+        NotificationCentre {}
     }
 
     Component {

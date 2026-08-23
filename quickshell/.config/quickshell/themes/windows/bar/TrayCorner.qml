@@ -29,6 +29,12 @@ Row {
 
     required property var barScreen
 
+    // The bar hands these down rather than each item asking, so the switches
+    // and the drawing agree in one place.
+    property bool showTray: true
+    property bool showKeyboardLayout: true
+    property bool showNotifications: true
+
     spacing: 0
 
     // A backplate that several glyphs share. Declared once as an inline
@@ -81,7 +87,7 @@ Row {
     // it; we have no overflow, so it is what opens the tray's own popout
     // instead -- the same gesture reaching the same set.
     CornerItem {
-        visible: SystemTray.items.values.length > 0
+        visible: root.showTray && SystemTray.items.values.length > 0
 
         // chevronDown TURNED OVER, because the host's icon vocabulary has no
         // chevronUp: it publishes left, right and down and nothing else, and
@@ -102,7 +108,7 @@ Row {
     // The third-party icons, each its own target, at the size Windows draws
     // every symbol.
     Repeater {
-        model: SystemTray.items
+        model: root.showTray ? SystemTray.items : null
 
         CornerItem {
             id: trayItem
@@ -125,7 +131,7 @@ Row {
 
     // The keyboard layout, when there is more than one to be in.
     CornerItem {
-        visible: Config.keyboardLayouts.length > 1
+        visible: root.showKeyboardLayout && Config.keyboardLayouts.length > 1
 
         content: Column {
             spacing: -2

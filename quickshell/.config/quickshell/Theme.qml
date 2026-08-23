@@ -710,17 +710,73 @@ Singleton {
             // worst of both readings.
             root.adoptPalette(null);
             root.adoptFont(null);
+            root.adoptBar(null);
             return;
         }
 
         root.adoptPalette(manifest);
         root.adoptFont(manifest);
+        root.adoptBar(manifest);
     }
 
-    // MOVED OUT OF adoptManifest AND NOT CHANGED, because there are two
+    // MOVED OUT OF adoptManifest AND NOT CHANGED, because there are three
     // declarations to read now and a single function would have had to decide
-    // what a manifest that gets one of them wrong means for the other. It means
-    // nothing: they are independent claims and each falls back on its own.
+    // what a manifest that gets one of them wrong means for the others. It
+    // means nothing: they are independent claims and each falls back on its
+    // own.
+
+    // ---- WHICH BAR WIDGETS THE DRAWING THEME ACTUALLY HAS ----
+    //
+    // An empty list means "all of them", which is what every theme meant
+    // before this existed and what genesis still means: it draws every widget
+    // the shell has a switch for, so it names none and nothing moves.
+    //
+    // WHY A THEME HAS TO BE ASKED AT ALL. The bar page offers a switch per
+    // widget -- the distribution logo, the focused window title, the island,
+    // the tray, the peripheral battery, the keyboard layout. A theme decides
+    // what its bar HAS, and the Windows theme has almost none of those: its
+    // taskbar is Start, the open windows and the corner, because that is what
+    // a Windows taskbar is. Every switch for a widget it does not draw is a
+    // control that flips, saves, reloads and changes nothing on screen.
+    //
+    // THAT FAILURE HAS A HISTORY HERE. It is the same shape as the colour
+    // scheme picker staying live under a theme that pins one, and the
+    // transparency slider staying live under a theme that sets its own -- and
+    // both of those were found by the person using the desktop rather than by
+    // anything in tests/. A control that cannot do what it says is worse than
+    // a missing one, because the missing one does not lie.
+    //
+    // NOT A TOKEN: token() takes a number and this is a list of names. It goes
+    // in the manifest beside `palette` and `font`, which is where a theme's
+    // declarations about ITSELF live. theme.json is metrics.
+    property var barWidgets: []
+
+    readonly property bool barWidgetsDeclared: root.barWidgets.length > 0
+
+    // Does the drawing theme have this widget at all? A theme that declares
+    // nothing answers yes to everything, which leaves every existing theme and
+    // every existing switch exactly where they were.
+    function themeDrawsWidget(name: string): bool {
+        return !root.barWidgetsDeclared || root.barWidgets.includes(name);
+    }
+
+    function adoptBar(manifest: var): void {
+        const declared = manifest && manifest.bar ? manifest.bar.widgets : undefined;
+
+        if (declared === undefined) {
+            root.barWidgets = [];
+            return;
+        }
+
+        if (!Array.isArray(declared)) {
+            console.warn(`Theme: ${root.themeName} carries a "bar.widgets" that is not a list -- offering every widget`);
+            root.barWidgets = [];
+            return;
+        }
+
+        root.barWidgets = declared.filter(n => typeof n === "string" && n !== "");
+    }
+
     function adoptPalette(manifest: var): void {
         // NOT NAMED `palette`, which is a property of this singleton twenty
         // lines further down: a local of that name reads like the palette the

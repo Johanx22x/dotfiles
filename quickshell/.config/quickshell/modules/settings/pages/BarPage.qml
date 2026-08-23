@@ -73,6 +73,7 @@
 import QtQuick
 import qs
 import qs.components
+import qs.modules
 import qs.modules.settings
 
 SettingsPage {
@@ -303,7 +304,28 @@ SettingsPage {
             font.pointSize: Theme.fontSize - 2
         }
 
+        // AND THE THEME DECIDES WHICH SWITCHES EXIST AT ALL.
+        //
+        // Every row below is gated on Theme.themeDrawsWidget(), because a
+        // theme decides what its bar HAS and a switch for a widget it does not
+        // draw is a control that flips, saves, reloads and changes nothing on
+        // screen. A theme that declares nothing -- genesis, and every theme
+        // before this existed -- answers yes to everything, so nothing moved
+        // for it.
+        //
+        // Said rather than left as a shorter list, because a section that
+        // silently loses half its rows when you change themes reads as a bug.
+        SectionNote {
+            visible: Theme.barWidgetsDeclared
+
+            text: `The ${Themes.title} theme draws its own bar, so only the `
+                + "widgets it has appear here. Switch themes to get the rest "
+                + "back."
+            font.pointSize: Theme.fontSize - 2
+        }
+
         ToggleRow {
+            visible: Theme.themeDrawsWidget("logo")
             glyph: Icons.arch
             label: "Distribution logo"
             checked: Config.barWidget(root.barKey, "logo")
@@ -311,6 +333,7 @@ SettingsPage {
         }
 
         ToggleRow {
+            visible: Theme.themeDrawsWidget("activeWindow")
             glyph: Icons.window
             label: "Focused window title"
             checked: Config.barWidget(root.barKey, "activeWindow")
@@ -324,6 +347,7 @@ SettingsPage {
         // one, and why this switch is the one most likely to be the reason
         // somebody opened this section.
         ToggleRow {
+            visible: Theme.themeDrawsWidget("island")
             glyph: Icons.widgets
             label: "Island"
             checked: Config.barWidget(root.barKey, "island")
@@ -345,6 +369,7 @@ SettingsPage {
         }
 
         ToggleRow {
+            visible: Theme.themeDrawsWidget("tray")
             glyph: Icons.apps
             label: "System tray"
             checked: Config.barWidget(root.barKey, "tray")
@@ -352,6 +377,7 @@ SettingsPage {
         }
 
         ToggleRow {
+            visible: Theme.themeDrawsWidget("battery")
             glyph: Icons.battery
             label: "Peripheral battery"
             checked: Config.barWidget(root.barKey, "battery")
@@ -366,6 +392,7 @@ SettingsPage {
         // With one layout configured the pill is hidden whatever this says.
         // The row stays, and the line under it explains why nothing appeared.
         ToggleRow {
+            visible: Theme.themeDrawsWidget("keyboardLayout")
             glyph: Icons.keyboard
             label: "Keyboard layout"
             checked: Config.barWidget(root.barKey, "keyboardLayout")
@@ -389,6 +416,7 @@ SettingsPage {
         // are the key and the do-not-disturb badge, and the badge is only there
         // while the mute is on.
         ToggleRow {
+            visible: Theme.themeDrawsWidget("notifications")
             glyph: Icons.bell
             label: "Notification history"
             checked: Config.barWidget(root.barKey, "notifications")
@@ -396,6 +424,7 @@ SettingsPage {
         }
 
         ToggleRow {
+            visible: Theme.themeDrawsWidget("clock")
             glyph: Icons.clock
             label: "Clock"
             checked: Config.barWidget(root.barKey, "clock")
@@ -403,6 +432,7 @@ SettingsPage {
         }
 
         ToggleRow {
+            visible: Theme.themeDrawsWidget("updates")
             glyph: Icons.update
             label: "Updates"
             checked: Config.barWidget(root.barKey, "updates")
@@ -427,6 +457,7 @@ SettingsPage {
         }
 
         ToggleRow {
+            visible: Theme.themeDrawsWidget("settingsButton")
             glyph: Icons.settings
             label: "Settings button"
             checked: Config.barWidget(root.barKey, "settingsButton")

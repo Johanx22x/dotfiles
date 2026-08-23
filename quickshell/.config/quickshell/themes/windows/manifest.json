@@ -9,5 +9,13 @@
     "font": {
         "source": "theme",
         "family": "Segoe UI Variable Static Text"
+    },
+    "bar": {
+        "widgets": [
+            "tray",
+            "keyboardLayout",
+            "clock",
+            "notifications"
+        ]
     }
 }
