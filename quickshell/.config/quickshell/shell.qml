@@ -123,7 +123,6 @@ import qs.themes.windows
 import qs.themes.windows.bar
 import qs.themes.windows.cheatsheet
 import qs.themes.windows.components
-import qs.themes.windows.island
 import qs.themes.windows.launcher
 import qs.themes.windows.notifications
 import qs.themes.windows.powermenu

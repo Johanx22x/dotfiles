@@ -333,11 +333,7 @@ declare -A BASELINE=(
     #
     # Lower these as they fall. A budget left above the real number is a budget
     # that hides the next regression underneath it.
-    [windows:unqualified]=96
-    [windows:missing-property]=14
-    [windows:unresolved-type]=6
     [windows:uncreatable-type]=6
-    [windows:signal-handler-parameters]=1
 
     # --- theme-probe: 6 warnings --------------------------------------------
     #
