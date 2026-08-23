@@ -1,81 +1,48 @@
-// One notification.
+// How genesis draws one notification. The public half -- the timeout per
+// urgency, the two values the spec reserves, the clock, and the difference
+// between dismissing a notification and letting it expire -- is
+// components/NotificationCard.qml, and none of that is drawing.
 //
 // Collapsed it is two lines: who sent it and when, then the body cut to a
 // single line. The chevron expands it in place to the full body plus the
 // actions the sender offered -- the card grows, the stack below slides down,
 // and nothing opens a second window.
 //
-// Clicking the card dismisses it. That is `dismiss()` and not `expire()`:
-// dismissing tells the sending application the user closed it deliberately,
-// which is what lets apps like Discord stop re-sending the same thing.
+// THE WHOLE CARD IS THE TARGET, which is a promise the facade cannot require
+// and this file has to keep. A click anywhere that is not the chevron and not
+// an action button dismisses the notification; there is no close button and
+// there never was one. The MouseArea at the foot of this file is how, and it
+// is declared last on purpose. See rule 7 in README.md in this directory.
+//
+// AND IT IS `row.dismiss()` AND NOT `row.notification.expire()`. Both would
+// take the card off the screen and they say opposite things to the sender --
+// dismissing tells the application the user closed it deliberately, which is
+// what lets apps like Discord stop re-sending the same thing. The facade owns
+// that distinction and exposes the one of the two a click means; a theme that
+// reached past it to the notification would be answering a question about the
+// protocol that it was not asked.
 
-import Quickshell.Services.Notifications
 import QtQuick
 import qs
+import qs.components
 
 Rectangle {
     id: root
 
-    required property Notification notification
+    // The facade, handed in by its Loader as an initial property. See the note
+    // in this directory's ToggleRow.qml on why it is `required`, why it is
+    // typed rather than `var`, and why `NotificationCard` here is the facade
+    // and not this file.
+    required property NotificationCard row
 
-    property bool expanded: false
+    // HOISTED, because the Repeater at the bottom is a delegate and rule 1's
+    // checking stops at its edge -- `row.notification.actions` read from inside
+    // it would be exactly as unchecked as `property var row` would have made
+    // the whole file. Read once here, where the type is real, and the delegate
+    // binds to a local name. LevelMeter.qml in this directory does the same
+    // thing and says so in the same words.
+    readonly property var actions: root.row.notification.actions
 
-    // How long this card stays up, in MILLISECONDS.
-    //
-    // expireTimeout is already in milliseconds -- `notify-send -t 2000`
-    // arrives here as 2000. An earlier version multiplied it by 1000 "to
-    // convert from seconds", which turned every explicit timeout into a
-    // little over half an hour. That is why notifications piled up and never
-    // left: the only ones that expired were the ones asking for the default.
-    //
-    // The two special values come from the desktop notification spec:
-    //   -1  the sender has no opinion -> ours
-    //    0  "never expire"
-    //
-    // "Never" is NOT honoured. Applications reach for it far too easily
-    // (browser notifications especially) and the result is a panel that only
-    // grows. Every setting below is bounded at both ends, so even something
-    // important eventually clears itself.
-    //
-    // ONE DEFAULT PER URGENCY, and this is where the file changed its mind.
-    // It used to say that critical did not follow the setting, because "how
-    // long do I want to read a chat notification" is not an answer to "how
-    // long should the recorder's failure stay up". Those are still two
-    // different questions -- which is the argument for giving them two
-    // different ANSWERS, not for hardcoding one of them. A number written
-    // into the source is not an answer to a question nobody can ask; it only
-    // makes the question unaskable. So the settings page asks all three and
-    // each urgency carries its own number.
-    //
-    // The old behaviour is what the defaults still are: 10 seconds for low
-    // and normal, 30 for critical. Nothing moves until somebody moves it.
-    //
-    // Anything the spec does not define falls to normal, which is the closest
-    // true answer for an urgency this shell has never heard of.
-    readonly property int timeoutSeconds: {
-        switch (root.notification.urgency) {
-        case NotificationUrgency.Low:
-            return Config.notificationTimeoutLow;
-        case NotificationUrgency.Critical:
-            return Config.notificationTimeoutCritical;
-        default:
-            return Config.notificationTimeout;
-        }
-    }
-
-    // SECONDS in Config and multiplied HERE -- the one place in the shell
-    // that conversion happens, so there is one place to get it wrong. Three
-    // settings and still one `* 1000`.
-    readonly property int timeout: {
-        const asked = root.notification.expireTimeout;
-        if (asked > 0)
-            return asked;
-        return root.timeoutSeconds * 1000;
-    }
-
-    readonly property bool critical: root.notification.urgency === NotificationUrgency.Critical
-
-    implicitWidth: Theme.notificationWidth
     implicitHeight: layout.implicitHeight + Theme.groupPadding * 2
 
     // A box on the panel, not a window of its own: a step up the surface
@@ -86,19 +53,17 @@ Rectangle {
 
     // Critical notifications get an outline instead of a different fill:
     // recolouring the whole card would fight the palette, an edge does not.
-    border.width: root.critical ? 1 : 0
+    border.width: root.row.critical ? 1 : 0
     border.color: Theme.critical
 
+    // THE GROWTH IS MOTION AND MOTION IS THIS SIDE'S, unlike Popout's two
+    // Behaviors, which are on its facade because a window's input mask and its
+    // size reservation both have to follow the same geometry. Nothing on the
+    // other side of this seam reads the card's height except the Column that
+    // stacks the cards, and it is happy to be told a moving number: the facade
+    // follows this implicitHeight through its Loader and the stack slides.
     Behavior on implicitHeight {
         NumberAnimation { duration: Theme.animDuration; easing.type: Easing.OutCubic }
-    }
-
-    // Expanded means the user is reading it, so the clock stops; collapsing
-    // it again starts a fresh one.
-    Timer {
-        running: !root.expanded
-        interval: root.timeout
-        onTriggered: root.notification.expire()
     }
 
     Column {
@@ -134,7 +99,7 @@ Rectangle {
                     width: parent.width - 8
                     height: parent.height - 8
 
-                    source: Icons.resolve(root.notification.image || root.notification.appIcon)
+                    source: Icons.resolve(root.row.notification.image || root.row.notification.appIcon)
                     visible: status === Image.Ready
                     sourceSize.width: width
                     sourceSize.height: height
@@ -144,7 +109,7 @@ Rectangle {
                     anchors.centerIn: parent
                     // Nothing to show: the bell stands in, so the card never
                     // has a hole where the icon goes.
-                    visible: !root.notification.image && !root.notification.appIcon
+                    visible: !root.row.notification.image && !root.row.notification.appIcon
                     text: Icons.bell
                     font.family: Theme.fontFamily
                     font.pointSize: Theme.iconSize
@@ -167,7 +132,7 @@ Rectangle {
                     spacing: 6
 
                     Text {
-                        text: root.notification.summary || root.notification.appName
+                        text: root.row.notification.summary || root.row.notification.appName
                         font.family: Theme.fontFamily
                         font.pointSize: Theme.fontSize
                         font.weight: Font.Bold
@@ -193,13 +158,13 @@ Rectangle {
 
                 Text {
                     width: header.width
-                    text: root.notification.body
+                    text: root.row.notification.body
                     textFormat: Text.StyledText
 
                     // Collapsed: one line, cut. Expanded: as many as it needs.
-                    maximumLineCount: root.expanded ? 0 : 1
-                    wrapMode: root.expanded ? Text.Wrap : Text.NoWrap
-                    elide: root.expanded ? Text.ElideNone : Text.ElideRight
+                    maximumLineCount: root.row.expanded ? 0 : 1
+                    wrapMode: root.row.expanded ? Text.Wrap : Text.NoWrap
+                    elide: root.row.expanded ? Text.ElideNone : Text.ElideRight
 
                     font.family: Theme.fontFamily
                     font.pointSize: Theme.fontSize
@@ -207,7 +172,9 @@ Rectangle {
                 }
             }
 
-            // Expand / collapse.
+            // Expand / collapse. The card's own state lives on the facade
+            // because the clock is bound to it, so this asks rather than
+            // assigns -- rule 4.
             Text {
                 id: chevron
 
@@ -215,7 +182,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
 
                 text: "⌄"
-                rotation: root.expanded ? 180 : 0
+                rotation: root.row.expanded ? 180 : 0
                 font.family: Theme.fontFamily
                 font.pointSize: Theme.fontSize
                 color: Theme.textOnSurfaceVariant
@@ -228,7 +195,7 @@ Rectangle {
                     anchors.fill: parent
                     anchors.margins: -8
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.expanded = !root.expanded
+                    onClicked: root.row.toggleExpanded()
                 }
             }
         }
@@ -237,11 +204,11 @@ Rectangle {
         // Only while expanded: collapsed cards stay two lines tall whatever
         // the sender attached to them.
         Row {
-            visible: root.expanded && root.notification.actions.length > 0
+            visible: root.row.expanded && root.actions.length > 0
             spacing: Theme.itemSpacing
 
             Repeater {
-                model: root.notification.actions
+                model: root.actions
 
                 Rectangle {
                     required property var modelData
@@ -285,6 +252,6 @@ Rectangle {
         anchors.fill: parent
         z: -1
         cursorShape: Qt.PointingHandCursor
-        onClicked: root.notification.dismiss()
+        onClicked: root.row.dismiss()
     }
 }

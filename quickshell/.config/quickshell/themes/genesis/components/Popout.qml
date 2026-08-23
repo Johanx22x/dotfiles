@@ -34,9 +34,14 @@
 // corners hanging off the top of the screen is what the alternative looks
 // like, and it was on screen for a while.
 //
-// CornerWedge IS THE HOST'S COMPONENT and has not been split. Until it is,
-// this instantiates components/CornerWedge.qml, which is what the pre-split
-// Popout did from the window itself.
+// THE FILLETS GO THROUGH components/CornerWedge.qml AND NOT ROUND IT, now
+// that the wedge is split too. That reads like a detour -- a theme file
+// reaching for a facade whose only job is to load a file back in this same
+// directory -- and it is the only thing that works: the theme's half takes a
+// `required property CornerWedge row` and there is no facade to hand it unless
+// one is built. It is also the arrangement the seam already assumes, in
+// ../README.md's own words: a theme draws WITH the shell's components. The
+// cost is one Loader per fillet, two per popout.
 
 import QtQuick
 import qs

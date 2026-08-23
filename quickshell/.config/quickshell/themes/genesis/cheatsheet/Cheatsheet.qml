@@ -213,8 +213,16 @@ PanelWindow {
     readonly property int chipSpacing: 5
 
     // The chip label's font, so advanceWidth() measures the text with the face
-    // it will actually be drawn in. Kept in step with the Text inside BindRow
-    // by hand -- FontMetrics takes a font, not a component.
+    // it will actually be drawn in.
+    //
+    // IT NO LONGER HAS TO BE KEPT IN STEP BY HAND. It did, and this comment
+    // used to say so: the Text inside BindRow spelled out `Theme.fontSize - 1.5`
+    // for itself and the two were the same face only for as long as somebody
+    // remembered to change both. With the cap drawn by components/Chip.qml the
+    // font travels -- this one, whole, through BindRow's `chipFont` to the
+    // chip's `labelFont` -- so the face that is measured and the face that is
+    // drawn are one value. The same arrangement the keybinds settings page
+    // arrived at, and its header carries the longer argument.
     FontMetrics {
         id: chipMetrics
 
@@ -699,6 +707,12 @@ PanelWindow {
                                                 gap: root.rowGap
                                                 chipPadding: root.chipPadding
                                                 chipSpacing: root.chipSpacing
+
+                                                // The face the gutter above
+                                                // was measured in, handed to
+                                                // the chip that is drawn in
+                                                // it. See chipMetrics.
+                                                chipFont: chipMetrics.font
                                             }
                                         }
                                     }

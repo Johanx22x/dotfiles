@@ -102,7 +102,9 @@
 # ---------------------------------------------------------------------------
 #
 # THE BASELINE, AND WHY IT IS NOT ZERO. The tree measured 326 the first time a
-# linter could read it; 19 of those were cheap and are gone, so it is 307.
+# linter could read it; 19 of those were cheap and are gone, which made it 307,
+# and one more went with the notification card's split -- see unresolved-type
+# below -- so it is 306.
 # Gating at zero would mean gating at a number nobody can reach today, so this
 # gates at what is there and refuses to let it grow. The table below is the
 # whole of it, and the shape matters more than the total:
@@ -129,9 +131,17 @@
 #                                   onExited handler. Quickshell exposes a Qt
 #                                   private enum there; nothing in this
 #                                   repository can fix it.
-#    14  unresolved-type            Quickshell C++ types not exposed
+#    13  unresolved-type            Quickshell C++ types not exposed
 #                                   declaratively: Toplevel, UntypedObjectModel,
 #                                   FileViewAdapter, DBusMenuHandle. Not ours.
+#                                   Was 14: the notification card read
+#                                   `notification.actions` twice and each read
+#                                   cost one, so hoisting the list into a
+#                                   single property when the card was split
+#                                   took one off. Which is the only way a
+#                                   number in this column ever moves for a
+#                                   reason of ours -- the TYPE is still not
+#                                   exposed; there is one fewer place asking.
 #     9  uncreatable-type           "PanelWindow is not creatable", which is
 #                                   false -- the whole shell is PanelWindows. An
 #                                   artefact of how Quickshell registers it.
@@ -184,7 +194,7 @@ declare -A BASELINE=(
     [unqualified]=246
     [missing-property]=19
     [signal-handler-parameters]=17
-    [unresolved-type]=14
+    [unresolved-type]=13
     [uncreatable-type]=9
     [incompatible-type]=1
     [redundant-optional-chaining]=1
