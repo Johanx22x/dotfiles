@@ -3,10 +3,12 @@
 #  desktop-scheme — which base palette the desktop wears
 #
 #  The colour of this desktop has two halves. The ACCENTS -- three of them, plus
-#  the Material 3 roles around them -- are derived from the wallpaper. The BASE
-#  -- surfaces, text, outlines, the sixteen ANSI slots, the alert colours -- was
-#  Tokyo Night written out as 227 hex literals across ten files, and could not
-#  be changed without editing all of them.
+#  the Material 3 roles around them -- are derived from the wallpaper, THROUGH
+#  the scheme: the picture chooses which of the scheme's own colours the accent
+#  is built from, and never a colour from outside it. The BASE -- surfaces,
+#  text, outlines, the sixteen ANSI slots, the alert colours -- was Tokyo Night
+#  written out as 227 hex literals across ten files, and could not be changed
+#  without editing all of them.
 #
 #  This script is the dial for the base: WHICH scheme supplies it. The accents
 #  are not a dial, and the note above `accent_args` says why.
@@ -139,7 +141,7 @@ chosen() {
 
 # THE WORDS THAT OPEN THE matugen COMMAND LINE, one per line, for
 # `wallpaper-switch` to read into an array. Everything after them -- the mode,
-# the preference, the scheme import -- stays at that call site.
+# the quiet flag, the scheme import -- stays at that call site.
 #
 # WHERE THE ACCENTS COME FROM IS NOT A SETTING. It was one briefly: the picker
 # offered the scheme's own `fb_*` roles and a colour typed by hand as two
@@ -150,18 +152,101 @@ chosen() {
 # a thing to look at. The `fb_*` roles stay in the scheme files: they answer
 # the different question a clone with no wallpaper yet asks.
 #
-# STILL ASKED FOR RATHER THAN SPELLED OUT AT THE CALL SITE, with one answer to
-# give today. The division of labour is what earns it: this script is the one
-# that knows what the scheme is, and `wallpaper-switch` is the one that knows
-# WHICH image to colour from -- a video is coloured from a cached frame, which
-# is twenty lines over there. Which words open the render is therefore this
-# side's question, and this is the seam anything with a say in the accent
-# reaches it through.
+# THE WALLPAPER STILL CHOOSES WHICH ACCENT; THE SCHEME DECIDES WHAT IT IS.
+# Those two sentences above were the whole design and half of it was not being
+# honoured. matugen was handed the image and its answer went straight through:
+# a blue picture derived its accent from #0b87e2, a sky blue no dark scheme in
+# this repository publishes, so a Gruvbox desktop wore a colour Gruvbox would
+# never print and the base and the accent read as two palettes at once. This
+# now happens in two steps instead of one:
 #
-# A PURE READ, so there is no loop: `set` calls `wallpaper-switch reapply`,
-# `reapply` calls this, and this returns. Same contract as `path`.
+#   1. matugen is asked what colour the image is, and nothing else --
+#      `-j hex --dry-run` prints the palette and writes no file.
+#   2. that colour is snapped onto the nearest colour the SCHEME publishes --
+#      the twelve ANSI chromatics, `scheme-accent.py` next door -- and the
+#      snapped colour, not the image, is what the render is seeded with.
+#
+# So a blue picture under Gruvbox gives Gruvbox's blue #458588 and a sunset its
+# gold #d79921: the image still picks, out of a menu the scheme wrote.
+#
+# `--prefer saturation` MOVED HERE FROM THE CALL SITE, and it had to. It
+# decides which of an image's candidate colours becomes the seed -- there is no
+# image at the render step any more, so it means nothing there and everything
+# here. Without it, and with no interactive terminal to ask, matugen has no way
+# to choose between the several colours it found.
+#
+# `color hex` AND NOT `image`, which costs the render its knowledge of the
+# picture: `{{image}}` is the provenance line at the top of all fourteen
+# generated files and matugen fills it with the literal `Null` when it was
+# given a colour. `--import-json-string` puts the path back, because an import
+# is render data like any other -- verified against 4.2.0, all fourteen render
+# with the real path. It is one of the words handed back rather than a flag the
+# call site appends for the same reason `color hex` is: which image the accent
+# came from is this side's answer to give.
+#
+# STILL ASKED FOR RATHER THAN SPELLED OUT AT THE CALL SITE. The division of
+# labour is what earns it: this script is the one that knows what the scheme
+# is, and `wallpaper-switch` is the one that knows WHICH image to colour from
+# -- a video is coloured from a cached frame, which is twenty lines over there.
+# Which words open the render is therefore this side's question, and this is
+# the seam anything with a say in the accent reaches it through.
+#
+# WHAT THIS TAKES IS A STILL IMAGE, ALWAYS, and the division above is what
+# guarantees it: `wallpaper-switch` computes `PALETTE_SOURCE` -- the video's
+# cached frame when the wallpaper is a video, the wallpaper itself when it is
+# not -- and passes THAT, never `TARGET`. Reading an image is now the first
+# thing this function does rather than the last thing the render does, so the
+# order matters more than it did, and it is unchanged: the frame is extracted
+# at step 5 of that script, before `accent-args` is called at all. Handed an
+# mp4 anyway, matugen panics on `Unsupported(PathExtension)` and the `die`
+# below stops the run -- which is the correct answer to a caller that skipped
+# the extraction, not something to paper over with a second copy of it here.
+#
+# NOT A PURE READ ANY MORE, and it is still not a loop. `set` calls
+# `wallpaper-switch reapply`, `reapply` calls this, and this runs matugen in
+# `--dry-run` and returns -- the dry run writes nothing and calls nothing back.
+# What it costs is one extra matugen process per wallpaper change, measured at
+# 0.1 s on this collection.
+#
+# EVERY STEP IS FATAL, matching the `die` on the render itself in
+# wallpaper-switch and the reasoning written there: a palette that cannot be
+# generated leaves every application on the machine holding the wrong colours,
+# and an accent that quietly fell back to the unsnapped image colour would be
+# the same failure wearing the wrong palette instead of the old one.
 accent_args() {
-    printf 'image\n%s\n' "$1"
+    local image="$1" source_color snapped scheme
+
+    command -v python3 >/dev/null \
+        || die "python3 is not installed; it is what snaps the accent onto the scheme"
+
+    scheme="$(scheme_file "$(current)")"
+    [[ -r "$scheme" ]] || die "no readable scheme file at $scheme"
+
+    # `.default.color` and not `.dark.color`: matugen reports the source colour
+    # identically under all three keys -- it is the colour it read out of the
+    # image, before any mode is applied to it.
+    #
+    # matugen's own stderr is NOT swallowed here. `--quiet` keeps it silent on
+    # the way through, so anything it does say is the reason this failed, and
+    # the `die` below only knows that it did.
+    source_color="$(matugen image "$image" -j hex --dry-run \
+        --mode dark --prefer saturation --quiet \
+        | jq -r '.colors.source_color.default.color')" \
+        || die "matugen could not read a colour out of $(basename "$image")"
+    [[ "$source_color" =~ ^#[0-9a-fA-F]{6}$ ]] \
+        || die "matugen gave no usable colour for $(basename "$image")"
+
+    snapped="$(python3 "$BIN_DIR/../lib/scheme-accent.py" snap "$scheme" "$source_color")" \
+        || die "could not snap $source_color onto $(basename "$scheme")"
+    [[ "$snapped" =~ ^#[0-9a-fA-F]{6}$ ]] \
+        || die "the accent snapped to '$snapped', which is not a colour"
+
+    # ONE WORD PER LINE, and `jq -n --arg` builds the import so that a filename
+    # carrying a quote, a backslash or a newline comes out as valid JSON on a
+    # single line -- `mapfile` on the other side splits on newlines, so an
+    # argument that contained one would arrive as two.
+    printf 'color\nhex\n%s\n--import-json-string\n' "$snapped"
+    jq -cn --arg image "$image" '{$image}'
 }
 
 # ---------------------------------------------------------------------------

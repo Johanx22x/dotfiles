@@ -1,15 +1,27 @@
 #!/usr/bin/env python3
 #
-# VENDORED, NOT WRITTEN HERE. This file and themes.json come from
+# VENDORED, NOT WRITTEN HERE. This file and
+# ../../share/cursor-match/themes.json come from
 # github.com/SakibShahariar/material-bibata-cursor, MIT licensed -- the notice
-# it requires is the LICENSE file next to this one. They are copied in rather
-# than cloned because they are the only two pieces of that repository this
-# desktop uses: the other half of it builds the themes, which are downloaded
-# already compiled (see step 6 of install.sh).
+# it requires is the LICENSE file next to this one, and a second copy of it
+# sits next to themes.json for the same reason. They are copied in rather than
+# cloned because they are the only two pieces of that repository this desktop
+# uses: the other half of it builds the themes, which are downloaded already
+# compiled (see step 6 of install.sh).
 #
 # Keep them in step: themes.json lists the colours of the themes the pack
 # ships, so replacing the pack means replacing this file too, or the matcher
 # will confidently name a theme that is not installed.
+#
+# IT LIVES IN lib/ AND NOT NEXT TO themes.json, and the split is deliberate.
+# Everything above the "Theme matching" heading -- the sRGB -> XYZ -> Lab chain
+# and CIEDE2000 -- is general colour arithmetic with nothing to do with
+# pointers, and it now has a second caller: `scheme-accent.py`, which snaps the
+# wallpaper's colour onto the palette of the colour scheme in effect. Left in
+# ~/.local/share/cursor-match it would have been a file the accent pipeline
+# reaches into a feature it has no relationship with -- and one that would
+# leave with that feature the day the cursor matcher does. themes.json stays
+# where it was: it is cursor-match's data, not shared arithmetic.
 #
 """
 color_match.py — CIEDE2000-based nearest-theme matcher for cursor_matugen.sh

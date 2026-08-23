@@ -1571,14 +1571,18 @@ SCHEME_FILE="$("$WS_BIN_DIR/desktop-scheme" path)" \
 
 # ---- And the FIRST half, which is the one the image supplies ----------------
 #
-# The accents come from the wallpaper. `desktop-scheme accent-args` is asked
-# which words open the render rather than being told, and what comes back is the
-# OPENING OF THE COMMAND -- `image <file>` today -- rather than a flag to
-# append, so a source that needed a different subcommand or something imported
-# over the top could still be expressed without this call site learning about
-# it. It briefly did: `accent` was a setting with two further answers, and both
-# were removed as controls over a question nobody was asking. The note above
-# `accent_args` in that script is where that is argued.
+# The accents come from the wallpaper, through the scheme's palette.
+# `desktop-scheme accent-args` is asked which words open the render rather than
+# being told, and what comes back is the OPENING OF THE COMMAND rather than a
+# flag to append, so a source that needed a different subcommand or something
+# imported over the top could be expressed without this call site learning about
+# it. Both of those happened. It is no longer `image <file>`: that script now
+# reads the image's colour, snaps it onto the nearest colour the scheme itself
+# publishes and hands back `color hex <snapped>`, plus an
+# `--import-json-string` carrying the image path so the `{{image}}` provenance
+# line in the generated files still names the real wallpaper. Nothing here
+# changed for either. The note above `accent_args` in that script is where the
+# snapping is argued.
 #
 # ASKED FOR RATHER THAN COMPUTED HERE, exactly as the scheme file above is and
 # for the same reason: one script owns that store, and a second reader of it is
@@ -1592,14 +1596,16 @@ ACCENT_ARGS_TEXT="$("$WS_BIN_DIR/desktop-scheme" accent-args "$PALETTE_SOURCE")"
     || die "could not work out where the accents should come from"
 mapfile -t ACCENT_ARGS <<< "$ACCENT_ARGS_TEXT"
 
-# --prefer is mandatory: with no interactive terminal matugen cannot tell
-# which colour to pick when the image has several candidates. saturation gives
-# accents with more character than darkness/lightness. It sits here rather than
-# among the words `accent-args` hands back because it is true of the render and
-# not of where the accents came from.
+# --prefer USED TO BE HERE AND IS NOT ANY MORE. It is mandatory wherever an
+# image is read -- with no interactive terminal matugen cannot tell which colour
+# to pick when the image offers several -- and no image is read here now: the
+# render is seeded with a colour, and `accent-args` is where the image is read
+# and where `--prefer saturation` accordingly moved to. Adding it back at this
+# call site would be a flag with nothing to apply to.
 #
 # --import-json MERGES THE SCHEME INTO THE PALETTE MATUGEN JUST DERIVED, so the
-# 17 Material 3 roles are the image's and the 74 named in schemes/README.md come
+# 17 Material 3 roles are the wallpaper's -- by way of the scheme colour
+# `accent-args` snapped it to -- and the 74 named in schemes/README.md come
 # from the file, and every template sees all of them in one render. It is one
 # process rather than two because it can be: dumping the palette with
 # `-j hex --dry-run`, merging it with jq and rendering with `matugen json` was
@@ -1620,7 +1626,7 @@ mapfile -t ACCENT_ARGS <<< "$ACCENT_ARGS_TEXT"
 # everything around it is `|| true` is at step 7 below and is unchanged: a
 # palette that cannot be generated leaves every app on the machine holding the
 # colours of the wrong image.
-matugen "${ACCENT_ARGS[@]}" --mode dark --prefer saturation --quiet \
+matugen "${ACCENT_ARGS[@]}" --mode dark --quiet \
     --import-json "$SCHEME_FILE" \
     || die "matugen failed"
 
