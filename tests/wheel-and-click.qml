@@ -76,6 +76,64 @@ Item {
     property int plainHeard: -1
     property int plainHeardCount: 0
 
+    // HOW MANY OF THE RAIL'S ENTRIES ACTUALLY DREW, which is a different
+    // question from every other one on this bench and has to be asked
+    // separately.
+    //
+    // SettingsNavItem is a facade. It keeps the width rule, the height floor
+    // and -- the whole point -- the MouseArea whose preventStealing is half of
+    // what is measured here; the pill, the glyph and the label are loaded out
+    // of themes/<theme>/components/SettingsNavItem.qml at runtime. So a theme
+    // file that does not load leaves EVERY assertion below passing: the floor
+    // holds each entry at Theme.groupHeight, the list is still 530 tall, the
+    // wheel still moves it and the click still lands on an entry that draws
+    // nothing at all.
+    //
+    // AN ENTRY COUNTS ONCE, however many Texts the drawing puts in it. The
+    // number of Texts is the theme's business -- genesis draws two, a glyph
+    // and a label, and the delegate below sets a real glyph -- and a bench
+    // that asserted on it would go red the day a theme drew three. What is
+    // being asked is only "did the drawing arrive", so an entry with any text
+    // under it at all is an entry that drew, and fourteen of them is a rail.
+    // It is the same idea as the pixel grab at the end of
+    // tests/scrollbar-target.py: a bench whose subject is invisible measures
+    // nothing and says so.
+    //
+    // COUNTED ONCE, ON COMPLETION, AND NOT BOUND. The Loader in the facade is
+    // synchronous and builds inside its own Component.onCompleted, and a
+    // child completes before its parent -- so by the time this runs every
+    // entry's drawing is either there or it never was. A binding over
+    // `children` would re-run on every delegate the Repeater makes and answer
+    // the same thing more expensively.
+    property int railDrawn: 0
+
+    function hasText(item: var): bool {
+        for (let i = 0; i < item.children.length; i++) {
+            const child = item.children[i];
+            if (!child)
+                continue;
+
+            if (child.text !== undefined && String(child.text).length > 0)
+                return true;
+
+            if (scene.hasText(child))
+                return true;
+        }
+        return false;
+    }
+
+    Component.onCompleted: {
+        let drawn = 0;
+        // The last child of the Column is the Repeater itself, which draws
+        // nothing and answers false -- so this counts entries without having
+        // to know where in the list it sits.
+        for (let i = 0; i < railItems.children.length; i++) {
+            if (scene.hasText(railItems.children[i]))
+                drawn += 1;
+        }
+        scene.railDrawn = drawn;
+    }
+
     // WHERE TO AIM, AND WHY IT IS A FIXED POINT IN THE VIEWPORT rather than
     // an entry chased down the list. The click is sent with the scroll
     // animation still running, so "the entry under the pointer" is whatever

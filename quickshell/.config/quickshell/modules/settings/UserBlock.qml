@@ -1,4 +1,6 @@
-// Who this desktop belongs to, at the top of the sidebar.
+// Who this desktop belongs to, at the top of the sidebar. THIS IS THE HALF THE
+// WINDOW SEES; the pill, the round portrait and the two lines of text are in
+// themes/<theme>/components/UserBlock.qml.
 //
 // The macOS arrangement, and it earns its place for the same reason there: a
 // settings window is where you go to change things about YOUR session, and
@@ -10,18 +12,49 @@
 // what every application that has ever had this problem settles on. It is
 // what a fresh machine shows: there is no AccountsService user record here and
 // the GECOS field in /etc/passwd is empty, so there is no full name either and
-// the username stands in for both.
+// the username stands in for both. Which of the two is drawn is the theme's
+// business; that there is a fallback at all is a promise, and the theme file
+// keeps it.
 //
 // The picture itself is ~/.face, set from the User page of this window through
 // the `desktop-avatar` script. It is deliberately NOT a path of this shell's
 // own: ~/.face is the freedesktop convention, so a display manager finds the
 // same picture.
+//
+// ---------------------------------------------------------------------------
+// THE CACHE-BUST DID NOT MOVE, AND IT IS WHY THIS FACADE HAS A PROPERTY THE
+// THEME MUST BIND TO RATHER THAN A PATH IT COULD HAVE READ ITSELF
+// ---------------------------------------------------------------------------
+//
+// An Image caches by URL. The URL of the profile picture never changes -- only
+// its contents do -- so a theme that bound `source: "file://" + <path>` would
+// draw the first portrait this session ever saw and never another one, in a
+// window that otherwise works.
+//
+// A query string would be the shorter trick and it is not available: appending
+// ?v=2 to a file:// URL asks the filesystem for a file whose name ends in
+// "?v=2".
+//
+// What is left is setting the source to nothing and back, which is a sequence
+// of two writes and therefore something that has to be DONE rather than bound.
+// It is done here, once, into `avatarSource`, and every theme binds its Image
+// to that one property. `cache: false` on that Image is a HARD REQUIREMENT and
+// not a suggestion: without it the second assignment is answered out of Qt's
+// pixmap cache and the portrait silently stops updating after the first change.
+// There is no way for this side to require it -- it is a property of an object
+// the theme owns -- so it is written here, in the theme file, and in
+// themes/genesis/components/README.md's rule 7 sense it is a promise about
+// behaviour.
 
+// NO `import qs` HERE, unlike every other facade in this window. There is no
+// design token left on this side: the block's height is 56 because that is
+// what it was, and everything that reads a colour or a font moved into the
+// theme file. tests/qml-lint.sh gates on unused-imports, so the import that
+// would have been kept out of habit is the one it names.
 import QtQuick
-import QtQuick.Effects
-import qs
+import qs.modules
 
-Rectangle {
+Item {
     id: root
 
     property bool selected: false
@@ -30,172 +63,51 @@ Rectangle {
 
     readonly property string avatarPath: SessionInfo.avatarPath
 
-    // RELOADED BY HAND, because an Image will not do it on its own: it caches
-    // by URL, and the URL of the profile picture never changes -- only its
-    // contents do. Setting the source to nothing and back is what makes it
-    // read the file again, and `cache: false` on the Image is what stops the
-    // second assignment being answered out of the cache anyway.
-    //
-    // A query string on the URL would be the shorter trick, and it is not used
-    // here: appending ?v=2 to a file:// URL asks the filesystem for a file
-    // whose name ends in "?v=2".
+    // RELOADED BY HAND, because an Image will not do it on its own. See the
+    // header for the whole of it.
     readonly property int revision: SessionInfo.avatarRevision
 
-    onRevisionChanged: {
-        picture.source = "";
-        picture.source = `file://${root.avatarPath}`;
+    // WHAT THE THEME'S Image BINDS TO. Not a binding on this side: it is
+    // assigned twice in a row, and a binding cannot be two values in one turn.
+    property string avatarSource: ""
+
+    function reload(): void {
+        root.avatarSource = "";
+        root.avatarSource = `file://${root.avatarPath}`;
     }
+
+    // Three ways in, and all three are the same two writes. `revision` is the
+    // one that matters -- it is what the User page bumps after writing a new
+    // ~/.face -- and the other two are what fills the property in the first
+    // place and what covers a HOME that arrives after this item was built.
+    Component.onCompleted: root.reload()
+    onAvatarPathChanged: root.reload()
+    onRevisionChanged: root.reload()
 
     width: parent ? parent.width : implicitWidth
     implicitWidth: 200
-    implicitHeight: 56
+    implicitHeight: Math.max(56, drawing.implicitHeight)
 
-    radius: Theme.cardRadius
-
-    color: root.selected ? Theme.primaryContainer
-        : mouse.containsMouse ? Theme.surfaceContainerHigh
-        : "transparent"
-
-    Behavior on color {
-        ColorAnimation { duration: Theme.animDuration }
-    }
-
-    Row {
-        anchors.left: parent.left
-        anchors.leftMargin: 8
-        anchors.right: parent.right
-        anchors.rightMargin: 8
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.itemSpacing
-
-        Rectangle {
-            id: avatar
-
-            anchors.verticalCenter: parent.verticalCenter
-            width: 38
-            height: 38
-            radius: height / 2
-
-            color: root.selected ? Theme.primary : Theme.primaryContainer
-
-            Behavior on color {
-                ColorAnimation { duration: Theme.recolorDuration }
-            }
-
-            Text {
-                anchors.centerIn: parent
-                visible: picture.status !== Image.Ready
-                text: SessionInfo.user.charAt(0).toUpperCase()
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize + 4
-                font.weight: Font.Bold
-                color: root.selected ? Theme.textOnPrimary : Theme.textOnPrimaryContainer
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-
-            // ROUND, AND THAT TAKES AN EFFECT. An Image is a rectangle: put
-            // inside a rounded parent it keeps its own square corners, and
-            // `clip` does not help because it clips to the bounding box and
-            // not to the curve. The first version of this used MultiEffect
-            // with only maskSpreadAtMin set, and the result was a perfectly
-            // square photograph sitting in a circular hole.
-            //
-            // What was missing is maskThresholdMin. Without it the mask is
-            // cut at a hard step at zero, which for a fully opaque mask
-            // texture means everything passes and nothing is masked at all.
-            // The pair below -- 0.5 and 1.0 -- is copied verbatim from
-            // the wallpaper carousel, which took it from CornerWedge.qml, where
-            // the note says the spread is what keeps the antialiasing on the
-            // cut edge instead of throwing it away.
-            //
-            // The mask is a Rectangle with a colour and its own layer, not an
-            // Item wrapping one: the layer texture comes from the item the
-            // property is set on, so a bare wrapper renders an empty mask.
-            Image {
-                id: picture
-
-                anchors.fill: parent
-                source: `file://${root.avatarPath}`
-                cache: false
-                fillMode: Image.PreserveAspectCrop
-                // Asked for at twice the size it is drawn at, so it stays
-                // sharp on a scaled output without a 1024px portrait being
-                // held in memory to be shown at 38.
-                sourceSize.width: width * 2
-                sourceSize.height: height * 2
-                smooth: true
-
-                // A missing file is the normal case here, not an error.
-                visible: false
-                layer.enabled: true
-            }
-
-            Rectangle {
-                id: pictureMask
-
-                anchors.fill: parent
-                radius: height / 2
-                antialiasing: true
-                color: "black"
-
-                visible: false
-                layer.enabled: true
-            }
-
-            MultiEffect {
-                anchors.fill: parent
-                source: picture
-                visible: picture.status === Image.Ready
-                maskEnabled: true
-                maskSource: pictureMask
-                maskThresholdMin: 0.5
-                maskSpreadAtMin: 1.0
-            }
-        }
-
-        Column {
-            anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - avatar.width - parent.spacing
-            spacing: 1
-
-            Text {
-                width: parent.width
-                text: SessionInfo.displayName
-                elide: Text.ElideRight
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                font.weight: Font.Bold
-                color: root.selected ? Theme.textOnPrimaryContainer : Theme.textOnSurface
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-
-            Text {
-                width: parent.width
-                text: `${SessionInfo.user}@${SessionInfo.host}`
-                elide: Text.ElideRight
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize - 3
-                color: root.selected ? Theme.textOnPrimaryContainer : Theme.textOnSurfaceVariant
-
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
-                }
-            }
-        }
-    }
-
-    MouseArea {
-        id: mouse
+    // Identical to ToggleRow's loader, and deliberately not factored out: see
+    // themes/genesis/components/README.md on why the sixteen lines are copied
+    // into each facade rather than shared through a base type.
+    Loader {
+        id: drawing
 
         anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: root.clicked()
+
+        readonly property string drawingUrl: Themes.surface("components/UserBlock.qml")
+
+        function build(): void {
+            if (String(drawing.source) === drawing.drawingUrl)
+                return;
+
+            drawing.setSource(drawing.drawingUrl, {
+                row: root
+            });
+        }
+
+        Component.onCompleted: drawing.build()
+        onDrawingUrlChanged: drawing.build()
     }
 }

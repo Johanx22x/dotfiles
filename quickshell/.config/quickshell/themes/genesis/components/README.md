@@ -10,15 +10,17 @@ what was deliberately left out of the split:
 
 That sentence is now mostly false, and this file is what replaced it.
 
-**Twenty components have a theme half**, which is every `.qml` in this
+**Twenty-five components have a theme half**, which is every `.qml` in this
 directory:
 
 ```
 ActionRow          BindRow            Chip               ChoiceRow
 CornerWedge        InfoRow            LevelMeter         ListRow
 MenuRow            NotificationCard   Popout             ScrollBar
-SearchField        SettingsSection    StepperButton      StepperRow
-StreamRow          ToggleRow          Tooltip            VolumeSlider
+SearchField        SettingsChrome     SettingsHeader     SettingsNavItem
+SettingsResult     SettingsSection    StepperButton      StepperRow
+StreamRow          ToggleRow          Tooltip            UserBlock
+VolumeSlider
 ```
 
 Count the files rather than trusting that number. It said nineteen and was
@@ -46,13 +48,24 @@ last assertion reads are the ones this directory paints. The whole of that is
 written up in `components/ScrollBar.qml` under AND THE BENCH FOLLOWED IT
 ACROSS. The reason was about a tool, and the tool changed.
 
-Two of the twenty are worth knowing about before you copy anything:
+Two of the twenty-five are worth knowing about before you copy anything:
 
-- **`SettingsSection`'s facade is not under `components/`.** It is
-  `modules/settings/SettingsSection.qml`, and its implementation is here
-  anyway, because `shell.qml` imports this directory for the file watcher and
-  that is what makes a theme file reload -- see the last section of this file.
-  The seam does not care where a facade lives.
+- **`SettingsSection`'s facade is not under `components/`, and it is no longer
+  the only one.** It is `modules/settings/SettingsSection.qml`, and its
+  implementation is here anyway, because `shell.qml` imports this directory for
+  the file watcher and that is what makes a theme file reload -- see the last
+  section of this file. The seam does not care where a facade lives.
+
+  Five more facades now live beside it: `SettingsChrome`, `SettingsHeader`,
+  `SettingsNavItem`, `SettingsResult` and `UserBlock`, which between them are
+  the whole of what the settings window used to draw. Their implementations are
+  in here for the same reason, and their `row` declarations name types out of
+  `qs.modules.settings` rather than `qs.components`. That import has one edge
+  worth knowing: **two files in that directory are `pragma Singleton` and open
+  `import Quickshell`**, and a composite singleton declared in a qmldir is
+  created when a document importing the module is created -- which is fine in
+  the shell and is why the two Python benches under `tests/` build that module
+  with the singletons left out. Both say so where they do it.
 - **`Popout`'s facade is a `PanelWindow` and not an `Item`.** Every other one
   is an Item. The diagram below is drawn from `ToggleRow` and does not
   represent that shape at all: a window's facade keeps a layer surface, a
