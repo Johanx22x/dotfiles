@@ -50,8 +50,11 @@
 // login -- but it is the one thing here that is worth a look with your own
 // eyes rather than a headless run.
 //
-// The theme's files are NOT watched for changes at all -- see the long note in
-// modules/Themes.qml about what loading by path costs.
+// The theme's files are watched -- editing one reloads the shell -- but not
+// because of anything here. Loading by URL never registers a watch; the import
+// list in shell.qml is what does, and modules/Themes.qml has the account of
+// why the two are separate. A theme shell.qml does not import loads through
+// this file exactly the same way and is not watched.
 
 import QtQuick
 import qs.modules

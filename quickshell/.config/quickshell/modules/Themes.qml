@@ -8,7 +8,10 @@
 // THE SURFACES ARE LOADED BY PATH AND NOT IMPORTED, which is the whole point
 // and has consequences that are not obvious. shell.qml used to say
 // `import qs.themes.genesis.bar` and instantiate a Bar; it now instantiates a
-// ThemeSurface whose `file` is "bar/Bar.qml", and never names a theme at all.
+// ThemeSurface whose `file` is "bar/Bar.qml". It still IMPORTS the theme's
+// directories -- that is what keeps them watched, and the header there says
+// why -- but an import is not an instantiation: no line in shell.qml builds a
+// type out of a theme, and which theme is drawn is decided here at runtime.
 // What follows is what that costs and what it buys, all of it measured against
 // Quickshell 0.3.1 in a headless compositor rather than assumed.
 //
@@ -25,39 +28,50 @@
 // modules/ThemeSurface.qml for why that has to be an initial property rather
 // than an assignment afterwards.
 //
-// A file:// URL AND NOT A MODULE PATH, and this is the part that was found the
-// hard way. Quickshell resolves `import qs.anything` through qmldir files it
-// SYNTHESIZES at startup, and it synthesizes one only for directories it
-// reached by following the imports out of shell.qml. Nothing imports a theme
-// any more, so nothing walks its directories, so inside the qs: module tree a
-// theme file cannot see its own siblings: `import qs.themes.genesis.island`
-// from a theme loaded by path fails with "module is not installed", and even
-// a file in the same directory is "not a type".
+// A file:// URL, WHICH IS NOT A WORKAROUND AND IS WORTH SAYING SO. It reads
+// like one -- most of this tree is spelled `qs.something` -- but there is no
+// second scheme it is standing in for. Loader.setSource takes a URL and a
+// module import is not one, and Quickshell 0.3.1 hands its files to the engine
+// as ordinary file:// URLs -- `Qt.resolvedUrl(".")` inside shell.qml comes
+// back as "file://" followed by exactly what `Quickshell.shellDir` returns,
+// measured. So `"file://" + shellPath(...)` is not an escape from the qs:
+// tree, it is how you spell the URL of a file in this tree at all. The
+// encodeURI is what a home directory with a space in it needs; that is the
+// only trick in the line.
 //
-// Loading the file through an explicit file:// URL steps outside that tree and
-// puts ordinary QML rules back: a theme file sees its own directory with no
-// import, reaches a sibling directory with `import "../island"`, and still
-// reaches the host through `import qs`, `import qs.components` and
-// `import qs.modules.*` -- those are real modules on the import path and stay
-// resolvable from anywhere. It is also what makes a theme directory COPYABLE:
-// nothing inside it spells its own name, so `cp -r genesis tokyo` is a second
-// theme rather than a directory full of references to the first.
+// WHAT THE URL BUYS is ordinary QML resolution rules inside a theme: a theme
+// file sees its own directory with no import, reaches a sibling directory with
+// `import "../island"`, and still reaches the host through `import qs`,
+// `import qs.components` and `import qs.modules.*` -- those are real modules on
+// the import path and stay resolvable from anywhere. And it is what makes a
+// theme directory COPYABLE: nothing inside it spells its own name, so
+// `cp -r genesis tokyo` is a second theme rather than a directory full of
+// references to the first.
 //
-// AND THE PRICE, WHICH IS THE FILE WATCH. The same startup scan that
-// synthesizes the qmldirs is what registers the file watches behind
-// Quickshell's hot reload, so a directory nothing imports is a directory
-// nothing watches. Editing a file under themes/ no longer reloads the shell --
-// no reload is logged and nothing on screen changes -- while editing anything
-// under modules/, components/ or this file still does. Restarting is what
-// picks a theme edit up:
+// THE RELATIVE FORM IS NOW A RULE AND NOT A NECESSITY, which changed under it
+// and is worth not mistaking. While nothing imported a theme,
+// `import qs.themes.genesis.island` from inside one failed with "module is not
+// installed" and there was no choice about it. shell.qml imports the theme's
+// directories again -- for the watches, see the header there -- so the module
+// form resolves once more; it was tried and the shell came up clean. It stays
+// out anyway: a theme that spells its own name is a theme that cannot be
+// copied, and the copy would quietly draw the original's island.
 //
-//   qs kill && qs -d --no-duplicate
+// THE PRICE USED TO BE THE FILE WATCH, and shell.qml is where it is bought
+// back. The same startup scan that synthesizes the qmldirs is what registers
+// the watches behind hot reload, so for as long as nothing imported a theme,
+// editing a file under themes/ reloaded nothing -- no line logged, nothing on
+// screen. The import list at the top of shell.qml restores it without giving
+// up any of the above: the theme is still loaded by URL and still never named
+// by anything that instantiates it, and an edit in each of the eight
+// directories under themes/genesis reloads the shell again. What is left of
+// the price is that a theme NOT on that list is not watched, which is the
+// trade a hand-dropped theme makes and is written out beside the imports.
 //
-// which is the same restart shell.qml's header already asks for after a pull,
-// for a related reason. Three ways of loading were measured and all three lose
-// the watch -- LazyLoader, BoundComponent and a QtQuick Loader, through the qs:
-// tree and through file:// alike -- so it is the price of loading by name and
-// not of the primitive chosen to do it.
+// Three ways of loading were measured on the way here and none of them is what
+// decided this -- LazyLoader, BoundComponent and a QtQuick Loader all lose the
+// watch, through the qs: tree and through file:// alike. The watch never
+// depended on the primitive; it depended on the import.
 
 pragma Singleton
 
@@ -114,16 +128,22 @@ Singleton {
     // THE HOST MODULES A THEME IMPORTS AND NOTHING ELSE DOES, HELD IN SCOPE.
     //
     // The startup scan that decides which directories become modules follows
-    // the imports out of shell.qml, and a theme is no longer on that path -- so
-    // a host module whose only importer is a theme is a directory the scan
-    // never reaches, and `import qs.modules.bar` from inside a theme fails with
-    // "module is not installed" at the moment the widget that wanted it is
-    // drawn. modules/bar is exactly that: one singleton, BatteryAlerts, read by
-    // the bar's two battery widgets and by nothing in the host.
+    // the imports out of shell.qml, so a host module whose only importer is a
+    // theme is a directory the scan reaches only if that theme is on the import
+    // list -- and `import qs.modules.bar` from inside a theme it never reached
+    // fails with "module is not installed" at the moment the widget that wanted
+    // it is drawn. modules/bar is exactly that: one singleton, BatteryAlerts,
+    // read by the bar's two battery widgets and by nothing in the host.
     //
-    // Naming it here is what keeps the module real. It is the host saying which
-    // modules are part of the seam rather than an accident of who imported
-    // what, and the next host module a theme reaches for belongs on this line.
+    // shell.qml importing themes/genesis/bar would now cover THIS theme by
+    // accident -- deleting the line below and loading the tree comes up clean,
+    // measured. It stays because the accident is the whole problem. A theme
+    // dropped into themes/ by hand is not on that import list and a theme that
+    // drops the two battery widgets stops importing modules/bar at all, and in
+    // either case the next theme to reach for it would find it gone. This line
+    // is the host saying which modules are part of the seam rather than leaving
+    // it to who happened to import what, and the next host module a theme
+    // reaches for belongs on it.
     //
     // NOTHING IS STARTED BY BEING NAMED. BatteryAlerts is thresholds and
     // formatting -- no timer, no process, no connection -- so building it early
