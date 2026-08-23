@@ -355,6 +355,26 @@
         "color": "#313244"
       }
     },
+    "ui_surface": {
+      "default": {
+        "color": "#11111b"
+      }
+    },
+    "ui_surface_container": {
+      "default": {
+        "color": "#1e1e2e"
+      }
+    },
+    "ui_surface_container_high": {
+      "default": {
+        "color": "#313244"
+      }
+    },
+    "ui_surface_container_highest": {
+      "default": {
+        "color": "#585b70"
+      }
+    },
     "ui_text": {
       "default": {
         "color": "#cdd6f4"

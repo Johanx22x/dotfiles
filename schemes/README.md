@@ -89,7 +89,7 @@ matugen image "$PALETTE_SOURCE" --mode dark --prefer saturation --quiet \
 
 `--import-json` merges the file into the render context that matugen has just
 derived from the image. The 17 Material 3 accent roles come from the wallpaper,
-the 74 roles named here come from the file, and every template sees all 91 at
+the 78 roles named here come from the file, and every template sees all 95 at
 once. `.hex`, `.hex_stripped` and `.red` / `.green` / `.blue` are computed by
 matugen from any hex it is given, so a scheme role supports exactly the filters
 a derived one does — which is what `qt6ct-colors.conf` (ARGB), `hypr-colors.lua`
@@ -162,7 +162,7 @@ now is, end to end. Upstream is `folke/tokyonight.nvim`:
 init.lua` for the tones the plugin derives (`black`, `bg_visual`, the
 brightened terminal chromatics), and `extras/kitty/tokyonight_night.conf` for
 the sixteen ANSI slots — cross-checked against the wezterm and ghostty extras,
-which agree hex for hex. Sixteen of the 74 roles moved; the other 58 were
+which agree hex for hex. Sixteen roles moved; the other 58 were
 already right. **Where a role has no upstream counterpart at all** — the Qt
 palette slots, mostly — the rule is: take the published Night tone that fills
 that rung of the ladder, and only where the ladder has no published tone
@@ -201,6 +201,15 @@ authority here, because they are what a terminal actually ships. Same source
 disagrees on the six bright chromatics — the style guide generates distinct
 brighter variants where kitty and alacritty repeat the normal hex — and this
 scheme follows kitty there too.
+
+**Every scheme picks its own four surfaces.** The shell's Material 3 surface
+ladder was one global mapping in `quickshell-colors.json` — `ui_bg` →
+`ui_bg_raised` → `ui_bevel_midlight` → `ui_border` — which imposed Gruvbox's
+grammar on all three and put Tokyo Night in tones Tokyo Night does not paint
+surfaces with. It is four roles in the scheme file now (`ui_surface` and the
+three containers, 1.1), derived per scheme from that project's own published UI
+ports. The full derivation, the citations, the two judgement calls and the
+regrade are in 4.4.
 
 **No shadow-tint role.** The `rgba(0,0,0,·)` shades and scrims in both GTK
 templates stay alpha-on-black. A warm scheme wanting brown shadows would need
@@ -265,7 +274,7 @@ dropped.
 
 ## 1. The role list
 
-74 roles in four groups: **23 base**, **27 terminal**, **7 semantic**,
+78 roles in four groups: **27 base**, **27 terminal**, **7 semantic**,
 **17 accent fallbacks**. On top of those sit the 17 Material 3 roles the
 templates already consume at runtime (section 1.5) — those come from the
 wallpaper and are *not* in the scheme file.
@@ -290,6 +299,10 @@ wallpaper. The prefixes make that collision impossible by construction.
 | `ui_bg_raised` | `#292e42` | `#313244` | `#3c3836` | Card / popover / tooltip / completion menu: a container floating above ui_bg. | gtk3:103,110,113; gtk4:162,169,172; zathura:31; qt6ct idx18 x3 |
 | `ui_bg_button` | `#292e42` | `#313244` | `#3c3836` | Qt button face (QPalette::Button). | qt6ct idx1 x3 |
 | `ui_bg_control` | `#222534` | `#313244` | `#3c3836` | A raised inline control (the Nautilus breadcrumb pill, linked button groups). | gtk4:428 |
+| `ui_surface` | `#0c0e14` | `#11111b` | `#282828` | **Level 1 of the shell's surface ladder**: the ground a whole panel is drawn on — the bar, the launcher, the settings window, a popout, the notification stack. Each scheme picks its own four; the derivation and the citations are in 4.4. | quickshell-colors.json:11 |
+| `ui_surface_container` | `#1a1b26` | `#1e1e2e` | `#3c3836` | **Level 2**: a card sitting on that panel — a notification, a settings section, the dashboard sheet. Borderless in this shell, so it has to stand off level 1 by tone alone. | quickshell-colors.json:12 |
+| `ui_surface_container_high` | `#292e42` | `#313244` | `#504945` | **Level 3**: hover, and the pills the bar and the launcher draw at rest. 33 of its 46 readers are a hover or focus fill and 23 of those are literally `containsMouse ? this : "transparent"`, which is why every scheme's level 3 sits *above* its level 2 whatever its chrome does. | quickshell-colors.json:13 |
+| `ui_surface_container_highest` | `#343a55` | `#585b70` | `#665c54` | **Level 4**: tooltips, slider rails, meter tracks, key chips, field fills, and 9 more hover fills. Must not be equal to `ui_border_dim` — every tooltip fills with level 4 and borders with `outline_variant`. | quickshell-colors.json:14 |
 | `ui_bevel_dark` | `#15161e` | `#181825` | `#1d2021` | Qt 3D bevel, darkest shade (QPalette::Dark). | qt6ct idx4 x3 |
 | `ui_bevel_mid` | `#1a1b26` | `#1e1e2e` | `#282828` | Qt 3D bevel, mid shade (QPalette::Mid). | qt6ct idx5 x3 |
 | `ui_bevel_midlight` | `#353b55` | `#45475a` | `#504945` | Qt 3D bevel, light-mid shade (QPalette::Midlight). | qt6ct idx3 x3 |
@@ -729,7 +742,7 @@ an invented colour, and it barely matters: `kitty-colors.conf:13` overrides
 `selection_background` with the wallpaper accent on every change, so the scheme
 value is only seen before the first `wallpaper-switch`.
 
-Everything else — all 23 base roles, all 27 terminal roles, all 7 semantic
+Everything else — all 27 base roles, all 27 terminal roles, all 7 semantic
 roles, 15 of the 17 fallbacks — fills from published values in all three
 palettes, with **two exceptions in Tokyo Night** where the palette has no tone
 in the gap a Qt slot needs: `ui_bg_control` `#222534` and `ui_bevel_midlight`
@@ -789,6 +802,205 @@ three fills. Tokyo Night sets alternating table rows to the window colour, i.e.
 no stripe (`qt6ct-colors.conf:46`), and reproducing "no stripe" faithfully
 matters more than exercising the role. The role exists so a scheme *can*
 disagree.
+
+**What the counts above do NOT settle** is which four tones the shell's four
+Material 3 surface levels take. That used to be decided here, once, for
+everybody; it is decided per scheme now, in 4.4.
+
+### 4.4 The shell's surface ladder: four roles, filled per scheme
+
+`quickshell-colors.json` used to map M3's four surface levels with one global
+rule — `ui_bg` → `ui_bg_raised` → `ui_bevel_midlight` → `ui_border` — and that
+rule was reasoned for at length in the template itself. It got one thing right
+and one thing wrong.
+
+Right: **all three schemes really do have four separable tones above their
+window, and only there**, which is what 4.3 counts. Below the window Tokyo
+Night's four steps span 1.13:1 end to end and two of them (`#15161e`,
+`#16161e`) differ by one bit of blue; Catppuccin's three span 1.22:1; Gruvbox's
+two are not steps at all. No descending ladder survives in any scheme.
+
+Wrong: the rule read **Qt bevel slots as if they were an elevation scale**, and
+then handed Gruvbox's answer to the other two. Under Tokyo Night it painted the
+shell in tones Tokyo Night does not use for surfaces at all — `ui_bevel_midlight
+#353b55` is not upstream, it is the `Util.blend` this repository computed to
+fill `QPalette::Midlight` (4.1(c)), and `ui_border #414868` is `terminal_black`,
+which folke assigns to ANSI bright black and to dimmed foreground text and to no
+surface anywhere in the theme. The shell rendered greys where Tokyo Night
+renders blacks.
+
+So the ladder became data: **`ui_surface`, `ui_surface_container`,
+`ui_surface_container_high`, `ui_surface_container_highest`** (1.1), one set per
+scheme, read straight through by `quickshell-colors.json:11-14`.
+
+**What the shell paints with each level**, counted in the QML tree, because a
+level's meaning is what its readers do with it and not what M3 calls it:
+
+| level | readers | what they are |
+|---|---|---|
+| `surface` | 10 | Every panel, always through `Theme.glass()`: `bar/Bar.qml:197`, `launcher/Launcher.qml:346`, `settings/Settings.qml:116`, `components/Popout.qml:350`, `powermenu/PowerMenu.qml:190`, `cheatsheet/Cheatsheet.qml:372`, `notifications/Notifications.qml:314`, `wallpaper/WallpaperCarousel.qml:428` |
+| `surface_container` | 6 | The card on that panel: `notifications/NotificationCard.qml:85` ("a step up the surface ladder from the panel behind it"), `settings/SettingsSection.qml:149`, `island/Dashboard.qml:808`, `pages/UpdatesPage.qml:338`, `cheatsheet/Cheatsheet.qml:424` |
+| `surface_container_high` | 46 | **33 are a hover or focus fill, 23 of them literally `containsMouse ? this : "transparent"`.** The other 13 are at-rest fills: the bar's `components/Group.qml:31` pills, `bar/Bar.qml:395`, the launcher's search field `Launcher.qml:374`, `island/Island.qml:534-535`, `powermenu/PowerMenu.qml:245`, `notifications/NotificationCard.qml:130` |
+| `surface_container_highest` | 25 | 9 more hover fills; the other 16 are `components/Tooltip.qml:190`, `components/VolumeSlider.qml:81` rails, `components/LevelMeter.qml:109` unlit ticks, the key chips at `pages/InputPage.qml:488` / `pages/KeybindsPage.qml:539` / `cheatsheet/BindRow.qml:86`, the field fills at `pages/NetworkPage.qml:685` / `pages/RecordingPage.qml:815`, and the island's `ReplayControl.qml:64` / `RecordControl.qml:47` rest states |
+
+**Hence the one thing every scheme still agrees on: the ladder climbs.** Levels
+3 and 4 are where this shell paints hover, and all three projects put their own
+hover above their own ground — Tokyo Night's `CursorLine` is `bg_highlight`,
+Catppuccin's `list.hoverBackground` is `surface0`, Gruvbox's `CursorLine` is
+`bg1`. A descending ladder would turn every hover in the tree into a recess.
+What the schemes disagree on is **where the ladder starts**, and that is the
+datum the old rule had no way to express.
+
+#### Tokyo Night — starts on the palette floor
+
+Upstream is explicit, in `lua/tokyonight/colors/init.lua`: *"Popups and
+statusline always get a dark background"*, `bg_popup = bg_dark`,
+`bg_statusline = bg_dark`, and `styles.sidebars` / `styles.floats` both default
+to `"dark"` in `lua/tokyonight/config.lua`. Chrome descends; state ascends.
+
+| level | before | after | tone | where Tokyo Night uses it |
+|---|---|---|---|---|
+| `surface` | `#1a1b26` | **`#0c0e14`** | `bg_dark1` | The palette floor — the one entry `colors/night.lua` adds over `storm.lua`. **The one rung filled by position rather than by an upstream assignment**; see the note below. |
+| `surface_container` | `#292e42` | **`#1a1b26`** | `bg` | `Normal`, `editor.background`, and — exactly the shell's case — the `normal` notification frame in `extras/dunst/tokyonight_night.dunstrc` |
+| `surface_container_high` | `#353b55` | **`#292e42`** | `bg_highlight` | `CursorLine` / `CursorColumn`; kitty `inactive_tab_background`; yazi `hovered`; the menu-hover slot of `extras/slack`; dunst `critical` |
+| `surface_container_highest` | `#414868` | **`#343a55`** | `blend_bg(fg_gutter, 0.8)` | `PmenuSel` and `PmenuMatchSel`; helix `ui.menu.selected`; **fuzzel `selection`**, i.e. the highlighted row of a launcher, which is what `Launcher.qml:546` paints from this level |
+
+Both tones the old rule used are gone from the shell, and neither is a loss:
+`#353b55` was never upstream, and upstream's real value for that rung is
+`#343a55` — this repository was two levels off. `#414868` stays in the
+vocabulary as `ui_border`, which is what it is.
+
+**The judgement call, declared.** `bg_dark1 #0c0e14` is a published Night tone
+but no highlight group in the theme uses it; grepping the repo's own resolved
+dump (`extras/lua/tokyonight_night.lua`) finds it only on the palette line.
+The tone upstream *does* paint panels with is `bg_dark #16161e` — and it sits
+**2.5 L\* from `bg`**, which is how Tokyo Night itself separates a sidebar from
+an editor. Tokyo Night can do that because it draws a border between them (VS
+Code's `sideBar.border`); this shell's cards are borderless
+(`NotificationCard.qml:87` draws one only when the notification is critical), so
+tone is the only separator there is. `#16161e` at level 1 would have made every
+card in the shell vanish into its panel. `#0c0e14` is the only Night tone that
+leaves a full step under `bg`, and enkia's VS Code theme — which folke's README
+names as the theme his port comes from — corroborates that Tokyo Night has an
+overlay tier below the sidebar: `notifications.background` and
+`peekViewResult.background` are `#101014`, within one L\* of it. That value is
+not in folke's palette, and "Tokyo Night is Night, and only Night" under
+**Decisions taken** is what keeps it out.
+
+#### Catppuccin Mocha — the style guide names four tiers
+
+`catppuccin/catppuccin`, `docs/style-guide.md`, "Background Colors" — four rows,
+verbatim: `Background Pane` → `Base`; `Secondary Panes` → `Crust, Mantle`;
+`Surface Elements` → `Surface 0, Surface 1, Surface 2`; `Overlays` → `Overlay 0,
+Overlay 1, Overlay 2`. Chrome below base, elements above it. The ports agree:
+`catppuccin/vscode` puts `activityBar` / `statusBar` / `titleBar` on `crust`,
+`sideBar` on `mantle`, `editor` on `base`, and `list.hoverBackground` /
+`list.activeSelectionBackground` on `surface0`; the KDE port puts
+`[Colors:Window]` on mantle and `[Colors:View]` on base; `catppuccin/gtk` ships
+`headerbar_bg_color` and `dialog_bg_color` as mantle with `window_bg_color` and
+`card_bg_color` as base.
+
+| level | before | after | tone | style-guide tier / port |
+|---|---|---|---|---|
+| `surface` | `#1e1e2e` | **`#11111b`** | `crust` | Secondary Panes; vscode `activityBar` / `statusBar` / `titleBar`, KDE `[WM] inactiveBackground` |
+| `surface_container` | `#313244` | **`#1e1e2e`** | `base` | Background Pane; vscode `editor` / `menu` / `tab.active`, gtk `card_bg_color`, KDE `[Colors:View]` |
+| `surface_container_high` | `#45475a` | **`#313244`** | `surface0` | Surface Elements; vscode `list.hoverBackground` (its comment: *"when hovering over the file tree"*), `list.activeSelectionBackground`, `input.background`, KDE `[Colors:Button]` |
+| `surface_container_highest` | `#585b70` | **`#585b70`** | `surface2` | Surface Elements; vscode `menu.selectionBackground`, `dropdown.listBackground`, `panel.border`, `editorGroup.border` |
+
+**Catppuccin has no Material 3 mapping of its own** — the org has no
+`material` / `m3` / `compose` port, and `catppuccin/userstyles` PR #1833, "feat(lib):
+introduce stub m3 color library", was closed unmerged with its own TODO still
+reading *"Determine Catppuccin>Material3 color bindings"*. Three ports do consume
+M3 role names and they contradict each other: `catppuccin/kvaesitso` and
+`catppuccin/symfonium` ascend `crust → mantle → base → surface0`, while
+`catppuccin/dankmaterialshell` runs the ladder backwards. Kvaesitso's is the only
+four-step ascending ladder attested in the org — but its four tones are 3.4, 3.2
+and 9.4 L\* apart, so two of its rungs would be invisible here. **The tier table
+is the authority, not a port**, and one representative per tier is what this
+ladder takes.
+
+**The judgement call, declared.** Level 4 is `surface2` and not `surface1`, even
+though `surface1` would be the even step. `surface1 #45475a` is also Catppuccin's
+`ui_border_dim`, i.e. the shell's `outline_variant`, and `components/Tooltip.qml`
+fills with level 4 (`:190`) and borders with `outline_variant` (`:192`) — every
+tooltip's border would melt into its own fill, in at least five places. Taking
+`surface2` instead costs an uneven top rung (17.7 L\*) and **fixes** the reverse
+collision the old ladder had: `outline_variant` no longer sits on
+`surface_container_high`, so the two borders at `SettingsSection.qml:90` and
+`UpdatesPage.qml:560` go from 1.00:1 to 1.38:1 under Catppuccin.
+
+#### Gruvbox Dark Medium — does not move
+
+morhetz publishes no prose about which tone goes where, so the authority is
+`colors/gruvbox.vim`'s own usage, and it is unambiguous. `Normal` is `bg0`;
+`CursorLine`, `TabLine`, `SignColumn`, `ColorColumn`, `Folded`, `StatusLineNC`
+and (in `ellisonleao/gruvbox.nvim`) `NormalFloat` are `bg1`; `Pmenu`,
+`StatusLine` and `WildMenu` are `bg2`; `Visual` and `MatchParen` are `bg3`. The
+VS Code port agrees where it fills at all — `tab.activeBackground` is `bg1`,
+`list.hoverBackground` and `list.activeSelectionBackground` are `bg1` at 50%.
+
+| level | before | after | tone | where Gruvbox uses it |
+|---|---|---|---|---|
+| `surface` | `#282828` | **`#282828`** | `bg0` | `Normal`, `editor.background`, every piece of VS Code chrome |
+| `surface_container` | `#3c3836` | **`#3c3836`** | `bg1` | `CursorLine`, `TabLine`, `SignColumn`, `Folded`, `NormalFloat`, `tab.activeBackground` |
+| `surface_container_high` | `#504945` | **`#504945`** | `bg2` | `Pmenu`, `StatusLine`, `WildMenu`, `scrollbarSlider` |
+| `surface_container_highest` | `#665c54` | **`#665c54`** | `bg3` | `Visual`, `MatchParen` |
+
+**Gruvbox is the scheme the old rule happened to fit**, which is why it was
+never obvious the rule was a rule. It cannot start lower: `bg0_h #1d2021` and
+`bg0_s #32302f` are alternative *values* for `bg0` selected by
+`g:gruvbox_contrast_dark` (`colors/gruvbox.vim:89-91`, `:173-175`), never a
+second surface, and 4.3 already records that Gruvbox has two steps at or below
+its window rather than a ladder. Not one rendered byte moves under Gruvbox.
+`sainnhe/gruvbox-material` does publish a `bg_dim #1b1b1b` below `bg0` and an
+opt-in `float_style='dim'` — but that is a different palette (only `#282828` and
+`#504945` survive from morhetz's) and adopting a tone from it would be the
+Storm-inside-Night mistake again.
+
+#### Measure the rungs in L\*, not in contrast ratio
+
+A contrast ratio compresses badly at this end of the scale, and reading the four
+levels through one would have rejected the right answer. The old ladder's
+narrowest rung was **5.8 L\*** and scored 1.22:1; Tokyo Night's new narrowest is
+**5.7 L\*** and scores 1.13:1 — the same step to an eye, two very different
+numbers. In L\*:
+
+| scheme | before | after |
+|---|---|---|
+| Tokyo Night | 10.1 / 19.3 / 25.4 / 31.2 — rungs 9.2, 6.1, 5.8 | **4.0 / 10.1 / 19.3 / 25.0** — rungs 6.1, 9.2, 5.7 |
+| Catppuccin Mocha | 12.0 / 21.4 / 30.7 / 39.1 — rungs 9.4, 9.3, 8.5 | **5.4 / 12.0 / 21.4 / 39.1** — rungs 6.6, 9.4, 17.7 |
+| Gruvbox Dark Medium | 16.1 / 23.9 / 31.6 / 39.8 — rungs 7.8, 7.7, 8.2 | unchanged |
+
+**Nothing collapses.** No scheme renders two levels the same hex, and the
+closest any two come is Tokyo Night's 5.7 L\*, which is the step the old ladder
+already ran at.
+
+#### What it does to the grading
+
+Every pair was regraded: `on_surface`, `on_surface_variant` and `outline` on all
+four levels; `warning`, `critical` and `outline_variant` on all four; and the
+wallpaper-derived `primary` / `secondary` / `tertiary` on all four across all 58
+still wallpapers in the collection. Because the ladders only go down, **no pair
+in any scheme gets worse**, and two long-standing failures go away:
+
+* Tokyo Night `on_surface_variant` on level 4 was the one text pair under 4.5:1
+  in that scheme, at 4.23:1. It is now **5.28:1**. `critical` there goes
+  3.38:1 → **4.22:1**, `warning` 4.47:1 → **5.58:1**, and the wallpaper accent
+  5.23:1 → **6.53:1** at its worst over the 58 stills.
+* Catppuccin gains on levels 1 to 3 (accent on level 3, 5.34:1 → 7.36:1) and
+  loses nothing, because its level 4 did not move.
+
+**Three failures are unchanged and none of them is the ladder's.** `outline`
+(`ui_text_muted`) is painted as *text* in `SearchField.qml`, `AudioPage.qml` and
+`KeybindsPage.qml` and is under 4.5:1 on every level of every scheme, before and
+after — worst is Tokyo Night at 1.80:1 on level 4, best is Gruvbox at 4.02:1 on
+level 1. That is a role-choice question, not a ladder question. `outline_variant`
+is under 3:1 everywhere as well, but it is a divider *between two surfaces*
+rather than a component boundary, and it improves under two of the three schemes
+(above). And **Gruvbox's red is exactly as weak as it was** — `sem_critical
+#fb4934` grades 2.56:1 on `bg2` and 1.89:1 on `bg3` — because Gruvbox's ladder
+did not move. It is fixed in `schemes/gruvbox-dark.json` if it is worth fixing,
+as the `_alerts` note in `quickshell-colors.json` already says.
 
 ---
 
@@ -1205,7 +1417,7 @@ file, which is where a ninth belongs too.
   and comment-only values dropped.
 * 9 hexes carry more than one meaning; `#1a1b26` carries four, `#15161e` five,
   `#c0caf5` six, `#414868` four, `#292e42` four.
-* 74 roles: 23 base, 27 terminal, 7 semantic, 17 accent fallbacks.
+* 78 roles: 27 base, 27 terminal, 7 semantic, 17 accent fallbacks.
 * 17 Material 3 accent roles stay wallpaper-derived and unchanged.
 * 227 substitutions across 10 files; 1 literal (`#000000`) deliberately kept.
 * 4 roles cannot be filled from all three palettes without judgement; 1 of
