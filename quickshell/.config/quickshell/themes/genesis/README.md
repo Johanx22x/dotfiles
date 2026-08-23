@@ -27,11 +27,15 @@ the two import lines in `bar/NotificationButton.qml` is the fastest way to see
 it:
 
 ```
-modules/notifications/NotificationState.qml   the host's half: the daemon's
-                                              store, the mute, the IpcHandler
-themes/genesis/notifications/                 this theme's half: the daemon
-                                              window, the history panel, the
-                                              DND pill
+modules/notifications/NotificationDaemon.qml  the host's half: the daemon
+                                              itself -- the bus name, the
+                                              stack tags, what is claimed
+modules/notifications/NotificationState.qml   the host's half again: the
+                                              daemon's store, the mute, the
+                                              IpcHandler
+themes/genesis/notifications/                 this theme's half: the panel the
+                                              cards are stacked in, the history
+                                              panel, the DND pill
 ```
 
 The card is not in that list any more: it is a shared component now, drawn at
@@ -214,14 +218,24 @@ them. Only `MenuView.qml` says in its own header why it did not cross; the
 other thirteen never raised the question, and that silence is not a decision in
 either direction.
 
-**One thing sits on the wrong side and is left there.**
-`notifications/Notifications.qml` owns `org.freedesktop.Notifications` -- the
-bus name, the daemon, the whole reason dunst is gone -- as well as being the
-window the cards are stacked in. Being the daemon is a host job by every
-reading of the rule above. Splitting it means moving a `NotificationServer` and
-rewiring what claims a notification, which is logic and not a move, so it
-waits. The card itself is no longer part of that knot: it went across the seam
-as a shared component, and what this file builds is the facade.
+**One thing used to sit on the wrong side, and this is what is left of the
+entry that said so.** `notifications/Notifications.qml` owned
+`org.freedesktop.Notifications` -- the bus name, the daemon, the whole reason
+dunst is gone -- as well as being the window the cards are stacked in. Being
+the daemon is a host job by every reading of the rule above, and this paragraph
+said it was waiting because splitting it means moving a `NotificationServer`
+and rewiring what claims a notification, which is logic and not a move.
+
+**The second theme is what made the wait cost more than the move.** A theme
+that had to carry the daemon would have had to carry the whole of it -- the bus
+name, both stack-tag hints, the claim that makes a notification exist at all,
+the do-not-disturb drop -- or ship a desktop with no notifications whatsoever
+for as long as it was selected. That is not a thing to ask of a theme, and it
+is the same argument that moved the card's spec out a change earlier. So the
+daemon is `modules/notifications/NotificationDaemon.qml` now, armed from
+`shell.qml` beside the services, and it hands a theme two properties: `tracked`
+to put in a Repeater and `count` to size a window from. What this file builds
+is the panel around them.
 
 ## WHY "genesis"
 

@@ -140,11 +140,15 @@ should keep meaning something.
   caught by nothing at all. That is the same limit `tests/shell-load.sh`'s
   header describes for the shell's own tree, and the answer to it is the same:
   a linter that reads every file whether or not anything runs it.
-- **It runs no notification daemon.** `notifications/Notifications.qml` here
-  deliberately ships no `NotificationServer`. See the header there: a second
-  process claiming `org.freedesktop.Notifications` is a developer's own session
-  losing its notifications. So this fixture does not prove that a theme *can*
-  host the daemon.
+- **It draws no notification cards**, and it no longer refuses the daemon --
+  because there is no longer a daemon for a theme to refuse.
+  `modules/notifications/NotificationDaemon.qml` owns
+  `org.freedesktop.Notifications` in the host and is armed from `shell.qml`, so
+  a run that loads this fixture starts it exactly as a run on genesis does.
+  What keeps that off a developer's own session is that `tests/shell-load.sh`
+  unsets `DBUS_SESSION_BUS_ADDRESS` and `tests/scheme-pinning.sh` points it at
+  a path with no bus behind it. See the header of
+  `notifications/Notifications.qml` here for the whole of what changed.
 - **It draws no bar widgets, no island and no popout content.** The bar is one
   strip with one line of text on it. `Config.barWidgetsByMonitor`, the widget
   set, the island and everything a popout puts inside itself are exercised by

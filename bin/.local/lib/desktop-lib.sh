@@ -123,8 +123,9 @@ readonly LIB_RESET=$'\033[0m'
 # x-dunst-stack-tag GROUPS THEM, and it is not decoration either. Config.qml
 # pushes one `desktop-tweak set` process per changed key, all at once; a failure
 # they share would otherwise be six identical popups. The shell reads that hint
-# -- see extraHints in themes/genesis/notifications/Notifications.qml, which lists it
-# by name -- and replaces the previous notification carrying the same tag.
+# -- see extraHints in quickshell/.config/quickshell/modules/notifications/
+# NotificationDaemon.qml, which lists it by name -- and replaces the previous
+# notification carrying the same tag.
 #
 # Silent about its own failure: no notify-send installed, no session bus, no
 # daemon. A script must not fail because it could not complain.
