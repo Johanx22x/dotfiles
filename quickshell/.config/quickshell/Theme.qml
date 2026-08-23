@@ -2,16 +2,50 @@
 // QUICKSHELL - design tokens
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 //
-// Material 3, and therefore the ONE exception to this setup's colour policy:
-// everywhere else the background and the text are fixed Tokyo Night and only
-// the accents follow the wallpaper (see the header of matugen's config.toml).
-// Here the surfaces follow the image as well.
+// Material 3 role NAMES, on this setup's ordinary colour policy and no longer
+// an exception to it. The two axes are the ones every other application here
+// follows (see the header of matugen's config.toml): SURFACES, TEXT and
+// OUTLINES come from the scheme and hold still for as long as the scheme does;
+// ACCENTS come from the wallpaper and are regenerated on every change. What
+// arrives under an M3 name below is one or the other:
 //
-// That is safe on one condition: roles are always used in PAIRS. Text over a
-// surface is on_surface, text over primary is on_primary, and so on. M3
-// guarantees the contrast of each pair whatever the wallpaper is. Painting
-// on_surface over primary, or a hardcoded hex over a generated surface, is
-// what breaks it -- so don't.
+//   from the SCHEME    surface, surface_container, surface_container_high,
+//                      surface_container_highest, on_surface,
+//                      on_surface_variant, outline, outline_variant -- eight
+//                      M3 names filled from ui_* roles, plus warning, critical
+//                      and on_critical from sem_*.
+//   from the WALLPAPER primary, on_primary, primary_container,
+//                      on_primary_container, secondary, secondary_container,
+//                      on_secondary_container, tertiary, on_tertiary. Nine,
+//                      and they are the whole of what the image still decides.
+//
+// THIS FILE'S HEADER USED TO CLAIM THE OPPOSITE and the claim is worth keeping
+// because the argument under it was good and the facts moved. It said: the
+// shell is the ONE exception, everywhere else the base is fixed Tokyo Night and
+// only the accents follow the image, here the surfaces follow it as well -- and
+// that is safe because M3 GUARANTEES the contrast of each role pair whatever
+// the wallpaper is. Sound, while the alternative was a base nobody could ever
+// change. It stopped being sound when the base became the user's to pick:
+// desktop-scheme moves GTK, Qt, kitty and zathura, and leaving this one alone
+// meant choosing a scheme restyled the whole desktop except the part of it this
+// repository draws.
+//
+// SO THE RULE SURVIVES AND ITS GUARANTEE DID NOT. Roles are still always used
+// in PAIRS: text over a surface is on_surface, text over primary is on_primary,
+// and so on. Painting on_surface over primary, or a hardcoded hex over a
+// generated surface, is still what breaks it -- so don't. What changed is what
+// the pairing is worth. On the accent side it is still M3's per-wallpaper
+// guarantee. On the scheme side the pairs are the SCHEME's, and their contrast
+// is MEASURED -- once, by hand, when the scheme is written -- rather than
+// derived. That is a weaker promise and it is the reason the rule matters more
+// now than it did, not less: a guaranteed pair tolerates being taken apart and
+// a measured one does not, because nothing recomputes it when a wallpaper
+// lands. Pair them and the measurement holds; mix them and there is no
+// mechanism left to catch you.
+//
+// The same policy, and the same history, is written from the other side in the
+// _policy key of matugen's quickshell-colors.json template -- which is the file
+// that fills the eight names above from ui_* roles.
 //
 // WHY colors.json AND NOT A GENERATED .qml
 // Quickshell reloads the entire config whenever a .qml file changes. If

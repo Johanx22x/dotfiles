@@ -10,27 +10,43 @@ what was deliberately left out of the split:
 
 That sentence is now mostly false, and this file is what replaced it.
 
-**Nineteen components have a theme half**, which is every `.qml` in this
+**Twenty components have a theme half**, which is every `.qml` in this
 directory:
 
 ```
 ActionRow          BindRow            Chip               ChoiceRow
 CornerWedge        InfoRow            LevelMeter         ListRow
-MenuRow            NotificationCard   Popout             SearchField
-SettingsSection    StepperButton      StepperRow         StreamRow
-ToggleRow          Tooltip            VolumeSlider
+MenuRow            NotificationCard   Popout             ScrollBar
+SearchField        SettingsSection    StepperButton      StepperRow
+StreamRow          ToggleRow          Tooltip            VolumeSlider
 ```
 
-**Fifteen under `components/` do not**, and only two of them say why in their
-own headers -- `MenuView.qml`, because a component that is a delegate end to
-end gets no checking from the seam and pays the full price of it, and
-`ScrollBar.qml`, because it is the one component with a bench of its own and
-the bench cannot follow it across the seam. The other thirteen never raise the
-question at all: two objects with nothing to draw, two windows, two grabs, and
-seven widgets nobody has looked at yet. Do not read that silence as a decision
-in either direction.
+Count the files rather than trusting that number. It said nineteen and was
+already wrong when it was written: `ScrollBar` crossed the seam in
+"Let the theme draw the scrollbar" and the sentence was typed eleven minutes
+later, in the next commit but one, without it. A count in prose beside a list
+somebody appends to has nothing checking the two against each other --
+`tests/theme-interface.py` prints the real number on every run, and that is the
+one to believe.
 
-Two of the nineteen are worth knowing about before you copy anything:
+**Fourteen under `components/` do not**, and only one of them says why in its
+own header: `MenuView.qml`, because a component that is a delegate end to end
+gets no checking from the seam and pays the full price of it. The other
+thirteen never raise the question at all: two objects with nothing to draw, two
+windows, two grabs, and seven widgets nobody has looked at yet. Do not read
+that silence as a decision in either direction.
+
+**`ScrollBar` used to be the second name in that paragraph**, and what moved is
+worth a sentence rather than a quiet deletion. Its reason was that it is the
+one component with a bench of its own -- `tests/scrollbar-target.py` -- and
+that the bench could not follow it across the seam. The bench can, and does:
+it builds the sandbox `qs.modules` and `qs.components` a split file needs and
+points its `Themes` stub at the real `themes/genesis`, so the four pixels its
+last assertion reads are the ones this directory paints. The whole of that is
+written up in `components/ScrollBar.qml` under AND THE BENCH FOLLOWED IT
+ACROSS. The reason was about a tool, and the tool changed.
+
+Two of the twenty are worth knowing about before you copy anything:
 
 - **`SettingsSection`'s facade is not under `components/`.** It is
   `modules/settings/SettingsSection.qml`, and its implementation is here
@@ -326,10 +342,10 @@ and QML will say so, at runtime, once per row.
 
 #### THE RULE IS ABOUT A LOOP AND NOT ABOUT A WIDTH
 
-Read literally, "never `implicitWidth`" is now broken by four components on
-record, and every one of them was right to. The reason in the paragraph above
-is a LOOP -- a row fills its parent Column, a Column sizes itself to its widest
-child -- and four components are not in that shape:
+Read literally, "never `implicitWidth`" is broken by six components on record,
+and every one of them was right to. The reason in the paragraph above is a LOOP
+-- a row fills its parent Column, a Column sizes itself to its widest child --
+and none of the six is in that shape:
 
 | | why the loop cannot form |
 | --- | --- |
@@ -337,18 +353,50 @@ child -- and four components are not in that shape:
 | `MenuRow` | its parent Column has no width of its own. The width has to come from somewhere and the only somewhere is the row |
 | `StepperButton` | it is not a row. Both directions are floored at 26 |
 | `Tooltip` | a note has no column |
+| `ScrollBar` | it is anchored, not packed. Its width is the number two call sites reserve their gutter FROM, so it is the thing others size against rather than the other way round |
+| `Popout` | it is a window. What it reports is what the layer surface has to reserve, and a surface takes its size from its content or from nowhere |
 
 So the test is not "is this a width" but **"is there a parent whose size
 depends on mine?"** If there is, the width comes down and only down. If there
-is not, say so in the file the way those four do, and report it.
+is not, say so in the file the way those six do, and report it.
 
-`CornerWedge` is the same test answered from the other end, and it is the one
-component where NOTHING crosses upwards -- not even the height. Its facade
-declares the box (`radius` square) and never reads the Loader, because the
-theme is allowed to draw nothing at all and an empty `Item` reports zero. A
+#### THE EXCEPTION LIST IS THE SYMPTOM AND NOT THE RULE
+
+That table said FOUR until somebody grepped the facades for
+`drawing.implicitWidth` and found six. `ScrollBar` and `Popout` were on the
+wrong side of it and nothing anywhere noticed -- not a check, not a lint, not a
+review -- because a rule written as a list of names has no way to be wrong out
+loud.
+
+So the sentence in bold above IS the rule and the table is six worked examples
+of it. One rule, one missing clause, and the clause is that sentence: six
+components pass the same test for six spellings of one reason, and a seventh
+will not need a new row.
+
+**`CornerWedge` IS NOT ON THAT TABLE AND DOES NOT BELONG ON IT**, which is the
+other half of the answer: what looks like one rule with a growing list is
+partly a second rule wearing the same words. Its facade declares the box
+(`radius` square) and never reads the Loader at all -- not the width, and not
+the height either. The reason is not that no loop can form. It is that **the
+theme is allowed to draw nothing at all**, and an empty `Item` reports zero: a
 facade that took its size from that theme would collapse every fillet in the
-shell the moment a theme declined to draw one. See WHEN THE RIGHT
-IMPLEMENTATION IS EMPTY, below.
+shell the moment a theme declined to draw one, and a floor would not have
+rescued it -- `Math.max(radius, drawing.implicitHeight)` is the same number and
+says the theme has a say in it, which it does not. Note where that lands: it
+constrains the HEIGHT as well, in the opposite direction from this rule's own
+first sentence. Rule 2 says report your height; `CornerWedge` says report
+nothing. Two rules cannot disagree about the same property and still be one
+rule. It is stated where it belongs, under WHEN THE RIGHT IMPLEMENTATION IS
+EMPTY, below.
+
+**AND `implicitHeight` DOES NOT ALWAYS MEAN WHAT THE FIRST SENTENCE SAYS.**
+`ScrollBar.qml` in this directory reports one and it is not how tall the bar
+came out -- nothing lays a scrollbar out that way. It is THE SHORTEST TRACK THE
+THUMB CAN LIVE IN, the floor the facade puts under a proportional thumb. Bind
+it to `root.height` the way this rule reads and the thumb is floored at the
+whole track and stops moving; that file says so in its own header. One
+property, two meanings, and the seam cannot tell them apart. Read what the
+facade does with the number before deciding what to put in it.
 
 ### 3. Do not re-declare `label`, `title` or `glyph`
 
@@ -412,12 +460,12 @@ Design tokens are the host's and they are the same for every theme --
 `../README.md` is explicit that the palette belongs to the wallpaper and stays
 in the host, which is why this theme is not named after a colour. So a theme
 implementation imports `qs` and reads `Theme.groupPadding`, `Theme.primary`,
-`Icons.wifi` directly. Thirty-one of the thirty-two files under `themes/genesis`
+`Icons.wifi` directly. Forty-eight of the fifty files under `themes/genesis`
 already do.
 
 The alternative -- everything arrives through `row` -- was considered and is
 worse in a specific way: the facade would have to re-export a dozen tokens per
-component, twenty-one times, and each of those is a place for the public API to
+component, twenty times, and each of those is a place for the public API to
 drift into carrying design.
 
 So: **`row` carries what the call site said. `Theme` and `Icons` carry what the
@@ -506,7 +554,11 @@ default.
 **AN EMPTY IMPLEMENTATION REPORTS ZERO FOR EVERYTHING.** No `implicitHeight`,
 no `implicitWidth`, no children, no colour. Rule 2 has the facade read a height
 back off the Loader and floor it, and that floor is exactly what keeps an empty
-theme from dropping a row out of its section. Which gives the rule two halves:
+theme from dropping a row out of its section. Where a floor is not enough, this
+takes over -- and it is a rule of its own and not a third half of rule 2, for
+the reason set out under THE EXCEPTION LIST IS THE SYMPTOM AND NOT THE RULE: it
+tells a facade to report nothing where rule 2 tells it to report a height. Two
+clauses:
 
 1. **A component whose empty implementation is legitimate must not need
    anything back across the seam.** `CornerWedge`'s box is `radius` square and

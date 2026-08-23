@@ -20,8 +20,12 @@
 # hypr/.config, zsh/.zshrc. It is not the list in install.sh, on purpose --
 # install.sh links one compositor or the other, and the question here is whether
 # ALL of them can coexist, including the two that are never installed together.
-# assets/, packages/, seeds/, system/ and tests/ hold no dotfiles and drop out
-# of the list on their own.
+# assets/, lib/, packages/, schemes/, seeds/, system/ and tests/ hold no
+# dotfiles and drop out of the list on their own -- seven of the repository's
+# twenty-four top-level directories, leaving seventeen packages. The run says
+# how many it found, so read that rather than this sentence: nothing checks the
+# list above, and lib/ and schemes/ were both missing from it for as long as
+# they had existed.
 #
 # --no-folding matches install.sh: real directories with a link per file, so an
 # application writing a new file into ~/.config does not drop it inside the repo.
