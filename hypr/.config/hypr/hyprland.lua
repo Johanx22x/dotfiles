@@ -938,15 +938,26 @@ hl.window_rule({
 -- overlayLayerRule:set_enabled(false)
 
 
--- HOW the Quickshell surfaces are blurred. WHERE is not decided here any more.
+-- HOW the Quickshell surfaces are blurred, AND WHERE. Both, again.
 --
--- The shell names its own blur region through ext-background-effect -- see
--- BackgroundEffect.blurRegion in ~/.config/quickshell/themes/genesis/bar/Bar.qml and
--- its six siblings -- and Hyprland has implemented that protocol since 0.56.0
--- (0.56.2 installed; `strings /usr/bin/Hyprland` has
--- ext_background_effect_manager_v1). A client region takes priority over what
--- a rule would have blurred, so from here on this rule answers one question
--- only: with which parameters.
+-- This used to say WHERE was not decided here any more -- that the shell named
+-- its own region through ext-background-effect, "see BackgroundEffect.blurRegion
+-- in themes/genesis/bar/Bar.qml and its six siblings", and that this rule was
+-- left to answer only "with which parameters".
+--
+-- THAT CODE IS GONE. There is no BackgroundEffect anywhere in the shell today
+-- -- grep the whole tree for it, or for blurRegion, and both come back empty.
+-- niri/config.kdl says so plainly at its own end ("THE SHELL NO LONGER ASKS,
+-- AND NIRI NO LONGER TELLS") and gives the three artifacts that ended the
+-- attempt; this file was simply never brought back into line with it. So this
+-- rule is not the parameters half of a pair. It is the whole of the shell's
+-- blur under Hyprland, and every surface that wants glass has to be matched
+-- below or it falls through to the global decoration.blur.
+--
+-- Hyprland does still implement the protocol (0.56.2; `strings
+-- /usr/bin/Hyprland` has ext_background_effect_manager_v1), so if the shell
+-- ever asks again, a client region takes priority over what this rule blurs
+-- and the paragraph above becomes true a second time.
 --
 -- WHY IT DOES NOT SIMPLY GO AWAY, the way its opposite number in
 -- niri/config.kdl did. The protocol carries a region and nothing else -- its
@@ -1009,7 +1020,34 @@ hl.layer_rule({
     --
     -- It was never enough on its own: with passes at 3 the corner steps again
     -- whatever this is set to. Both changes were needed.
-    ignore_alpha  = 0.84,
+    --
+    -- 0.84 -> 0.77, BECAUSE A SECOND THEME ARRIVED AND THIS NUMBER HAD BEEN
+    -- PINNED TO THE FIRST ONE'S DEFAULT. The rule is "just under the fill's
+    -- alpha", and there is no longer one fill:
+    --
+    --   genesis   Config.opacity, default 0.85, AND A USER SLIDER
+    --   windows   0.78 for the taskbar (themes/windows/theme.json,
+    --             surfaceAlpha 78), 0.94 for the flyouts
+    --
+    -- At 0.84 the windows taskbar is BELOW the threshold, so every one of its
+    -- pixels is excluded and the most visible glass surface on the desktop
+    -- gets no blur at all -- which is not a subtle corner artifact, it is the
+    -- wallpaper coming through sharp behind a bar built to have it soft.
+    --
+    -- 0.77 is the same relationship to the lowest fill in the tree that 0.84
+    -- had to genesis's. What it costs is the outer sliver of the antialiased
+    -- ramp between 0.77 and the fill: those pixels are blurred now where they
+    -- were excluded before. That is a fraction of a pixel along a curve, and
+    -- the artifact this line exists for -- blur bleeding into the FULLY
+    -- transparent strip outside the fillet, which is alpha 0 -- is excluded by
+    -- any threshold above zero.
+    --
+    -- IT IS STILL A FLOOR SOMEBODY CAN WALK UNDER, and that was true at 0.84
+    -- too: the transparency slider writes Config.opacity, and set below this
+    -- number genesis loses its own blur the way windows just did. If that
+    -- turns up, the fix is not another guess here -- it is the shell naming
+    -- its own region, which is the paragraph at the top of this rule.
+    ignore_alpha  = 0.77,
     blur_popups   = true,
 
     -- xray makes the blur sample ONLY the wallpaper, ignoring the windows in
