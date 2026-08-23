@@ -39,6 +39,7 @@
 import Quickshell
 import QtQml
 import qs.modules
+import qs.modules.notifications
 import qs.modules.recorder
 import qs.modules.settings
 // EVERYTHING ABOVE IS THE HOST: the arbiter, the state singletons, the
@@ -181,6 +182,19 @@ ShellRoot {
         Component.onCompleted: Track.armed
     }
 
+    // THE NOTIFICATION DAEMON ANSWERS THE BUS FROM LOGIN, and this line is what
+    // lets it, for the same reason as the five above and with more riding on it
+    // than any of them. modules/notifications/NotificationDaemon.qml owns
+    // org.freedesktop.Notifications, and the only thing that would ever ask for
+    // it is the surface that draws the cards -- so the bus name would be claimed
+    // by whichever theme happened to draw a notification panel, and a theme that
+    // drew none would leave it unclaimed for dunst to be D-Bus activated into.
+    // That is what living inside a theme file cost, and this line is what ends
+    // it: the daemon is up because the shell is up.
+    Scope {
+        Component.onCompleted: NotificationDaemon.armed
+    }
+
     // THE ONE-SURFACE-AT-A-TIME RULE IS AWAKE FROM LOGIN, and this line is what
     // lets it, for the same reason as the five above. modules/Surfaces.qml is an
     // arbiter: it listens to the singletons behind the launcher, the power menu,
@@ -215,8 +229,11 @@ ShellRoot {
         }
     }
 
-    // The notification daemon, on the same screen as the bar. It takes the
-    // org.freedesktop.Notifications bus name, so dunst must not be running.
+    // The notification panel, on the same screen as the bar. NOT the daemon --
+    // that is the singleton armed above, which owns the bus name whether or not
+    // this surface, or a theme's replacement for it, ever draws a card. dunst
+    // must still not be running; that is the singleton's business now rather
+    // than this line's.
     Variants {
         model: Screens.mainOnly
 
