@@ -124,6 +124,52 @@ these rows against it under a headless compositor with no "not a type" and no
 refused assignment. If you split a component whose name collides with a QtQuick
 type, check it again before writing the file.
 
+#### AND IT STOPS AT THE EDGE OF A DELEGATE
+
+The table above was measured on `ToggleRow`, which has no `Repeater`, no
+`ListView` and no delegate of any kind. **Everything it claims is true at the
+top level of a theme file and false inside a delegate**, which was found the
+second and third times somebody split something and is the sharpest limit on
+this rule.
+
+Measured in `LevelMeter.qml` in this directory, `hotFrom` and `accent`
+misspelt in BOTH places in the same run:
+
+| where the misspelt `row.<name>` sits | what `tests/qml-lint.sh` said |
+| --- | --- |
+| top level of the theme file | `Member "hotFrmo" not found on type "LevelMeter" [missing-property]`, and the run went **19 -> 20 and failed** |
+| inside the `Repeater` delegate | **nothing. No `missing-property`, and not even an `[unqualified]`.** |
+
+qmllint stops at the outer component's `root` and does not follow through to
+`.row.<name>`. The same thing was seen from the other side in `ChoiceRow`,
+where the delegate reads came out as bare `[unqualified]` -- so the category
+varies with the shape of the delegate and the protection does not: **inside a
+delegate, `row.anything` is exactly as unchecked as `property var row` would
+have made the whole file.**
+
+It is not fixable from here. `pragma ComponentBehavior: Bound` is what would
+make a delegate's outer scope resolvable, and `tests/qml-lint.sh`'s own header
+rules it out for the tree.
+
+So there are two things to do and they are both cheap:
+
+- **Hoist.** Read the value once at the top level of the theme file, into a
+  `readonly property` with a real type, and let the delegate bind to that local
+  name. The read that crosses the seam is then a checked one and the delegate
+  never touches `row` at all. `LevelMeter.qml` does this with `hotFrom` and
+  `accent` and says so where it does it. This is not the mirroring rule 3
+  forbids -- that ban is specifically `label`, `title` and `glyph`, because the
+  settings search walks the tree looking for those three names and nothing
+  walks for anything else.
+- **Run it.** For whatever cannot be hoisted, the linter is not evidence. Open
+  the thing and look at it, or measure it in a bench.
+
+And when you are deciding whether a component needs a theme half at all, put
+this on the scale: a component that is a delegate end to end -- `MenuView` is,
+its rows come out of a `QsMenuOpener` -- gets no checking from the seam and
+pays the full price of it. `components/MenuView.qml` was left whole partly for
+this reason and its header sets out the rest.
+
 ### 2. Report `implicitHeight`, and never `implicitWidth`
 
 Height is the only measurement that crosses the seam upwards, because a row
