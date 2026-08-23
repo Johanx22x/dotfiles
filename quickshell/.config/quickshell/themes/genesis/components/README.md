@@ -355,9 +355,14 @@ cannot be shared without a new file under `components/`. Revisit it when there
 is a second real theme, which is the point at which the trade actually has two
 sides.
 
-**Editing a file in here does not hot-reload the shell.** Same reason as
-everything else under `themes/` -- see the long note in `modules/Themes.qml`.
-`qs kill && qs -d --no-duplicate`.
+**Editing a file in here DOES hot-reload the shell**, and that is not free.
+Quickshell registers its watches during the startup scan, which only reaches a
+directory it can follow an import to -- so `shell.qml` carries one static
+import per theme directory purely to be watched, this one included. The import
+is unused by design and qmllint is told so. Add a directory under a theme and
+it is invisible to the watcher until its import is there: that is how this
+very directory spent its first hours, silently unwatched, because it was
+created after the imports were written.
 
 **Nothing checks rule 3, rule 4 or rule 7.** A mirrored `label`, a write to
 `row`, a MouseArea on `InfoRow`: all three load, all three pass every test in

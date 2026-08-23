@@ -106,6 +106,7 @@ import qs.modules.settings
 import qs.themes.genesis
 import qs.themes.genesis.bar
 import qs.themes.genesis.cheatsheet
+import qs.themes.genesis.components
 import qs.themes.genesis.island
 import qs.themes.genesis.launcher
 import qs.themes.genesis.notifications
