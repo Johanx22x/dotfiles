@@ -97,11 +97,11 @@
    Note this is the opposite of upstream Adwaita, where the sidebar is
    LIGHTER than the window (#2e2e32 over #222226); here the chrome is one
    flat surface and the content is what steps back. */
-@define-color window_bg_color   #1a1b26;
-@define-color window_fg_color   #c0caf5;
+@define-color window_bg_color   {{colors.ui_bg.default.hex}};
+@define-color window_fg_color   {{colors.ui_text.default.hex}};
 
-@define-color view_bg_color     #101119;
-@define-color view_fg_color     #c0caf5;
+@define-color view_bg_color     {{colors.ui_bg_view.default.hex}};
+@define-color view_fg_color     {{colors.ui_text.default.hex}};
 
 /* headerbar_shade_color: in a plain headerbar this is the "inset 0 -1px"
    underline, but Nautilus's headerbars live inside AdwToolbarViews and
@@ -119,10 +119,10 @@
    The other half of this lives in hyprland.lua: its opacity field is
    "active inactive", and an inactive value below the active one re-creates
    exactly the same problem from the compositor side. */
-@define-color headerbar_bg_color        #1a1b26;
-@define-color headerbar_fg_color        #c0caf5;
-@define-color headerbar_border_color    #414868;
-@define-color headerbar_backdrop_color  #1a1b26;
+@define-color headerbar_bg_color        {{colors.ui_bg.default.hex}};
+@define-color headerbar_fg_color        {{colors.ui_text.default.hex}};
+@define-color headerbar_border_color    {{colors.ui_border.default.hex}};
+@define-color headerbar_backdrop_color  {{colors.ui_bg.default.hex}};
 @define-color headerbar_shade_color     rgba(0, 0, 0, 0.15);
 
 /* sidebar_border_color: TRANSPARENT, and it must stay defined to be so.
@@ -143,9 +143,9 @@
    background does not says the class is present and something app-side is
    overriding only the background. Not worth chasing: window_bg_color
    already paints the sidebar the intended colour. */
-@define-color sidebar_bg_color        #1a1b26;
-@define-color sidebar_fg_color        #c0caf5;
-@define-color sidebar_backdrop_color  #1a1b26;
+@define-color sidebar_bg_color        {{colors.ui_bg.default.hex}};
+@define-color sidebar_fg_color        {{colors.ui_text.default.hex}};
+@define-color sidebar_backdrop_color  {{colors.ui_bg.default.hex}};
 @define-color sidebar_border_color    transparent;
 @define-color sidebar_shade_color     rgba(0, 0, 0, 0.18);
 
@@ -153,28 +153,28 @@
    pane. Nautilus does not use it today, but if it is left undefined it
    falls back to Adwaita's grey (#28282c) and a 36% divider, which would
    show up as a foreign colour the day some dialog does use it. */
-@define-color secondary_sidebar_bg_color        #1a1b26;
-@define-color secondary_sidebar_fg_color        #c0caf5;
-@define-color secondary_sidebar_backdrop_color  #1a1b26;
+@define-color secondary_sidebar_bg_color        {{colors.ui_bg.default.hex}};
+@define-color secondary_sidebar_fg_color        {{colors.ui_text.default.hex}};
+@define-color secondary_sidebar_backdrop_color  {{colors.ui_bg.default.hex}};
 @define-color secondary_sidebar_border_color    rgba(0, 0, 0, 0.15);
 @define-color secondary_sidebar_shade_color     rgba(0, 0, 0, 0.18);
 
-@define-color card_bg_color     #292e42;
-@define-color card_fg_color     #c0caf5;
+@define-color card_bg_color     {{colors.ui_bg_raised.default.hex}};
+@define-color card_fg_color     {{colors.ui_text.default.hex}};
 @define-color card_shade_color  rgba(0, 0, 0, 0.36);
 
-@define-color dialog_bg_color   #1a1b26;
-@define-color dialog_fg_color   #c0caf5;
+@define-color dialog_bg_color   {{colors.ui_bg.default.hex}};
+@define-color dialog_fg_color   {{colors.ui_text.default.hex}};
 
-@define-color popover_bg_color  #292e42;
-@define-color popover_fg_color  #c0caf5;
+@define-color popover_bg_color  {{colors.ui_bg_raised.default.hex}};
+@define-color popover_fg_color  {{colors.ui_text.default.hex}};
 
-@define-color thumbnail_bg_color #292e42;
-@define-color thumbnail_fg_color #c0caf5;
+@define-color thumbnail_bg_color {{colors.ui_bg_raised.default.hex}};
+@define-color thumbnail_fg_color {{colors.ui_text.default.hex}};
 
 @define-color shade_color   rgba(0, 0, 0, 0.36);
 @define-color scrim_color   rgba(0, 0, 0, 0.5);
-@define-color borders       #414868;
+@define-color borders       {{colors.ui_border.default.hex}};
 
 /* ---- Accent: the only thing that follows the wallpaper ----
    accent_color    = for TEXT and icons over the window background.
@@ -197,21 +197,21 @@
    reading M3's error role, and it is written out under [config] in
    config.toml. (That comment used to point at waybar's #custom-system.
    waybar is gone.) */
-@define-color destructive_color     #f7768e;
-@define-color destructive_bg_color  #f7768e;
-@define-color destructive_fg_color  #1a1b26;
+@define-color destructive_color     {{colors.sem_critical.default.hex}};
+@define-color destructive_bg_color  {{colors.sem_critical.default.hex}};
+@define-color destructive_fg_color  {{colors.sem_on_critical.default.hex}};
 
-@define-color success_color     #9ece6a;
-@define-color success_bg_color  #9ece6a;
-@define-color success_fg_color  #1a1b26;
+@define-color success_color     {{colors.sem_success.default.hex}};
+@define-color success_bg_color  {{colors.sem_success.default.hex}};
+@define-color success_fg_color  {{colors.sem_on_success.default.hex}};
 
-@define-color warning_color     #e0af68;
-@define-color warning_bg_color  #e0af68;
-@define-color warning_fg_color  #1a1b26;
+@define-color warning_color     {{colors.sem_warning.default.hex}};
+@define-color warning_bg_color  {{colors.sem_warning.default.hex}};
+@define-color warning_fg_color  {{colors.sem_on_warning.default.hex}};
 
-@define-color error_color       #f7768e;
-@define-color error_bg_color    #f7768e;
-@define-color error_fg_color    #1a1b26;
+@define-color error_color       {{colors.sem_critical.default.hex}};
+@define-color error_bg_color    {{colors.sem_critical.default.hex}};
+@define-color error_fg_color    {{colors.sem_on_critical.default.hex}};
 
 
 /* ==================================================================
@@ -425,5 +425,5 @@ window.view .content-pane popover scrolledwindow {
 
 window.view .content-pane .top-bar box.linked,
 window.view .content-pane .top-bar box.linked:backdrop {
-  background-color: #24283b;
+  background-color: {{colors.ui_bg_control.default.hex}};
 }

@@ -52,8 +52,8 @@
    ================================================================== */
 
 /* ---- Surfaces ---- */
-@define-color window_bg_color   #1a1b26;
-@define-color window_fg_color   #c0caf5;
+@define-color window_bg_color   {{colors.ui_bg.default.hex}};
+@define-color window_fg_color   {{colors.ui_text.default.hex}};
 
 /* The view (lists, content areas) goes one step darker than the window: it
    lifts the content off the chrome. Same reasoning and the same values as
@@ -68,13 +68,13 @@
    strength, which is a slightly firmer content/chrome step than Nautilus
    shows. Matching the numbers is what keeps the toolkits in sync;
    compensating per-app is what would put them out of sync. */
-@define-color view_bg_color     #101119;
-@define-color view_fg_color     #c0caf5;
+@define-color view_bg_color     {{colors.ui_bg_view.default.hex}};
+@define-color view_fg_color     {{colors.ui_text.default.hex}};
 
-@define-color headerbar_bg_color        #1a1b26;
-@define-color headerbar_fg_color        #c0caf5;
-@define-color headerbar_border_color    #414868;
-@define-color headerbar_backdrop_color  #1a1b26;
+@define-color headerbar_bg_color        {{colors.ui_bg.default.hex}};
+@define-color headerbar_fg_color        {{colors.ui_text.default.hex}};
+@define-color headerbar_border_color    {{colors.ui_border.default.hex}};
+@define-color headerbar_backdrop_color  {{colors.ui_bg.default.hex}};
 @define-color headerbar_shade_color     rgba(0, 0, 0, 0.15);
 
 /* The full sidebar_* set, and three of these five were MISSING before --
@@ -94,28 +94,28 @@
 
      grep -m1 '@define-color <name> ' \
        /usr/share/themes/adw-gtk3-dark/gtk-3.0/gtk.css */
-@define-color sidebar_bg_color        #1a1b26;
-@define-color sidebar_fg_color        #c0caf5;
-@define-color sidebar_backdrop_color  #1a1b26;
+@define-color sidebar_bg_color        {{colors.ui_bg.default.hex}};
+@define-color sidebar_fg_color        {{colors.ui_text.default.hex}};
+@define-color sidebar_backdrop_color  {{colors.ui_bg.default.hex}};
 @define-color sidebar_border_color    transparent;
 @define-color sidebar_shade_color     rgba(0, 0, 0, 0.18);
 
-@define-color card_bg_color     #292e42;
-@define-color card_fg_color     #c0caf5;
+@define-color card_bg_color     {{colors.ui_bg_raised.default.hex}};
+@define-color card_fg_color     {{colors.ui_text.default.hex}};
 @define-color card_shade_color  rgba(0, 0, 0, 0.36);
 
-@define-color dialog_bg_color   #1a1b26;
-@define-color dialog_fg_color   #c0caf5;
+@define-color dialog_bg_color   {{colors.ui_bg.default.hex}};
+@define-color dialog_fg_color   {{colors.ui_text.default.hex}};
 
-@define-color popover_bg_color  #292e42;
-@define-color popover_fg_color  #c0caf5;
+@define-color popover_bg_color  {{colors.ui_bg_raised.default.hex}};
+@define-color popover_fg_color  {{colors.ui_text.default.hex}};
 
-@define-color thumbnail_bg_color #292e42;
-@define-color thumbnail_fg_color #c0caf5;
+@define-color thumbnail_bg_color {{colors.ui_bg_raised.default.hex}};
+@define-color thumbnail_fg_color {{colors.ui_text.default.hex}};
 
 @define-color shade_color   rgba(0, 0, 0, 0.36);
 @define-color scrim_color   rgba(0, 0, 0, 0.5);
-@define-color borders       #414868;
+@define-color borders       {{colors.ui_border.default.hex}};
 
 /* content_view_bg exists only in the GTK3 port: it is what an icon view or a
    file list paints behind the items. Left equal to the view so a file chooser
@@ -130,10 +130,10 @@
    above, so they follow on their own: theme_base_color, theme_bg_color,
    theme_fg_color, theme_text_color, theme_selected_bg_color and
    text_view_bg. */
-@define-color content_view_bg   #101119;
+@define-color content_view_bg   {{colors.ui_bg_view.default.hex}};
 
-@define-color panel_bg_color    #1a1b26;
-@define-color panel_fg_color    #c0caf5;
+@define-color panel_bg_color    {{colors.ui_bg.default.hex}};
+@define-color panel_fg_color    {{colors.ui_text.default.hex}};
 
 /* ---- Backdrop ----
    GTK3 keeps a separate set of colours for a window WITHOUT focus, and with
@@ -145,21 +145,21 @@
    This is the same shift that the old selector patch fought with a whole
    :backdrop section. Here it is eight lines and it cannot be beaten on
    specificity, because it is not a rule. */
-@define-color theme_unfocused_bg_color            #1a1b26;
-@define-color theme_unfocused_fg_color            #c0caf5;
-@define-color theme_unfocused_base_color          #101119;
-@define-color theme_unfocused_text_color          #c0caf5;
+@define-color theme_unfocused_bg_color            {{colors.ui_bg.default.hex}};
+@define-color theme_unfocused_fg_color            {{colors.ui_text.default.hex}};
+@define-color theme_unfocused_base_color          {{colors.ui_bg_view.default.hex}};
+@define-color theme_unfocused_text_color          {{colors.ui_text.default.hex}};
 @define-color theme_unfocused_selected_bg_color   {{colors.primary.default.hex}};
 @define-color theme_unfocused_selected_fg_color   {{colors.on_primary.default.hex}};
-@define-color unfocused_borders                   #414868;
+@define-color unfocused_borders                   {{colors.ui_border.default.hex}};
 
 /* ---- Disabled ----
    The text dims, the background does NOT lighten. Lightening it on a dark
    theme is exactly what makes a disabled widget unreadable. */
-@define-color insensitive_bg_color      #1a1b26;
-@define-color insensitive_fg_color      #565f89;
-@define-color insensitive_base_color    #101119;
-@define-color unfocused_insensitive_color #565f89;
+@define-color insensitive_bg_color      {{colors.ui_bg.default.hex}};
+@define-color insensitive_fg_color      {{colors.ui_text_muted.default.hex}};
+@define-color insensitive_base_color    {{colors.ui_bg_view.default.hex}};
+@define-color unfocused_insensitive_color {{colors.ui_text_muted.default.hex}};
 
 /* ---- Accent: the only thing that follows the wallpaper ----
    accent_color    = for TEXT and icons over the window background.
@@ -182,18 +182,18 @@
    reading M3's error role, and it is written out under [config] in
    config.toml. (That comment used to point at waybar's #custom-system.
    waybar is gone.) */
-@define-color destructive_color     #f7768e;
-@define-color destructive_bg_color  #f7768e;
-@define-color destructive_fg_color  #1a1b26;
+@define-color destructive_color     {{colors.sem_critical.default.hex}};
+@define-color destructive_bg_color  {{colors.sem_critical.default.hex}};
+@define-color destructive_fg_color  {{colors.sem_on_critical.default.hex}};
 
-@define-color success_color     #9ece6a;
-@define-color success_bg_color  #9ece6a;
-@define-color success_fg_color  #1a1b26;
+@define-color success_color     {{colors.sem_success.default.hex}};
+@define-color success_bg_color  {{colors.sem_success.default.hex}};
+@define-color success_fg_color  {{colors.sem_on_success.default.hex}};
 
-@define-color warning_color     #e0af68;
-@define-color warning_bg_color  #e0af68;
-@define-color warning_fg_color  #1a1b26;
+@define-color warning_color     {{colors.sem_warning.default.hex}};
+@define-color warning_bg_color  {{colors.sem_warning.default.hex}};
+@define-color warning_fg_color  {{colors.sem_on_warning.default.hex}};
 
-@define-color error_color       #f7768e;
-@define-color error_bg_color    #f7768e;
-@define-color error_fg_color    #1a1b26;
+@define-color error_color       {{colors.sem_critical.default.hex}};
+@define-color error_bg_color    {{colors.sem_critical.default.hex}};
+@define-color error_fg_color    {{colors.sem_on_critical.default.hex}};
