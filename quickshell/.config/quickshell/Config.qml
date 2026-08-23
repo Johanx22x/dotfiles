@@ -1115,6 +1115,21 @@ Singleton {
     // adapter's default means the shell builds the shipped theme immediately
     // and rebuilds only for someone who has chosen a different one -- and a
     // config written before this key existed reads exactly as it always did.
+    //
+    // ON THE ADAPTER, WHERE THE SCHEME TWO SECTIONS UP IS NOT, and the rule
+    // that separates them is WallpaperPage.qml's: a value that already has an
+    // owner outside the shell must not get a copy in this file. `desktop-scheme`
+    // is such an owner -- a keybind, a terminal and a theme all go through it
+    // -- so `scheme` is a reading of its state file. Nothing owns the theme but
+    // the shell. No script writes it, nothing else reads it, and the only thing
+    // it decides is which QML this process loads; a state file for it would be
+    // a file with exactly one writer and one reader, both of them here.
+    //
+    // WRITTEN BY ONE CLICK AND NOTHING ELSE. The picker on AppearancePage
+    // assigns this directly, the way every other plain adapter value on that
+    // side is assigned -- there is no setTheme() because there is nothing for
+    // one to do. That is also what keeps it clear of the trap the saveTimer
+    // section below sets out at length: one property, one write, one turn.
     property alias theme: adapter.theme
 
     // ---------------- Which monitor is which ----------------
