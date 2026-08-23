@@ -415,9 +415,16 @@ and the settings window can point it somewhere else.
 
 `wallpaper-switch` sets the wallpaper and runs matugen, which renders eleven
 untracked files for kitty, GTK 3/4, Hyprland, **niri**, Qt, zathura, ranger,
-fastfetch, Zen and the shell. The base palette is fixed (Tokyo Night) and
-matugen supplies only the accents, so contrast never depends on which image is
-set.
+fastfetch, Zen and the shell. Only the **accents** come from the image, so
+contrast never depends on which wallpaper is set.
+
+The other half — surfaces, text, outlines, the sixteen ANSI slots, the alert
+colours — is a **scheme**, and `desktop-scheme` is the dial for it. A scheme is
+a JSON file in `schemes/`; matugen is handed it alongside the wallpaper and
+merges the two into one render, which is why one command re-themes everything
+at once. `schemes/README.md` names all 74 colour roles and is the authority on
+what each one means — read it before writing a scheme or touching a template.
+Tokyo Night is what ships and what a fresh clone gets.
 
 **Zen needs one thing done by hand.** Its theming reads out of a profile with a
 fixed name, `~/.zen/rice`: a stable path is the only thing stow and matugen can
