@@ -1,22 +1,44 @@
-// The application launcher, hanging from the centre of the bar.
+// THE START MENU, AND WHAT IT ACTUALLY RECREATES.
 //
-// It replaces `wofi --show drun` (see ~/.local/bin/wofi-drun for what it used
-// to be). The layout is deliberately the same shape it had there -- a grid of
-// three columns with the icon to the left of the name -- so the habit
-// survives the move; what changes is that it now belongs to the bar instead
-// of being a separate window that happened to be near it.
+// Not the pinned-tile grid. This launcher is search-first -- it opens with the
+// caret in the field and Johan types -- so the Windows screen it corresponds to
+// is the one you get AFTER you type, not the one you get when you press the
+// key. That view is a list with section headers, not a grid of tiles, and this
+// file is that list.
 //
-// CONTINUITY WITH THE BAR
-// Square top corners, rounded bottom, and a concave fillet on each side
-// welding it to the bar's underside: the same construction the popouts and
-// the notification panel use. The rounding trick is the same too -- a plain
-// `radius` with the top corners pushed above the window and clipped, because
-// Rectangle's per-corner radii are not antialiased.
+// AND MICROSOFT PUBLISHES NOTHING ABOUT IT. The Windows 11 search results view
+// is not native XAML at all: it is a WebView2 surface, which is verifiable --
+// windows-11-start-menu-styler.wh.cpp matches its source URL
+// `ms-appx-web://microsoft.windows.search/cache/local/desktop/2.html`, and a
+// companion Windhawk mod exists purely to attach Chrome DevTools to
+// SearchHost.exe. So the row height, the hero card and the preview split are
+// CSS classes in a bundle nobody has scraped, and there is no number to copy.
 //
-// KEYBOARD
-// The surface takes an exclusive keyboard grab while it is up, or there is
-// nothing to type into. Typing filters, Enter launches, Escape closes, and
-// the arrows move a highlight around the grid.
+// What this file uses instead is WinUI's own documented ListViewItem -- 40px
+// minimum height, 4px radius, a 3x16 accent selection pill -- which is the
+// primitive the rest of the Windows shell is built from. That is a defensible
+// substitute. A number invented and presented as measured would not be, so
+// every figure below that is ours says so at its line.
+//
+// WHAT MOVED FROM GENESIS, and it is more than a restyle:
+//
+//   the grid          -> a list. Three columns of 260x60 tiles became one
+//                        column of rows, because that is what the view being
+//                        copied is, and because `move()` collapses from a
+//                        two-dimensional walk to a one-dimensional one.
+//   the anchor        -> bottom. Genesis hangs the launcher off the underside
+//                        of a top bar with two fillets welding it there. The
+//                        taskbar is at the bottom and Windows' panel FLOATS
+//                        above it with a gap, so the fillets go and all four
+//                        corners round.
+//   section headers   -> new. Windows separates "Best match" from the rest,
+//                        and the ranking below already computed the tiers that
+//                        distinction needs; it was simply not being shown.
+//
+// WHAT DID NOT MOVE: the ranking, `launch`, `activate`, `back`, the reset on
+// opening, and the clipboard picker's Loader. Those are behaviour, they were
+// right, and a theme rewriting them would be a theme reimplementing the
+// launcher rather than drawing it.
 
 import Quickshell
 import Quickshell.Wayland
@@ -24,108 +46,80 @@ import QtQuick
 import qs
 import qs.components
 import qs.modules.launcher
+import qs.modules.powermenu
+import qs.modules.settings
+import ".."
 
 PanelWindow {
     id: root
 
     required property var modelData
 
-    // Three columns, as in the wofi grid. Four rows on screen and the rest on
-    // scroll: twelve applications is about as many as can be scanned without
-    // reading, and past that the launcher stops being faster than typing.
-    readonly property int columns: 3
-    readonly property int rows: 4
-    readonly property int cellWidth: 260
-    readonly property int cellHeight: 60
+    // OURS. Microsoft publishes no width for this view. 560 is read off
+    // screenshots and sits between the classic Start panel's 666 and the
+    // narrower search flyout; at the shell's default type size it holds a
+    // 40-character application name without eliding.
+    readonly property int panelWidth: 560
 
-    // Breathing room inside the panel. Deliberately larger than the bar's
-    // groupPadding: the bar is a strip where every pixel is contested, and
-    // this is a surface you stop and look at.
+    // How many rows are on screen before the list scrolls. Twelve
+    // applications is about as many as can be scanned without reading, and
+    // past that the launcher stops being faster than typing -- the same
+    // reasoning genesis's four-by-three grid was built on, arriving at the
+    // same number down one column instead of across three.
+    readonly property int visibleRows: 8
+
+    // OURS, from the same screenshots: the gap between the panel and the
+    // taskbar. The Windows panel does not touch the bar.
+    readonly property int taskbarGap: 12
+
     readonly property int padding: 20
 
-    // The search field's own height. A pill, like everything else the shell
-    // draws that you can act on.
-    readonly property int searchHeight: 42
+    // Windows' search box is 32 in Settings and reads a shade taller in the
+    // Start panel. 34 with a 4px radius; the accent underline is drawn inside
+    // it rather than added to it, so this is the whole height.
+    readonly property int searchHeight: 34
+
+    // The strip along the bottom: account on the left, power on the right. It
+    // carries its own tint, distinct from the panel -- which is a correction
+    // to an earlier reading that had it flush.
+    readonly property int footerHeight: 64
 
     property string query: ""
     property int selected: 0
 
-    // Which screen the launcher is on. "" is the application grid; "command"
-    // is the ">" list; anything else is a picker a command opened, and the
-    // string is which one.
-    //
-    // The ">" prefix is what separates the two searches. An application
-    // launcher that also answers to verbs ends up ranking "Wallpaper" against
-    // a program of that name and getting it wrong; the prefix says which list
-    // is being searched so neither has to guess.
     readonly property bool commandMode: root.query.startsWith(">")
     property string picker: ""
 
-    // How much of the panel is hidden ABOVE the top edge.
-    //
-    // Welded to the bar, the rectangle starts a corner radius higher than the
-    // window so its top corners are cut off by the screen edge and only the
-    // bottom two round. Detached there is nothing to hide under, so the slack
-    // goes to zero and all four corners are drawn -- and the content, the
-    // window height and the fillets all have to agree on which of the two it
-    // currently is, or the panel gains a square bottom or uneven padding.
-    readonly property int topSlack: root.barVisible ? Theme.cardRadius : 0
-
-
-    // IS THE BAR ACTUALLY THERE?
-    //
-    // The launcher is welded to the bar's underside: square top corners and a
-    // concave fillet on each side. A fullscreen window covers the bar -- it is
-    // on the Top layer and fullscreen windows draw over that -- so the weld
-    // ends up joining the panel to nothing, and what is left is a card with
-    // two square corners floating in the middle of a game.
-    //
-    // So when the bar is hidden the panel stops pretending: it detaches, drops
-    // its fillets and rounds all four corners like the free-floating thing it
-    // has become.
-    // TWO WAYS FOR THE BAR NOT TO BE THERE, and only one of them used to be
-    // checked. A fullscreen window covers it -- the bar is on the Top layer and
-    // fullscreen draws over that -- but a monitor can also simply not HAVE one:
-    // the bar is per screen and which screens carry it is a setting.
-    //
-    // Only testing for fullscreen meant that on a monitor without a bar this
-    // panel still welded itself to one: square top corners and a fillet on each
-    // side, joined to nothing, hanging off the top edge of the screen. Which is
-    // exactly what it looked like.
-    //
-    // AND IT HAS TO BE A FULLSCREEN WINDOW YOU CAN ACTUALLY SEE: one parked on
-    // a workspace nobody is looking at covers nothing. What is fullscreen comes
-    // from wlr-foreign-toplevel and reads the same on every flavor; whether it
-    // is on screen is the backend's to answer, because the protocol does not
-    // say -- see fullscreenOutputs in CompositorBackend.qml.
     readonly property bool barVisible: Screens.hasBar(root.screen)
         && !Compositor.hasFullscreenOn(root.screen?.name ?? "")
 
-
     readonly property var commandResults: root.commandMode ? Commands.search(root.query.slice(1)) : []
 
-    // How many things the arrows can walk through right now.
     readonly property int count: {
         if (root.picker !== "")
             return 0;               // the picker moves its own selection
         return root.commandMode ? root.commandResults.length : root.results.length;
     }
 
-    // The application list, filtered.
+    // The application list, filtered and ranked. UNCHANGED FROM GENESIS except
+    // that the score survives into `ranked` instead of being thrown away after
+    // the sort -- see `sectionAt` below, which is the only reason it is kept.
     //
     // noDisplay entries are the ones a desktop file explicitly asks not to
     // show -- settings panels of other desktops, mostly. Matching is on the
     // name AND the keywords, which is what makes "browser" find Brave.
-    readonly property var results: {
+    readonly property var ranked: {
         const all = DesktopEntries.applications.values.filter(e => !e.noDisplay);
         const q = root.query.trim().toLowerCase();
 
-        // A desktop file with no Name is malformed, but it exists in the
-        // wild and it must not take the whole list down.
+        // A desktop file with no Name is malformed, but it exists in the wild
+        // and it must not take the whole list down.
         const named = all.filter(e => e.name);
 
         if (q === "")
-            return named.slice().sort((a, b) => a.name.localeCompare(b.name));
+            return named.slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(e => ({ entry: e, score: 0 }));
 
         const scored = [];
         for (const entry of named) {
@@ -150,7 +144,28 @@ PanelWindow {
         }
 
         scored.sort((a, b) => a.score - b.score || a.entry.name.localeCompare(b.entry.name));
-        return scored.map(s => s.entry);
+        return scored;
+    }
+
+    readonly property var results: root.ranked.map(r => r.entry)
+
+    // WHICH HEADER, IF ANY, GOES ABOVE ROW `i`.
+    //
+    // Windows shows the top hit under "Best match" and everything after it
+    // under its category. The tiers to do that already existed in the ranking
+    // above and were being discarded; nothing new is computed here.
+    //
+    // Returns "" for a row that carries no header, which is most of them.
+    function sectionAt(i: int): string {
+        if (root.commandMode)
+            return i === 0 ? "Commands" : "";
+        if (root.query.trim() === "")
+            return i === 0 ? "All apps" : "";
+        if (i === 0)
+            return "Best match";
+        if (i === 1)
+            return "Apps";
+        return "";
     }
 
     function launch(entry): void {
@@ -160,25 +175,22 @@ PanelWindow {
         LauncherState.close();
 
         // runInTerminal is Terminal=true in the desktop file: ranger, btop and
-        // friends need a terminal to live in, and the old script handed that
-        // job to wofi with `--term kitty`. Here it has to be done explicitly.
+        // friends need a terminal to live in.
         if (entry.runInTerminal)
             Quickshell.execDetached(["kitty", "-e", ...entry.command]);
         else
             Quickshell.execDetached(entry.command);
     }
 
+    // ONE DIMENSION NOW, AND THAT IS THE WHOLE OF THE CHANGE HERE. Genesis
+    // stepped by `columns` on a vertical move because its results were a grid.
+    // A list has a stride of one, so left and right have nothing to walk and
+    // are left to the picker.
     function move(dx: int, dy: int): void {
         if (root.picker !== "") {
-            // The picker says which axis it walks on. There is one picker
-            // left -- the clipboard, a vertical list -- and the question
-            // survives its horizontal sibling on purpose: this used to hand
-            // the horizontal step to both, which left the clipboard dead to
-            // the arrow keys.
-            //
-            // Through the Loader's `item`, not through an id: an id declared
-            // inside a Component belongs to that Component's scope and is not
-            // visible from out here.
+            // The picker says which axis it walks on. Through the Loader's
+            // `item`, not through an id: an id declared inside a Component
+            // belongs to that Component's scope and is not visible from here.
             const picker = pickerLoader.item;
             if (picker)
                 picker.move(picker.vertical ? dy : dx);
@@ -188,10 +200,7 @@ PanelWindow {
         if (root.count === 0)
             return;
 
-        // The command list is one column, so a vertical step is one entry
-        // rather than a row of the grid.
-        const stride = root.commandMode ? 1 : root.columns;
-        const next = root.selected + dx + dy * stride;
+        const next = root.selected + dy;
         if (next >= 0 && next < root.count)
             root.selected = next;
     }
@@ -209,13 +218,9 @@ PanelWindow {
 
             if (command.picker !== "") {
                 // Opening a picker keeps the launcher up: the command was a
-                // question, and the answer is the next screen.
-                //
-                // The search box is cleared and RE-POINTED at the picker: one
-                // field searches whatever is on screen. Leaving ">clipboard"
-                // in it would be a box showing a command that already ran,
-                // and giving the picker a second field of its own would be
-                // two places to type in one window.
+                // question, and the answer is the next screen. The search box
+                // is cleared and RE-POINTED at the picker: one field searches
+                // whatever is on screen.
                 root.picker = command.picker;
                 root.selected = 0;
                 input.text = "";
@@ -246,52 +251,55 @@ PanelWindow {
     screen: modelData
     visible: LauncherState.isOpen
 
+    // THE NAMESPACE IS NOT A NAME, IT IS HOW THE BLUR IS FOUND. Hyprland's
+    // blur-quickshell layer rule matches on it; a namespace that is not on
+    // that list does not come out unblurred, it falls through to the global
+    // decoration.blur, which has different parameters and no xray, and the
+    // surface ends up visibly blurrier than the taskbar it belongs to.
     WlrLayershell.namespace: "quickshell-launcher"
-    // Overlay, above the notification panel on Top, for the same reason the
-    // popouts are: this is something the user opened and is looking at.
     WlrLayershell.layer: WlrLayer.Overlay
     // Exclusive: the launcher is useless without a keyboard, and while it is
     // up nothing else should be receiving keys.
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
+    // BOTTOM, AND ONLY BOTTOM. Anchored to one edge, wlr-layer-shell centres
+    // it on the other axis without anyone measuring the screen -- which is the
+    // same trick genesis used against `top`, pointed the other way.
     anchors {
-        top: true
+        bottom: true
     }
 
-    // Flush with the bar's underside; anchored to `top` alone, so
-    // wlr-layer-shell centres it horizontally without anyone measuring the
-    // screen.
     margins {
-        top: root.barVisible ? Theme.barHeight : Theme.barCornerRadius
+        bottom: (root.barVisible ? Theme.barHeight : 0) + root.taskbarGap
     }
 
-    implicitWidth: panel.implicitWidth + Theme.barCornerRadius * 2
-    implicitHeight: panel.implicitHeight - root.topSlack
+    implicitWidth: panel.implicitWidth
+    implicitHeight: panel.implicitHeight
 
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
 
-    // Input stops at the panel: the fillets are decoration.
+    // NO FILLETS AND NO SLACK. Genesis grew the panel upwards by one radius so
+    // its top corners rounded off out of sight under the bar, and welded it
+    // there with two CornerWedges. Windows' panel floats: every corner is
+    // visible, so every corner rounds, and there is nothing to weld it to.
     mask: Region {
         item: panel
     }
-
-    // WHERE THE BLUR GOES, ASKED FOR BY THE SURFACE ITSELF.
 
     // Reset on every opening. A launcher that remembers the last search is a
     // launcher that shows yesterday's answer to today's keystroke.
     onVisibleChanged: {
         if (visible) {
-            // input.text and NOT root.query: the field is the source of
-            // truth and it drives `query` through onTextChanged. Clearing
-            // only the property left the previous search visible in the box
-            // while the results below were of an empty one -- reopening
-            // after a ">" command showed the grid with ">" still typed.
+            // input.text and NOT root.query: the field is the source of truth
+            // and it drives `query` through onTextChanged. Clearing only the
+            // property left the previous search visible in the box while the
+            // results below were of an empty one.
             input.text = "";
             root.selected = 0;
 
             // A keybind may have asked for a particular screen. Consumed here
-            // and cleared, so the next plain opening starts on the grid.
+            // and cleared, so the next plain opening starts on the list.
             root.picker = LauncherState.pendingPicker;
             LauncherState.pendingPicker = "";
 
@@ -299,51 +307,20 @@ PanelWindow {
         }
     }
 
-    // Named, because the blur region above is built from them: it reads each
-    // one's `radius`, `corner` and `visible` rather than being told any of it
-    // twice.
-    CornerWedge {
-        id: leftFillet
-
-        visible: root.barVisible
-
-        anchors.left: parent.left
-        anchors.top: parent.top
-        corner: "topRight"
-        radius: Theme.barCornerRadius
-        fillColor: panel.color
-    }
-
-    CornerWedge {
-        id: rightFillet
-
-        visible: root.barVisible
-
-        anchors.right: parent.right
-        anchors.top: parent.top
-        corner: "topLeft"
-        radius: Theme.barCornerRadius
-        fillColor: panel.color
-    }
-
     Rectangle {
         id: panel
 
         anchors.horizontalCenter: parent.horizontalCenter
 
-        // Grown upwards by one radius and pushed the same amount above the
-        // window, so the top corners round off out of sight and the edge that
-        // meets the bar comes out straight. Per-corner radii would be simpler
-        // and are not antialiased; see components/Popout.qml.
-        y: -root.topSlack
+        implicitWidth: root.panelWidth
+        implicitHeight: layout.implicitHeight + root.padding * 2 + footer.height
 
-        implicitWidth: root.columns * root.cellWidth + root.padding * 2
-        implicitHeight: layout.implicitHeight + root.padding * 2 + root.topSlack
-
-        radius: Theme.cardRadius
+        radius: Fluent.overlayRadius
         antialiasing: true
 
         color: Theme.glass(Theme.surface)
+        border.width: 1
+        border.color: Theme.outlineVariant
 
         Behavior on color {
             ColorAnimation { duration: Theme.recolorDuration }
@@ -355,56 +332,65 @@ PanelWindow {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.topMargin: root.topSlack + root.padding
+            anchors.topMargin: root.padding
             anchors.leftMargin: root.padding
             anchors.rightMargin: root.padding
 
-            spacing: root.padding - 6
+            spacing: 12
 
             // ---------------- Search ----------------
-            // In a container of its own, in the island's tone
-            // (surfaceContainerHigh over the panel's surface). A bare input
-            // line on the panel reads as a caption; a filled pill reads as
-            // something to type into, which is the first thing this window
-            // has to say.
+            //
+            // The Windows text field, and the two details that make it one:
+            // the fill INVERTS on focus rather than brightening, and the
+            // bottom border becomes two pixels of accent. Both happen with no
+            // transition at all -- Microsoft's own state change is a
+            // DiscreteObjectKeyFrame at time zero.
             Rectangle {
+                id: field
+
                 width: layout.width
                 height: root.searchHeight
-                radius: height / 2
-                color: Theme.glass(Theme.surfaceContainerHigh)
+                radius: Fluent.controlRadius
 
-                Behavior on color {
-                    ColorAnimation { duration: Theme.recolorDuration }
+                color: input.activeFocus ? Theme.surface : Theme.glass(Theme.surfaceContainer)
+                border.width: 1
+                border.color: Theme.outlineVariant
+
+                // The accent underline. A child rather than a border side,
+                // because a Rectangle's border is uniform and this one is not.
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 1
+                    height: Fluent.focusUnderline
+                    radius: 1
+                    visible: input.activeFocus
+                    color: Theme.primary
                 }
 
                 Row {
                     anchors.left: parent.left
-                    anchors.leftMargin: Theme.groupPadding + 4
+                    anchors.leftMargin: 11
                     anchors.right: parent.right
-                    anchors.rightMargin: Theme.groupPadding + 4
+                    anchors.rightMargin: 11
                     anchors.verticalCenter: parent.verticalCenter
 
-                    spacing: Theme.itemSpacing
+                    spacing: 10
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: Icons.search
                         font.family: Theme.fontFamily
-                        font.pointSize: Theme.iconSize
-                        // Brighter once something is typed: the glyph doubles
-                        // as the sign that the field is live.
-                        color: root.query === "" ? Theme.outline : Theme.primary
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.animDuration }
-                        }
+                        font.pointSize: Theme.fontSize
+                        color: Theme.textOnSurfaceVariant
                     }
 
                     TextInput {
                         id: input
 
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - Theme.iconSize * 2 - Theme.itemSpacing
+                        width: parent.width - Theme.fontSize * 2 - 10
 
                         font.family: Theme.fontFamily
                         font.pointSize: Theme.fontSize
@@ -422,8 +408,6 @@ PanelWindow {
                         Keys.onEscapePressed: root.back()
                         Keys.onReturnPressed: root.activate()
                         Keys.onEnterPressed: root.activate()
-                        Keys.onLeftPressed: root.move(-1, 0)
-                        Keys.onRightPressed: root.move(1, 0)
                         Keys.onUpPressed: root.move(0, -1)
                         Keys.onDownPressed: root.move(0, 1)
 
@@ -432,236 +416,217 @@ PanelWindow {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             visible: input.text === ""
-                            // Names the list being searched: the same box
-                            // means three different things depending on the
-                            // screen, and the placeholder is the only thing
-                            // that can say which.
+                            // Names the list being searched: the same box means
+                            // three different things depending on the screen,
+                            // and the placeholder is the only thing that can
+                            // say which.
                             text: {
                                 if (root.picker === "clipboard")
                                     return "Search clipboard";
                                 if (root.commandMode)
-                                    return "Search commands";
-                                return "Search applications";
+                                    return "Type a command";
+                                return "Type here to search";
                             }
                             font.family: Theme.fontFamily
                             font.pointSize: Theme.fontSize
-                            color: Theme.outline
+                            color: Theme.textOnSurfaceVariant
                         }
                     }
                 }
             }
 
             // ---------------- Results ----------------
-            // Three screens in one place, and only one of them is up at a
-            // time. A Loader rather than visibility for the last of them: the
-            // clipboard picker spawns a decode per image row, and it should
-            // not be doing that while the application grid is what is on
-            // screen.
+            //
+            // Three screens in one place and only one of them up at a time. A
+            // Loader rather than visibility for the last: the clipboard picker
+            // spawns a decode per image row, and it should not be doing that
+            // while the application list is what is on screen.
 
-            // The application grid.
-            GridView {
-                id: grid
+            ListView {
+                id: list
 
-                visible: !root.commandMode && root.picker === ""
-                width: layout.width
-                height: visible ? root.rows * root.cellHeight : 0
+                // THE VALUES THE DELEGATE READS, HOISTED. Inside a delegate,
+                // `root.anything` is out of scope as far as qmllint is
+                // concerned -- it resolves at runtime and is checked by
+                // nothing, which is the single largest source of unqualified
+                // reads in the genesis tree. Read once here, and the delegate
+                // reaches them through its `ListView.view` attached property,
+                // which IS in scope.
+                property int sel: root.selected
+                property bool commands: root.commandMode
 
-                cellWidth: root.cellWidth
-                cellHeight: root.cellHeight
-
-                model: root.results
-                currentIndex: root.selected
-
-                highlightFollowsCurrentItem: true
-                snapMode: GridView.SnapToRow
-                clip: true
-
-                // Twelve cells of everything installed. The header up there
-                // says four rows is as many as can be scanned without reading
-                // and that past it you should be typing instead -- which is an
-                // argument for this rather than against it: a grid that ends
-                // flush with the bottom row looks like the whole answer, and
-                // the bar is what says the answer is four hundred long and
-                // typing is the way through it.
-                //
-                // ANCHORED TO THE GRID, and it is already the grid's own child
-                // even though it is declared in here. A GridView is not a
-                // Flickable in this one respect: QQuickFlickable's default
-                // property is `flickableData`, which puts declared children on
-                // the contentItem that scrolls, but QQuickListView and
-                // QQuickGridView override it back to plain `data`, so a child
-                // declared inside one of those belongs to the view item, which
-                // does not move. (Checked both ways: `bar.parent === grid` is
-                // true at runtime, and `defaultProperty` in QtQuick's
-                // plugins.qmltypes says `data` for both views and
-                // `flickableData` for Flickable.)
-                //
-                // This used to say `y: grid.contentY`, borrowed from
-                // components/ScrollList.qml where it is right because that one
-                // really is a plain Flickable and its bar really does ride the
-                // contents. Here there was nothing to give back, so the line
-                // was not a cancellation but a shove: the bar slid down the
-                // panel by exactly the scroll and was clipped away before the
-                // first row had finished passing.
-                //
-                // Hard against the right edge, where the third column's cell
-                // already keeps a groupPadding clear before its label starts.
-                //
-                // NO MARGIN OVERRIDE, and this file used to carry one. The
-                // component widened its press target by seven on each side,
-                // and eleven pixels down the right-hand edge of every
-                // third-column row a click scrolled the grid instead of
-                // launching the application under the pointer; three was asked
-                // for here to stop it. Three inward is what the component does
-                // by default now, so the ask is gone and the measurement it
-                // was made on still holds: the cell hears the press up to
-                // x=772 and the bar answers from 773 to 779. The outward half
-                // never mattered either way -- `clip: true` above ends the
-                // target at the grid's own edge, so the component's eleven
-                // outward pixels are discarded here in full.
-                ScrollBar {
-                    view: grid
-
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
+                function headerFor(i: int): string {
+                    return root.sectionAt(i);
                 }
 
-                delegate: Item {
+                function choose(i: int): void {
+                    root.selected = i;
+                    root.activate();
+                }
+
+                function hover(i: int): void {
+                    root.selected = i;
+                }
+
+                visible: root.picker === "" && root.count > 0
+                width: layout.width
+                height: Math.min(contentHeight, root.visibleRows * 44)
+
+                clip: true
+                interactive: contentHeight > height
+                currentIndex: root.selected
+                highlightFollowsCurrentItem: true
+                highlightMoveDuration: 0
+                preferredHighlightBegin: 0
+                preferredHighlightEnd: height
+                highlightRangeMode: ListView.ApplyRange
+
+                model: root.commandMode ? root.commandResults : root.results
+
+                ScrollBar {
+                    view: list
+                }
+
+                delegate: Column {
                     id: cell
 
                     required property int index
                     required property var modelData
 
-                    width: root.cellWidth
-                    height: root.cellHeight
+                    // Hoisted off the view rather than off `root`: see the
+                    // note on `sel` above.
+                    readonly property bool current: cell.ListView.view.sel === cell.index
+                    readonly property string header: cell.ListView.view.headerFor(cell.index)
+                    readonly property bool isCommand: cell.ListView.view.commands
 
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: 4
-                        radius: Theme.cardRadius - 6
+                    width: ListView.view.width
 
-                        color: cell.index === root.selected
-                            ? Qt.alpha(Theme.primary, 0.18)
-                            : cellMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
-
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.animDuration }
-                        }
-                    }
-
-                    Row {
-                        anchors.left: parent.left
-                        anchors.leftMargin: Theme.groupPadding
-                        anchors.right: parent.right
-                        anchors.rightMargin: Theme.groupPadding
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        spacing: Theme.itemSpacing
-
-                        Image {
-                            anchors.verticalCenter: parent.verticalCenter
-                            source: Icons.resolve(cell.modelData.icon ?? "")
-                            visible: status === Image.Ready
-                            width: 34
-                            height: 34
-                            sourceSize.width: width
-                            sourceSize.height: height
-                        }
+                    // The section header, when this row starts one. Windows'
+                    // BodyStrong: 14 semibold. 6 below and 12 above, except at
+                    // the very top where the field already provides the gap.
+                    Item {
+                        width: parent.width
+                        height: cell.header === "" ? 0 : 30
+                        visible: cell.header !== ""
 
                         Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: cell.modelData.name ?? ""
-                            elide: Text.ElideRight
-                            width: root.cellWidth - 34 - Theme.itemSpacing - Theme.groupPadding * 2
+                            anchors.left: parent.left
+                            anchors.leftMargin: 4
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 6
+
+                            text: cell.header
                             font.family: Theme.fontFamily
-                            font.pointSize: Theme.fontSize
-                            font.weight: Theme.fontWeight
+                            font.pointSize: Fluent.captionSize
+                            font.weight: Fluent.strongWeight
                             color: Theme.textOnSurface
                         }
                     }
 
-                    MouseArea {
-                        id: cellMouse
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-
-                        onEntered: root.selected = cell.index
-                        onClicked: root.launch(cell.modelData)
-                    }
-                }
-            }
-
-            // The ">" commands. A list and not a grid: each one carries a line
-            // of explanation, and explanations want a full width to sit on.
-            Column {
-                visible: root.commandMode && root.picker === ""
-                width: layout.width
-                spacing: 2
-
-                Repeater {
-                    model: root.commandResults
-
+                    // The row itself: WinUI's ListViewItem. 40 minimum, 4
+                    // radius, and selection carried by the accent pill rather
+                    // than by a colour of its own -- the selected fill and the
+                    // hover fill are the SAME brush in Windows, which is why
+                    // there is no third branch in the colour below.
                     Rectangle {
-                        id: row
+                        id: rowBox
 
-                        required property int index
-                        required property var modelData
+                        width: parent.width
+                        height: Math.max(40, rowText.implicitHeight + 12)
+                        radius: Fluent.controlRadius
 
-                        width: layout.width
-                        height: 56
-                        radius: Theme.cardRadius - 6
+                        color: cell.current || rowMouse.containsMouse
+                            ? Theme.surfaceContainerHigh
+                            : "transparent"
 
-                        color: row.index === root.selected
-                            ? Qt.alpha(Theme.primary, 0.18)
-                            : rowMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+                        // NO Behavior HERE, AND THAT IS THE POINT. Windows
+                        // swaps the brush on a DiscreteObjectKeyFrame at time
+                        // zero. A fade on hover is the tell that gives a
+                        // Fluent recreation away faster than any wrong colour,
+                        // because every real control in the same session is
+                        // doing it without one.
 
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.animDuration }
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Fluent.indicatorWidth
+                            height: Fluent.indicatorHeight
+                            radius: Fluent.indicatorRadius
+                            visible: cell.current
+                            color: Theme.primary
                         }
 
-                        Text {
-                            id: rowGlyph
+                        // The icon. An application has a real bitmap; a command
+                        // has a glyph. Both land in the same 24px box so the
+                        // text column starts in the same place either way.
+                        Item {
+                            id: rowIcon
 
                             anchors.left: parent.left
-                            anchors.leftMargin: Theme.groupPadding + 4
+                            anchors.leftMargin: 12
                             anchors.verticalCenter: parent.verticalCenter
+                            width: 24
+                            height: 24
 
-                            text: row.modelData.glyph
-                            font.family: Theme.fontFamily
-                            font.pointSize: Theme.iconSize + 3
-                            color: row.index === root.selected ? Theme.primary : Theme.textOnSurfaceVariant
+                            Image {
+                                anchors.fill: parent
+                                // Icons.resolve and not Quickshell.iconPath:
+                                // the host owns icon lookup, and a theme that
+                                // resolves its own would be a second answer to
+                                // a question Icons.qml already answers -- and
+                                // would miss the theme's own icons.json.
+                                source: cell.isCommand
+                                    ? ""
+                                    : Icons.resolve(cell.modelData.icon ?? "")
+                                visible: !cell.isCommand && status === Image.Ready
+                                sourceSize.width: 24
+                                sourceSize.height: 24
+                                fillMode: Image.PreserveAspectFit
+                                asynchronous: true
+                            }
 
-                            Behavior on color {
-                                ColorAnimation { duration: Theme.animDuration }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: cell.isCommand
+                                text: cell.isCommand ? cell.modelData.glyph : ""
+                                font.family: Theme.fontFamily
+                                font.pointSize: Theme.fontSize + 2
+                                color: cell.current ? Theme.primary : Theme.textOnSurfaceVariant
                             }
                         }
 
                         Column {
-                            anchors.left: rowGlyph.right
-                            anchors.leftMargin: Theme.itemSpacing + 4
+                            id: rowText
+
+                            anchors.left: rowIcon.right
+                            anchors.leftMargin: 12
                             anchors.right: rowChevron.left
-                            anchors.rightMargin: Theme.itemSpacing
+                            anchors.rightMargin: 12
                             anchors.verticalCenter: parent.verticalCenter
 
-                            spacing: 1
-
-                            Text {
-                                text: row.modelData.name
-                                font.family: Theme.fontFamily
-                                font.pointSize: Theme.fontSize
-                                font.weight: Font.Bold
-                                color: Theme.textOnSurface
-                            }
+                            spacing: 0
 
                             Text {
                                 width: parent.width
-                                text: row.modelData.description
+                                text: cell.modelData.name ?? ""
                                 elide: Text.ElideRight
                                 font.family: Theme.fontFamily
-                                font.pointSize: Theme.fontSize - 1
+                                font.pointSize: Fluent.bodySize
+                                color: Theme.textOnSurface
+                            }
+
+                            // The second line, when there is one. Applications
+                            // mostly have a genericName; commands always have a
+                            // description.
+                            Text {
+                                width: parent.width
+                                visible: text !== ""
+                                text: cell.isCommand
+                                    ? (cell.modelData.description ?? "")
+                                    : (cell.modelData.genericName ?? "")
+                                elide: Text.ElideRight
+                                font.family: Theme.fontFamily
+                                font.pointSize: Fluent.captionSize
                                 color: Theme.textOnSurfaceVariant
                             }
                         }
@@ -672,14 +637,14 @@ PanelWindow {
                             id: rowChevron
 
                             anchors.right: parent.right
-                            anchors.rightMargin: Theme.groupPadding + 4
+                            anchors.rightMargin: 12
                             anchors.verticalCenter: parent.verticalCenter
 
-                            visible: row.modelData.picker !== ""
+                            visible: cell.isCommand && cell.modelData.picker !== ""
                             text: Icons.chevronRight
                             font.family: Theme.fontFamily
-                            font.pointSize: Theme.iconSize
-                            color: Theme.outline
+                            font.pointSize: Theme.fontSize
+                            color: Theme.textOnSurfaceVariant
                         }
 
                         MouseArea {
@@ -689,22 +654,17 @@ PanelWindow {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
 
-                            onEntered: root.selected = row.index
-                            onClicked: {
-                                root.selected = row.index;
-                                root.activate();
-                            }
+                            onEntered: cell.ListView.view.hover(cell.index)
+                            onClicked: cell.ListView.view.choose(cell.index)
                         }
                     }
                 }
             }
 
             // Whichever picker a command opened. STILL A LOADER WITH A
-            // COMPONENT BESIDE IT although there is only one picker left: the
-            // wallpaper strip that used to be the other one is now a
-            // fullscreen carousel of its own (see themes/genesis/wallpaper), and what
+            // COMPONENT BESIDE IT although there is only one picker left: what
             // the Loader buys is that the clipboard's decodes do not happen
-            // while the application grid is what is on screen.
+            // while the application list is what is on screen.
             Loader {
                 id: pickerLoader
 
@@ -727,14 +687,139 @@ PanelWindow {
             }
 
             // Nothing matched: say so rather than showing an empty box.
-            Text {
+            Item {
                 width: layout.width
+                height: visible ? 72 : 0
                 visible: root.picker === "" && root.count === 0
-                horizontalAlignment: Text.AlignHCenter
-                text: "No matches"
-                font.family: Theme.fontFamily
-                font.pointSize: Theme.fontSize
-                color: Theme.outline
+
+                Text {
+                    anchors.centerIn: parent
+                    text: `No results for "${root.query}"`
+                    font.family: Theme.fontFamily
+                    font.pointSize: Fluent.bodySize
+                    color: Theme.textOnSurfaceVariant
+                }
+            }
+        }
+
+        // ---------------- Footer ----------------
+        //
+        // Full bleed and its own tint, which is a correction rather than a
+        // choice: an earlier reading had this strip flush with the panel, and
+        // the CSS recreation that has the only real numbers for it gives it a
+        // background of its own. 64 tall, and the bottom corners follow the
+        // panel's.
+        Rectangle {
+            id: footer
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: 1
+
+            height: root.footerHeight
+            radius: Fluent.overlayRadius - 1
+            color: Theme.surfaceContainer
+
+            // Square at the top, rounded at the bottom, matching the panel.
+            // Two rectangles rather than per-corner radii for the same reason
+            // components/Popout.qml gives: per-corner radii are not
+            // antialiased.
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                height: parent.height / 2
+                color: parent.color
+            }
+
+            // The hairline that separates it from the list above.
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                height: 1
+                color: Theme.outlineVariant
+            }
+
+            Item {
+                id: account
+
+                anchors.left: parent.left
+                anchors.leftMargin: root.padding
+                anchors.verticalCenter: parent.verticalCenter
+                width: avatar.width + name.implicitWidth + 10
+                height: 32
+
+                Rectangle {
+                    id: avatar
+
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 28
+                    height: 28
+                    radius: width / 2
+                    color: Theme.primary
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: (SessionInfo.displayName || "?").charAt(0).toUpperCase()
+                        font.family: Theme.fontFamily
+                        font.pointSize: Fluent.captionSize
+                        font.weight: Fluent.strongWeight
+                        // Black on an accent fill, which is what Windows does
+                        // in dark mode: the dark accent is the LIGHT shade of
+                        // the ramp, so the ink on it is TextOnAccentFillColor.
+                        color: Theme.textOnPrimary
+                    }
+                }
+
+                Text {
+                    id: name
+
+                    anchors.left: avatar.right
+                    anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    text: SessionInfo.displayName
+                    font.family: Theme.fontFamily
+                    font.pointSize: Fluent.bodySize
+                    color: Theme.textOnSurface
+                }
+            }
+
+            Rectangle {
+                id: power
+
+                anchors.right: parent.right
+                anchors.rightMargin: root.padding
+                anchors.verticalCenter: parent.verticalCenter
+
+                width: 40
+                height: 40
+                radius: Fluent.controlRadius
+                color: powerMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: Icons.power
+                    font.family: Theme.fontFamily
+                    font.pointSize: Theme.fontSize + 2
+                    color: Theme.textOnSurface
+                }
+
+                MouseArea {
+                    id: powerMouse
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+
+                    onClicked: {
+                        LauncherState.close();
+                        PowerMenuState.toggle();
+                    }
+                }
             }
         }
     }
