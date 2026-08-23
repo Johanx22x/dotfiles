@@ -1,0 +1,21 @@
+{
+    "name": "windows",
+    "title": "Windows 11",
+    "interface": 1,
+    "palette": {
+        "source": "pinned",
+        "scheme": "windows-11-dark"
+    },
+    "font": {
+        "source": "theme",
+        "family": "Segoe UI Variable Static Text"
+    },
+    "bar": {
+        "widgets": [
+            "tray",
+            "keyboardLayout",
+            "clock",
+            "notifications"
+        ]
+    }
+}

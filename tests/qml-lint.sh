@@ -141,7 +141,11 @@
 # linter could read it; 19 of those were cheap and are gone, which made it 307,
 # and one more went with the notification card's split -- see unresolved-type
 # below -- so the shell tree and genesis together are 306. The fixture adds the
-# 6 it was always going to add once anything looked at it, so the sweep is 312.
+# 6 it was always going to add once anything looked at it, which made the sweep
+# 312; the windows theme adds genesis's 160 a second time because it IS genesis
+# a second time, and the sweep is 471. That last number is the one that should
+# fall: a theme redrawn is a theme that need not inherit the shapes these
+# warnings are counting.
 # Gating at zero would mean gating at a number nobody can reach today, so this
 # gates at what is there and refuses to let it grow.
 #
@@ -156,10 +160,24 @@
 #
 # The split is measured, not apportioned by eye:
 #
-#          shell  genesis  probe
-#   145      145        -      -   the shell tree, 96 files
-#   160        -      160      -   genesis, 50 files
-#     6        -        -      6   theme-probe, 27 files
+#          shell  genesis  windows  probe
+#   145      145        -        -      -   the shell tree
+#   160        -      160        -      -   genesis
+#   160        -        -      160      -   windows
+#     6        -        -        -      6   theme-probe
+#
+# WINDOWS IS GENESIS'S NUMBERS TWICE AND THAT IS WHAT IT SHOULD BE AT THIS
+# COMMIT: the theme was created with `cp -r genesis windows`, so it is the same
+# files and therefore the same findings, category for category. The pair will
+# come apart as the theme is redrawn, and the direction it comes apart in is
+# the interesting part -- 128 of genesis's 130 unqualified reads are one shape,
+# a delegate naming an id from outside itself, and a component written fresh
+# does not have to be written that way. If the windows column tracks genesis's
+# all the way to the end, nothing was learned from writing a second theme.
+#
+# THE FILE COUNTS ARE NOT WRITTEN DOWN HERE ANY MORE. They said 96, 50 and 27,
+# and the sweep line above prints the real ones on every run. Two of the three
+# were already stale.
 #
 # and by category, which is the shape that matters more than the total:
 #
@@ -270,7 +288,7 @@ QMLLINT=/usr/lib/qt6/bin/qmllint
 # comparison, so that the way it stops failing a run is that the file is fixed
 # and not that a number was written here.
 declare -A BASELINE=(
-    # --- the shell tree, themes excluded: 96 files, 145 warnings -------------
+    # --- the shell tree, themes excluded: 145 warnings -----------------------
     [shell:unqualified]=115
     [shell:signal-handler-parameters]=16
     [shell:unresolved-type]=7
@@ -281,14 +299,85 @@ declare -A BASELINE=(
     [shell:unused-imports]=0
     [shell:duplicate-property-binding]=0
 
-    # --- genesis: 50 files, 160 warnings ------------------------------------
+    # --- genesis: 160 warnings ----------------------------------------------
     [genesis:unqualified]=130
     [genesis:missing-property]=17
     [genesis:unresolved-type]=6
     [genesis:uncreatable-type]=6
     [genesis:signal-handler-parameters]=1
 
-    # --- theme-probe: 27 files, 6 warnings ----------------------------------
+    # --- windows: 68 warnings, and none of them inherited -------------------
+    #
+    # THIS TABLE USED TO SAY "genesis's account, twice", AND IT WAS RIGHT.
+    # The first Windows theme was made with `cp -r genesis windows`, so it
+    # started with genesis's 160 warnings in genesis's 160 places and the
+    # numbers moved only where somebody had rewritten a file. Johan looked at
+    # what that produced and called it a cheap adaptation; the theme was
+    # deleted and drawn again from an empty 36-file skeleton, and these are the
+    # numbers of a tree that was written rather than copied.
+    #
+    #                    genesis   windows
+    #   unqualified          130        55
+    #   missing-property      17         4
+    #   unresolved-type        6         3
+    #   uncreatable-type       6         6
+    #                      -----     -----
+    #                        160        68
+    #
+    # Lower these as they fall. A budget left above the real number is a budget
+    # that hides the next regression underneath it.
+
+    # SIX PanelWindows, one per surface, and the same six genesis and the
+    # fixture each carry. Quickshell registers PanelWindow uncreatable and
+    # instantiates it itself; nothing in this repository can change that.
+    [windows:uncreatable-type]=6
+
+    # FIFTY-ONE DELEGATE READS AND ONE PanelWindow SCOPE. Three of the
+    # original fifty-four were Bar.qml's Components reading outer ids, and
+    # `pragma ComponentBehavior: Bound` turned those into checked names.
+    #
+    # The delegate shape is genesis's too, and it is worth stating exactly
+    # because 55 against 130 is the only number here that could be mistaken for
+    # a virtue. Inside a `delegate` or a `Repeater`, `root.anything` is out of
+    # scope as far as qmllint is concerned even though it resolves perfectly at
+    # runtime -- every photograph of this theme is of those bindings working.
+    # Windows has fewer because it has fewer delegates, not because a fix was
+    # found.
+    #
+    # There IS a way to cut them: hang the reads off the view instead of the
+    # outer id. It was tried on the launcher's ListView and it moved five out
+    # of [unqualified] and into [missing-property], which is a trade this
+    # repository refuses. [missing-property] is the category that catches a
+    # MISSPELLED read through a typed facade -- the whole return on rule 1 of
+    # themes/genesis/components/README.md -- and five permanent false positives
+    # in it are five places a real typo can hide.
+    #
+    # The odd one out is `margins` on a PanelWindow in launcher/Launcher.qml, a
+    # grouped scope qmllint cannot resolve at all; the shell budget carries the
+    # same finding from components/Popout.qml. Writing it dotted rather than as
+    # a block does not help. That was MEASURED after the comment at the site
+    # claimed it did: both forms produce the same two warnings at the same
+    # line, because what cannot be resolved is `margins` itself.
+    [windows:unqualified]=52
+
+    # FOUR READS THROUGH THE PICKER LOADER, all of them launcher/Launcher.qml
+    # calling `move()` and `activate()` on a `Loader.item` typed QObject. The
+    # launcher hosts pickers of different types behind one loader -- the
+    # clipboard history today, whatever comes next tomorrow -- so the item
+    # genuinely has no single type to declare, and the facade for it is the
+    # pair of functions every picker promises. Typing it would mean naming one
+    # picker in the surface that is supposed to host any of them.
+    [windows:missing-property]=4
+
+    # ONE Quickshell C++ TYPE AND ONE PanelWindow SCOPE. The type is
+    # `QList<NotificationAction*>` read off a live notification in
+    # components/NotificationCard.qml, which Quickshell does not expose
+    # declaratively -- it was two reads until the action filter hoisted one
+    # into a plain `var`; the other is the `margins` from the paragraph above,
+    # counted once in each category.
+    [windows:unresolved-type]=2
+
+    # --- theme-probe: 6 warnings --------------------------------------------
     #
     # ALL SIX ARE "PanelWindow is not creatable", one per surface, which is the
     # Quickshell artefact the table above carries nine of. The fixture has no
@@ -702,7 +791,12 @@ for key in $(printf '%s\n' "${!counts[@]}" "${!BASELINE[@]}" | sort -u); do
         # that went red is illustrated with its own files rather than with
         # whichever ten of the shell's happen to sort first.
         examples="$(grep -P "\[$category\]$" "${scope_file[$label]:-$report}" || true)"
-        printf '%s\n' "$examples" | head -n 10 >&2 || true
+        #
+        # QML_LINT_EXAMPLES raises the ten, and it exists because setting a
+        # baseline needs the whole category rather than a sample of it. Ten is
+        # right for a red run somebody has to read; writing a budget means
+        # counting every line the budget covers.
+        printf '%s\n' "$examples" | head -n "${QML_LINT_EXAMPLES:-10}" >&2 || true
     elif (( now < was )); then
         # Not a failure, and deliberately so: a branch that improves the tree
         # should not have to argue with a test. It does have to record it,

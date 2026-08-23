@@ -39,6 +39,7 @@
 import Quickshell
 import QtQml
 import qs.modules
+import qs.modules.notifications
 import qs.modules.recorder
 import qs.modules.settings
 // EVERYTHING ABOVE IS THE HOST: the arbiter, the state singletons, the
@@ -83,7 +84,7 @@ import qs.modules.settings
 // the imports ends the import list as far as Quickshell's scanner is
 // concerned: the ENGINE still reads every line below and resolves them, so the
 // file loads and then dies with "module qs.themes.genesis is not installed"
-// for all eight at once -- an error about the imports that is really about a
+// for every one of them at once -- an error about the imports that is really about a
 // comment thirty lines above them. It cost a run here. modules/Themes.qml
 // carries the same warning over its own header for the same reason and a
 // different symptom.
@@ -96,12 +97,18 @@ import qs.modules.settings
 // themes/ by hand does not have to be.
 //
 // AND qmllint IS RIGHT THAT THEY ARE UNUSED, which is why it is silenced for
-// these eight lines and only these eight. "Unused" is the point: an import
-// nothing instantiates is exactly what a theme's directories are here for, so
-// the finding is correct and the code is deliberate. Silenced here rather than
+// these lines and only these. "Unused" is the point: an import nothing
+// instantiates is exactly what a theme's directories are here for, so the
+// finding is correct and the code is deliberate. Silenced here rather than
 // budgeted in tests/qml-lint.sh because that budget is per category across the
-// whole tree, and a budget of eight would hide the ninth unused import
-// wherever it appeared.
+// whole tree, and a budget the size of this list would hide the NEXT unused
+// import wherever it appeared.
+//
+// ONE LINE PER DIRECTORY, PER THEME, and the list grows with both. It was nine
+// lines while genesis was the only theme; every theme added since has added its
+// own root plus one line for each subdirectory it carries. The count is not
+// written down anywhere on purpose -- a number in a comment is a number that
+// goes stale, and this one already had.
 //qmllint disable unused-imports
 import qs.themes.genesis
 import qs.themes.genesis.bar
@@ -112,6 +119,14 @@ import qs.themes.genesis.launcher
 import qs.themes.genesis.notifications
 import qs.themes.genesis.powermenu
 import qs.themes.genesis.wallpaper
+import qs.themes.windows
+import qs.themes.windows.bar
+import qs.themes.windows.cheatsheet
+import qs.themes.windows.components
+import qs.themes.windows.launcher
+import qs.themes.windows.notifications
+import qs.themes.windows.powermenu
+import qs.themes.windows.wallpaper
 //qmllint enable unused-imports
 
 ShellRoot {
@@ -181,6 +196,19 @@ ShellRoot {
         Component.onCompleted: Track.armed
     }
 
+    // THE NOTIFICATION DAEMON ANSWERS THE BUS FROM LOGIN, and this line is what
+    // lets it, for the same reason as the five above and with more riding on it
+    // than any of them. modules/notifications/NotificationDaemon.qml owns
+    // org.freedesktop.Notifications, and the only thing that would ever ask for
+    // it is the surface that draws the cards -- so the bus name would be claimed
+    // by whichever theme happened to draw a notification panel, and a theme that
+    // drew none would leave it unclaimed for dunst to be D-Bus activated into.
+    // That is what living inside a theme file cost, and this line is what ends
+    // it: the daemon is up because the shell is up.
+    Scope {
+        Component.onCompleted: NotificationDaemon.armed
+    }
+
     // THE ONE-SURFACE-AT-A-TIME RULE IS AWAKE FROM LOGIN, and this line is what
     // lets it, for the same reason as the five above. modules/Surfaces.qml is an
     // arbiter: it listens to the singletons behind the launcher, the power menu,
@@ -215,8 +243,11 @@ ShellRoot {
         }
     }
 
-    // The notification daemon, on the same screen as the bar. It takes the
-    // org.freedesktop.Notifications bus name, so dunst must not be running.
+    // The notification panel, on the same screen as the bar. NOT the daemon --
+    // that is the singleton armed above, which owns the bus name whether or not
+    // this surface, or a theme's replacement for it, ever draws a card. dunst
+    // must still not be running; that is the singleton's business now rather
+    // than this line's.
     Variants {
         model: Screens.mainOnly
 

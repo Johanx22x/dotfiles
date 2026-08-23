@@ -113,6 +113,37 @@ Singleton {
     // peripheral batteries, so it has always gone true for a tray icon as well.
     property bool popoutOpen: false
 
+    // WHICH SCREENS HAVE A POPOUT UP, BY NAME -- the per-screen truth the flag
+    // above deliberately is not. `popoutOpen` is one bar's news about
+    // something global, read on its rising edge and nothing else; the comment
+    // over it says plainly that it can read false while another bar still has
+    // a panel up. That is fine for the one-surface rule and useless for a
+    // question like "is there a flyout over THIS screen's corner right now?",
+    // which is what a toast surface has to ask before drawing where the
+    // flyout is -- a toast that comes up behind an open panel is half-hidden
+    // and looks broken, and it was reported as exactly that.
+    //
+    // Reported by components/Popout.qml itself rather than by the bars,
+    // because the popout is the one object that knows both its screen and its
+    // openness, and because a report filed by the thing it describes cannot
+    // go stale against it -- the window clears its own entry on destruction,
+    // which is the theme-swap hole closeAll() below exists to plug for the
+    // older flag.
+    //
+    // REASSIGNED WHOLE, never mutated in place: bindings on a var property
+    // wake on assignment, not on a key changing under them.
+    property var popoutScreens: ({})
+
+    function reportPopout(screenName: string, open: bool): void {
+        const next = {};
+        for (const name in root.popoutScreens)
+            if (root.popoutScreens[name] && name !== screenName)
+                next[name] = true;
+        if (open)
+            next[screenName] = true;
+        root.popoutScreens = next;
+    }
+
     // EVERY POPOUT ON EVERY BAR, CLOSE. The broadcast half of the rule, because
     // the receiver is per bar and this is not: each Bar connects its own popout
     // to this and closes it.
@@ -268,6 +299,11 @@ Singleton {
             member.close();
 
         root.popoutOpen = false;
+        // The same void-report argument, for the registry: destroying a bar
+        // destroys the popout that would have reported itself closed. The
+        // popout's own onDestruction covers the common case; this covers the
+        // swap, where destruction order is the compositor's business.
+        root.popoutScreens = {};
     }
 
     // The five call sites, in one place so the membership can be read off them.

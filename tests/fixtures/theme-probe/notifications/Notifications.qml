@@ -1,22 +1,26 @@
 // Notifications, as the probe draws it: a red box in the corner carrying the
 // unread count, and NO DAEMON.
 //
-// THE MISSING NotificationServer IS DELIBERATE AND IS THE ONE PLACE THIS
-// FIXTURE REFUSES TO COPY genesis. That file owns
-// org.freedesktop.Notifications -- the bus name, the server, the whole reason
-// dunst is gone -- as well as drawing the cards, and themes/genesis/README.md
-// already says it sits on the wrong side of the seam and is left there. A
+// THERE IS NO NotificationServer IN HERE AND THERE IS NOWHERE TO PUT ONE.
+// It used to be a refusal: genesis owned org.freedesktop.Notifications from
+// inside notifications/Notifications.qml, themes/genesis/README.md said that
+// was the wrong side of the seam, and this file declined to copy it because a
 // fixture is loaded by tests, tests run on a developer's own machine, and a
 // second process claiming that bus name is a session whose notifications stop
-// arriving where they were going. tests/shell-load.sh points the whole run at
-// a dead bus so it cannot happen; not writing the server is the second lock on
-// the same door.
+// arriving where they were going.
 //
-// WHAT IT COSTS, said out loud rather than left to be discovered: this theme
-// does not prove that a theme CAN host the daemon. Nothing under modules/
-// reads the server or needs the window to exist -- NotificationState's `dnd`,
-// `unread` and `markRead()` all work with no server and `history` simply stays
-// empty -- so the host is not broken by the refusal, only unexercised.
+// The daemon is modules/notifications/NotificationDaemon.qml now, in the host,
+// armed from shell.qml -- so loading this theme starts it exactly as loading
+// genesis does, and the refusal has nothing left to refuse. What kept a test
+// run off the session bus is now the only thing keeping it off:
+// tests/shell-load.sh unsets DBUS_SESSION_BUS_ADDRESS, and tests/scheme-pinning.sh
+// points it at a path with no bus behind it. That was always the lock that did
+// the work; this file's silence was the second one, and it is gone.
+//
+// WHAT THIS THEME DRAWS INSTEAD OF CARDS is the unread count and nothing else,
+// which is a legal theme rather than an incomplete one: the daemon does not
+// need anybody to draw its model for it to answer the bus, and that is the
+// property the move was for.
 
 import QtQuick
 import Quickshell

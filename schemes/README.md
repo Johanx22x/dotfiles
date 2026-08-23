@@ -26,6 +26,7 @@ schemes/README.md              this file: the vocabulary and the substitution wo
 schemes/tokyo-night.json       the default scheme, taken from upstream (see "Tokyo Night is Night")
 schemes/catppuccin-mocha.json  Catppuccin Mocha
 schemes/gruvbox-dark.json      Gruvbox Dark Medium
+schemes/windows-11-dark.json   Windows 11 Dark
 ```
 
 `schemes/` is not a stow package — it holds no dotfile, so `install.sh` and
@@ -329,35 +330,35 @@ wallpaper. The prefixes make that collision impossible by construction.
 
 ### 1.1 base — surfaces, text, outlines
 
-| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | meaning | consumed at |
-|---|---|---|---|---|---|
-| `ui_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | Window / chrome background: the flat surface every app frame sits on. | gtk3 x9, gtk4 x8, zathura:28, zen-scheme.css x3, qt6ct idx10/17 |
-| `ui_bg_dim` | `#16161e` | `#181825` | `#1d2021` | A quiet chrome strip that must recede behind ui_bg. | **nothing today** — the kitty tab bar reads `term_tab_bg` |
-| `ui_bg_bar` | `#15161e` | `#181825` | `#3c3836` | Secondary bar / strip inside a window: statusbar, inputbar, notification, group header. | zathura:30,32,36,52 |
-| `ui_bg_field` | `#15161e` | `#181825` | `#1d2021` | Background of an editable field or a scrolling list (Qt Base). | qt6ct idx9 x3 |
-| `ui_bg_view` | `#0c0e14` | `#11111b` | `#1d2021` | The content pane, set one clear step away from ui_bg so content lifts off chrome. NOT necessarily darker -- see the ladder notes. | gtk3:83,145,162,173; gtk4:117 |
-| `ui_bg_shadow` | `#0c0e14` | `#11111b` | `#1d2021` | Deepest tone of the palette; Qt bevel drop shadow. | qt6ct idx11 x3 |
-| `ui_bg_alt_row` | `#1a1b26` | `#1e1e2e` | `#282828` | Alternating table row. Deliberately equal to ui_bg today (no stripe). | qt6ct idx16 x3 |
-| `ui_bg_raised` | `#292e42` | `#313244` | `#3c3836` | Card / popover / tooltip / completion menu: a container floating above ui_bg. | gtk3:115,122,125; gtk4:176,183,186; zathura:34; qt6ct idx18 x3 |
-| `ui_bg_button` | `#292e42` | `#313244` | `#3c3836` | Qt button face (QPalette::Button). | qt6ct idx1 x3 |
-| `ui_bg_control` | `#222534` | `#313244` | `#3c3836` | A raised inline control (the Nautilus breadcrumb pill, linked button groups). | gtk4:451 |
-| `ui_surface` | `#0c0e14` | `#11111b` | `#282828` | **Level 1 of the shell's surface ladder**: the ground a whole panel is drawn on — the bar, the launcher, the settings window, a popout, the notification stack. Each scheme picks its own four; the derivation and the citations are in 4.4. | quickshell-colors.json:11 |
-| `ui_surface_container` | `#1a1b26` | `#1e1e2e` | `#3c3836` | **Level 2**: a card sitting on that panel — a notification, a settings section, the dashboard sheet. Borderless in this shell, so it has to stand off level 1 by tone alone. | quickshell-colors.json:12 |
-| `ui_surface_container_high` | `#292e42` | `#313244` | `#504945` | **Level 3**: hover, and the pills the bar and the launcher draw at rest. 33 of its 46 readers are a hover or focus fill and 23 of those are literally `containsMouse ? this : "transparent"`, which is why every scheme's level 3 sits *above* its level 2 whatever its chrome does. | quickshell-colors.json:13 |
-| `ui_surface_container_highest` | `#343a55` | `#585b70` | `#665c54` | **Level 4**: tooltips, slider rails, meter tracks, key chips, field fills, and 9 more hover fills. Must not be equal to `ui_border_dim` — every tooltip fills with level 4 and borders with `outline_variant`. | quickshell-colors.json:14 |
-| `ui_bevel_dark` | `#15161e` | `#181825` | `#1d2021` | Qt 3D bevel, darkest shade (QPalette::Dark). | qt6ct idx4 x3 |
-| `ui_bevel_mid` | `#1a1b26` | `#1e1e2e` | `#282828` | Qt 3D bevel, mid shade (QPalette::Mid). | qt6ct idx5 x3 |
-| `ui_bevel_midlight` | `#353b55` | `#45475a` | `#504945` | Qt 3D bevel, light-mid shade (QPalette::Midlight). | qt6ct idx3 x3 |
-| `ui_border` | `#414868` | `#585b70` | `#665c54` | Visible 1px divider or frame between surfaces; Qt bevel lit edge (QPalette::Light). | gtk3:88,130,166; gtk4:138,191; qt6ct idx2 x3, idx14/15 disabled |
-| `ui_border_dim` | `#3b4261` | `#45475a` | `#504945` | A weaker divider: an unfocused window split. | **nothing today** — the unfocused split reads `term_border_inactive` |
-| `ui_text` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | Primary text and icons on any ui_bg* surface. | gtk3 x12, gtk4 x9, zathura x6, qt6ct idx0/6/8/19, fastfetch:49 |
-| `ui_text_variant` | `#a9b1d6` | `#bac2de` | `#d5c4a1` | Secondary / less important text that still has to be read. | cship.toml:63 |
-| `ui_text_dim` | `#545c7e` | `#7f849c` | `#a89984` | Text of an inactive-but-clickable element. | **nothing today** — the inactive tab label reads `term_tab_inactive_fg` |
-| `ui_text_muted` | `#565f89` | `#6c7086` | `#928374` | Disabled text, placeholder text, group headings -- present but not readable as content. | gtk3:172,174; zathura:37; qt6ct disabled idx0/6/7/8/13/19/20 |
-| `ui_on_accent` | `#1a1b26` | `#1e1e2e` | `#282828` | Text/glyphs drawn ON TOP of a full-strength accent or semantic fill. Never a surface. | gtk3:204,208,212,216; gtk4:221,225,229,233; kitty-colors:19,28; kitty-scheme.conf:62; zathura:39 |
-| `ui_doc_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | The page of a recoloured document (what zathura turns white paper into). | zathura:20 |
-| `ui_doc_fg` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | The ink of a recoloured document. | zathura:21 |
-| `ui_selection_disabled` | `#292e42` | `#313244` | `#504945` | Selection fill inside a DISABLED widget: present but must not shout. | qt6ct:64 idx12 |
+| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | Windows 11 Dark | meaning | consumed at |
+|---|---|---|---|---|---|---|
+| `ui_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | `#202020` | Window / chrome background: the flat surface every app frame sits on. | gtk3 x9, gtk4 x8, zathura:28, zen-scheme.css x3, qt6ct idx10/17 |
+| `ui_bg_dim` | `#16161e` | `#181825` | `#1d2021` | `#1c1c1c` | A quiet chrome strip that must recede behind ui_bg. | **nothing today** — the kitty tab bar reads `term_tab_bg` |
+| `ui_bg_bar` | `#15161e` | `#181825` | `#3c3836` | `#272727` | Secondary bar / strip inside a window: statusbar, inputbar, notification, group header. | zathura:30,32,36,52 |
+| `ui_bg_field` | `#15161e` | `#181825` | `#1d2021` | `#2d2d2d` | Background of an editable field or a scrolling list (Qt Base). | qt6ct idx9 x3 |
+| `ui_bg_view` | `#0c0e14` | `#11111b` | `#1d2021` | `#242424` | The content pane, set one clear step away from ui_bg so content lifts off chrome. NOT necessarily darker -- see the ladder notes. | gtk3:83,145,162,173; gtk4:117 |
+| `ui_bg_shadow` | `#0c0e14` | `#11111b` | `#1d2021` | `#0a0a0a` | Deepest tone of the palette; Qt bevel drop shadow. | qt6ct idx11 x3 |
+| `ui_bg_alt_row` | `#1a1b26` | `#1e1e2e` | `#282828` | `#202020` | Alternating table row. Deliberately equal to ui_bg today (no stripe). | qt6ct idx16 x3 |
+| `ui_bg_raised` | `#292e42` | `#313244` | `#3c3836` | `#2c2c2c` | Card / popover / tooltip / completion menu: a container floating above ui_bg. | gtk3:115,122,125; gtk4:176,183,186; zathura:34; qt6ct idx18 x3 |
+| `ui_bg_button` | `#292e42` | `#313244` | `#3c3836` | `#2d2d2d` | Qt button face (QPalette::Button). | qt6ct idx1 x3 |
+| `ui_bg_control` | `#222534` | `#313244` | `#3c3836` | `#323232` | A raised inline control (the Nautilus breadcrumb pill, linked button groups). | gtk4:451 |
+| `ui_surface` | `#0c0e14` | `#11111b` | `#282828` | `#202020` | **Level 1 of the shell's surface ladder**: the ground a whole panel is drawn on — the bar, the launcher, the settings window, a popout, the notification stack. Each scheme picks its own four; the derivation and the citations are in 4.4. | quickshell-colors.json:11 |
+| `ui_surface_container` | `#1a1b26` | `#1e1e2e` | `#3c3836` | `#2b2b2b` | **Level 2**: a card sitting on that panel — a notification, a settings section, the dashboard sheet. Borderless in this shell, so it has to stand off level 1 by tone alone. | quickshell-colors.json:12 |
+| `ui_surface_container_high` | `#292e42` | `#313244` | `#504945` | `#333333` | **Level 3**: hover, and the pills the bar and the launcher draw at rest. 33 of its 46 readers are a hover or focus fill and 23 of those are literally `containsMouse ? this : "transparent"`, which is why every scheme's level 3 sits *above* its level 2 whatever its chrome does. | quickshell-colors.json:13 |
+| `ui_surface_container_highest` | `#343a55` | `#585b70` | `#665c54` | `#454545` | **Level 4**: tooltips, slider rails, meter tracks, key chips, field fills, and 9 more hover fills. Must not be equal to `ui_border_dim` — every tooltip fills with level 4 and borders with `outline_variant`. | quickshell-colors.json:14 |
+| `ui_bevel_dark` | `#15161e` | `#181825` | `#1d2021` | `#141414` | Qt 3D bevel, darkest shade (QPalette::Dark). | qt6ct idx4 x3 |
+| `ui_bevel_mid` | `#1a1b26` | `#1e1e2e` | `#282828` | `#1c1c1c` | Qt 3D bevel, mid shade (QPalette::Mid). | qt6ct idx5 x3 |
+| `ui_bevel_midlight` | `#353b55` | `#45475a` | `#504945` | `#2c2c2c` | Qt 3D bevel, light-mid shade (QPalette::Midlight). | qt6ct idx3 x3 |
+| `ui_border` | `#414868` | `#585b70` | `#665c54` | `#414141` | Visible 1px divider or frame between surfaces; Qt bevel lit edge (QPalette::Light). | gtk3:88,130,166; gtk4:138,191; qt6ct idx2 x3, idx14/15 disabled |
+| `ui_border_dim` | `#3b4261` | `#45475a` | `#504945` | `#2f2f2f` | A weaker divider: an unfocused window split. | **nothing today** — the unfocused split reads `term_border_inactive` |
+| `ui_text` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#ffffff` | Primary text and icons on any ui_bg* surface. | gtk3 x12, gtk4 x9, zathura x6, qt6ct idx0/6/8/19, fastfetch:49 |
+| `ui_text_variant` | `#a9b1d6` | `#bac2de` | `#d5c4a1` | `#cccccc` | Secondary / less important text that still has to be read. | cship.toml:63 |
+| `ui_text_dim` | `#545c7e` | `#7f849c` | `#a89984` | `#717171` | Text of an inactive-but-clickable element. | **nothing today** — the inactive tab label reads `term_tab_inactive_fg` |
+| `ui_text_muted` | `#565f89` | `#6c7086` | `#928374` | `#969696` | Disabled text, placeholder text, group headings -- present but not readable as content. | gtk3:172,174; zathura:37; qt6ct disabled idx0/6/7/8/13/19/20 |
+| `ui_on_accent` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | Text/glyphs drawn ON TOP of a full-strength accent or semantic fill. Never a surface. | gtk3:204,208,212,216; gtk4:221,225,229,233; kitty-colors:19,28; kitty-scheme.conf:62; zathura:39 |
+| `ui_doc_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | `#1c1c1c` | The page of a recoloured document (what zathura turns white paper into). | zathura:20 |
+| `ui_doc_fg` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#e8e8e8` | The ink of a recoloured document. | zathura:21 |
+| `ui_selection_disabled` | `#292e42` | `#313244` | `#504945` | `#3a3a3a` | Selection fill inside a DISABLED widget: present but must not shout. | qt6ct:64 idx12 |
 
 **Three of these rows have no reader, and that is not an oversight.**
 `ui_bg_dim`, `ui_border_dim` and `ui_text_dim` name the *general* "dimmed
@@ -376,35 +377,35 @@ named for.
 
 ### 1.2 terminal — the sixteen ANSI slots plus fg/bg/cursor/selection
 
-| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | meaning | consumed at |
-|---|---|---|---|---|---|
-| `term_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | Terminal background. | kitty-scheme.conf:49 |
-| `term_fg` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | Default terminal text. | kitty-scheme.conf:48 |
-| `term_cursor` | `#c0caf5` | `#f5e0dc` | `#ebdbb2` | Cursor block colour (fallback; matugen overrides with primary). | kitty-scheme.conf:53 |
-| `term_cursor_text` | `#1a1b26` | `#1e1e2e` | `#282828` | The character under the cursor block. | kitty-scheme.conf:54 |
-| `term_selection_bg` | `#283457` | `#585b70` | `#504945` | Selection fill (fallback; matugen overrides with primary). | kitty-scheme.conf:51 |
-| `term_selection_fg` | `#c0caf5` | `#1e1e2e` | `#282828` | Text inside the selection, over term_selection_bg. | kitty-scheme.conf:50 |
-| `term_url` | `#73daca` | `#94e2d5` | `#8ec07c` | Underlined URL (fallback; matugen overrides with tertiary). | kitty-scheme.conf:56 |
-| `term_border_inactive` | `#292e42` | `#45475a` | `#504945` | Border of an unfocused kitty split. | kitty-scheme.conf:59 (no longer = ui_border_dim: upstream publishes `inactive_border_color #292e42`) |
-| `term_tab_bg` | `#16161e` | `#181825` | `#1d2021` | Tab bar background and inactive tab background. | kitty-colors:29, kitty-scheme.conf:65,66 |
-| `term_tab_inactive_fg` | `#545c7e` | `#7f849c` | `#a89984` | Label of an inactive tab. | kitty-colors:30, kitty-scheme.conf:64 |
-| `term_bell_border` | `#e0af68` | `#f9e2af` | `#fabd2f` | Border flash when a window rings the bell. | kitty-scheme.conf:60 |
-| `term_black` | `#15161e` | `#45475a` | `#282828` | ANSI slot color0. | kitty-scheme.conf:69; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_red` | `#f7768e` | `#f38ba8` | `#cc241d` | ANSI slot color1. | kitty-scheme.conf:72; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_green` | `#9ece6a` | `#a6e3a1` | `#98971a` | ANSI slot color2. | kitty-scheme.conf:75; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_yellow` | `#e0af68` | `#f9e2af` | `#d79921` | ANSI slot color3. | kitty-scheme.conf:78; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_blue` | `#7aa2f7` | `#89b4fa` | `#458588` | ANSI slot color4. | kitty-scheme.conf:81; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_magenta` | `#bb9af7` | `#f5c2e7` | `#b16286` | ANSI slot color5. | kitty-scheme.conf:84; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_cyan` | `#7dcfff` | `#94e2d5` | `#689d6a` | ANSI slot color6. | kitty-scheme.conf:87; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_white` | `#a9b1d6` | `#bac2de` | `#a89984` | ANSI slot color7. | kitty-scheme.conf:90; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_black` | `#414868` | `#585b70` | `#928374` | ANSI slot color8. | kitty-scheme.conf:70; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_red` | `#ff899d` | `#f38ba8` | `#fb4934` | ANSI slot color9. | kitty-scheme.conf:73; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_green` | `#9fe044` | `#a6e3a1` | `#b8bb26` | ANSI slot color10. | kitty-scheme.conf:76; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_yellow` | `#faba4a` | `#f9e2af` | `#fabd2f` | ANSI slot color11. | kitty-scheme.conf:79; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_blue` | `#8db0ff` | `#89b4fa` | `#83a598` | ANSI slot color12. | kitty-scheme.conf:82; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_magenta` | `#c7a9ff` | `#f5c2e7` | `#d3869b` | ANSI slot color13. | kitty-scheme.conf:85; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_cyan` | `#a4daff` | `#94e2d5` | `#8ec07c` | ANSI slot color14. | kitty-scheme.conf:88; inherited by ranger, fzf (--color=16), and every TUI |
-| `term_bright_white` | `#c0caf5` | `#a6adc8` | `#ebdbb2` | ANSI slot color15. | kitty-scheme.conf:91; inherited by ranger, fzf (--color=16), and every TUI |
+| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | Windows 11 Dark | meaning | consumed at |
+|---|---|---|---|---|---|---|
+| `term_bg` | `#1a1b26` | `#1e1e2e` | `#282828` | `#0c0c0c` | Terminal background. | kitty-scheme.conf:49 |
+| `term_fg` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#cccccc` | Default terminal text. | kitty-scheme.conf:48 |
+| `term_cursor` | `#c0caf5` | `#f5e0dc` | `#ebdbb2` | `#ffffff` | Cursor block colour (fallback; matugen overrides with primary). | kitty-scheme.conf:53 |
+| `term_cursor_text` | `#1a1b26` | `#1e1e2e` | `#282828` | `#0c0c0c` | The character under the cursor block. | kitty-scheme.conf:54 |
+| `term_selection_bg` | `#283457` | `#585b70` | `#504945` | `#3a3d41` | Selection fill (fallback; matugen overrides with primary). | kitty-scheme.conf:51 |
+| `term_selection_fg` | `#c0caf5` | `#1e1e2e` | `#282828` | `#ffffff` | Text inside the selection, over term_selection_bg. | kitty-scheme.conf:50 |
+| `term_url` | `#73daca` | `#94e2d5` | `#8ec07c` | `#4cc2ff` | Underlined URL (fallback; matugen overrides with tertiary). | kitty-scheme.conf:56 |
+| `term_border_inactive` | `#292e42` | `#45475a` | `#504945` | `#2f2f2f` | Border of an unfocused kitty split. | kitty-scheme.conf:59 (no longer = ui_border_dim: upstream publishes `inactive_border_color #292e42`) |
+| `term_tab_bg` | `#16161e` | `#181825` | `#1d2021` | `#202020` | Tab bar background and inactive tab background. | kitty-colors:29, kitty-scheme.conf:65,66 |
+| `term_tab_inactive_fg` | `#545c7e` | `#7f849c` | `#a89984` | `#969696` | Label of an inactive tab. | kitty-colors:30, kitty-scheme.conf:64 |
+| `term_bell_border` | `#e0af68` | `#f9e2af` | `#fabd2f` | `#fce100` | Border flash when a window rings the bell. | kitty-scheme.conf:60 |
+| `term_black` | `#15161e` | `#45475a` | `#282828` | `#0c0c0c` | ANSI slot color0. | kitty-scheme.conf:69; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_red` | `#f7768e` | `#f38ba8` | `#cc241d` | `#c50f1f` | ANSI slot color1. | kitty-scheme.conf:72; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_green` | `#9ece6a` | `#a6e3a1` | `#98971a` | `#13a10e` | ANSI slot color2. | kitty-scheme.conf:75; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_yellow` | `#e0af68` | `#f9e2af` | `#d79921` | `#c19c00` | ANSI slot color3. | kitty-scheme.conf:78; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_blue` | `#7aa2f7` | `#89b4fa` | `#458588` | `#0037da` | ANSI slot color4. | kitty-scheme.conf:81; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_magenta` | `#bb9af7` | `#f5c2e7` | `#b16286` | `#881798` | ANSI slot color5. | kitty-scheme.conf:84; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_cyan` | `#7dcfff` | `#94e2d5` | `#689d6a` | `#3a96dd` | ANSI slot color6. | kitty-scheme.conf:87; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_white` | `#a9b1d6` | `#bac2de` | `#a89984` | `#cccccc` | ANSI slot color7. | kitty-scheme.conf:90; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_black` | `#414868` | `#585b70` | `#928374` | `#767676` | ANSI slot color8. | kitty-scheme.conf:70; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_red` | `#ff899d` | `#f38ba8` | `#fb4934` | `#e74856` | ANSI slot color9. | kitty-scheme.conf:73; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_green` | `#9fe044` | `#a6e3a1` | `#b8bb26` | `#16c60c` | ANSI slot color10. | kitty-scheme.conf:76; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_yellow` | `#faba4a` | `#f9e2af` | `#fabd2f` | `#f9f1a5` | ANSI slot color11. | kitty-scheme.conf:79; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_blue` | `#8db0ff` | `#89b4fa` | `#83a598` | `#3b78ff` | ANSI slot color12. | kitty-scheme.conf:82; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_magenta` | `#c7a9ff` | `#f5c2e7` | `#d3869b` | `#b4009e` | ANSI slot color13. | kitty-scheme.conf:85; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_cyan` | `#a4daff` | `#94e2d5` | `#8ec07c` | `#61d6d6` | ANSI slot color14. | kitty-scheme.conf:88; inherited by ranger, fzf (--color=16), and every TUI |
+| `term_bright_white` | `#c0caf5` | `#a6adc8` | `#ebdbb2` | `#f2f2f2` | ANSI slot color15. | kitty-scheme.conf:91; inherited by ranger, fzf (--color=16), and every TUI |
 
 **Tokyo Night's six bright chromatics are NOT repeats of the normal ones**, and
 this table said they were until the file was checked against upstream. The
@@ -431,15 +432,15 @@ reader in that file (`:62`, the active tab's label over an `fb_primary` fill:
 
 ### 1.3 semantic
 
-| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | meaning | consumed at |
-|---|---|---|---|---|---|
-| `sem_warning` | `#e0af68` | `#f9e2af` | `#fabd2f` | 'Watch out'. Never harmonised with the wallpaper. | gtk3:210,211; gtk4:227,228; zathura:54; Theme.qml:251; cship x6 |
-| `sem_on_warning` | `#1a1b26` | `#1e1e2e` | `#282828` | Text on a sem_warning fill. | gtk3:212; gtk4:229; zathura:55 |
-| `sem_critical` | `#f7768e` | `#f38ba8` | `#fb4934` | 'Something is wrong'. Also GTK's destructive_* and error_*, and Qt BrightText. | gtk3:202,203,214,215; gtk4:219,220,231,232; zathura:56; qt6ct idx7; Theme.qml:252; cship x4 |
-| `sem_on_critical` | `#1a1b26` | `#1e1e2e` | `#282828` | Text on a sem_critical fill. | gtk3:204,216; gtk4:221,233; zathura:57; Theme.qml:253 |
-| `sem_success` | `#9ece6a` | `#a6e3a1` | `#b8bb26` | 'It worked'. | gtk3:206,207; gtk4:223,224 |
-| `sem_on_success` | `#1a1b26` | `#1e1e2e` | `#282828` | Text on a sem_success fill. | gtk3:208; gtk4:225 |
-| `sem_info` | `#7dcfff` | `#89dceb` | `#83a598` | Nominal / informational reading -- the low end of a warn/critical ramp. | cship.toml:44,55 |
+| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | Windows 11 Dark | meaning | consumed at |
+|---|---|---|---|---|---|---|
+| `sem_warning` | `#e0af68` | `#f9e2af` | `#fabd2f` | `#fce100` | 'Watch out'. Never harmonised with the wallpaper. | gtk3:210,211; gtk4:227,228; zathura:54; Theme.qml:251; cship x6 |
+| `sem_on_warning` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | Text on a sem_warning fill. | gtk3:212; gtk4:229; zathura:55 |
+| `sem_critical` | `#f7768e` | `#f38ba8` | `#fb4934` | `#ff99a4` | 'Something is wrong'. Also GTK's destructive_* and error_*, and Qt BrightText. | gtk3:202,203,214,215; gtk4:219,220,231,232; zathura:56; qt6ct idx7; Theme.qml:252; cship x4 |
+| `sem_on_critical` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | Text on a sem_critical fill. | gtk3:204,216; gtk4:221,233; zathura:57; Theme.qml:253 |
+| `sem_success` | `#9ece6a` | `#a6e3a1` | `#b8bb26` | `#6ccb5f` | 'It worked'. | gtk3:206,207; gtk4:223,224 |
+| `sem_on_success` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | Text on a sem_success fill. | gtk3:208; gtk4:225 |
+| `sem_info` | `#7dcfff` | `#89dceb` | `#83a598` | `#4cc2ff` | Nominal / informational reading -- the low end of a warn/critical ramp. | cship.toml:44,55 |
 
 GTK's `destructive_*` and `error_*` sets are the same colour in both templates
 today; both map to `sem_critical` / `sem_on_critical`. There is no separate
@@ -453,25 +454,25 @@ They were written as the shell's fallback for a fresh clone or a malformed
 but it is no longer all they are, and it is not how the shell reads them. See
 the two paragraphs under the table.
 
-| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | meaning | consumed at |
-|---|---|---|---|---|---|
-| `fb_surface` | `#1a1b26` | `#1e1e2e` | `#282828` | M3 surface fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:140 |
-| `fb_surface_container` | `#292e42` | `#313244` | `#3c3836` | M3 surface_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:141 |
-| `fb_surface_container_high` | `#353b55` | `#45475a` | `#504945` | M3 surface_container_high fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:142 |
-| `fb_surface_container_highest` | `#414868` | `#585b70` | `#665c54` | M3 surface_container_highest fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:143 |
-| `fb_on_surface` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | M3 on_surface fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:144 |
-| `fb_on_surface_variant` | `#a9b1d6` | `#bac2de` | `#bdae93` | M3 on_surface_variant fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:145 |
-| `fb_outline` | `#565f89` | `#6c7086` | `#7c6f64` | M3 outline fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:146 |
-| `fb_outline_variant` | `#3b4261` | `#45475a` | `#504945` | M3 outline_variant fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:147 |
-| `fb_primary` | `#7aa2f7` | `#89b4fa` | `#83a598` | M3 primary fallback, used only until matugen writes colors.json. | kitty-scheme.conf:58,63 (kitty's active border and tab); mirrored at Theme.qml:149 |
-| `fb_on_primary` | `#1a1b26` | `#1e1e2e` | `#282828` | M3 on_primary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:150 |
-| `fb_primary_container` | `#3d59a1` | `#45475a` | `#458588` | M3 primary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:151 |
-| `fb_on_primary_container` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | M3 on_primary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:152 |
-| `fb_secondary` | `#bb9af7` | `#cba6f7` | `#d3869b` | M3 secondary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:154 |
-| `fb_secondary_container` | `#414868` | `#585b70` | `#665c54` | M3 secondary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:155 |
-| `fb_on_secondary_container` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | M3 on_secondary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:156 |
-| `fb_tertiary` | `#73daca` | `#f5c2e7` | `#fe8019` | M3 tertiary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:158 |
-| `fb_on_tertiary` | `#1a1b26` | `#1e1e2e` | `#282828` | M3 on_tertiary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:159 |
+| role | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | Windows 11 Dark | meaning | consumed at |
+|---|---|---|---|---|---|---|
+| `fb_surface` | `#1a1b26` | `#1e1e2e` | `#282828` | `#202020` | M3 surface fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:140 |
+| `fb_surface_container` | `#292e42` | `#313244` | `#3c3836` | `#2b2b2b` | M3 surface_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:141 |
+| `fb_surface_container_high` | `#353b55` | `#45475a` | `#504945` | `#333333` | M3 surface_container_high fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:142 |
+| `fb_surface_container_highest` | `#414868` | `#585b70` | `#665c54` | `#454545` | M3 surface_container_highest fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:143 |
+| `fb_on_surface` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#ffffff` | M3 on_surface fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:144 |
+| `fb_on_surface_variant` | `#a9b1d6` | `#bac2de` | `#bdae93` | `#cccccc` | M3 on_surface_variant fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:145 |
+| `fb_outline` | `#565f89` | `#6c7086` | `#7c6f64` | `#969696` | M3 outline fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:146 |
+| `fb_outline_variant` | `#3b4261` | `#45475a` | `#504945` | `#2f2f2f` | M3 outline_variant fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:147 |
+| `fb_primary` | `#7aa2f7` | `#89b4fa` | `#83a598` | `#4cc2ff` | M3 primary fallback, used only until matugen writes colors.json. | kitty-scheme.conf:58,63 (kitty's active border and tab); mirrored at Theme.qml:149 |
+| `fb_on_primary` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | M3 on_primary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:150 |
+| `fb_primary_container` | `#3d59a1` | `#45475a` | `#458588` | `#0067c0` | M3 primary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:151 |
+| `fb_on_primary_container` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#ffffff` | M3 on_primary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:152 |
+| `fb_secondary` | `#bb9af7` | `#cba6f7` | `#d3869b` | `#3a96dd` | M3 secondary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:154 |
+| `fb_secondary_container` | `#414868` | `#585b70` | `#665c54` | `#003e92` | M3 secondary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:155 |
+| `fb_on_secondary_container` | `#c0caf5` | `#cdd6f4` | `#ebdbb2` | `#ffffff` | M3 on_secondary_container fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:156 |
+| `fb_tertiary` | `#73daca` | `#f5c2e7` | `#fe8019` | `#61d6d6` | M3 tertiary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:158 |
+| `fb_on_tertiary` | `#1a1b26` | `#1e1e2e` | `#282828` | `#000000` | M3 on_tertiary fallback, used only until matugen writes colors.json. | **no reader** — mirrored as a `??` literal at Theme.qml:159 |
 
 **ONE OF THE SEVENTEEN HAS A READER, and this paragraph used to claim all of
 them did.** It did, for as long as `desktop-scheme accent` existed: that
@@ -761,12 +762,15 @@ each other.
 Was three filled JSON blocks in the working document. They are files now: the
 `*.json` beside this README are the authority, and `desktop-scheme list` is how
 you find out which exist. Section 4 is the record of what filling the
-vocabulary three times taught, and it is the thing to read before writing a
-fourth.
+vocabulary taught: 4.1 to 4.4 are the three-scheme pass and are left in the
+tense they were written in, and **4.5 is the fourth**, which is the one to read
+beside them before writing a fifth. Where the fourth contradicts a verdict of
+the first three, the note saying so is under the verdict rather than folded
+into it.
 
 ---
 
-## 4. Validation pass — filling the vocabulary three times
+## 4. Validation pass — filling the vocabulary four times
 
 ### 4.1 Roles that cannot be filled from a scheme's own palette
 
@@ -837,6 +841,20 @@ in the gap a Qt slot needs: `ui_bg_control` `#222534` and `ui_bevel_midlight`
 published neighbours the role sits between, so they are derived from the
 palette rather than picked beside it. See "Tokyo Night is Night" below.
 
+**The fourth scheme overturns three of these four, and confirms the fourth.**
+Windows 11 Dark fills **(a)** properly — `SystemAccentColorDark1 #0067c0` and
+`Dark2 #003e92` are genuine darkened variants of its accent, which is what an
+M3 container role means and what Catppuccin could not supply. It fills **(b)**
+properly too: `SolidBackgroundFillColorBaseAlt #0a0a0a` is a real step below
+its darkest surface, so `ui_bg_shadow` does not have to repeat `ui_bg_view`.
+And **(c)** is a real distinction for it as well — `ui_bg_control #323232` is
+`ControlFillColorSecondary` and `ui_bg_raised #2c2c2c` is
+`SolidBackgroundFillColorQuarternary`, two published constants rather than one
+tone spent twice. Only **(d)** holds: Campbell publishes no selection colour
+either, so `term_selection_bg` is a judgement fill in three schemes out of four.
+The severity ordering in this section is therefore a fact about *those* three
+palettes and not about the vocabulary. Details in 4.5.
+
 ### 4.2 Colours the palettes define that the vocabulary has no slot for
 
 **Catppuccin Mocha.** Unused: `flamingo #f2cdcd`, `maroon #eba0ac`,
@@ -861,14 +879,20 @@ consumes.
 judgement in all three schemes (Tokyo Night `cyan`, Mocha `sky`, Gruvbox
 `bright blue`). Settled under **Decisions taken**: the role stays.
 
+**And the fourth scheme is the one that can cite it.** WinUI declares
+`SystemFillColorAttentionBrush Color="{ThemeResource SystemAccentColorLight2}"`
+in its dark dictionary, so Windows' informational colour *is* its accent and
+`sem_info #4cc2ff` is a citation rather than a judgement. One scheme out of
+four; the role stays for the same reason it stayed before.
+
 ### 4.3 Ladder depth: how the differences were resolved
 
-| region | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | resolution |
-|---|---|---|---|---|
-| at or below the window | 4 steps: `0c0e14`, `15161e`, `16161e`, `1a1b26` | 3: `crust`, `mantle`, `base` | 2: `bg0_h`, `bg0` | Keep 5 roles (`ui_bg_shadow`, `ui_bg_view`, `ui_bg_field`/`ui_bg_bar`/`ui_bevel_dark`, `ui_bg_dim`, `ui_bg`). All three repeat: Tokyo Night spends `bg_dark1` twice, Mocha repeats `mantle` 3x and `crust` 2x, Gruvbox repeats `bg0_h` 4x. Repeats are cheap; a missing name is not. |
-| above the window | 2 published (`bg_highlight`, `terminal_black`) + 2 blended (`222534`, `353b55`) | 4: `surface0`, `surface1`, `surface2`, `overlay0` | 4: `bg1`, `bg2`, `bg3`, `bg4` | Gruvbox and Mocha are the rich ones here; Tokyo Night publishes only two tones above the window and the other two are `Util.blend` midpoints of them. It is the *lower* half where the other two run out. |
-| text ramp | 4: `c0caf5`, `a9b1d6`, `545c7e`, `565f89` | 5: `text`, `subtext1`, `subtext0`, `overlay1`, `overlay0` | 5: `fg1`, `fg2`, `fg3`, `fg4`, `gray` | Even, with one spare each. |
-| ANSI 16 | **16 distinct** (the six bright chromatics are `Util.brighten` of the normals; `color8`/`color15` are `terminal_black` and `fg`, separate palette entries) | 10 distinct | **16 distinct** | Keep all 16 slots. Mocha is the one that fills slots with repeats; collapsing to 8 would flatten both Tokyo Night's brightened chromatics and Gruvbox's entire terminal identity. |
+| region | Tokyo Night | Catppuccin Mocha | Gruvbox Dark Medium | Windows 11 Dark | resolution |
+|---|---|---|---|---|---|
+| at or below the window | 4 steps: `0c0e14`, `15161e`, `16161e`, `1a1b26` | 3: `crust`, `mantle`, `base` | 2: `bg0_h`, `bg0` | 4: `0a0a0a`, `141414`, `1c1c1c`, `202020` | Keep 5 roles (`ui_bg_shadow`, `ui_bg_view`, `ui_bg_field`/`ui_bg_bar`/`ui_bevel_dark`, `ui_bg_dim`, `ui_bg`). All three repeat: Tokyo Night spends `bg_dark1` twice, Mocha repeats `mantle` 3x and `crust` 2x, Gruvbox repeats `bg0_h` 4x. Repeats are cheap; a missing name is not. |
+| above the window | 2 published (`bg_highlight`, `terminal_black`) + 2 blended (`222534`, `353b55`) | 4: `surface0`, `surface1`, `surface2`, `overlay0` | 4: `bg1`, `bg2`, `bg3`, `bg4` | **11 distinct**, `242424` up to `454545` | Gruvbox and Mocha are the rich ones here; Tokyo Night publishes only two tones above the window and the other two are `Util.blend` midpoints of them. It is the *lower* half where the other two run out. |
+| text ramp | 4: `c0caf5`, `a9b1d6`, `545c7e`, `565f89` | 5: `text`, `subtext1`, `subtext0`, `overlay1`, `overlay0` | 5: `fg1`, `fg2`, `fg3`, `fg4`, `gray` | 4, and they are one published ramp: `ffffff`, `cccccc`, `969696`, `717171` | Even, with one spare each. |
+| ANSI 16 | **16 distinct** (the six bright chromatics are `Util.brighten` of the normals; `color8`/`color15` are `terminal_black` and `fg`, separate palette entries) | 10 distinct | **16 distinct** | **16 distinct** (Campbell) | Keep all 16 slots. Mocha is the one that fills slots with repeats; collapsing to 8 would flatten both Tokyo Night's brightened chromatics and Gruvbox's entire terminal identity. |
 
 **One assumption the vocabulary deliberately does not bake in.** In Tokyo Night
 the content view is *darker* than the window (`#0c0e14` under `#1a1b26`), and
@@ -888,6 +912,14 @@ three fills. Tokyo Night sets alternating table rows to the window colour, i.e.
 no stripe (`qt6ct-colors.conf:46`), and reproducing "no stripe" faithfully
 matters more than exercising the role. The role exists so a scheme *can*
 disagree.
+
+**Windows 11 Dark is the first scheme that is rich at BOTH ends**, which is why
+its column is the one that reads oddly against the resolution column: that
+column is the record of resolving a disagreement between three palettes and it
+is left alone. Eleven separable tones above the window and four at or below it
+mean the fourth scheme never has to repeat a value to fill a role — with the
+three exceptions 4.5 names, and none of those is a repeat, they are values
+Windows does not publish at all.
 
 **What the counts above do NOT settle** is which four tones the shell's four
 Material 3 surface levels take. That used to be decided here, once, for
@@ -1055,6 +1087,75 @@ opt-in `float_style='dim'` — but that is a different palette (only `#282828` a
 `#504945` survive from morhetz's) and adopting a tone from it would be the
 Storm-inside-Night mistake again.
 
+#### Windows 11 Dark — `x:Key="Default"` **is** the dark dictionary
+
+The other three schemes are recreations of a palette a project published. This
+one is read out of the source Windows itself ships:
+`microsoft/microsoft-ui-xaml`, `controls/dev/CommonStyles/
+Common_themeresources_any.xaml` (MIT). That file holds three
+`ResourceDictionary` blocks — `x:Key="Default"`, `x:Key="Light"` and
+`x:Key="HighContrast"` — and **`Default` is the DARK one**. It is not a
+neutral base that `Light` and a missing `Dark` specialise; it is the dark
+theme, and `Light` is the special case. `TextFillColorPrimary` is `#FFFFFF`
+inside `Default` and `#E4000000` inside `Light`, which settles it in one line.
+Reading `Default` as "the shared defaults" and then hunting for a `Dark` block
+that does not exist is the classic Fluent recreation bug, and it produces a
+palette that is half light theme. Every citation below is from that block and
+from no other.
+
+Windows has no "surface ladder" of its own to copy, because it does not
+separate surfaces by tone the way this shell has to: it draws a 1px
+`ControlStrokeColorDefault` line round almost everything and lets the tones sit
+close. So the four rungs are chosen by **what the shell paints with each
+level** — the classification at the top of 4.4 — and each one is filled with
+the WinUI key that does that same job in Windows.
+
+| level | before | after | tone | where Windows uses it |
+|---|---|---|---|---|
+| `surface` | — | **`#202020`** | `SolidBackgroundFillColorBase` | The window ground, and the **Mica fallback** — what a Mica window paints when transparency is off, on battery saver, or when it is deactivated. Every panel in this shell is a `Theme.glass()` call over the wallpaper, so the fallback of the Windows material that also samples the wallpaper is the right rung to stand on. |
+| `surface_container` | — | **`#2b2b2b`** | `CardBackgroundFillColorDefault #0DFFFFFF`, flattened on level 1 | The fill of a Fluent **card** — literally the role level 2 has here (`NotificationCard.qml:52`, `SettingsSection.qml:170`, the dashboard sheet). |
+| `surface_container_high` | — | **`#333333`** | `SolidBackgroundFillColorQuinary` | Windows' own fifth background tier, one step above the card. Level 3 is 33-of-46 a hover fill, and Windows brightens on hover (`ControlFillColorSecondary #15FFFFFF` over `ControlFillColorDefault #0FFFFFFF`) rather than dimming, so the direction is upstream's. |
+| `surface_container_highest` | — | **`#454545`** | `ControlSolidFillColorDefault` | The one **opaque** control fill in the dictionary — the value Windows reaches for when a control cannot composite, which is exactly a tooltip, a slider rail or a key chip. **This is the one deviation from Windows verbatim; see below.** |
+
+Rungs in L\*: **12.25 / 17.53 / 21.25 / 29.29 — 5.28, 3.71, 8.04.**
+
+**The judgement call, declared: level 4 is `ControlSolidFillColorDefault
+#454545` and not `SolidBackgroundFillColorSenary #373737`.** Senary is where
+Windows' own background ramp ends, and Base → Quinary → Senary is the ladder a
+faithful transcription would take. Its top rung is **1.82 L\***. That is fine
+for Windows, which separates a tooltip from the surface under it with
+`SurfaceStrokeColorFlyout` and a shadow rather than with tone; it is not fine
+here, where level 4 is nine more hover fills on top of the tooltip and the
+tooltip's own border is `outline_variant` (`Tooltip.qml:46` fills, `:48`
+borders). A 1.82 L\* top rung would make every one of those a fill that does
+not read as a fill. `#454545` is still a Windows constant out of the same
+dictionary — it is not a lightened `#373737` — and taking it costs the ladder
+its evenness (8.04 L\* against 3.71 below it) rather than its provenance. The
+trade accepted: an uneven top rung, in exchange for level 4 being visible at
+all.
+
+**Second judgement call, declared: level 2 is the card fill flattened, not the
+next background tier.** `SolidBackgroundFillColorTertiary #282828` is the tone
+that sits between Base and Quinary in Windows' own ramp, and taking it would
+give rungs of 3.86 / 5.14 / 8.04 — marginally more even than what is here. It
+is not taken, because level 2's readers are cards and `Tertiary` is a
+background tier, not a card: `CardBackgroundFillColorDefault` is the key whose
+name and whose readers both say "card". The evenness argument is worth almost
+nothing anyway — 3.86 against 3.71 — so it buys nothing and costs the one rung
+in the ladder that can be justified by meaning rather than by position.
+
+**And the narrow rung is declared rather than argued away.** 3.71 L\* between
+levels 2 and 3 is **the narrowest rung of any scheme in this file**, under
+Tokyo Night's 5.7. It is narrow because Windows is narrow there — its own
+`Quarternary #2C2C2C` → `Quinary #333333` step is 3.25 L\* — and Windows can
+afford that because a stroke does the separating. What makes it survive here is
+that levels 2 and 3 almost never sit still next to each other: level 3 is a
+hover, so it is a *change* under the pointer rather than a static boundary, and
+a change of 3.71 L\* is visible where a border of 3.71 L\* would not be. If
+this scheme ever reads flat, this rung is the first place to look, and the fix
+is to move level 3 to `SolidBackgroundFillColorSenary #373737` (rungs 5.28,
+5.54, 6.22) at the cost of losing Quinary's own hover meaning.
+
 #### Measure the rungs in L\*, not in contrast ratio
 
 A contrast ratio compresses badly at this end of the scale, and reading the four
@@ -1068,10 +1169,12 @@ numbers. In L\*:
 | Tokyo Night | 10.1 / 19.3 / 25.4 / 31.2 — rungs 9.2, 6.1, 5.8 | **4.0 / 10.1 / 19.3 / 25.0** — rungs 6.1, 9.2, 5.7 |
 | Catppuccin Mocha | 12.0 / 21.4 / 30.7 / 39.1 — rungs 9.4, 9.3, 8.5 | **5.4 / 12.0 / 21.4 / 39.1** — rungs 6.6, 9.4, 17.7 |
 | Gruvbox Dark Medium | 16.1 / 23.9 / 31.6 / 39.8 — rungs 7.8, 7.7, 8.2 | unchanged |
+| Windows 11 Dark | — | **12.3 / 17.5 / 21.3 / 29.3** — rungs 5.3, 3.7, 8.0 |
 
-**Nothing collapses.** No scheme renders two levels the same hex, and the
-closest any two come is Tokyo Night's 5.7 L\*, which is the step the old ladder
-already ran at.
+**Nothing collapses.** No scheme renders two levels the same hex. The closest
+any two come is **Windows 11 Dark's 3.7 L\***, argued for in its own section
+above; before that scheme arrived it was Tokyo Night's 5.7 L\*, which is the
+step the old ladder already ran at.
 
 #### What it does to the grading
 
@@ -1090,15 +1193,254 @@ in any scheme gets worse**, and two long-standing failures go away:
 
 **Three failures are unchanged and none of them is the ladder's.** `outline`
 (`ui_text_muted`) is painted as *text* in `SearchField.qml`, `AudioPage.qml` and
-`KeybindsPage.qml` and is under 4.5:1 on every level of every scheme, before and
+`KeybindsPage.qml` and was under 4.5:1 on every level of every scheme, before and
 after — worst is Tokyo Night at 1.80:1 on level 4, best is Gruvbox at 4.02:1 on
-level 1. That is a role-choice question, not a ladder question. `outline_variant`
+level 1. **"Every scheme" stopped being true when the fourth arrived**; the
+paragraph below this one is that scheme's row of the same table, and it is the
+first to clear the bar anywhere. That is a role-choice question, not a ladder
+question. `outline_variant`
 is under 3:1 everywhere as well, but it is a divider *between two surfaces*
 rather than a component boundary, and it improves under two of the three schemes
 (above). And **Gruvbox's red is exactly as weak as it was** — `sem_critical
 #fb4934` grades 2.56:1 on `bg2` and 1.89:1 on `bg3` — because Gruvbox's ladder
 did not move. It is fixed in `schemes/gruvbox-dark.json` if it is worth fixing,
 as the `_alerts` note in `quickshell-colors.json` already says.
+
+**Windows 11 Dark grades better than all three on every text pair, and it still
+has one deliberate gap.** `ui_text` (`on_surface`) never drops below **9.59:1**
+across the four levels and `ui_text_variant` (`on_surface_variant`) never below
+**5.97:1**, both comfortably the best in the file — the four-tone WinUI text
+ramp in 4.5 is why. `ui_text_muted` (`outline`), the role the paragraph above
+calls a standing failure, grades **5.51 / 4.79 / 4.27 / 3.24** on levels 1 to 4,
+against a previous best of 4.02:1 anywhere in any scheme. Levels 1 and 2 pass
+4.5:1; **levels 3 and 4 do not, and that is accepted rather than fixed.**
+
+The reason it is accepted: levels 3 and 4 under this scheme are hover fills and
+chip backings, not text grounds. Level 3's readers are 33-of-46 a hover or focus
+fill and level 4's are the tooltip fill, slider rails, meter ticks and key chips
+(4.4's reader table). Placeholder and group-heading text — what `ui_text_muted`
+is *for* (1.1) — is drawn on levels 1 and 2, where it passes. Lifting
+`ui_text_muted` to reach 4.5:1 on level 4 would mean abandoning
+`TextFillColorTertiary`, i.e. abandoning the ramp that produced the two figures
+above it, to fix a pair that is not drawn. Recorded as a known gap in the same
+sense as the three above: measured, understood, and not a defect of the ladder.
+
+**One terminal pair is worse than any of that, and it is Microsoft's.**
+`term_blue #0037da` grades **2.38:1** on `term_bg #0c0c0c`. That is Campbell
+exactly as Windows Terminal ships it — the ANSI blue a stock Windows console has
+always drawn, unreadable as body text and famous for it. It is not introduced
+here and it is not corrected here: correcting it would make the scheme a
+Campbell-like palette rather than Campbell, and the sixteen slots are the one
+part of this file that is verbatim upstream. `term_bright_blue #3b78ff` is the
+readable one at 4.95:1, which is what a well-behaved TUI reaches for anyway.
+
+---
+
+### 4.5 Windows 11 Dark — where the other 74 roles come from
+
+4.4 fills four roles. This is the rest of the file, and the reason it is
+written out at this length is that it can be: every value below is either a
+constant in a Microsoft source file or one arithmetic step from one, so a
+reader can disagree with it by opening the source rather than by squinting at a
+screenshot. Three values are neither, and they are named as such at the end.
+
+#### The flattening rule, once
+
+**Most of WinUI's dark tones are alpha over the window, not opaque hexes.**
+`ControlFillColorDefault` is `#0FFFFFFF` — 6% white — and what reaches the eye
+is that composited over whatever is behind it. This vocabulary has no alpha:
+every role is `#rrggbb` and is painted directly. So the rule for this scheme,
+applied once and never varied:
+
+> An alpha constant becomes the colour it resolves to **over
+> `SolidBackgroundFillColorBase #202020`**, the window ground, with the channel
+> truncated rather than rounded.
+
+`#202020` is the right ground because it is where the shell's own panels sit
+(level 1 of 4.4) and because it is what Windows composites those fills over in
+the overwhelming majority of cases. It is not always right — the same overlay
+over a card resolves two levels higher — and the one place that matters is
+`ui_border` / `ui_border_dim`, which is handled explicitly below rather than
+fudged.
+
+Worked once so the arithmetic is checkable: `TextFillColorSecondary #C5FFFFFF`
+is α = 0xC5 = 197, so 197/255 × 255 + 58/255 × 32 = 197.0 + 7.28 = 204.28,
+truncated to 204 = `0xCC`, giving **`#cccccc`**.
+
+#### The base group
+
+| role | value | WinUI dark key | note |
+|---|---|---|---|
+| `ui_bg`, `ui_bg_alt_row` | `#202020` | `SolidBackgroundFillColorBase` | The Mica fallback. `ui_bg_alt_row` equals `ui_bg` in all four schemes — no stripe, the assumption 4.3 records. |
+| `ui_bg_dim`, `ui_bevel_mid`, `ui_doc_bg` | `#1c1c1c` | `SolidBackgroundFillColorSecondary` — and `CardStrokeColorDefaultSolid`, independently, at the same hex | The one tier below the window. |
+| `ui_bg_shadow` | `#0a0a0a` | `SolidBackgroundFillColorBaseAlt` | The **Mica Alt** fallback, and the floor of the dictionary. |
+| `ui_bg_view` | `#242424` | *computed* — see "Three values" below | |
+| `ui_bevel_dark` | `#141414` | *computed* — see "Three values" below | |
+| `ui_bg_bar` | `#272727` | `CardBackgroundFillColorSecondary #08FFFFFF` | The quieter of the two card fills: a strip inside a window rather than a card on it. |
+| `ui_bg_button`, `ui_bg_field` | `#2d2d2d` | `ControlFillColorDefault #0FFFFFFF` | The **rest** fill of every Fluent control. A button face and a field face are the same colour in Windows, and this vocabulary keeps them apart only so a scheme *can* disagree. |
+| `ui_bg_control` | `#323232` | `ControlFillColorSecondary #15FFFFFF` | The **hover** fill. `ui_bg_control` is "a raised inline control" (1.1), which is the one place in the base group that wants to sit above a button at rest — so the hover fill is the honest key, not a mistake. |
+| `ui_bg_raised`, `ui_bevel_midlight` | `#2c2c2c` | `SolidBackgroundFillColorQuarternary` — and `LayerOnMicaBaseAltFillColorTertiary`, and the **acrylic tint** of `AcrylicBackgroundFillColorDefault`, all at the same hex | Card, popover, tooltip, completion menu. |
+| `ui_border_dim` | `#2f2f2f` | `ControlStrokeColorDefault #12FFFFFF`, on `#202020` | |
+| `ui_border` | `#414141` | `ControlStrokeColorDefault #12FFFFFF`, on **`#333333`** | **The same Windows stroke, resolved on two different grounds**, which is what it actually is: Windows draws one stroke colour and it lands lighter on a lighter control. `ui_border` is the visible frame and `ui_border_dim` the weaker one, so the pair is the stroke on level 3 and the stroke on level 1. This is the one place the flattening rule above is deliberately applied over something other than `#202020`, and it is the only way to get two border tones out of a dictionary that publishes one. |
+| `ui_selection_disabled` | `#3a3a3a` | `LayerFillColorDefault #4C3A3A3A`, tint taken opaque | Worth its own line: that constant is a **30%-alpha mid grey**, not the alpha-white every neighbour is. Its tint colour is already the "present but not shouting" grey the role wants, so it is taken directly instead of flattened. |
+| `ui_text` | `#ffffff` | `TextFillColorPrimary` | |
+| `ui_text_variant` | `#cccccc` | `TextFillColorSecondary #C5FFFFFF` | |
+| `ui_text_muted` | `#969696` | `TextFillColorTertiary #87FFFFFF` | |
+| `ui_text_dim` | `#717171` | `TextFillColorDisabled #5DFFFFFF` | |
+| `ui_on_accent` | `#000000` | `TextOnAccentFillColorPrimary` | **Black, and that is not a slip.** In dark mode Windows' accent fill is the *light* shade of the accent, so what goes on top of it is black. The other three schemes put their darkest surface here; this one puts pure black, because Windows does. |
+| `ui_doc_fg` | `#e8e8e8` | *nothing* — see "Three values" below | |
+
+The four text tones are one ramp — WinUI's own Primary / Secondary / Tertiary /
+Disabled, in order — which is a tidier fill than any of the other three schemes
+manage, and it is the reason the contrast table below is as clean as it is.
+
+#### The semantic group
+
+`sem_success`, `sem_warning` and `sem_critical` are **`SystemFillColorSuccess
+#6CCB5F`, `SystemFillColorCaution #FCE100` and `SystemFillColorCritical
+#FF99A4`**, verbatim, from the same block. The three `sem_on_*` are
+`TextOnAccentFillColorPrimary #000000`, for the reason `ui_on_accent` is.
+
+**`sem_info` is the one role 4.2 says is filled by judgement in every scheme,
+and here it is not.** WinUI defines
+`SystemFillColorAttentionBrush Color="{ThemeResource SystemAccentColorLight2}"`
+in the dark dictionary: Windows' informational colour **is** the accent. So
+`sem_info` is `#4cc2ff` by citation rather than by taste, and this is the first
+scheme in the file that can say that.
+
+#### The terminal group — Campbell, verbatim
+
+The sixteen ANSI slots plus `term_bg`, `term_fg` and `term_cursor` are
+**Campbell**, Windows Terminal's shipped default scheme:
+`microsoft/terminal`, `src/cascadia/TerminalSettingsModel/defaults.json`, the
+`"name": "Campbell"` block. Checked key for key against that file — nineteen
+keys, all nineteen consumed here, none altered. Campbell is the right terminal
+palette rather than an arbitrary one: it is what a stock Windows console shows,
+which is the thing this scheme is a recreation of.
+
+Campbell publishes nothing for the six roles kitty needs beyond a palette, so
+those are filled from the WinUI side and say so:
+
+| role | value | from |
+|---|---|---|
+| `term_tab_bg` | `#202020` | `SolidBackgroundFillColorBase` — the Terminal window's own chrome, not the console ground |
+| `term_tab_inactive_fg` | `#969696` | `TextFillColorTertiary`, flattened |
+| `term_border_inactive` | `#2f2f2f` | `ControlStrokeColorDefault`, flattened |
+| `term_bell_border` | `#fce100` | `SystemFillColorCaution` |
+| `term_url` | `#4cc2ff` | `SystemAccentColorLight2` — see the accent note below |
+| `term_selection_bg` / `term_selection_fg` | `#3a3d41` / `#ffffff` | **judgement**, and 4.1(d)'s case exactly: Campbell's block has no `selectionBackground` key at all (verified — the schemes in that file that publish one show it, and Campbell does not). A cool neutral at L\* 25.6 is what stands there. It barely matters: `kitty-colors.conf:13` overrides `selection_background` with the wallpaper accent on every change. |
+
+**One coincidence worth naming so nobody "fixes" it.** Campbell's `foreground`
+and `white` are `#CCCCCC`, and `TextFillColorSecondary` flattened over
+`#202020` is `#cccccc`. `term_fg`, `term_white` and `ui_text_variant` are
+therefore the same hex from two entirely independent Microsoft sources. That is
+the collision table's subject matter in miniature, and the three roles stay
+apart.
+
+#### The accent — and the one thing Microsoft does not publish
+
+The `fb_*` block is Windows' accent, and the accent is where the citations stop
+being citations.
+
+`AccentFillColorDefaultBrush` in the dark dictionary is
+`Color="{ThemeResource SystemAccentColorLight2}"` — a **runtime** lookup, not a
+value. `microsoft-ui-xaml` contains no hex for any shade of the ramp, anywhere,
+because the shades never exist in the XAML: WinUI forwards to
+`IUISettings3::GetColorValue` and Windows answers. Microsoft was asked to
+publish the derivation and declined —
+`MicrosoftDocs/windows-uwp` issue #1673, closed as not planned — so there is no
+documented Windows 11 default-accent hex to cite and this file must not pretend
+otherwise.
+
+What the three values here actually are: **a reading of a running Windows 11
+(25H2, build 26200)** through
+`Windows.UI.ViewManagement.UISettings.GetColorValue`, the same API WinUI itself
+calls, corroborated twice on disk — `HKCU\Software\Microsoft\Windows\
+CurrentVersion\Explorer\Accent!AccentPalette`, whose seven RGBA records read
+`99EBFF 4CC2FF 0091F8 0078D4 0067C0 003E92 001A68` in Light3→Dark3 order, and
+the same 32-byte record inside `uxtheme.dll`'s built-in accent palette table.
+The `winaccent` project reads that same registry key and agrees. That is
+strong evidence and it is still **a measurement of one machine, not a published
+constant**, which is a different kind of fact from every other line in this
+section.
+
+| role | value | shade |
+|---|---|---|
+| `fb_primary` | `#4cc2ff` | `SystemAccentColorLight2` — what `AccentFillColorDefaultBrush` resolves to in dark |
+| `fb_primary_container` | `#0067c0` | `SystemAccentColorDark1` |
+| `fb_secondary_container` | `#003e92` | `SystemAccentColorDark2` |
+| `fb_on_primary`, `fb_on_tertiary` | `#000000` | `TextOnAccentFillColorPrimary` |
+| `fb_on_primary_container`, `fb_on_secondary_container` | `#ffffff` | `TextFillColorPrimary` |
+| `fb_secondary`, `fb_tertiary` | `#3a96dd`, `#61d6d6` | Campbell `cyan` and `brightCyan` — **Windows publishes exactly one accent**, so a second and third have to come from somewhere, and the twelve Campbell chromatics are the set the live accent is drawn from too (below). Fallback and running desktop then speak the same twelve colours. |
+
+The remaining eight `fb_*` mirror their `ui_*` twins, per 1.5's row order:
+`fb_surface`…`fb_surface_container_highest` are 4.4's four rungs,
+`fb_on_surface` is `ui_text`, `fb_on_surface_variant` is `ui_text_variant`,
+`fb_outline` is `ui_text_muted` and `fb_outline_variant` is `ui_border_dim`.
+
+**A declared choice inside the accent.** WinUI uses two accent tiers in dark:
+`Light2 #4CC2FF` for *fills* (`AccentFillColorDefaultBrush`) and
+`Light3 #99EBFF` for accent *text* (`AccentTextFillColorPrimaryBrush`). This
+scheme uses Light2 everywhere, `term_url` and `sem_info` included, where a
+strict transcription would put Light3 on those two. Taking both would introduce
+a second accent tier into a vocabulary that has one slot for it, for the sake
+of two roles. Light2 stands; the loss is that a Windows hyperlink is a shade
+paler than this one.
+
+#### What a wallpaper actually does to this scheme's accent
+
+**None of the `fb_*` accents above is what the running desktop wears, and under
+this scheme that is more surprising than under the other three.** The live
+accent is snapped onto the nearest colour the scheme publishes, and the
+candidate pool is fixed at **the twelve ANSI chromatics** — `CHROMATICS` in
+`bin/.local/lib/scheme-accent.py:118-123`, `term_red` through
+`term_bright_cyan`, and nothing else. So a wallpaper-derived accent under
+Windows 11 Dark lands on a **Campbell** shade, never on `#4cc2ff`.
+
+Measured against the script rather than reasoned about: the Windows 11 UI
+accent itself, handed in as an extracted colour, snaps to `term_cyan #3a96dd`.
+So does `#0078d4`, and so does a vivid `#0b87e2` out of a blue picture. The
+full family the render is then seeded with is `primary #3a96dd`,
+`secondary #e74856`, `tertiary #881798`.
+
+**The behaviour is authentic and the shades are not.** Windows derives its own
+accent from the wallpaper — that is exactly what `SystemAccentColor` is, and
+why there is no hex to cite for it in the first place — so a desktop whose
+accent moves with the picture is doing the Windows thing. What it wears while
+doing it is a terminal palette, because that is the pool this repository's
+snapper draws from. Recorded because the alternative reading — "the accent is
+broken, it should be `#4cc2ff`" — is the one a future reader will arrive at,
+and the answer is that `#4cc2ff` is the *fallback* (`fb_primary`, what a clone
+with no wallpaper yet shows) and Campbell is the *palette*.
+
+#### Three values with no Windows origin, named
+
+Every other value in the file resolves to a constant. These do not, and the
+file should say so rather than let a future reader assume they were cited:
+
+* **`ui_bg_view #242424`.** The exact sRGB midpoint of
+  `SolidBackgroundFillColorBase #202020` and `SolidBackgroundFillColorTertiary
+  #282828` — (32 + 40) / 2 = 36 = `0x24` — and within 0.02 L\* of their L\*
+  midpoint as well. 1.1 defines the role as "one clear step *away* from
+  `ui_bg`", and Windows has no content-pane tone distinct from its window: a
+  WinUI page and the window behind it are the same `#202020`. So the role is
+  filled by splitting the one step Windows does publish. Same shape as Tokyo
+  Night's two `Util.blend` fills in 4.1(c): derived from the palette, not
+  picked beside it.
+* **`ui_bevel_dark #141414`.** A step between `SolidBackgroundFillColorBaseAlt
+  #0a0a0a` and `SolidBackgroundFillColorSecondary #1c1c1c`, sitting at L\* 6.32
+  against their L\* midpoint of 6.50. Qt's `QPalette::Dark` slot must be *some*
+  colour and Windows has no bevel — Fluent has no 3D bevel at all — so there is
+  nothing to cite and the ladder position is the whole of the argument. Same
+  category as 4.1(b)'s `ui_bg_shadow`: a mandatory Qt slot filled by position.
+* **`ui_doc_fg #e8e8e8`.** The only value in the file with no derivation of any
+  kind. The dark dictionary has no document token — no `Document*`, no
+  `Reading*`, no `Page*` key exists in it — because a recoloured PDF is not a
+  thing WinUI has an opinion about. `ui_text #ffffff` was available and is what
+  every other scheme puts here; `#e8e8e8` (L\* 92.0) steps the ink down off
+  pure white, which is a reader's judgement about a page of body text and not a
+  fact about Windows. Change it to `#ffffff` if the distinction is not worth
+  the unsourced value.
 
 ---
 

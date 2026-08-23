@@ -291,6 +291,17 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
 
+        // THE FLICKABLE MUST NOT TAKE THIS DRAG BACK. Where the bar is
+        // declared INSIDE the view it reports on -- the launcher's list, the
+        // clipboard history -- this MouseArea is a descendant of a Flickable,
+        // and a Flickable steals a descendant's grab the moment a press moves
+        // past the drag threshold. The press landed here, the drag flicked
+        // the CONTENT: pulling the thumb down scrolled the list up, which is
+        // a scrollbar doing the opposite of what it is for. The settings
+        // window never showed it because its bars live in the pane's padding,
+        // outside the Flickable, where there is nothing to steal.
+        preventStealing: true
+
         // Press jumps and drag follows, which is what the volume slider does
         // and for the same reason: one gesture, and no dead zone on the track
         // where nothing happens.

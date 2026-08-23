@@ -5,12 +5,18 @@
 // modules/settings/SettingsChrome.qml and not under components/ -- hence the
 // import, the same way SettingsSection.qml in this directory does it.
 //
-// THE RAIL'S WIDTH IS READ AND NEVER CHOSEN. `railWidth` is declared on the
-// facade because six things in the settings window are anchored against it and
-// a theme reporting nothing would collapse all six -- so this file paints over
-// the rectangle it is told about rather than deciding where the rail ends. It
-// is the CornerWedge case: the number stayed on the host side, and this is the
-// second caller for that clause.
+// THE RAIL'S WIDTH IS READ HERE AND NEVER MEASURED BACK. `railWidth` is
+// published by the facade because six things in the settings window are
+// anchored against it and a facade sized by whatever this file drew would
+// collapse all six -- so this file paints over the rectangle it is told about
+// rather than deciding where the rail ends.
+//
+// A THEME STILL GETS TO CHOOSE THE NUMBER, and this file's silence is how it
+// declines to. The facade reads `Theme.railWidth`, a token out of the theme's
+// own theme.json; the probe's theme.json does not name it, so the probe gets
+// the host's 210 and paints its strip exactly that wide. Stating a number up
+// front in JSON and reporting one back up through a Loader are different
+// channels, and only the second is the one the facade's header refuses.
 
 import QtQuick
 import qs.modules.settings

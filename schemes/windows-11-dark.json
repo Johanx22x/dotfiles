@@ -1,0 +1,399 @@
+{
+  "_meta": {
+    "label": "Windows 11 Dark",
+    "source": "microsoft/microsoft-ui-xaml, controls/dev/CommonStyles/Common_themeresources_any.xaml, the x:Key=\"Default\" dictionary -- which is the dark one -- for every ui_* and sem_* tone, its alpha overlays flattened over SolidBackgroundFillColorBase #202020; the sixteen ANSI slots and fg/bg/cursor are Windows Terminal's shipped Campbell scheme, microsoft/terminal src/cascadia/TerminalSettingsModel/defaults.json; the fb_* accents are SystemAccentColorLight2 / Dark1 / Dark2 of the Windows 11 default accent #0078d4, which Windows resolves at runtime and for which Microsoft publishes no hex",
+    "variant": "dark"
+  },
+  "colors": {
+    "fb_on_primary": {
+      "default": {
+        "color": "#000000"
+      }
+    },
+    "fb_on_primary_container": {
+      "default": {
+        "color": "#ffffff"
+      }
+    },
+    "fb_on_secondary_container": {
+      "default": {
+        "color": "#ffffff"
+      }
+    },
+    "fb_on_surface": {
+      "default": {
+        "color": "#ffffff"
+      }
+    },
+    "fb_on_surface_variant": {
+      "default": {
+        "color": "#cccccc"
+      }
+    },
+    "fb_on_tertiary": {
+      "default": {
+        "color": "#000000"
+      }
+    },
+    "fb_outline": {
+      "default": {
+        "color": "#969696"
+      }
+    },
+    "fb_outline_variant": {
+      "default": {
+        "color": "#2f2f2f"
+      }
+    },
+    "fb_primary": {
+      "default": {
+        "color": "#4cc2ff"
+      }
+    },
+    "fb_primary_container": {
+      "default": {
+        "color": "#0067c0"
+      }
+    },
+    "fb_secondary": {
+      "default": {
+        "color": "#3a96dd"
+      }
+    },
+    "fb_secondary_container": {
+      "default": {
+        "color": "#003e92"
+      }
+    },
+    "fb_surface": {
+      "default": {
+        "color": "#202020"
+      }
+    },
+    "fb_surface_container": {
+      "default": {
+        "color": "#2b2b2b"
+      }
+    },
+    "fb_surface_container_high": {
+      "default": {
+        "color": "#333333"
+      }
+    },
+    "fb_surface_container_highest": {
+      "default": {
+        "color": "#454545"
+      }
+    },
+    "fb_tertiary": {
+      "default": {
+        "color": "#61d6d6"
+      }
+    },
+    "sem_critical": {
+      "default": {
+        "color": "#ff99a4"
+      }
+    },
+    "sem_info": {
+      "default": {
+        "color": "#4cc2ff"
+      }
+    },
+    "sem_on_critical": {
+      "default": {
+        "color": "#000000"
+      }
+    },
+    "sem_on_success": {
+      "default": {
+        "color": "#000000"
+      }
+    },
+    "sem_on_warning": {
+      "default": {
+        "color": "#000000"
+      }
+    },
+    "sem_success": {
+      "default": {
+        "color": "#6ccb5f"
+      }
+    },
+    "sem_warning": {
+      "default": {
+        "color": "#fce100"
+      }
+    },
+    "term_bell_border": {
+      "default": {
+        "color": "#fce100"
+      }
+    },
+    "term_bg": {
+      "default": {
+        "color": "#0c0c0c"
+      }
+    },
+    "term_black": {
+      "default": {
+        "color": "#0c0c0c"
+      }
+    },
+    "term_blue": {
+      "default": {
+        "color": "#0037da"
+      }
+    },
+    "term_border_inactive": {
+      "default": {
+        "color": "#2f2f2f"
+      }
+    },
+    "term_bright_black": {
+      "default": {
+        "color": "#767676"
+      }
+    },
+    "term_bright_blue": {
+      "default": {
+        "color": "#3b78ff"
+      }
+    },
+    "term_bright_cyan": {
+      "default": {
+        "color": "#61d6d6"
+      }
+    },
+    "term_bright_green": {
+      "default": {
+        "color": "#16c60c"
+      }
+    },
+    "term_bright_magenta": {
+      "default": {
+        "color": "#b4009e"
+      }
+    },
+    "term_bright_red": {
+      "default": {
+        "color": "#e74856"
+      }
+    },
+    "term_bright_white": {
+      "default": {
+        "color": "#f2f2f2"
+      }
+    },
+    "term_bright_yellow": {
+      "default": {
+        "color": "#f9f1a5"
+      }
+    },
+    "term_cursor": {
+      "default": {
+        "color": "#ffffff"
+      }
+    },
+    "term_cursor_text": {
+      "default": {
+        "color": "#0c0c0c"
+      }
+    },
+    "term_cyan": {
+      "default": {
+        "color": "#3a96dd"
+      }
+    },
+    "term_fg": {
+      "default": {
+        "color": "#cccccc"
+      }
+    },
+    "term_green": {
+      "default": {
+        "color": "#13a10e"
+      }
+    },
+    "term_magenta": {
+      "default": {
+        "color": "#881798"
+      }
+    },
+    "term_red": {
+      "default": {
+        "color": "#c50f1f"
+      }
+    },
+    "term_selection_bg": {
+      "default": {
+        "color": "#3a3d41"
+      }
+    },
+    "term_selection_fg": {
+      "default": {
+        "color": "#ffffff"
+      }
+    },
+    "term_tab_bg": {
+      "default": {
+        "color": "#202020"
+      }
+    },
+    "term_tab_inactive_fg": {
+      "default": {
+        "color": "#969696"
+      }
+    },
+    "term_url": {
+      "default": {
+        "color": "#4cc2ff"
+      }
+    },
+    "term_white": {
+      "default": {
+        "color": "#cccccc"
+      }
+    },
+    "term_yellow": {
+      "default": {
+        "color": "#c19c00"
+      }
+    },
+    "ui_bevel_dark": {
+      "default": {
+        "color": "#141414"
+      }
+    },
+    "ui_bevel_mid": {
+      "default": {
+        "color": "#1c1c1c"
+      }
+    },
+    "ui_bevel_midlight": {
+      "default": {
+        "color": "#2c2c2c"
+      }
+    },
+    "ui_bg": {
+      "default": {
+        "color": "#202020"
+      }
+    },
+    "ui_bg_alt_row": {
+      "default": {
+        "color": "#202020"
+      }
+    },
+    "ui_bg_bar": {
+      "default": {
+        "color": "#272727"
+      }
+    },
+    "ui_bg_button": {
+      "default": {
+        "color": "#2d2d2d"
+      }
+    },
+    "ui_bg_control": {
+      "default": {
+        "color": "#323232"
+      }
+    },
+    "ui_bg_dim": {
+      "default": {
+        "color": "#1c1c1c"
+      }
+    },
+    "ui_bg_field": {
+      "default": {
+        "color": "#2d2d2d"
+      }
+    },
+    "ui_bg_raised": {
+      "default": {
+        "color": "#2c2c2c"
+      }
+    },
+    "ui_bg_shadow": {
+      "default": {
+        "color": "#0a0a0a"
+      }
+    },
+    "ui_bg_view": {
+      "default": {
+        "color": "#242424"
+      }
+    },
+    "ui_border": {
+      "default": {
+        "color": "#414141"
+      }
+    },
+    "ui_border_dim": {
+      "default": {
+        "color": "#2f2f2f"
+      }
+    },
+    "ui_doc_bg": {
+      "default": {
+        "color": "#1c1c1c"
+      }
+    },
+    "ui_doc_fg": {
+      "default": {
+        "color": "#e8e8e8"
+      }
+    },
+    "ui_on_accent": {
+      "default": {
+        "color": "#000000"
+      }
+    },
+    "ui_selection_disabled": {
+      "default": {
+        "color": "#3a3a3a"
+      }
+    },
+    "ui_surface": {
+      "default": {
+        "color": "#202020"
+      }
+    },
+    "ui_surface_container": {
+      "default": {
+        "color": "#2b2b2b"
+      }
+    },
+    "ui_surface_container_high": {
+      "default": {
+        "color": "#333333"
+      }
+    },
+    "ui_surface_container_highest": {
+      "default": {
+        "color": "#454545"
+      }
+    },
+    "ui_text": {
+      "default": {
+        "color": "#ffffff"
+      }
+    },
+    "ui_text_dim": {
+      "default": {
+        "color": "#717171"
+      }
+    },
+    "ui_text_muted": {
+      "default": {
+        "color": "#969696"
+      }
+    },
+    "ui_text_variant": {
+      "default": {
+        "color": "#cccccc"
+      }
+    }
+  }
+}

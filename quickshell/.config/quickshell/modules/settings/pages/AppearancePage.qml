@@ -55,6 +55,17 @@ SettingsPage {
     // label is what a person reads.
     property var schemes: []
 
+    // The pinned scheme's human label, out of the same list the picker reads.
+    // Falls back to the identifier: `desktop-scheme list` is a process, so
+    // there is a moment before it answers, and a theme that pins a scheme this
+    // machine does not have never gets a row at all.
+    readonly property string pinnedLabel: {
+        for (const s of root.schemes)
+            if (s.name === Theme.pinnedScheme)
+                return s.label;
+        return Theme.pinnedScheme;
+    }
+
     onVisibleChanged: {
         if (visible && !themeQuery.running)
             themeQuery.running = true;
@@ -221,8 +232,35 @@ SettingsPage {
         // of picker. The font row below stays segments because ITS set is
         // closed and always three: the Nerd Font variants, and nothing else can
         // ever be offered there without filling the shell with tofu.
+        // A THEME THAT PINS A SCHEME HAS ALREADY ANSWERED THIS QUESTION.
+        //
+        // `pinned` in a theme's manifest means the whole desktop wears that
+        // scheme for as long as the theme is drawn: entering it runs
+        // `desktop-scheme pin` and leaving it runs `unpin`, so kitty, GTK, Zen
+        // and this shell move together. A picker that stayed live underneath
+        // that is offering a choice the theme takes back, and the first person
+        // to meet one said so: a theme whose look is fixed must not keep asking
+        // which colours you want.
+        //
+        // SAID RATHER THAN HIDDEN. An empty section would read as a bug, and
+        // the fact worth knowing -- that the theme is deciding, and which
+        // scheme it decided on -- is exactly what the picker can no longer
+        // show. So the rows go and a reading takes their place.
+        //
+        // Theme.pinnedScheme and NOT the manifest: Theme.qml resolves the
+        // manifest, falls back when a theme names a scheme this machine does
+        // not have, and follows Themes.name -- what is DRAWN -- rather than
+        // Config.theme. Reading the manifest here would be a second answer to
+        // a question that already has one.
+        InfoRow {
+            visible: Theme.pinnedScheme !== ""
+            glyph: Icons.palette
+            label: root.pinnedLabel
+            description: `The ${Themes.title} theme sets the colours for the whole desktop, so there is nothing to choose here. Switch themes above to change them.`
+        }
+
         Repeater {
-            model: root.schemes
+            model: Theme.pinnedScheme === "" ? root.schemes : []
 
             PickRow {
                 required property var modelData
@@ -284,6 +322,29 @@ SettingsPage {
             hint: "Applies to most surfaces immediately. "
                 + "Some apps only read it at startup and will not "
                 + "follow until they are restarted."
+        }
+
+        // AND THE SHELL ITSELF MAY BE OUT OF ITS REACH, which is the one thing
+        // the hint above cannot say for itself.
+        //
+        // This dial belongs to the person at the keyboard and it moves four
+        // programs: kitty, Zen, Nautilus and this shell. The first three are
+        // windows and it will always move them. The fourth is the desktop's
+        // own chrome, and a theme whose look IS a transparency -- Windows,
+        // whose taskbar and flyouts are acrylic -- sets its own and stops
+        // following. That is the same bargain `pinned` makes with the colour
+        // scheme one section up: a theme that fixes its look has taken the
+        // control away for as long as it is drawn.
+        //
+        // Said rather than hidden, and said HERE rather than in the hint,
+        // because the row is still live and still doing three quarters of its
+        // job. Hiding the slider would take the terminal with it.
+        InfoRow {
+            visible: Theme.themeSurfaceAlpha > 0
+            glyph: Icons.palette
+            label: `The ${Themes.title} theme draws its own surfaces at ${Theme.themeSurfaceAlpha}%`
+            description: "The slider above still moves the terminal and other "
+                + "windows. Switch themes to give it the shell back."
         }
     }
 

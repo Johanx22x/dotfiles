@@ -91,10 +91,11 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 # every press row above reports identically under both backends.
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
-from PyQt6.QtCore import QCoreApplication, QPointF, QUrl, Qt
+from PyQt6.QtCore import QCoreApplication, QPoint, QPointF, QUrl, Qt
 from PyQt6.QtGui import QGuiApplication, QInputDevice, QMouseEvent, QPointingDevice
 from PyQt6.QtQml import QQmlAbstractUrlInterceptor, QQmlComponent
 from PyQt6.QtQuick import QQuickView
+from PyQt6.QtTest import QTest
 
 TESTS = Path(__file__).resolve().parent
 SCENE = TESTS / "scrollbar-target.qml"
@@ -415,6 +416,14 @@ note("--- the bar beside the list ---")
 
 # modules/settings/Settings.qml:304. Rail 210 wide with 10 of padding, bar
 # inset 3 from its right edge, entries stopping at the padding. Window 820.
+#
+# THOSE TWO NUMBERS ARE GENESIS'S AND NOT THE SHELL'S ANY MORE. The rail is
+# `Theme.railWidth` and `Theme.railPadding`, two tokens a theme.json may set,
+# with 210 and 10 as the fallbacks -- see modules/settings/SettingsChrome.qml.
+# This case is written at genesis's values, so what it asserts is that the three
+# pixels hold THERE. A theme that took railPadding below the bar's own four has
+# no channel left for it and this bench would not notice; that gap is named in
+# the same header and is not closed here.
 check({**BESIDE, "name": "settings rail", "listLeft": 10, "listRight": 200,
        "barX": 203, "sceneWidth": 820},
       bar=(200, 217), content=(10, 199))
@@ -578,6 +587,70 @@ elif where == {0.0}:
 else:
     note(f"a press at y=190 lands at contentY {landed[0][2]} for all of "
          f"{[(i, o) for i, o, _ in landed]}")
+
+# ---------------------------------------------------------------------------
+# The drag is the bar's and the view cannot steal it back
+# ---------------------------------------------------------------------------
+# Where the bar is declared INSIDE the view -- the launcher, the clipboard
+# history -- its MouseArea is a descendant of a Flickable, and a Flickable
+# steals a descendant's grab the moment a press moves past the drag threshold.
+# The press landed on the bar, the DRAG flicked the content: pulling the thumb
+# down scrolled the list up. `preventStealing` on the bar's MouseArea is the
+# whole fix, and this row is what notices if it ever comes off again.
+#
+# The directions cannot be confused, which is what makes the assertion sharp:
+# dragging UP as a scrollbar moves contentY DOWN toward zero, dragging up as a
+# flick moves contentY UP. Same gesture, opposite signs.
+
+note("--- the view does not steal the bar's drag ---")
+
+
+def drag(view: QQuickView, x: float, y0: float, y1: float, steps: int = 12) -> None:
+    """A press, a run of moves crossing the drag threshold, and a release.
+
+    THROUGH QTest AND NOT sendEvent, and the difference is the clock.
+    Flickable's steal logic reads event timestamps -- velocities and drag
+    thresholds are computed against them -- and a hand-built QMouseEvent
+    carries timestamp zero, which PyQt6 gives no way to set. The first
+    version of this helper sent those, and the steal it was written to catch
+    simply never fired: the check passed with preventStealing true, false or
+    deleted, which is a check on nothing. QTest stamps events off the real
+    clock, and the per-step delay is what spaces them out enough for the
+    threshold arithmetic to see a drag rather than a teleport.
+    """
+    QTest.mousePress(view, Qt.MouseButton.LeftButton,
+                     Qt.KeyboardModifier.NoModifier, QPoint(round(x), round(y0)), 20)
+    for i in range(1, steps + 1):
+        at = QPoint(round(x), round(y0 + (y1 - y0) * i / steps))
+        QTest.mouseMove(view, at, 20)
+        app.processEvents()
+    QTest.mouseRelease(view, Qt.MouseButton.LeftButton,
+                       Qt.KeyboardModifier.NoModifier, QPoint(round(x), round(y1)), 20)
+    app.processEvents()
+
+
+case = {**VIEW, "name": "drag not stolen", "listLeft": 0, "listRight": 780,
+        "sceneWidth": 820, "viewInteractive": True}
+with tempfile.TemporaryDirectory() as empty:
+    view = build(case, Path(empty))
+    # The press alone jumps the thumb: that is the anchor the drag is
+    # measured against, and it doubles as the proof the bar heard it at all.
+    press(view, 776.5, 250.0)
+    anchored = view.rootObject().drivenY()
+    drag(view, 776.5, 250.0, 80.0)
+    after = view.rootObject().drivenY()
+    view.hide()
+
+if anchored <= 0:
+    fail("the anchoring press scrolled nowhere, so the drag row proves nothing")
+elif after < anchored:
+    note(f"an upward drag on the thumb took contentY {round(anchored)} -> "
+         f"{round(after)} -- the bar kept its grab")
+elif after > anchored:
+    fail(f"the drag FLICKED the content instead: contentY {round(anchored)} -> "
+         f"{round(after)} -- the view stole the bar's grab")
+else:
+    fail(f"the drag moved nothing at all from contentY {round(anchored)}")
 
 # ---------------------------------------------------------------------------
 # And it is drawn where a row paints over it

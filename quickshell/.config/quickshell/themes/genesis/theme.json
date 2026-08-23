@@ -13,6 +13,9 @@
     "notificationIconSize": 38,
     "popoutMinWidth": 220,
 
+    "railWidth": 210,
+    "railPadding": 10,
+
     "fontWeight": 600,
     "imageSize": 20,
 

@@ -1,0 +1,44 @@
+{
+    "_comment": "Windows 11 dark. Every number here is Microsoft's unless its line says otherwise. Sources: microsoft/microsoft-ui-xaml controls/dev/CommonStyles/*_themeresources.xaml for the control metrics, CommunityToolkit/Windows components/SettingsControls for the settings card, and the Fluent 2 geometry page for the two corner radii. Where nothing is published -- the taskbar has no public design documentation at all -- the number is ours and is called out below.",
+
+    "_bar": "OURS: the taskbar is shell chrome and Microsoft documents none of it. 48 is the measured height at 100% scaling; 8 and 4 are read off screenshots.",
+    "_edge": "0 is the top and 1 is the bottom. The bar declares its own anchors and needs no help, but components/Popout.qml is a HOST window that has to open on the bar's inner side, and the host cannot see where a theme put its bar.",
+    "barAtBottom": 1,
+
+    "barHeight": 48,
+    "barPadding": 8,
+    "itemSpacing": 4,
+
+    "_groups": "SettingsCardSpacing 4 and SettingsCardPadding 16 are verbatim from the Community Toolkit sample the official docs point at. cardRadius is OverlayCornerRadius, the 8 that Windows gives windows, flyouts and dialogs.",
+    "groupSpacing": 4,
+    "groupPadding": 16,
+    "cardRadius": 8,
+
+    "_notifications": "A toast and a card in the notification centre are the same component in two expand states. 16 is the standard flyout padding, 8 the overlay radius, 40 the app-icon box.",
+    "notificationWidth": 360,
+    "notificationGap": 8,
+    "notificationPadding": 16,
+    "notificationRadius": 8,
+    "notificationIconSize": 40,
+
+    "_popout": "The Quick Settings flyout. OURS, measured from screenshots; Microsoft publishes nothing for it.",
+    "popoutMinWidth": 340,
+
+    "_rail": "NavigationView ships OpenPaneLength = 320.0 and the Settings app does not override it. 16 is the pane's own horizontal inset, NavigationViewAutoSuggestBoxMargin. Both of these are tokens only because this theme asked for them: the facade used to declare 210 and 10 on itself.",
+    "railWidth": 320,
+    "railPadding": 16,
+
+    "_type": "600 is Semibold. Windows 11's typography rules say Semibold for emphasis and never Bold, so this is the heaviest weight the theme ever asks for.",
+    "fontWeight": 600,
+    "imageSize": 20,
+
+    "_corners": "0 because Windows rounds WINDOWS, not the screen. This is what makes CornerWedge the empty implementation the interface explicitly supports -- the four ScreenCorner windows still exist, reserve nothing and take no input.",
+    "screenCornerRadius": 0,
+
+    "_alpha": "The number the whole theme leans on, and it is now measured rather than guessed. Windows' acrylic is a 30px blur under a #2C2C2C tint at 15% tint opacity and 96% luminosity opacity, which no single alpha reproduces -- what a single alpha can do is let the wallpaper's colour through the way the real taskbar does, and that is measurable. Sampling six points along a real Windows taskbar against the wallpaper directly above it, the bar keeps 0.28 of the wallpaper's saturation; ours at 78 keeps 0.25, WITHOUT the compositor blur the real desktop has and this sandbox does not. Close enough that moving it would be tuning against the sandbox rather than against Windows.",
+    "surfaceAlpha": 78,
+
+    "_motion": "ControlFastAnimationDuration. WinUI ships exactly three durations -- 83, 167, 250 -- and one easing spline, ControlFastOutSlowInKeySpline = 0,0,0,1. Note that hover is NOT among the things that animate: Windows swaps the brush on a DiscreteObjectKeyFrame at time zero.",
+    "animDuration": 167,
+    "recolorDuration": 0
+}

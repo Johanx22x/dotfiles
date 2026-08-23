@@ -100,7 +100,16 @@ PanelWindow {
     // The theme reads it for exactly that reason. It is not a style token: it
     // is a number this window's own height is computed from, and both ends
     // have to use the same one.
-    readonly property int topSlack: root.barVisible ? Theme.cardRadius : 0
+    // AND IT IS GATED ON THE FILLET, WHICH IS WHAT IT WAS ALWAYS FOR. The
+    // slack exists so the two corners facing the bar can round off out of
+    // sight behind it, and the fillets are what carry the panel across that
+    // join. A theme with barCornerRadius 0 -- the windows theme, whose panels
+    // float clear of the taskbar the way Windows' own flyouts do -- draws no
+    // fillets, so there is nothing to hide and nothing to weld. Without this
+    // gate that theme's popouts were grown by cardRadius and pushed the same
+    // distance off the screen edge, losing eight pixels of content to a join
+    // that does not exist.
+    readonly property int topSlack: (root.barVisible && root.fillet > 0) ? Theme.cardRadius : 0
 
 
     // IS THE BAR ACTUALLY THERE?
@@ -163,6 +172,17 @@ PanelWindow {
     screen: modelData
     visible: isOpen
 
+    // The per-screen report Surfaces keeps -- see popoutScreens there for who
+    // asks and why. Filed here because this window is the one object that
+    // knows both its screen and its openness; onDestruction so a window torn
+    // down while open (a theme swap) does not leave its screen marked busy
+    // forever.
+    onIsOpenChanged: Surfaces.reportPopout(root.modelData?.name ?? "", root.isOpen)
+    Component.onDestruction: {
+        if (root.isOpen)
+            Surfaces.reportPopout(root.modelData?.name ?? "", false);
+    }
+
     WlrLayershell.namespace: "quickshell-popout"
     // Overlay, above the notification panel on Top. A menu is something the
     // user opened on purpose and is looking at right now; a notification
@@ -205,15 +225,24 @@ PanelWindow {
     // popout that opens.
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
+    // THE BAR'S INNER SIDE, WHICHEVER SIDE THAT IS. This window used to
+    // anchor `top` outright, which was true for as long as every theme put its
+    // bar at the top. The windows theme puts it at the bottom, and a popout
+    // that stayed at the top opened detached at the far edge of the screen
+    // from the widget that asked for it.
     anchors {
-        top: true
+        top: !Theme.barAtBottom
+        bottom: Theme.barAtBottom
         left: true
     }
 
     margins {
-        // Flush with the bottom of the bar, or -- with no bar to be flush
-        // with -- clear of the screen edge by the same gap windows get.
+        // Flush with the bar's inner edge, or -- with no bar to be flush
+        // with -- clear of the screen edge by the same gap windows get. Only
+        // one of the two is live; the other anchor is false, so its margin is
+        // never consulted.
         top: root.barVisible ? Theme.barHeight : Theme.barCornerRadius
+        bottom: root.barVisible ? Theme.barHeight : Theme.barCornerRadius
         // Centred under the widget, then kept inside the screen. Without the
         // clamp, a popout opened by the rightmost widget would hang off the
         // edge.
@@ -260,6 +289,14 @@ PanelWindow {
     // the mark on every frame -- which is exactly the tearing the mark exists
     // to prevent, arrived at from the other direction.
     implicitWidth: Math.max(root.reservedWidth, Theme.popoutMinWidth) + root.fillet * 2
+    // popoutMinWidth AS A MINIMUM HEIGHT, and the name is wrong rather than
+    // the number. It is one token doing two jobs: the smallest a popout may be
+    // in either direction. Under genesis it is 220 and the floor never showed;
+    // under a theme that sets 340 it was the whole of why a short popout
+    // floated, until the line below stopped placing the panel at the wrong end.
+    // Left as it is because splitting the token is a change to every theme's
+    // theme.json, and it is written down here so the next reader does not
+    // spend the time working out that it is deliberate.
     implicitHeight: Math.max(root.reservedHeight, Theme.popoutMinWidth) - root.topSlack
 
     color: "transparent"
@@ -300,8 +337,17 @@ PanelWindow {
         // this screen, or a fullscreen window over it -- the hole would be a
         // dead patch of screen where clicks stopped dismissing for no visible
         // reason.
+        // AND IT FOLLOWS THE BAR. Hard-coding y=0 left a 48px dead strip
+        // along the top of the screen under a bottom-bar theme -- clicks there
+        // stopped dismissing, for no visible reason -- while the bar itself,
+        // at the other end, was covered by the grab and stopped responding.
         passthrough: root.barVisible
-            ? Qt.rect(0, 0, root.screen?.width ?? 0, Theme.barHeight)
+            ? Qt.rect(0,
+                      Theme.barAtBottom
+                          ? (root.screen?.height ?? 0) - Theme.barHeight
+                          : 0,
+                      root.screen?.width ?? 0,
+                      Theme.barHeight)
             : Qt.rect(0, 0, 0, 0)
 
         onDismissed: if (root.isOpen)
@@ -329,7 +375,39 @@ PanelWindow {
         id: drawing
 
         anchors.horizontalCenter: parent.horizontalCenter
-        y: -root.topSlack
+
+        // THE PANEL GOES TO THE BAR'S EDGE, WHICH IS NOT ALWAYS THE TOP OF
+        // THIS WINDOW.
+        //
+        // The window is anchored to the bar's inner side, and its HEIGHT is a
+        // session high-water mark -- see reservedHeight above -- so it is
+        // almost always taller than the panel currently inside it. Under a top
+        // bar that spare height falls below the panel and is invisible: the
+        // panel hangs from the window's top edge, which is the bar's edge, and
+        // the mask follows `drawing` so the empty part takes no input and
+        // draws nothing.
+        //
+        // Under a BOTTOM bar the two ends swap and this line did not. `y: 0`
+        // is then the far end of the window from the bar, so every popout
+        // opened at the top of a reservation instead of against the taskbar:
+        // the battery detail floated about two hundred pixels up on the 340
+        // floor alone, and the calendar floated by however tall the tallest
+        // popout of the session had been -- open the notification history once
+        // and the calendar moves further up for the rest of the session. That
+        // erratic distance is the high-water mark showing through, and it is
+        // what "the calendar opens much higher than the bar" was.
+        //
+        // `drawing.height` and not `implicitHeight`: it is the animated value,
+        // so the panel stays glued to the taskbar while it grows upward, which
+        // is the direction a bottom-anchored flyout should grow.
+        //
+        // The `+ topSlack` is zero under a theme with no fillets and it is not
+        // decoration: the corners that hide behind the bar are the BOTTOM two
+        // when the bar is at the bottom, so the rectangle has to overhang this
+        // window's bottom edge rather than its top.
+        y: Theme.barAtBottom
+            ? parent.height - drawing.height + root.topSlack
+            : -root.topSlack
 
         width: drawing.implicitWidth
         height: drawing.implicitHeight

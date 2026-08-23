@@ -347,7 +347,38 @@ Singleton {
     //
     // NOT A TOKEN for exactly that reason: four programs share this number and
     // only one of them can read a theme. A theme.json that names it is ignored.
-    readonly property real glassAlpha: Config.opacity
+    // AND A THEME MAY NOW OVERRIDE IT, WHICH THE PARAGRAPH ABOVE SAYS IT MAY
+    // NOT. The paragraph is kept because its argument is sound and it is still
+    // sound; what it does not survive is a theme whose whole look is a
+    // transparency.
+    //
+    // The number is shared by four programs and only one of them can read a
+    // theme -- true, and the four are kitty, Zen, Nautilus and this shell. The
+    // first three are WINDOWS: the dial exists so the terminal can be seen
+    // through, and it belongs to the person at the keyboard. The fourth is not
+    // a window, it is the desktop's own chrome, and it was inheriting the
+    // terminal's number by accident rather than by anybody's decision.
+    //
+    // WHAT MADE IT MATTER. Config.opacity is 0.95 on the machine this was
+    // written on, so every glass surface the shell drew was 95% opaque. A
+    // Windows 11 taskbar over a wallpaper carries the wallpaper's colour
+    // plainly; ours came out flat near-black, and no amount of correct drawing
+    // could have fixed it. That was found by photographing the shell over a
+    // picture instead of over the compositor's void.
+    //
+    // A PERCENTAGE BECAUSE token() TAKES A NUMBER. `"surfaceAlpha": 78` is
+    // 0.78. A theme that names nothing gets Config.opacity exactly as before,
+    // which is what keeps genesis where it is.
+    //
+    // AND IT IS THE SAME BARGAIN AS `pinned`: a theme that fixes its own
+    // transparency has taken the dial away for as long as it is drawn, and the
+    // Transparency section of the appearance page says so rather than offering
+    // a slider that does nothing.
+    readonly property real glassAlpha: root.themeSurfaceAlpha > 0
+        ? root.themeSurfaceAlpha / 100
+        : Config.opacity
+
+    readonly property int themeSurfaceAlpha: root.token("surfaceAlpha", 0)
 
     function glass(colour: color): color {
         return Qt.alpha(colour, root.glassAlpha);
@@ -363,6 +394,25 @@ Singleton {
 
     // Horizontal padding at the very ends of the bar.
     readonly property int barPadding: root.token("barPadding", 16)
+
+    // WHICH EDGE THE BAR IS ON, AS A NUMBER, BECAUSE token() ONLY TAKES ONE.
+    //
+    // 0 is the top and 1 is the bottom. It is not a style choice and it is not
+    // the bar's own business: the bar declares its own anchors and needs no
+    // help, but components/Popout.qml is a HOST window that has to open on the
+    // bar's inner side, and the host cannot see where a theme put its bar.
+    //
+    // It arrived with the windows theme, whose taskbar is at the bottom, and
+    // it is the third thing that theme asked the host for. The other two were
+    // railWidth and the notification daemon.
+    //
+    // A BOOLEAN WOULD BE BETTER AND theme.json CANNOT CARRY ONE: token()
+    // requires a finite number and falls through to the fallback for anything
+    // else, so a `"barEdge": "bottom"` would be read as absent and the popout
+    // would open at the top with nothing saying why. A number that is really a
+    // flag is the honest version of that constraint rather than a shortcut
+    // around it.
+    readonly property bool barAtBottom: root.token("barAtBottom", 0) !== 0
 
     // Space between the items inside one group.
     readonly property int itemSpacing: root.token("itemSpacing", 9)
@@ -399,6 +449,34 @@ Singleton {
     // Floor for a popout's width. A tray menu with two short entries would
     // otherwise come out as a sliver hanging off the bar.
     readonly property int popoutMinWidth: root.token("popoutMinWidth", 220)
+
+    // ---------------- Settings rail ----------------
+    // How wide the settings window's navigation sidebar is. NOT READ FROM HERE
+    // BY ANYTHING THAT DRAWS: modules/settings/SettingsChrome.qml publishes it
+    // as a property of its own and every one of the six things in
+    // modules/settings/Settings.qml anchored against the rail reads it off that
+    // facade, so the dependency stays in one file rather than in six. That
+    // facade's header has the whole account.
+    //
+    // 210 is what the window has always been, and it is a number this shell
+    // chose rather than one it inherited: a rail is as wide as its longest
+    // label plus its glyph, and "Notifications" at 11pt DemiBold with a Nerd
+    // Font pictogram in front of it is what set it. A theme whose type or
+    // whose idea of a sidebar is different needs its own number -- Windows 11
+    // ships NavigationView at OpenPaneLength 320 and its Settings app does not
+    // override it, and no amount of drawing gets there from 210.
+    readonly property int railWidth: root.token("railWidth", 210)
+
+    // How much that rail insets its own contents by, on every side.
+    //
+    // TEN IS ALSO THE SCROLLBAR'S CHANNEL, which is the part worth knowing
+    // before moving it. The rail's entries stop at the padding and the bar
+    // lives in the strip that leaves: four pixels of bar centred in ten leaves
+    // three on each side, and tests/scrollbar-target.py asserts that at 210 and
+    // 10 the entries own up to x=199 and the bar answers from 200. A theme that
+    // takes this below the bar's own width has no channel left, and the press
+    // target goes back over the entries -- the bug that bench exists for.
+    readonly property int railPadding: root.token("railPadding", 10)
 
     // ---------------- Type ----------------
     // POINTS, not pixels, and that is the whole point: kitty.conf says
@@ -632,17 +710,73 @@ Singleton {
             // worst of both readings.
             root.adoptPalette(null);
             root.adoptFont(null);
+            root.adoptBar(null);
             return;
         }
 
         root.adoptPalette(manifest);
         root.adoptFont(manifest);
+        root.adoptBar(manifest);
     }
 
-    // MOVED OUT OF adoptManifest AND NOT CHANGED, because there are two
+    // MOVED OUT OF adoptManifest AND NOT CHANGED, because there are three
     // declarations to read now and a single function would have had to decide
-    // what a manifest that gets one of them wrong means for the other. It means
-    // nothing: they are independent claims and each falls back on its own.
+    // what a manifest that gets one of them wrong means for the others. It
+    // means nothing: they are independent claims and each falls back on its
+    // own.
+
+    // ---- WHICH BAR WIDGETS THE DRAWING THEME ACTUALLY HAS ----
+    //
+    // An empty list means "all of them", which is what every theme meant
+    // before this existed and what genesis still means: it draws every widget
+    // the shell has a switch for, so it names none and nothing moves.
+    //
+    // WHY A THEME HAS TO BE ASKED AT ALL. The bar page offers a switch per
+    // widget -- the distribution logo, the focused window title, the island,
+    // the tray, the peripheral battery, the keyboard layout. A theme decides
+    // what its bar HAS, and the Windows theme has almost none of those: its
+    // taskbar is Start, the open windows and the corner, because that is what
+    // a Windows taskbar is. Every switch for a widget it does not draw is a
+    // control that flips, saves, reloads and changes nothing on screen.
+    //
+    // THAT FAILURE HAS A HISTORY HERE. It is the same shape as the colour
+    // scheme picker staying live under a theme that pins one, and the
+    // transparency slider staying live under a theme that sets its own -- and
+    // both of those were found by the person using the desktop rather than by
+    // anything in tests/. A control that cannot do what it says is worse than
+    // a missing one, because the missing one does not lie.
+    //
+    // NOT A TOKEN: token() takes a number and this is a list of names. It goes
+    // in the manifest beside `palette` and `font`, which is where a theme's
+    // declarations about ITSELF live. theme.json is metrics.
+    property var barWidgets: []
+
+    readonly property bool barWidgetsDeclared: root.barWidgets.length > 0
+
+    // Does the drawing theme have this widget at all? A theme that declares
+    // nothing answers yes to everything, which leaves every existing theme and
+    // every existing switch exactly where they were.
+    function themeDrawsWidget(name: string): bool {
+        return !root.barWidgetsDeclared || root.barWidgets.includes(name);
+    }
+
+    function adoptBar(manifest: var): void {
+        const declared = manifest && manifest.bar ? manifest.bar.widgets : undefined;
+
+        if (declared === undefined) {
+            root.barWidgets = [];
+            return;
+        }
+
+        if (!Array.isArray(declared)) {
+            console.warn(`Theme: ${root.themeName} carries a "bar.widgets" that is not a list -- offering every widget`);
+            root.barWidgets = [];
+            return;
+        }
+
+        root.barWidgets = declared.filter(n => typeof n === "string" && n !== "");
+    }
+
     function adoptPalette(manifest: var): void {
         // NOT NAMED `palette`, which is a property of this singleton twenty
         // lines further down: a local of that name reads like the palette the

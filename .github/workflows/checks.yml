@@ -282,6 +282,37 @@ jobs:
         if: ${{ !cancelled() }}
         run: tests/theme-interface.py
 
+      # THE THREE CHECKS THE WINDOWS THEME COST. theme-interface.py above asks
+      # whether a file EXISTS, qml-lint.sh whether it PARSES and shell-load.sh
+      # whether it LOADS -- and the first Windows theme was green on all three
+      # while being, in Johan's words, a cheap adaptation of genesis. It was
+      # built with `cp -r genesis windows` and shipped with three files still
+      # byte-identical to genesis's and on screen. A copy exists, parses and
+      # loads perfectly.
+      #
+      # Each of these asks a question none of the three asks, and each was
+      # mutation-tested against the tree that actually broke it rather than
+      # against a hypothetical one.
+      - name: A theme drew its files instead of copying them
+        if: ${{ !cancelled() }}
+        run: tests/theme-originality.sh
+
+      # Needs no font installed: it asks whether the theme has an ANSWER for
+      # every glyph it draws, not whether the codepoint renders. The failure it
+      # guards is not tofu -- 82 of the 92 codepoints windows/icons.json names
+      # also exist in the Nerd Font the shell ships, so an unmapped name gives
+      # a plausible WRONG glyph that looks deliberate.
+      - name: A theme maps every glyph it draws
+        if: ${{ !cancelled() }}
+        run: tests/theme-glyphs.py
+
+      # Rules 3, 4 and 7 of themes/genesis/components/README.md, whose own
+      # closing section said "nothing checks rules 3, 4 or 7. All three load,
+      # pass every test, and are wrong."
+      - name: The theme seam's unchecked rules
+        if: ${{ !cancelled() }}
+        run: tests/theme-seam.py
+
       # AND IT READS THE THEMES TOO, WHICH IT DID NOT USED TO. It swept
       # quickshell/.config/quickshell and nothing else, so genesis was read
       # because of where it sits and tests/fixtures/theme-probe -- a theme by
