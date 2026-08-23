@@ -341,8 +341,31 @@ QtObject {
     // the taskbar does NOT change material when a window is maximised, and
     // there is no separate "several windows" indicator state.
     readonly property int taskButton: 40
-    readonly property int indicatorRunningWidth: 6
+    readonly property int taskIcon: 24
+
+    // The Start mark: four panes with a one-pixel gutter. OURS, measured off a
+    // close-up -- the logo reads a shade smaller than an application icon
+    // beside it, which is what keeps it from looking like a grid button.
+    readonly property int startMark: 19
+    readonly property int startGutter: 2
+
+    // THE TASKBAR CORNER. Its items are shorter than the bar and share one
+    // hover backplate each; the whole group sits at the right edge with the
+    // clock last. OURS, measured off a close-up: the icons are the same 16 the
+    // rest of Windows draws symbols at, the items are 34 tall inside a 48 bar,
+    // and the padding is what separates a glyph from its own backplate's edge.
+    readonly property int trayItemHeight: 34
+    readonly property int trayIcon: 16
+    readonly property int trayPadding: 8
+    readonly property int badgeHeight: 14
+    // CORRECTED AGAINST A PHOTOGRAPH. These were 6 and 16 and 3, taken from a
+    // Windhawk mod's source -- and every published width for this indicator
+    // comes from a mod that REDESIGNS it into a pill or a bubble. A close-up
+    // of a real taskbar shows the running state is a small DIM DOT, not a
+    // short pill: about four pixels wide against sixteen for the focused bar,
+    // and dim enough that it reads as a dot rather than as a line.
+    readonly property int indicatorRunningWidth: 4
     readonly property int indicatorFocusedWidth: 16
     readonly property int indicatorThickness: 3
-    readonly property int indicatorBottomGap: 2
+    readonly property int indicatorBottomGap: 3
 }
