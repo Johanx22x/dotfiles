@@ -135,7 +135,9 @@ import QtQuick
 import qs
 import qs.components
 import qs.modules.island
-import qs.themes.genesis.bar
+// Relative, because this theme is loaded by path and does not name itself.
+// See the note beside the same pair of imports in bar/Bar.qml.
+import "../bar"
 
 Item {
     id: root

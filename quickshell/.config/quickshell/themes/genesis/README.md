@@ -36,9 +36,17 @@ themes/genesis/notifications/                 this theme's half: the daemon
 
 The dependency only ever runs one way. A theme file imports `qs.modules.<name>`
 to reach the state it draws; **no file under `modules/` imports anything under
-`themes/`**, and the only place in the entire tree that names a theme is
-`shell.qml`, where the surfaces are instantiated. That asymmetry is the seam --
-if it ever stops being true, the split has stopped meaning anything.
+`themes/`**, and **nothing in the tree names a theme at all** -- not even
+`shell.qml`, which loads its surfaces out of whatever directory `Config.theme`
+points at. That asymmetry is the seam -- if it ever stops being true, the split
+has stopped meaning anything.
+
+A theme reaches its own parts by **relative path** and never by its own name:
+`import "../island"`, not `import qs.themes.genesis.island`. That is partly a
+rule and mostly a fact -- a theme is loaded out of its directory rather than
+imported as a module, so the module form would not resolve from in here -- and
+it is what makes this directory copyable. `cp -r genesis tokyo`, edit
+`manifest.json`, set `theme` to `tokyo`, and the shell draws the copy.
 
 ## WHAT IS DELIBERATELY NOT IN HERE
 
@@ -58,17 +66,57 @@ precisely so two bars cannot warn twice; `Commands` is the list of what the
 launcher can do. None of them puts a pixel anywhere, and each stayed in
 `modules/` next to the state it belongs with.
 
+`BatteryAlerts` is the one of those the host itself never touches, and a module
+nothing on the host side imports is a module Quickshell's startup scan never
+reaches -- so `modules/Themes.qml` names it in `keptInScope` to keep
+`qs.modules.bar` importable from in here. The next host module that only a
+theme reaches for belongs on that line too.
+
+## HOW A THEME IS LOADED
+
+`manifest.json` is what makes a directory a theme. It is three keys today:
+
+```json
+{
+    "name": "genesis",
+    "title": "Genesis",
+    "interface": 1
+}
+```
+
+`interface` is a promise about the seam -- what a theme is handed, what it is
+expected to draw, where its files are looked for -- and the host refuses a
+number it does not speak rather than half-drawing a theme written against an
+older shape. `name` is a label; the directory is what the shell loads from.
+`title` is what a picker would show, and nothing shows it yet.
+
+`Config.theme` names the directory. `modules/Themes.qml` turns that name into
+URLs and reads the manifest; `modules/ThemeSurface.qml` loads one file out of
+the current theme; `shell.qml` builds seven of those and names no theme. The
+name can change while the shell is up: the surfaces are rebuilt and the old
+ones destroyed, with no config reload. A theme whose manifest cannot be read,
+or which claims an interface this shell does not speak, falls back to the one
+that ships with it -- an empty desktop has no way back to the setting that
+emptied it.
+
 ## THE HONEST LIMIT
 
-**There is no theme mechanism yet.** This is a directory with a rule about what
-may go in it, not a plug-in system: nothing loads a theme by name, there is no
-manifest, no `Loader`, no facade in front of `components/`. `shell.qml` imports
-`qs.themes.genesis.*` the same way it used to import `qs.modules.*`, so a second
-theme today would mean editing `shell.qml`, which is not what "swappable" means.
+**The manifest does not yet say what a theme provides.** The host builds the
+same seven surfaces whatever the theme is, from a list of paths written in
+`shell.qml`, so a theme without a cheatsheet has no way to say so and a theme
+with a surface of its own has no way to offer one. `modules/Surfaces.qml` will
+already take an extra member through `register()`; nothing hands it one.
 
-That is on purpose. The mechanism is worth building against a boundary that has
-already been drawn and checked; drawing the boundary and building the machinery
-in one go would have meant neither could be verified without the other.
+**Editing a theme no longer hot-reloads the shell.** Quickshell watches the
+files it reached by following imports out of `shell.qml`, and nothing imports a
+theme any more -- so a change under here needs
+`qs kill && qs -d --no-duplicate` where a change under `modules/` still lands
+by itself. It was measured three ways and it is the price of loading by name,
+not of the primitive that does the loading; the long note at the top of
+`modules/Themes.qml` has the whole account.
+
+**There is no facade in front of `components/`.** A theme draws with the
+shell's buttons, rows, scrollbars and popout, and cannot replace them.
 
 **One thing sits on the wrong side and is left there.**
 `notifications/Notifications.qml` owns `org.freedesktop.Notifications` -- the

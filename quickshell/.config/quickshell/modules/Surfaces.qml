@@ -13,6 +13,13 @@
 // sections at the bottom of this header for why, and for the one surface that
 // is deliberately not a member.
 //
+// FIVE IS WHAT THE HOST BRINGS, NOT WHAT THE RULE IS LIMITED TO. Those five
+// exist whatever is drawing them: four are host state a theme renders and the
+// fifth is reported by whatever draws a bar. A theme with a surface of its own
+// -- something the host has never heard of, that still takes the screen and
+// still has to yield it -- calls register() below and becomes a member on the
+// same terms. Nothing does today: genesis draws these five and no others.
+//
 // THE FIRST FOUR ARE THE GRABBING SURFACES, and that is the whole membership
 // test for them: a layer surface on the Overlay layer that asks for
 // WlrKeyboardFocus.Exclusive. They are already gathered under that name
@@ -139,28 +146,85 @@ Singleton {
         root.dismissPopouts();
     }
 
-    // THE RULE ITSELF. One surface names itself; the other four go.
+    // THE MEMBERSHIP, AS A LIST RATHER THAN AS FIVE BRANCHES. Each member is a
+    // name and the one thing that puts it away; keep() below walks them.
+    //
+    // WHY IT IS DATA NOW. These five come with the host and are the same five
+    // whatever is drawing them -- the launcher, the power menu, the cheatsheet
+    // and the carousel are host state that a theme renders, and the popout is
+    // reported by whatever draws a bar. But a theme with a surface the host has
+    // never heard of has nowhere to put it, and the header above is emphatic
+    // that a membership edited in n places will be short a pair. So the five
+    // stay here and anything else registers; the rule itself does not care
+    // which list a member came from.
+    readonly property var builtIn: [
+        {
+            name: "launcher",
+            close: () => LauncherState.isOpen = false
+        },
+        {
+            name: "powermenu",
+            close: () => PowerMenuState.isOpen = false
+        },
+        {
+            name: "cheatsheet",
+            close: () => CheatsheetState.isOpen = false
+        },
+        {
+            name: "wallpaper",
+            close: () => WallpaperState.isOpen = false
+        },
+        {
+            name: "popout",
+            close: () => root.dismiss()
+        }
+    ]
+
+    // What a theme has added. Empty for genesis, which draws the five above and
+    // nothing else.
+    property var registered: []
+
+    readonly property var members: root.builtIn.concat(root.registered)
+
+    // A SURFACE THE HOST DOES NOT KNOW ABOUT, JOINING THE RULE. `close` is
+    // called with no arguments and has to put the surface away by itself.
+    //
+    // THE EDGE IS THE CALLER'S JOB, and that is the one asymmetry with the five
+    // above. The built-in members have a singleton with an isOpen the
+    // Connections at the bottom can watch; a theme's own surface has whatever
+    // it has, so it announces itself by calling keep() with its own name when
+    // it opens. That is the same call the five make, one layer up.
+    //
+    // AND IT MUST BE UNDONE. A theme is swapped out by destroying its surfaces
+    // (see modules/ThemeSurface.qml), and a member left registered is a close()
+    // closing over an object that no longer exists -- so whatever registers on
+    // the way up unregisters on the way down.
+    function register(name: string, close: var): void {
+        root.unregister(name);
+        root.registered = root.registered.concat([
+            {
+                name,
+                close
+            }
+        ]);
+    }
+
+    function unregister(name: string): void {
+        root.registered = root.registered.filter(member => member.name !== name);
+    }
+
+    // THE RULE ITSELF. One surface names itself; every other member goes.
     //
     // A STRING RATHER THAN AN OBJECT because one of the five -- the popout -- is
     // not a singleton and has no object to name. Every call is one of the five
-    // lines at the bottom of this file, so a misspelling is not a silent
-    // no-op hiding somewhere in the tree: it means the surface closes itself
-    // the instant it opens, in front of the person who pressed the key.
+    // lines at the bottom of this file, or a theme's own surface announcing
+    // itself, so a misspelling is not a silent no-op hiding somewhere in the
+    // tree: it means the surface closes itself the instant it opens, in front
+    // of the person who pressed the key.
     function keep(surface: string): void {
-        if (surface !== "launcher")
-            LauncherState.isOpen = false;
-
-        if (surface !== "powermenu")
-            PowerMenuState.isOpen = false;
-
-        if (surface !== "cheatsheet")
-            CheatsheetState.isOpen = false;
-
-        if (surface !== "wallpaper")
-            WallpaperState.isOpen = false;
-
-        if (surface !== "popout")
-            root.dismiss();
+        for (const member of root.members)
+            if (member.name !== surface)
+                member.close();
     }
 
     // The five call sites, in one place so the membership can be read off them.

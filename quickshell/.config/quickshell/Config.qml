@@ -980,6 +980,23 @@ Singleton {
         onLoadFailed: root.wallpaperInterval = root.wallpaperIntervalDefault
     }
 
+    // ---------------- Which theme draws the desktop ----------------
+    //
+    // THE NAME OF A DIRECTORY UNDER themes/, and that is the whole contract.
+    // The shell loads its surfaces out of themes/<this>/ at runtime instead of
+    // importing them, so this is the only setting that decides what the
+    // desktop looks like rather than how it behaves. modules/Themes.qml is
+    // what turns the name into paths, and what happens when it names nothing.
+    //
+    // THE DEFAULT IS THE ANSWER BEFORE THE FILE IS READ, and that matters more
+    // here than anywhere else in this file. config.json is read
+    // asynchronously; every other setting arrives late and moves a binding,
+    // while this one decides which windows exist. Declaring "genesis" as the
+    // adapter's default means the shell builds the shipped theme immediately
+    // and rebuilds only for someone who has chosen a different one -- and a
+    // config written before this key existed reads exactly as it always did.
+    property alias theme: adapter.theme
+
     // ---------------- Which monitor is which ----------------
     //
     // HOW A MONITOR IS NAMED IN THIS FILE, and it is not the connector. "DP-3"
@@ -1684,6 +1701,10 @@ Singleton {
             property bool nightLightScheduled: false
             property int nightLightFrom: 1200
             property int nightLightTo: 420
+            // The directory under themes/ that draws the desktop. See the
+            // theme section above for why this one has a real default rather
+            // than an empty "decide for me".
+            property string theme: "genesis"
             // See the monitor section above for what goes in these three and
             // why the empty values mean "decide for me" rather than "nothing".
             property string mainMonitor: ""

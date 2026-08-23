@@ -81,7 +81,9 @@ import qs
 // store, the mute, the IpcHandler -- and NotificationHistory is this theme's
 // drawing of it. The two names are one module apart on purpose.
 import qs.modules.notifications
-import qs.themes.genesis.notifications
+// Relative, because this theme is loaded by path and does not name itself.
+// See the note beside the same pair of imports in Bar.qml.
+import "../notifications"
 
 Item {
     id: root

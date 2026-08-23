@@ -31,6 +31,14 @@
 // exits 255 and leaves no shell at all. The whole measurement is beside the
 // update chain in modules/installer/InstallerState.qml.
 //
+// AND NOTHING UNDER themes/ IS WATCHED AT ALL, which is newer than the counts
+// above and is not the same asymmetry. The watch list comes from a scan that
+// follows the imports out of this file, and this file no longer imports a
+// theme -- so a theme's files are loaded but never watched, and editing one
+// needs the same restart a pull does. modules/Themes.qml has the whole
+// account, including why loading by name costs this and the alternatives that
+// were measured and cost it too.
+//
 // The wallpaper palette does NOT go through that path: it is read live from
 // colors.json, see Theme.qml.
 
@@ -39,20 +47,14 @@ import QtQml
 import qs.modules
 import qs.modules.recorder
 import qs.modules.settings
-// THE SURFACES ARE DRAWN BY A THEME, and the two blocks of imports are the
-// seam. Above the line is the HOST: the arbiter, the state singletons, the
-// services and the settings window -- everything that decides what exists.
-// Below it is themes/genesis, which is the look this desktop has always had,
-// under a name it can now be swapped out from. It draws and nothing else, and
-// this file is the only place in the tree that names a theme by name.
-// themes/genesis/README.md is the whole account of what that means.
-import qs.themes.genesis
-import qs.themes.genesis.bar
-import qs.themes.genesis.cheatsheet
-import qs.themes.genesis.launcher
-import qs.themes.genesis.notifications
-import qs.themes.genesis.powermenu
-import qs.themes.genesis.wallpaper
+// AND NO THEME IS IMPORTED HERE, which is the point of the list stopping where
+// it does. Everything above is the HOST: the arbiter, the state singletons,
+// the services and the settings window -- everything that decides what exists.
+// What DRAWS is a directory under themes/, and this file no longer knows which
+// one: the surfaces below are `ThemeSurface`, loaded out of the current theme
+// by path at runtime. Config.theme is the name, modules/Themes.qml turns it
+// into paths, modules/ThemeSurface.qml is what loads one, and the README
+// beside a theme is the account of what a theme may and may not be.
 
 ShellRoot {
     // THE INSTANT REPLAY ARMS ITSELF, and this line is what lets it.
@@ -133,6 +135,13 @@ ShellRoot {
         Component.onCompleted: Surfaces.armed
     }
 
+    // EVERY SURFACE BELOW IS THE SAME SHAPE, and the shape is the seam. This
+    // file says WHAT exists and on which screens; the `file` is a path inside
+    // whatever theme is current and is the only thing that changes between
+    // them. A theme that draws a bar differently changes nothing here; a theme
+    // that has no bar at all cannot say so yet -- the list of surfaces is
+    // written out below rather than read off the theme's manifest.
+
     // A Bar on each screen that is meant to have one -- the main screen alone
     // until the Bar page says otherwise. See Screens.qml for how the main one
     // is chosen and why it is no longer a model name written out five times.
@@ -143,7 +152,9 @@ ShellRoot {
     Variants {
         model: Screens.barScreens
 
-        Bar {}
+        ThemeSurface {
+            file: "bar/Bar.qml"
+        }
     }
 
     // The notification daemon, on the same screen as the bar. It takes the
@@ -151,7 +162,9 @@ ShellRoot {
     Variants {
         model: Screens.mainOnly
 
-        Notifications {}
+        ThemeSurface {
+            file: "notifications/Notifications.qml"
+        }
     }
 
     // The launcher, on the same screen as the bar. One monitor only, like the
@@ -160,7 +173,9 @@ ShellRoot {
     Variants {
         model: Screens.grabScreens
 
-        Launcher {}
+        ThemeSurface {
+            file: "launcher/Launcher.qml"
+        }
     }
 
     // The power menu, on the same screen as the bar. Filtered to one monitor
@@ -169,7 +184,9 @@ ShellRoot {
     Variants {
         model: Screens.grabScreens
 
-        PowerMenu {}
+        ThemeSurface {
+            file: "powermenu/PowerMenu.qml"
+        }
     }
 
     // The wallpaper carousel, on the same screen as the bar. One monitor for
@@ -178,7 +195,9 @@ ShellRoot {
     Variants {
         model: Screens.grabScreens
 
-        WallpaperCarousel {}
+        ThemeSurface {
+            file: "wallpaper/WallpaperCarousel.qml"
+        }
     }
 
     // The keybind cheatsheet, on the same screen as the bar. One monitor for
@@ -188,7 +207,9 @@ ShellRoot {
     Variants {
         model: Screens.grabScreens
 
-        Cheatsheet {}
+        ThemeSurface {
+            file: "cheatsheet/Cheatsheet.qml"
+        }
     }
 
     // The settings window. NOT wrapped in Variants, and it is the only thing
@@ -202,6 +223,8 @@ ShellRoot {
     Variants {
         model: Quickshell.screens
 
-        ScreenCorners {}
+        ThemeSurface {
+            file: "ScreenCorners.qml"
+        }
     }
 }

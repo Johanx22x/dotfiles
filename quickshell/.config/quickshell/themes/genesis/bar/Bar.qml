@@ -24,8 +24,13 @@ import QtQuick
 import qs
 import qs.components
 import qs.modules
-import qs.themes.genesis.island
-import qs.themes.genesis.notifications
+// A THEME REACHES ITS OWN PARTS BY RELATIVE PATH AND NEVER BY ITS OWN NAME.
+// It is loaded out of its directory rather than imported as a module -- see
+// modules/Themes.qml -- so `import qs.themes.<name>.island` would not resolve
+// from in here even if it were written, and a directory that never spells its
+// own name is one `cp -r` away from being a second theme.
+import "../island"
+import "../notifications"
 
 PanelWindow {
     id: bar
