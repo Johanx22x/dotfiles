@@ -1,6 +1,43 @@
-# The Arch PKGBUILD for xwayland-satellite 0.8.2, plus the one-line fix from
-# upstream PR #480, because without it DaVinci Resolve cannot be opened at all
-# under niri.
+# The Arch PKGBUILD for xwayland-satellite 0.8.2, plus two small fixes on top:
+# the one-line fix from upstream PR #480, because without it DaVinci Resolve
+# cannot be opened at all under niri, and a local patch that stops Steam's
+# menus from closing the instant they open.
+#
+# --- popup-no-wm-focus.patch: Steam menus ---
+#
+# WHAT IT FIXES. Since Steam client build 1788291500 (2026-09-02, stable and
+# beta alike) every dropdown and context menu -- the Steam/View/Friends bar,
+# right-click menus, the notifications and friends-list popups -- appears and
+# disappears within the same second under niri. Steam creates each menu as an
+# override-redirect popup carrying WM_HINTS input=True and no WM_TAKE_FOCUS;
+# 0.8.2 (commit 3273a0f, for a Unity editor search box) hands X11 focus to
+# exactly that kind of popup on its first configure. The main window gets a
+# FocusOut, Steam dismisses the menu on it, and xwayland-satellite's own debug
+# log shows the whole thing: "focusing popup" followed by "unmapping" 33 ms
+# later. Measured here on 2026-09-05 with Steam running on a second display
+# served by a debug build; with the patch there is no "focusing popup" line
+# and the menus stay open until they are used.
+#
+# The patch removes that focus grant and nothing else. What is lost is the
+# Unity editor case from upstream PR #397, which nothing on this desktop uses.
+# The unit test upstream added for that case is flipped to assert the new
+# behaviour and renamed popup_no_focus_on_map_with_input_hint, so check() still
+# exercises the patched line -- and it goes red on the unpatched tree, which
+# was verified before trusting the green.
+#
+#   https://github.com/Supreeeme/xwayland-satellite/issues/468
+#   https://github.com/Supreeeme/xwayland-satellite/issues/489
+#   https://github.com/Supreeeme/xwayland-satellite/issues/491
+#   https://github.com/ValveSoftware/steam-for-linux/issues/13566
+#
+# Things that do NOT fix it, so nobody spends an evening on them again: leaving
+# the Steam beta (the stable build carries the same change), Steam's "context
+# menu focus compatibility mode" (it only delays the close), disabling GPU
+# rendering in web views, -system-composer, -cef-disable-gpu, or floating the
+# Steam window. Downgrading to 0.8.1 works but drops 0.8.2's other fixes and
+# needs an IgnorePkg to stay put.
+#
+# --- 480-dialog-toplevel.patch: DaVinci Resolve ---
 #
 # WHAT IT FIXES. 0.8.2 misclassifies a resizable DIALOG that carries
 # WM_TRANSIENT_FOR and client-side _MOTIF_WM_HINTS as an xdg_popup, and parents
@@ -24,10 +61,14 @@
 # and matches on wm_class "resolve". This is not a workaround shaped to fit;
 # it is the case the fix was written for.
 #
-# DELETE THIS WHOLE DIRECTORY once the fix is in the repos. pkgrel is 1.1 rather
-# than 2 on purpose: it beats the current 0.8.2-1 so pacman installs it, and it
-# LOSES to any future 0.8.2-2 or 0.8.3, so a released fix replaces this package
-# on its own with no pin to remember and nothing in IgnorePkg to clean up.
+# DELETE THIS WHOLE DIRECTORY once BOTH fixes are in the repos -- check that a
+# new release keeps Steam's menus open before dropping it, since upstream has
+# not merged anything for that one yet. pkgrel is 1.x rather than 2 on purpose:
+# it beats the current 0.8.2-1 so pacman installs it, and it LOSES to any
+# future 0.8.2-2 or 0.8.3, so a released fix replaces this package on its own
+# with no pin to remember and nothing in IgnorePkg to clean up. After a
+# restart of xwayland-satellite (niri respawns it on the next X11 client) the
+# new binary is what serves Steam; the running one keeps the old code.
 #
 # Build and install:   cd this directory && makepkg -si
 # (-s pulls clang and rust as build dependencies; add -r to drop them after.)
@@ -36,7 +77,7 @@
 
 pkgname=xwayland-satellite
 pkgver=0.8.2
-pkgrel=1.1
+pkgrel=1.2
 pkgdesc="Xwayland outside your Wayland"
 arch=(x86_64)
 url="https://github.com/Supreeeme/xwayland-satellite"
@@ -55,19 +96,23 @@ makedepends=(
 source=(
   "$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
   480-dialog-toplevel.patch
+  popup-no-wm-focus.patch
 )
 sha512sums=(
   'a125fe92591c7c39c4ae05e5d7a5b737d4104419165b98e4d486c5e2208b30b95173f2793141ef897f23f22c87c15f80daf8dcc2dbb4327c2fdf3288d56acd80'
   'd75cb3f6e45a68214400a7d7b674bc51f01725848b811bb7bf4fcd683716f2bf53fa608d39a7c1ef2de2860c013a88cc4754887a10cf37e6fdbab1367b779f4e'
+  'a8a43c855e1d13764fac04700b81b1867a2acfe6c4feaa263c618c1bd475b7525be8bee7be90daad3cddace248c060dd78493845199255684050d1dafc563d44'
 )
 b2sums=(
   '3bd8880386f0b2f73d2587e9ad5803ded1e107be4f4b8fe75f17453a3e98624f9f34c15a2ef11a2bb8362809100b6d9ce4fd6e1d350af164b3cf954cae7653db'
+  'SKIP'
   'SKIP'
 )
 
 prepare() {
   cd $pkgname-$pkgver
   patch -Np1 -i "$srcdir/480-dialog-toplevel.patch"
+  patch -Np1 -i "$srcdir/popup-no-wm-focus.patch"
   sed 's|/usr/local|/usr|' -i resources/$pkgname.service
   cargo fetch --locked --target "$(rustc --print host-tuple)"
 }
@@ -77,11 +122,14 @@ build() {
   cargo build --frozen --release --features systemd
 }
 
-# KEPT, AND THE REASON IS THE PATCH ITSELF. Upstream PR #480 is two hunks: the
-# classification change in src/xstate/mod.rs and a regression test beside it in
-# src/xstate/tests.rs called davinci_resolve_project_manager. This block is what
-# runs that test, so deleting it -- or reaching for `makepkg --nocheck` -- would
-# leave the one thing this whole directory exists for verified by nobody.
+# KEPT, AND THE REASON IS THE PATCHES THEMSELVES. Upstream PR #480 is two
+# hunks: the classification change in src/xstate/mod.rs and a regression test
+# beside it in src/xstate/tests.rs called davinci_resolve_project_manager. The
+# Steam patch is the same shape: the change in src/server/event.rs and
+# popup_no_focus_on_map_with_input_hint in src/server/tests.rs. This block is
+# what runs those tests, so deleting it -- or reaching for `makepkg --nocheck`
+# -- would leave the two things this whole directory exists for verified by
+# nobody.
 #
 # --lib, AND EVERYTHING BELOW IS WHY. `cargo test` here builds four test
 # binaries, of which two hold anything at all:
@@ -137,9 +185,10 @@ build() {
 # end-to-end coverage of v0.8.2 -- selections, decorations, output geometry,
 # window title and class round-trips through a real Xwayland -- is no longer
 # checked by anything in this repository. The judgement is that it was not this
-# repository's to check: this builds a RELEASED TAG plus three lines, and the
-# three lines are a pure function whose own test module (81 tests, of which the
-# window_role_heuristics group alone is over twenty) covers it directly.
+# repository's to check: this builds a RELEASED TAG plus two small patches, and
+# each patched line has a unit test next to it in the 81 -- guess_window_role's
+# own module (the window_role_heuristics group alone is over twenty) for #480,
+# and the popup focus tests in src/server/tests.rs for the Steam one.
 # Upstream's reviewer said the same thing on PR #480 in as many words, asking
 # for the integration-test changes to be dropped because the unit test was
 # enough. Re-verifying somebody else's release on every one of Johan's

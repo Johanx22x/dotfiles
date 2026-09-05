@@ -1,0 +1,71 @@
+diff --git a/src/server/event.rs b/src/server/event.rs
+index 3725178..ef995f6 100644
+--- a/src/server/event.rs
++++ b/src/server/event.rs
+@@ -441,7 +441,6 @@ impl SurfaceEvents {
+ 
+                 let mut role = data.get::<&mut SurfaceRole>().unwrap();
+                 let xdg = role.xdg_mut().unwrap();
+-                let first_configure = !xdg.configured;
+                 xdg.pending = Some(PendingSurfaceState {
+                     x,
+                     y,
+@@ -449,17 +448,11 @@ impl SurfaceEvents {
+                     height,
+                 });
+ 
+-                if first_configure {
+-                    let window_data = data.get::<&WindowData>().unwrap();
+-                    if window_data.attrs.require_wm_focus() {
+-                        let window = *data.get::<&x::Window>().unwrap();
+-                        state.inner.to_focus = Some(FocusData {
+-                            window,
+-                            output_name: None,
+-                            is_popup: true,
+-                        });
+-                    }
+-                }
++                // Do not hand X11 focus to a popup on its first configure, even
++                // when WM_HINTS asks for it. The Steam client (build 1788291500
++                // and later) opens every menu as a WM_HINTS input=True popup and
++                // dismisses it as soon as the main window loses focus, so
++                // focusing the popup here closes the menu ~35 ms after it maps.
+             }
+             xdg_popup::Event::Repositioned { .. } => {}
+             xdg_popup::Event::PopupDone => {
+diff --git a/src/server/tests.rs b/src/server/tests.rs
+index deae742..96c9bd8 100644
+--- a/src/server/tests.rs
++++ b/src/server/tests.rs
+@@ -1659,15 +1659,16 @@ fn popup_no_focus_without_input_hint() {
+ }
+ 
+ #[test]
+-fn popup_focus_on_map_with_input_hint() {
++fn popup_no_focus_on_map_with_input_hint() {
+     let (mut f, comp) = TestFixture::new_with_compositor();
+ 
+     let win_toplevel = Window::new(1);
+     let (_, toplevel_id) = f.create_toplevel(&comp, win_toplevel);
+ 
+-    // A popup with acquire_input_via_wm should receive X11 keyboard focus
+-    // at map time, matching what a real X11 WM does for windows with
+-    // WM_HINTS input=True.
++    // A popup with acquire_input_via_wm and no WM_TAKE_FOCUS must NOT be
++    // given X11 focus at map time. This is the shape of every Steam client
++    // menu since build 1788291500: focusing it takes focus away from the
++    // main window and Steam dismisses the menu on that FocusOut.
+     let win_popup = Window::new(2);
+     let (buffer, surface) = comp.create_surface();
+     let dims = WindowDims {
+@@ -1698,8 +1699,8 @@ fn popup_focus_on_map_with_input_hint() {
+     f.testwl.configure_popup(popup_id);
+     f.run();
+ 
+-    // Focus should have been given directly to the popup at map time.
+-    assert_eq!(f.connection().focused_window, Some(win_popup));
++    // Focus stays on the toplevel; the popup is never focused by us.
++    assert_eq!(f.connection().focused_window, Some(win_toplevel));
+ }
+ 
+ #[test]
