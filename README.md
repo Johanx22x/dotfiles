@@ -53,10 +53,13 @@ afterwards means "catch up on what has changed". What you tick is remembered, so
 the second run is shorter than the first.
 
 The compositor is the one thing settled before the table, because it decides
-what gets installed and what gets linked — and it is **detected** rather than
-asked: whichever of Hyprland and niri is installed is the one this machine
-chose. Only a machine with neither gets the question, where a bare Enter takes
-Hyprland. `--compositor=hyprland|niri|both` overrides either way. See
+what gets installed and what gets linked. The menu asks it every run, with the
+answer already known preselected — what the profile says, or failing that
+whichever of Hyprland and niri is installed — so a bare Enter keeps it, and
+picking a different one is how a second compositor gets added later. `check`,
+`update` and `apply` never ask: they take the same answer without offering it.
+`--compositor=hyprland|niri|both` overrides either way, and the menu and
+`update` both write it to the profile when it is given. See
 [Compositors](#compositors) below.
 
 | | |
@@ -258,6 +261,15 @@ clone has no desktop to draw on.
 Two flavors, chosen at install time and switched at the display manager. They
 are not exclusive: answer **both** and each session appears separately in SDDM,
 so one can be tried without dismantling the other.
+
+**Adding the second one later** is the same question asked again. Run
+`./install.sh` and pick **both** where the menu offers the compositor, or choose
+it under *Compositor* on the Updates page of the settings window — either way
+the profile is updated and the check table fills with what the new compositor
+needs, which the ordinary apply path then installs and links. Unattended, it is
+`./install.sh update --compositor=both`, which remembers the answer. Taking a
+compositor away is the same choice in reverse and **removes nothing**: no unit
+uninstalls a package, and the links its stow package made stay where they are.
 
 Built and tested against **Hyprland 0.56** and **niri 26.04**. Where a version
 matters — and it does more than once, because both move fast — the config says

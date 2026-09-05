@@ -279,7 +279,10 @@ Singleton {
         // `loaded` and not on `fileChanged`: the second fires before the new
         // text has been read, and dropping the copy there would leave one
         // frame in which the boxes show the file as it was a moment ago.
-        onLoaded: root.written = null
+        onLoaded: {
+            root.written = null;
+            root.recheckIfPending();
+        }
     }
 
     // WHAT THIS SHELL WROTE, UNTIL THE FILE CATCHES UP -- and this is a bug
@@ -391,6 +394,68 @@ Singleton {
                 n += 1;
 
         return n;
+    }
+
+    // ---------------- The compositor ----------------
+    //
+    // THE ONE ANSWER THAT USED TO BE ASKED ONCE. install.sh settles the
+    // compositor before any unit runs -- the flag, then the profile, then
+    // whatever is installed -- and until the menu learned to ask again, a
+    // machine that said "hyprland" on its first run had no door to niri
+    // afterwards: not the menu, not `update`, and not this window, which had a
+    // switch for every optional pack and nothing for the one choice that
+    // decides which package list and which stow package are in play.
+    //
+    // "" WHEN THE PROFILE HAS NO LINE, and the page shows that as no segment
+    // lit rather than guessing. The CLI would fall back to detecting what is
+    // installed, and reproducing that here would be a second copy of
+    // compositor_detect that drifts the day the first one changes. Every
+    // machine that has run the menu has the line -- mode_setup writes it on
+    // every pass -- so the empty case is a checkout that has never been
+    // installed from, which this page already cannot serve.
+    readonly property string compositor: root.profileGet("compositor", "")
+
+    // Written to the profile and then MEASURED, not assumed. Choosing "both"
+    // on a Hyprland machine changes what `packages` and `symlinks` are checked
+    // against, so the table above is wrong the moment the write lands: it says
+    // "Up to date" over a machine that now wants three packages and a stow
+    // package it does not have. The re-read is what turns the choice into rows
+    // somebody can act on with the two Apply buttons.
+    //
+    // NOT AN UNINSTALL EITHER WAY. Going from "both" back to one removes no
+    // package and unlinks nothing; the engine only ever adds, and
+    // lib/units/40-symlinks.sh says so under "the other compositor after a
+    // switch". The page says as much under the row.
+    function setCompositor(which: string): void {
+        if (which === root.compositor)
+            return;
+
+        root.profileSet("compositor", which);
+        root.recheck();
+    }
+
+    // A CHECK THAT WAITS FOR THE FILE. profileSet's write is asynchronous and
+    // `check --json` is a separate process reading the file from disk, so a
+    // check started on the click could read the profile as it was and report
+    // the old answer with complete confidence. `written` is non-null for
+    // exactly the window in which that could happen -- see its note -- so the
+    // check is held until the file has been re-read, and until any check
+    // already in flight has finished, because check() declines while one is
+    // running and a declined check is a stale table with nothing to refresh
+    // it.
+    property bool recheckPending: false
+
+    function recheck(): void {
+        root.recheckPending = true;
+        root.recheckIfPending();
+    }
+
+    function recheckIfPending(): void {
+        if (!root.recheckPending || root.checking || root.written !== null)
+            return;
+
+        root.recheckPending = false;
+        root.check();
     }
 
     // ---------------- The optional packs ----------------
@@ -955,6 +1020,10 @@ Singleton {
             root.checkError = "";
             root.units = parsed;
             root.checkedAt = Date.now();
+
+            // A compositor change that landed while this check was running
+            // was measured against the profile as it was. See recheck.
+            root.recheckIfPending();
         }
     }
 
