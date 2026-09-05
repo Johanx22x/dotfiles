@@ -52,7 +52,7 @@ SettingsPage {
     keywords: ["update", "updates", "install", "installer", "packages",
         "optional", "packs", "gaming", "apps", "neovim", "hardware",
         "symlinks", "stow", "drift", "check", "behind", "out of date",
-        "profile", "sudo", "terminal"]
+        "profile", "sudo", "terminal", "compositor", "hyprland", "niri"]
 
     // WHERE THIS PAGE LANDED IN THE RAIL, told to the singleton so the bar
     // widget can open it. The index is assigned by the window on the way past
@@ -712,6 +712,63 @@ SettingsPage {
                     ColorAnimation { duration: Theme.recolorDuration }
                 }
             }
+        }
+    }
+
+    // ---------------- The compositor ----------------
+
+    // THE CHOICE THAT WAS MISSING FROM THIS PAGE, and from everywhere else a
+    // person could reach after the first run. The packs below have had a
+    // switch here since the page existed; the compositor, which decides which
+    // package list and which stow package the whole table is measured
+    // against, was asked once at the first `./install.sh` and never offered
+    // again -- so a machine set up as Hyprland could not become a Hyprland and
+    // niri machine without knowing about `--compositor=both` or editing the
+    // profile by hand. The terminal menu asks again now, with the recorded
+    // answer preselected, and this row is the same question in this window.
+    //
+    // A ChoiceRow and not three switches: the three answers are one closed
+    // set, exactly one of them is true, and "hyprland off, niri off" is not a
+    // state the installer has a word for.
+    //
+    // IT SITS ABOVE THE PACKS AND BELOW THE BUTTONS, because that is the order
+    // things happen in. Change it here, the table re-reads itself against the
+    // new answer, and the two Apply rows above fill with what the second
+    // compositor needs -- packages and the patched AUR build in a terminal,
+    // the stow package in this window. Nothing on this row installs anything;
+    // it changes what the machine wants, and the rows that act on wants are
+    // the ones that already exist.
+    SettingsSection {
+        width: parent.width
+        glyph: Icons.display
+        title: "Compositor"
+
+        ChoiceRow {
+            glyph: Icons.display
+            label: "Sessions this machine has"
+            options: ["hyprland", "niri", "both"]
+            value: InstallerState.compositor
+            onChosen: value => InstallerState.setCompositor(value)
+
+            hint: "Which of the two sessions the installer sets up. Both is "
+                + "a real answer: the two touch different directories and "
+                + "appear separately in the display manager, so the second "
+                + "one can be tried without dismantling the first."
+        }
+
+        // THE ASYMMETRY, said where the row is. Adding a compositor turns
+        // into rows above that install it; taking one away turns into
+        // nothing, because the engine only ever adds -- no unit uninstalls a
+        // package, and the symlinks sweep removes a link only when its file
+        // has left the repository. A person choosing "hyprland" on a "both"
+        // machine and expecting niri to go should hear that from the page,
+        // not work it out from the check table staying quiet.
+        SectionNote {
+            topPadding: 4
+            text: "Adding a compositor puts its packages and configuration "
+                + "in the table above, ready to apply. Taking one away "
+                + "removes nothing: the packages stay installed and the "
+                + "session stays in the display manager."
         }
     }
 

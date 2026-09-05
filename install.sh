@@ -29,6 +29,9 @@ JSON=0
 PULL=0
 WITH_REQUIRES=0
 COMPOSITOR=""
+# 1 when --compositor= was on the command line, which is the one case a mode
+# that never asks is still allowed to write the answer down. See mode_update.
+COMPOSITOR_FLAG=0
 
 # THE FLAGS THAT MUST SURVIVE A RE-EXEC, kept as they were typed rather than
 # rebuilt from the variables they set. `update --pull` re-runs this script once
@@ -133,7 +136,22 @@ unit_assert_contract
 # with a question would be useless in a script and tiresome at a terminal, and
 # the machine already knows the answer: whichever compositor is installed is the
 # one this machine chose. The flag beats the profile, the profile beats the
-# detection, and only a machine with none of the three gets asked.
+# detection, and in `check`, `update` and `apply` only a machine with none of
+# the three gets asked.
+#
+# THE MENU IS THE EXCEPTION, AND IT USED TO NOT BE. It resolved the compositor
+# the same way, which meant the question was asked exactly once in the life of
+# a machine: the first run, before anything was installed. Every run after that
+# found the answer in the profile and moved on -- so a machine that answered
+# "hyprland" on day one had no way to add niri on day thirty. Not from the menu,
+# whose whole job is to be the interactive mode; not from `update`, which asks
+# nothing by design; and not from the settings window, which drives the same
+# engine. The only doors were `--compositor=both` on the command line and
+# editing the profile by hand, and neither is written anywhere a person adding
+# a compositor would look. So the menu asks every time, with the recorded
+# answer preselected: a bare Enter keeps it, which is what the laptop question
+# and the optional packs already do, and picking a different one is how a
+# second compositor gets installed. See compositor_ask.
 compositor_detect() {
   local hypr=0 niri=0
   pkg_is_installed hyprland && hypr=1
@@ -167,6 +185,44 @@ compositor_resolve() {
   ui_head "Compositor"
   ui_say "   It decides which packages go in and which configuration is linked."
   COMPOSITOR="$(ui_choose_one 1 hyprland niri both)"
+  ui_ok "   $COMPOSITOR"
+}
+
+# The menu's version: the same question, asked every time, defaulting to what
+# is known. The flag still wins outright -- `-y --compositor=both` is what the
+# tests and any script say, and a flag that was then asked about would not be
+# one. Below that the default is the profile, then what is installed, then
+# Hyprland, which is the order compositor_resolve reads them in and the only
+# difference is that here the answer is offered rather than taken.
+#
+# ADDING ONE INSTALLS IT; DROPPING ONE REMOVES NOTHING, and the question says
+# so, because an answer that shrinks looks like it should uninstall something
+# and does not. The packages unit only ever installs, and the symlinks sweep
+# removes a link only when its file is gone from the repository -- a package
+# that has merely left STOW_PACKAGES keeps every link it made, which
+# 40-symlinks.sh sets out under "the other compositor after a switch". That is
+# a limit of the engine and not of this menu, so it is said here and not fixed
+# here.
+compositor_ask() {
+  local known default=1
+
+  [[ -n $COMPOSITOR ]] && return 0
+
+  known="$(state_get compositor)"
+  [[ -n $known ]] || known="$(compositor_detect)"
+  case "$known" in
+    niri) default=2 ;;
+    both) default=3 ;;
+    *)    default=1 ;;
+  esac
+
+  ui_head "Compositor"
+  ui_say "   It decides which packages go in and which configuration is linked."
+  if state_has compositor; then
+    ui_say "   Enter keeps what this machine answered before. Adding a compositor"
+    ui_say "   installs it; taking one away removes nothing."
+  fi
+  COMPOSITOR="$(ui_choose_one "$default" hyprland niri both)"
   ui_ok "   $COMPOSITOR"
 }
 
@@ -227,7 +283,9 @@ OPTIONS
       --pull            update only. git pull --ff-only first.
       --with-requires   apply only. Also apply whatever the named units require.
       --compositor=X    hyprland, niri or both. Taken from the profile, or from
-                        what is installed, when it is not given.
+                        what is installed, when it is not given. The menu asks
+                        it every time with that answer preselected, and both
+                        the menu and update write it to the profile when given.
       --profile=PATH    Somewhere other than
                         ${XDG_STATE_HOME:-~/.local/state}/dotfiles-profile.
       --json            check only. A JSON array instead of the table, for
@@ -278,6 +336,7 @@ while (( $# )); do
         hyprland|niri|both) ;;
         *) ui_bad "--compositor takes hyprland, niri or both, not '$COMPOSITOR'" >&2; exit 2 ;;
       esac
+      COMPOSITOR_FLAG=1
       REEXEC_ARGS+=("$1")
       ;;
     --compositor)
@@ -575,6 +634,24 @@ mode_update() {
   state_load
   compositor_resolve update
   stow_packages_resolve
+
+  # WRITTEN DOWN WHEN IT WAS SAID OUT LOUD, and only then. `update
+  # --compositor=both` on a machine whose profile says hyprland used to install
+  # niri's packages and link its configuration and then forget it had: the next
+  # bare `update` read hyprland back out of the profile, so niri's links were
+  # never checked or repaired again and the machine was half of one thing and
+  # half of the other with nothing saying so. A flag given to a mode whose whole
+  # job is to obey the profile is the profile being told something. Resolved
+  # from the file or from what is installed, nothing is written: that is a
+  # reading, not a decision.
+  #
+  # BEFORE THE PULL, so that the re-exec below reads it back out of the file and
+  # a second `--compositor=` on the same line changes nothing.
+  if (( COMPOSITOR_FLAG )) && [[ "$(state_get compositor)" != "$COMPOSITOR" ]]; then
+    state_set compositor "$COMPOSITOR"
+    state_save
+    ui_dim "  compositor: $COMPOSITOR, written to $(state_path)"
+  fi
 
   if (( PULL )); then
     ui_head "pull"
@@ -909,7 +986,7 @@ mode_setup() {
   local id todo=() kind
 
   state_load
-  compositor_resolve setup
+  compositor_ask
   state_set compositor "$COMPOSITOR"
   stow_packages_resolve
 

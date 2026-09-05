@@ -534,6 +534,49 @@ want_eq "the profile is unchanged by running again" \
         "$(LC_ALL=C sort "$PROFILE")" "$(cat "$PROFILE")"
 
 # ---------------------------------------------------------------------------
+say "the compositor can be changed after the first run"
+
+# THE QUESTION THAT USED TO BE ASKED ONCE. Both runs above gave the answer on
+# the command line, so neither says whether the menu offers it at all -- and
+# for a long time it did not: with the answer in the profile the menu took it
+# and moved on, so a machine set up as one compositor had no way into the
+# other short of a flag nobody knew about or editing the file by hand. Without
+# the flag the menu must ask, the recorded answer must be the default, and
+# --yes must take that default rather than Hyprland's.
+third="$SANDBOX/run-3.txt"
+if installer -y > "$third" 2>&1; then
+    pass "a run with no --compositor exits zero"
+else
+    bad "a run with no --compositor exits zero"
+fi
+
+want "the menu asks the compositor without the flag" \
+     grep -q '^== Compositor ==' "$third"
+want "the recorded answer is the one preselected" \
+     grep -qF '3) both  (default)' "$third"
+want_eq "and a bare --yes keeps it" \
+        "both" "$(awk -F'\t' '$1 == "compositor" { print $2 }' "$PROFILE")"
+
+# `update` NEVER ASKS AND STILL REMEMBERS, which is the other half. A flag given
+# to the mode that exists to obey the profile used to install the second
+# compositor and then forget it had: the next bare `update` read the old answer
+# back out and never checked the new compositor's links again. hyprland first --
+# the sandbox has both stowed and installed, so narrowing has nothing to apply
+# -- then both again, so that every assertion below this one sees the same
+# profile the first run wrote.
+flagged="$SANDBOX/run-update-flag.txt"
+installer update --compositor=hyprland > "$flagged" 2>&1 || true
+want_eq "update --compositor=X writes X to the profile" \
+        "hyprland" "$(awk -F'\t' '$1 == "compositor" { print $2 }' "$PROFILE")"
+want "and says so" grep -qF 'compositor: hyprland, written to' "$flagged"
+
+installer update --compositor=both > "$flagged" 2>&1 || true
+want_eq "and back again" \
+        "both" "$(awk -F'\t' '$1 == "compositor" { print $2 }' "$PROFILE")"
+want_eq "with the rest of the profile as it was" \
+        "$(LC_ALL=C sort "$PROFILE")" "$(cat "$PROFILE")"
+
+# ---------------------------------------------------------------------------
 say "what check says once everything has been applied"
 
 # EVERY UNIT'S FINAL STATE, PINNED BY NAME. A summary line would stay green
