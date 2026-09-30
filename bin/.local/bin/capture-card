@@ -13,8 +13,20 @@
 #  That loopback is tagged with mpv's PID so Discord also sends it when
 #  sharing the screen. The reason why is at the end of the script.
 #
+#  The picture goes through FSRCNNX, a small convolutional upscaler that mpv
+#  runs on the GPU before scaling to the monitor. It is not DLSS (that needs
+#  the game engine's motion vectors, which an HDMI signal does not carry) but
+#  it is the closest thing that works on a plain video signal under Linux.
+#  Measured on the RTX 5070: well under a millisecond per frame, and its
+#  //!WHEN condition only fires when the window is more than 1.3x the source,
+#  so the 1080p window is untouched and fullscreen on a 1440p monitor gets
+#  it. Against native 1440p originals it gains about half a decibel of PSNR
+#  over lanczos: real, small, and worth judging with your own eyes, which is
+#  what the u key is for.
+#
 #  Keys inside mpv:
 #    f            fullscreen <-> 1080p window
+#    u            upscaling shader on / off (on by default)
 #    q  /  Esc    quit
 #    ctrl + +/-   adjust the audio delay if it feels out of sync
 #
@@ -28,6 +40,8 @@
 #    CAP_TEAR=1        Minimum latency at the cost of tearing: mpv stops
 #                      waiting for vsync. Only useful in very twitchy games.
 #    CAP_NOAUDIO=1     No audio (if you route it elsewhere)
+#    CAP_NOSHADER=1    Start without the upscaling shader. The u key can
+#                      still turn it on.
 # =============================================================
 set -uo pipefail
 
@@ -106,6 +120,13 @@ args=(
     --title=capture-card
     --input-conf="$HOME/.config/mpv/capture-card-input.conf"
 )
+
+# The upscaling shader (see the header). The same literal is in
+# capture-card-input.conf, where the u key toggles it with
+# `change-list glsl-shaders toggle`: that compares strings, so the two must
+# stay byte-identical or the key adds a second copy instead of removing the
+# first. ~~/ is mpv's own config directory, ~/.config/mpv.
+[[ ${CAP_NOSHADER:-0} == 1 ]] || args+=( "--glsl-shaders=~~/shaders/FSRCNNX_x2_16-0-4-1.glsl" )
 
 [[ ${CAP_FS:-0} == 1 ]] && args+=( --fullscreen )
 
