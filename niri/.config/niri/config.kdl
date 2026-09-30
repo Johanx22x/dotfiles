@@ -1115,8 +1115,10 @@ window-rule {
 // X11 clients: a resizable DIALOG carrying WM_TRANSIENT_FOR and client-side
 // _MOTIF_WM_HINTS was classified as an xdg_popup and parented to a hidden 1x1
 // WM_CLIENT_LEADER window. Resolve's project manager is exactly that window.
-// Fixed by upstream PR #480, carried here as packages/xwayland-satellite until
-// it reaches the repos -- the rules below do nothing without it.
+// Fixed by upstream PR #480 and released in 0.8.3. Until that release it was
+// carried here as a patched PKGBUILD in packages/xwayland-satellite, which is
+// why the directory is gone: pacman took the repository build on its own. On
+// anything older than 0.8.3 the rules below do nothing.
 //
 //   https://github.com/Supreeeme/xwayland-satellite/issues/470
 //   https://github.com/Supreeeme/xwayland-satellite/pull/480

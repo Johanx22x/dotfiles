@@ -187,15 +187,13 @@ Singleton {
     //
     // packages, optional and gpu install with pacman, which goes through
     // run_sudo in lib/pkg.sh. services-system enables system units with
-    // run_sudo directly. aur-patched calls sudo_begin itself, because makepkg
-    // -i runs `pacman -U` through sudo at the end of a build and no wrapper in
-    // this repository can get in front of that.
+    // run_sudo directly.
     //
     // `shell` IS IN THIS LIST AND IS NOT ABOUT ROOT. chsh authenticates the
     // USER through PAM and will not take a cached sudo ticket -- its own unit
     // file says so out loud. It needs a terminal for the same reason the
     // others do: something has to type a password into it.
-    readonly property var terminalUnits: ["packages", "optional", "gpu", "aur-patched",
+    readonly property var terminalUnits: ["packages", "optional", "gpu",
                                           "services-system", "shell"]
 
     function needsTerminal(id: string): bool {

@@ -41,12 +41,10 @@
 # did nothing takes the rest of the run down with it, loudly. lib32-glibc is in
 # there for [multilib]: without that repository enabled every lib32-* name
 # looks like a package that exists nowhere, and this is the list that would say
-# so. packages/xwayland-satellite/ is NOT substituted -- the aur-patched unit
-# really builds it with makepkg, which is the only real compile in here and the
-# only proof that unit works.
+# so.
 #
 # WHICH UNITS CAN REACH `ok` WITH NOBODY LOGGED IN. packages, optional,
-# aur-patched, symlinks, seeds, nvim, cursors and laptop all can, and every one
+# symlinks, seeds, nvim, cursors and laptop all can, and every one
 # of them is driven here for real -- `optional` included, with a pack that asks
 # for a package nothing else in this file installs, so that what is proven is
 # the installing and not only the bookkeeping around it. The rest are handled
@@ -99,9 +97,6 @@ neither is /etc -- but the packages step cannot be faked, so it will install
 these into the system:
 
   $WANTED_PACKAGES
-
-and it will build packages/xwayland-satellite/ with makepkg, which pulls clang
-and rust in as build dependencies and installs the result.
 
 Set INSTALLER_TEST_INSTALL=1 to allow that.
 EOF
@@ -341,11 +336,9 @@ etc_before="$(sha256sum /etc/pacman.conf /etc/fstab 2>/dev/null || true)"
 say "the first real run"
 
 # --compositor=both is the answer nobody ever gives and therefore the one least
-# likely to work: it links two compositors' configuration at once, installs
-# both of their package lists, and is what brings the aur-patched unit into
-# play, since xwayland-satellite is niri's X11 support and Hyprland has its
-# own. tests/stow-conflicts.sh has already established that the two stow
-# packages can coexist, so a failure here is install.sh's.
+# likely to work: it links two compositors' configuration at once and installs
+# both of their package lists. tests/stow-conflicts.sh has already established
+# that the two stow packages can coexist, so a failure here is install.sh's.
 first="$SANDBOX/run-1.txt"
 # ASKED FOR, NOW THAT IT MEANS SOMETHING. Every mode ends on fail_clean, so a
 # run with anything at all in its summary exits non-zero -- this used to be
@@ -401,12 +394,6 @@ want_not "the optional packs that were not ticked stayed out" pacman -Qq bc
 # Both compositors' lists, because the answer was `both`.
 want "the Hyprland list went in" pacman -Qq cowsay
 want "the niri list went in"     pacman -Qq sl
-
-# THE ONE REAL COMPILE. packages/xwayland-satellite/ is an Arch PKGBUILD plus a
-# one-line upstream fix, versioned 0.8.2-1.1 so that a released fix replaces it
-# on its own. The unit builds it with makepkg and installs the result, and this
-# is the only thing that says that path works.
-want "the patched AUR package was built and installed" pacman -Qq xwayland-satellite
 
 # STOW REALLY LINKED, and the link really lands in the repository. A test that
 # only asked whether the file exists would pass on a copy, which is the one
@@ -592,7 +579,7 @@ say "what check says once everything has been applied"
 final="$SANDBOX/check-final.json"
 checker --json > "$final" 2>/dev/null || true
 
-for expectation in packages=ok optional=ok aur-patched=ok symlinks=ok seeds=ok \
+for expectation in packages=ok optional=ok symlinks=ok seeds=ok \
                    nvim=ok cursors=ok laptop=ok palette=missing; do
     want_eq "check says ${expectation%%=*} is ${expectation#*=}" \
             "${expectation#*=}" \

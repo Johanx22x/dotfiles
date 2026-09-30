@@ -112,9 +112,9 @@ print(f"workflows: {len(specs)} workflow file(s)")
 # the day it arrives is a check everybody learns to scroll past. actionlint
 # runs shellcheck over every `run:` block -- coverage nothing else here has,
 # since those scripts live inside YAML and `git ls-files` cannot see them --
-# and at its default severity the two SC2016 notes already in
-# xwayland-satellite-watch.yml would have made this permanently red over two
-# deliberately single-quoted expressions. shellcheck reads SHELLCHECK_OPTS out
+# and at its default severity a deliberately single-quoted expression is enough
+# to make it permanently red: two SC2016 notes in a workflow that has since
+# been deleted are what set this line. shellcheck reads SHELLCHECK_OPTS out
 # of the environment, so the setting reaches it through actionlint without
 # actionlint having to offer a flag for it.
 actionlint = shutil.which("actionlint")
