@@ -189,8 +189,8 @@ DEFAULT_SCHEME="$(sed -n 's/^DEFAULT_SCHEME="\(.*\)"$/\1/p' "$SCRIPT")"
 # be waiting on a render that was never going to come. It would go red, but with
 # a timeout and no idea why, which is the least useful shape a failure has.
 #
-# Same idea as tests/xwayland-satellite-watch.sh, pointed at the seam this
-# check now depends on rather than at the gap it used to stand in for.
+# So the assertion below is pointed at the seam this check now depends on
+# rather than at the gap it used to stand in for.
 assert_the_shell_pins() {
     [[ -r "$THEME_QML" ]] || die "$THEME_QML is missing"
 

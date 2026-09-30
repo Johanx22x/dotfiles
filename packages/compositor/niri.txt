@@ -10,9 +10,10 @@
 # there is nothing to switch by hand.
 #
 # xwayland-satellite is X11 support, started per session rather than as a
-# rootful server. The version in the repositories has a bug that stops DaVinci
-# Resolve opening; packages/xwayland-satellite/ carries the same package with
-# the upstream fix and the installer prefers it while it is needed.
+# rootful server. 0.8.2 had two bugs this desktop ran into -- DaVinci Resolve
+# could not be opened at all, and Steam's menus closed the instant they opened
+# -- and this repository carried a patched build of its own until 0.8.3 fixed
+# both upstream. The repository package is the right one from 0.8.3 on.
 
 niri
 xwayland-satellite

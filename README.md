@@ -67,7 +67,6 @@ picking a different one is how a second compositor gets added later. `check`,
 | `packages` | `packages/required/*.txt` and the chosen compositor's list — repo or AUR, worked out per name |
 | `optional` | `packages/optional/*.txt`: apps, backup, gaming, hardware, neovim. Tick a pack, or open one and tick packages inside it. `laptop` is the sixth and is not a box: it follows the laptop answer |
 | `gpu` | `packages/gpu/<vendor>.txt`, with the card read off the bus and `none` as a real answer |
-| `aur-patched` | builds `packages/xwayland-satellite/`, which carries a fix niri needs for DaVinci Resolve |
 | `symlinks` | `stow` links the config into `$HOME` |
 | `seeds` | copies `seeds/` where nothing exists yet — never overwrites |
 | `nvim` | clones [Johanx22x/nvim](https://github.com/Johanx22x/nvim) into `~/.config/nvim` |
@@ -411,7 +410,7 @@ Eight are not, and the difference matters:
 | `schemes/` | the colour schemes and the vocabulary that names their roles. Read out of the checkout by `desktop-scheme`, not linked anywhere — they are repository content, not machine state |
 | `lib/` | the installer's own code: the unit registry and one file per unit |
 | `docs/adr/` | the decisions that have no single file to live beside — why the desktop is split into a host, a theme and a scheme, why the accent is not a setting, and why one word gets one definition. Everything else is argued in a header next to the code it constrains |
-| `tests/` | the checks CI runs — every one of them on every pull request, except `xwayland-satellite-watch.sh`, which is a weekly cron asking whether the patched package can be deleted yet |
+| `tests/` | the checks CI runs — every one of them, on every pull request |
 | `assets/` | the screenshots at the top of this file |
 
 **A new file in a package needs `stow` again**, which is invisible almost all

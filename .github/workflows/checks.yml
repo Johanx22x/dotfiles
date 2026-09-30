@@ -12,7 +12,9 @@ name: Checks
 # checks ask the real tools the real questions -- Hyprland whether it accepts
 # its own config, niri whether it accepts its own, pacman whether these package
 # names exist -- and none of those can be asked on Ubuntu. base-devel rather
-# than base for makepkg's dependencies, which is what packages/ is built with.
+# than base is left over from the one thing here that used to run makepkg, the
+# patched xwayland-satellite package; that is gone, so plain base would very
+# likely do, and the image is left alone rather than swapped on a guess.
 #
 # Every check lives in tests/ as a script that runs on its own, which is
 # deliberate: a check that can only be run by pushing a branch is a check
@@ -592,9 +594,7 @@ jobs:
       # breaks upstream -- which is a fact about the AUR, not about this
       # repository. tests/package-lists.sh already asks whether every one of
       # those names exists; the run here uses a handful of stand-ins so the
-      # question it answers is whether install.sh's own machinery works. The
-      # one thing it does build for real is packages/xwayland-satellite/,
-      # because that unit has no other way of being tested at all.
+      # question it answers is whether install.sh's own machinery works.
       #
       # NOTHING WRITES TO /etc, AND NOTHING IN THE INSTALLER TRIES. There was
       # a unit that wrote system files -- pacman.conf, fstab, the mkinitcpio

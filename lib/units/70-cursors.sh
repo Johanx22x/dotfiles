@@ -5,9 +5,9 @@
 #
 # NOT VERSIONED IN THIS REPOSITORY, and not built here either. The pack is
 # nearly a gigabyte of compiled bitmaps -- an XCursor file carries the pointer
-# at all 19 sizes -- which is the same reason packages/xwayland-satellite/
-# ignores its own build output. Building instead of downloading would mean
-# librsvg, xcursorgen, fish and about half an hour for 28 themes.
+# at all 19 sizes -- and build output has no business in a configuration
+# repository. Building instead of downloading would mean librsvg, xcursorgen,
+# fish and about half an hour for 28 themes.
 #
 # PINNED TO A TAG on purpose: `latest` would change the pointers on a machine
 # that only re-ran the installer. Bump it here when there is a reason to.
