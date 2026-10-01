@@ -131,10 +131,14 @@ Singleton {
     // also costs nothing on a session with the filter off: apply_gammarelay
     // returns early rather than starting a daemon to tell it to do nothing.
     //
-    // BEFORE readClock() AND NOT AFTER, in the handler below. Reading the clock
-    // can settle `dueNow` and fire followSchedule, which spawns its own
-    // `night-light on|off`; going first means the schedule's answer is the
-    // later of the two processes and has the last word.
+    // THE ONLY CALLER IS reconcile(), AND ONLY WHEN THERE IS NO SCHEDULE. This
+    // used to run beside followSchedule's own `night-light on|off` and the two
+    // were ordered by a comment claiming the schedule had the last word. It did
+    // not: `apply` with the filter on has to start the daemon and wait for it,
+    // which `off` never does, so `apply` was reliably the slower process and
+    // the later writer. The file said off, the switch said off, the screen
+    // stayed warm. Nothing orders two detached processes -- so now exactly one
+    // of them runs.
     function reassert(): void {
         Quickshell.execDetached(["night-light", "apply"]);
     }
@@ -236,11 +240,66 @@ Singleton {
     // from the event loop, so triggeredOnStart is not early enough on its own
     // -- the property bindings are evaluated first.
     //
-    // The re-assert goes first; see the note over reassert() for why the order
-    // between these two lines is load-bearing.
+    // The clock first, so that reconcile() below has a real `dueNow` to act on
+    // rather than the -1 sentinel.
     Component.onCompleted: {
-        root.reassert();
         root.readClock();
+        root.reconcile();
+    }
+
+    // ---------------- Settling the screen at startup ----------------
+
+    // Whether this shell has already had its say about the screen. Until it
+    // has, followSchedule stands down: startup is reconcile()'s to answer, and
+    // two answers is the bug this replaced.
+    property bool reconciled: false
+
+    // THE RECONCILIATION USED TO BE ONE-WAY, AND NOBODY COULD SEE IT. The
+    // schedule was applied at startup only through onDueNowChanged, and QML
+    // emits nothing when a value does not move. `dueNow` starts false, so:
+    //
+    //   starting INSIDE the window   false -> true   signal, filter goes on
+    //   starting OUTSIDE the window  false -> false  NO SIGNAL, nothing at all
+    //
+    // Every start outside the window left the screen to `apply` and the state
+    // file, which is the belief of whatever shell wrote it last -- so a night
+    // light that should have gone off at six in the morning stayed on all day.
+    // That is not a rare path: this machine is switched off overnight, so no
+    // live shell ever sees the 06:00 boundary and the morning transition IS
+    // this function. `qs kill && qs -d` from the update button and every QML
+    // reload land here too.
+    //
+    // ONE PROCESS, NOT TWO. Whichever branch is taken spawns a single
+    // `night-light`; see the note over reassert() for the race that cost.
+    // applyEnabled rather than setEnabled, because this has to hold when the
+    // answer has not changed -- that is the entire point of asserting it.
+    //
+    // NOT BEFORE Config HAS BEEN READ. The config file is read asynchronously
+    // and `from`/`to`/`scheduled` hold the adapter's defaults until it lands --
+    // 20:00 to 07:00, which is not what this machine has chosen. Reconciling
+    // against those would decide the wrong thing and then have the real values
+    // arrive a turn later. Config.loaded is the flag that makes the order
+    // knowable, and the Connections below bring us back when it flips.
+    function reconcile(): void {
+        if (root.reconciled || !Config.loaded)
+            return;
+
+        root.reconciled = true;
+
+        // A schedule that is off deliberately changes nothing on screen: the
+        // state file is the truth and the manual switch is how it moves.
+        if (root.scheduled)
+            root.applyEnabled(root.dueNow);
+        else
+            root.reassert();
+    }
+
+    Connections {
+        target: Config
+
+        function onLoadedChanged(): void {
+            root.reconcile();
+        }
     }
 
     function readClock(): void {
@@ -291,6 +350,15 @@ Singleton {
     onScheduledChanged: root.followSchedule()
 
     function followSchedule(): void {
+        // STARTUP IS reconcile()'S, AND THIS MUST NOT ANSWER OVER IT. Both
+        // handlers above fire while the shell is still coming up -- the config
+        // landing moves `scheduled`, `from` and `to` off their defaults, and
+        // each move is a signal -- so without this guard the defaults get acted
+        // on and then corrected, which is a flash of the wrong screen and a
+        // second process racing the first.
+        if (!root.reconciled)
+            return;
+
         if (!root.scheduled)
             return;
 
