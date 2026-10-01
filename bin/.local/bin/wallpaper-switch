@@ -1362,24 +1362,44 @@ awww_wait_for() {
 apply_image() {
     # The daemon takes a moment to come up the first time.
     if ! awww query >/dev/null 2>&1; then
-        # --no-cache OR THE DAEMON COMPETES WITH US FOR THE WALLPAPER. awww
-        # remembers the last image of each output under
-        # ~/.cache/awww/<version>/<output> and restores it as it starts. That
-        # restore is asynchronous and `awww query` begins answering before it
-        # has finished, so the `awww img` below was racing it -- and on
-        # whichever output the restore landed last, an old wallpaper won.
+        # THE CACHE IS LEFT ON, AND THAT IS A REVERSAL. This used to say
+        # --no-cache, because awww remembers the last image of each output
+        # under ~/.cache/awww/<version>/<output> and restores it as it starts:
+        # that restore is asynchronous, `awww query` answers before it has
+        # finished, and the `awww img` below was racing it. Measured on
+        # 2026-08-19, freezing the wallpaper for a game: DP-3 sat on an
+        # autumn-path.jpg nobody had asked for while HDMI-A-1 showed the frame
+        # just applied. It reads as "the wallpaper changed by itself".
         #
-        # Measured on 2026-08-19, freezing the wallpaper for a game: DP-3 sat
-        # on an autumn-path.jpg nobody had asked for while HDMI-A-1 showed the
-        # frame that had just been applied. The cache file for DP-3 held
-        # exactly that path. It reads as "the wallpaper changed by itself",
-        # and it only happens when the daemon has to be started -- which is
-        # every single freeze, since the video wallpaper leaves awww stopped.
+        # WHAT THAT FLAG ALSO TURNED OFF, which is why it is going. In awww
+        # 0.12.1, daemon/src/wallpaper.rs:277 restores a surface from the cache
+        # under exactly this condition:
         #
-        # Nothing is lost by not restoring: every route into this function
-        # applies an image immediately after, which is the only reason the
-        # daemon is being started at all.
-        spawn_daemon awww-daemon --no-cache
+        #     if (!self.configured && use_cache) || self.img.is_set()
+        #
+        # An output that comes back after a hotplug is a fresh surface:
+        # `configured` is false and no image is set. With --no-cache,
+        # `use_cache` is false and both halves are false, so NOTHING paints it
+        # and that monitor stays black until somebody changes the wallpaper by
+        # hand. This machine hits it at almost every boot -- niri drops and
+        # re-adds HDMI-A-1 a few seconds in, after this script has already
+        # finished and verified itself:
+        #
+        #   09:43:54.556  awww-daemon: BumpPool 8100Kb   (1080x1920, painted)
+        #   09:43:57.344  niri: disconnecting connector: "HDMI-A-1"
+        #   09:44:01.062  niri: new connector: HDMI-A-1  (nothing repaints it)
+        #
+        # Upstream has since flipped that condition to `|| !self.img.is_set()`,
+        # which restores a blank surface whatever the flag says, but 0.12.1 is
+        # the newest release and does not carry it. When a release does, the
+        # flag can come back and keep both properties at once.
+        #
+        # THE RACE IT REOPENS IS THE ONE THE CHECK BELOW ALREADY CATCHES. That
+        # check did not exist in August; it was added afterwards, and "an
+        # output showing a different image" is precisely what it looks for and
+        # corrects. A stale wallpaper may flash during a daemon start now. A
+        # monitor left black until it is noticed is worse.
+        spawn_daemon awww-daemon
         wait_until 20 0.15 awww query >/dev/null 2>&1 || true
     fi
 
@@ -1392,10 +1412,11 @@ apply_image() {
         --transition-fps 165 \
         || die "awww could not apply the wallpaper"
 
-    # AND THEN CHECK THAT IT HAPPENED, on every output. --no-cache removes the
-    # one cause that was found, but "the same picture on every screen" is what
-    # this function promises, it was quietly broken for weeks, and asking costs
-    # one query. A monitor coming back mid-apply would break it again.
+    # AND THEN CHECK THAT IT HAPPENED, on every output. "The same picture on
+    # every screen" is what this function promises, it was quietly broken for
+    # weeks, and asking costs one query. This is also the net under the cache
+    # restore above: a monitor coming back mid-apply, or a cached image landing
+    # late on one output, both end here.
     #
     # The retry carries no transition on purpose: a second fade over a picture
     # the eye has already accepted looks like the desktop apologising.
