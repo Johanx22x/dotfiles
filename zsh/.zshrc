@@ -110,6 +110,21 @@ alias vim='nvim'
 export EDITOR='nvim'
 export VISUAL='nvim'
 
+# ---- This machine's own, which is not this repository's ----
+# ~/.zshrc.local is not a stow package and has no link into the checkout: it
+# is a real file in $HOME, so it cannot be committed by accident. It is where
+# anything belonging to ONE machine or ONE person goes -- and the only place a
+# credential may go, because this repository is public and a key pushed to it
+# is in the history, in every clone and on GitHub's servers for good. The same
+# split, with the same reasoning written out, is backup/.config/borgmatic's
+# local.env in .gitignore.
+#
+# It is sourced LAST so it can override what everything above set, and before
+# the greeting so the greeting stays the final thing a new terminal prints.
+if [[ -r ~/.zshrc.local ]]; then
+  source ~/.zshrc.local
+fi
+
 # ---- Greeting when opening a terminal ----
 # Goes last so it prints after everything else. Costs ~7ms.
 #
