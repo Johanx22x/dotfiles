@@ -37,6 +37,7 @@
 // colors.json, see Theme.qml.
 
 import Quickshell
+import Quickshell.Io
 import QtQml
 import qs.modules
 import qs.modules.notifications
@@ -315,5 +316,77 @@ ShellRoot {
         ThemeSurface {
             file: "ScreenCorners.qml"
         }
+    }
+
+    // AND WHATEVER THIS MACHINE ADDS ON ITS OWN, which this file may not know
+    // anything about. local/Local.qml is the shell's counterpart of
+    // ~/.config/hypr/local.lua and ~/.config/niri/local.kdl -- the same split
+    // and for the same reason, and .gitignore's notes on those two are where
+    // that reasoning is written out at length: this repository is public and
+    // shared with another machine, so a surface that belongs to one person has
+    // nowhere to be declared unless there is a file like this to declare it
+    // in. Not having it is the normal case, and it is what every check here
+    // runs against.
+    //
+    // IT IS NOT AN IGNORED PATH, IT IS NOT A PATH IN THIS REPOSITORY AT ALL,
+    // and that distinction is the whole value of the arrangement. shellPath
+    // resolves against `Quickshell.shellDir`, which is the directory the shell
+    // was LAUNCHED from -- $XDG_CONFIG_HOME/quickshell, stow's target, and not
+    // this checkout, because Quickshell 0.3.1 does not canonicalize the
+    // symlink it loaded shell.qml through. modules/Themes.qml is where that
+    // was measured and why it matters there too. So a local surface is a real
+    // file in ~/.config/quickshell/ with no link into the repository, which is
+    // one fewer way for it to end up in a commit than .gitignore is: it cannot
+    // appear in `git status`, ignored or otherwise, and the checks cannot see
+    // it either -- tests/qml-lint.sh and tests/shell-load.sh copy their
+    // sandbox from the repository's own directory, so their counts stay the
+    // counts of what is versioned.
+    //
+    // THE PATH IS READ BEFORE IT IS LOADED, rather than handing the loader a
+    // source that may not resolve. What a loader does with a source that is
+    // not there was not measured and does not need to be: on every machine but
+    // one the answer is no, and asking first costs one stat and says nothing.
+    // blockLoading because the answer is needed in the same frame the surfaces
+    // are built in, and printErrors false because "there is no local file" is
+    // the normal case and not a fault to report.
+    //
+    // An EMPTY local/Local.qml reads as no local file at all, which is the one
+    // place this is less exact than `pcall`. It is also the only way to spell
+    // "a file whose content is nothing" and there is no use for one.
+    //
+    // NOTHING ABOUT THE LOCAL FILE IS WATCHED, and that is measured rather
+    // than assumed. Quickshell's watches follow the IMPORTS out of this file,
+    // and a local file is reached by URL instead -- so creating it, deleting
+    // it and editing it in place all pass unnoticed: two in-place edits
+    // produced no second "Configuration Loaded" in the log, while the same
+    // edit to an imported file reloads the shell as the header describes. A
+    // theme directory a local file loads out of is in the same position, for
+    // the same reason. Every change to any of it needs:
+    //
+    //   qs kill && qs -d --no-duplicate
+    FileView {
+        id: localConfig
+
+        path: Quickshell.shellPath("local/Local.qml")
+        blockLoading: true
+        printErrors: false
+    }
+
+    // Quickshell's LazyLoader and not a QtQuick one, which is the opposite of
+    // what modules/ThemeSurface.qml concluded and for a reason that does not
+    // contradict it. Everything that made LazyLoader wrong there -- no initial
+    // properties, so a PanelWindow is created on the default screen, and no
+    // swap without toggling `active` -- is about a surface that belongs to a
+    // screen and changes with the theme. This loads neither: one object, once,
+    // with nothing to hand it. What decides it is that `Loader` is a QtQuick
+    // type and this file imports no QtQuick at all -- `Loader is not a type`
+    // is what the shell says, and the whole configuration fails to load, not
+    // just this line.
+    LazyLoader {
+        active: true
+
+        // encodeURI for the same reason modules/Themes.qml does it: a home
+        // directory with a space in it is a URL that will not resolve.
+        source: localConfig.text() !== "" ? "file://" + encodeURI(localConfig.path) : ""
     }
 }
