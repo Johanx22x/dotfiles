@@ -83,14 +83,30 @@ SettingsPage {
         // and without this the words that reached this page for two months
         // reach nothing. The cycle rows are labelled with the layout's name
         // now, so "spanish" still finds it on its own.
-        "dead keys", "ñ", "active layout", "cycle"]
+        "dead keys", "ñ", "active layout", "cycle",
+        // The input method section below. "japonés", "kana" and "kanji" are
+        // here for the same reason "español" is above: somebody looking for
+        // this row is looking for the language they want to type in, and the
+        // words they will reach for are the language's own, not "input method".
+        "input method", "ime", "japanese", "japonés", "fcitx", "fcitx5",
+        "mozc", "kana", "hiragana", "katakana", "kanji", "romaji"]
 
     // The code-to-name table, asked for the first time this page is looked at.
     // See Config.ensureLayoutNames: nothing at startup needs ninety-nine
     // layout names, and the bar's pill shows the code.
     onVisibleChanged: {
-        if (visible)
-            Config.ensureLayoutNames();
+        if (!visible)
+            return;
+
+        Config.ensureLayoutNames();
+
+        // Whether there is an input method engine installed at all. Asked here
+        // rather than polled: the answer changes only when a package is
+        // installed or removed, and both end with a trip back to this page.
+        // The singleton owns the probe and has no `visible` of its own worth
+        // gating on -- QML allows one onVisibleChanged handler per object and
+        // this page's is here.
+        InputMethod.probe();
     }
 
     // What the search field is holding. On the page and not in the section so
@@ -824,6 +840,60 @@ SettingsPage {
                     }
                 }
             }
+        }
+    }
+    // ---------------- Japanese input ----------------
+    //
+    // ON THIS PAGE RATHER THAN A PAGE OF ITS OWN, and the trade is worth
+    // naming because it is not free. This page is gated
+    // `available: Compositor.can("inputConfig")`, so under a compositor the
+    // shell does not recognise the row goes with the page -- and whether kana
+    // can be typed has nothing to do with whether pointer speed can be pushed.
+    // The alternative was a sixteenth page, which renumbers every
+    // `qs ipc call settings page N` after it and moves the rail counts
+    // tests/wheel-and-click.py pins. Both shipped compositors answer true,
+    // `input-method` works from a terminal on any of them, and "Input" is
+    // where somebody looks for how they type.
+    SettingsSection {
+        width: parent.width
+        glyph: Icons.keyboard
+        title: "Japanese input"
+
+        // FIRST, AND ABOVE THE SWITCH. A row that silently does nothing is the
+        // thing this says out loud instead.
+        SectionNote {
+            visible: !InputMethod.available
+
+            topPadding: 4
+
+            text: "Nothing below will produce a kana: there is no input method "
+                + "engine installed. Tick input-method in "
+                + "`./install.sh apply optional`, and `input-method show` says "
+                + "what it looked for."
+            color: Theme.warning
+        }
+
+        // Disabled rather than hidden, for the reason NightLightSection gives:
+        // the switch is still the clearest statement of what the machine is
+        // doing, and a row that explains itself beats a row that vanishes.
+        ToggleRow {
+            glyph: Icons.keyboard
+            label: "Japanese input method"
+            checked: InputMethod.enabled
+            enabled: InputMethod.available
+
+            onToggled: value => InputMethod.setEnabled(value)
+        }
+
+        SectionNote {
+            visible: InputMethod.enabled && InputMethod.available
+
+            text: "Ctrl+Space switches between the ordinary keyboard and "
+                + "Japanese. Wayland applications follow at once; Qt and "
+                + "XWayland ones read XMODIFIERS at login and follow from the "
+                + "next one. Turning this off stops the engine now and keeps "
+                + "it from starting again."
+            font.pointSize: Theme.fontSize - 2
         }
     }
 }
