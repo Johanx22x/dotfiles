@@ -44,18 +44,25 @@ Item {
     // not this file.
     required property CornerWedge row
 
-    rotation: switch (root.row.corner) {
-    case "topLeft":
-        0;
-        break;
-    case "topRight":
-        90;
-        break;
-    case "bottomRight":
-        180;
-        break;
-    default:
-        270;
+    // EXPLICIT RETURNS, AND THEY ARE NOT A TIDY-UP. This was a switch whose
+    // cases were bare numbers -- `0; break;` -- and the angle arrived through
+    // ECMAScript's completion value: the last expression a statement list
+    // evaluated is what the binding returned. It worked, and nothing reading it
+    // could tell that from a list of statements with no effect, which is also
+    // what qmllint said of it. Measured equivalent before the change: both
+    // forms give 180, 90 and 270 for bottomRight, topRight and an unknown
+    // corner, and both re-evaluate when `corner` changes.
+    rotation: {
+        switch (root.row.corner) {
+        case "topLeft":
+            return 0;
+        case "topRight":
+            return 90;
+        case "bottomRight":
+            return 180;
+        default:
+            return 270;
+        }
     }
 
     // What we keep: the whole square.
