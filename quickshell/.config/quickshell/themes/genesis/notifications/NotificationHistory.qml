@@ -84,7 +84,7 @@ Item {
 
     // ---------------- Header ----------------
     Item {
-        id: header
+        id: headerBand
 
         anchors.left: parent.left
         anchors.right: parent.right
@@ -288,7 +288,7 @@ Item {
         // would re-lay out every remaining row sideways, which is a lot of
         // movement to pay for eleven pixels.
         anchors.rightMargin: scrollBar.width + 8
-        anchors.top: header.bottom
+        anchors.top: headerBand.bottom
         anchors.topMargin: 12
         anchors.bottom: parent.bottom
 

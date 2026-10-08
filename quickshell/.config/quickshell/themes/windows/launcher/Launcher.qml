@@ -421,7 +421,7 @@ PanelWindow {
 
             anchors.left: parent.left
             anchors.top: chips.bottom
-            anchors.bottom: footer.top
+            anchors.bottom: footerBand.top
             anchors.leftMargin: root.padding
             anchors.topMargin: 12
             anchors.bottomMargin: root.padding
@@ -482,7 +482,7 @@ PanelWindow {
             anchors.left: list.right
             anchors.right: parent.right
             anchors.top: chips.bottom
-            anchors.bottom: footer.top
+            anchors.bottom: footerBand.top
             anchors.rightMargin: root.padding
             anchors.leftMargin: root.padding
             anchors.topMargin: 12
@@ -507,7 +507,7 @@ PanelWindow {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: chips.bottom
-            anchors.bottom: footer.top
+            anchors.bottom: footerBand.top
             anchors.margins: root.padding
             anchors.topMargin: 12
 
@@ -544,7 +544,7 @@ PanelWindow {
         // Johan's transparency rule -- so the double-painted strip does not
         // double any alpha.
         Item {
-            id: footer
+            id: footerBand
 
             anchors.left: parent.left
             anchors.right: parent.right
@@ -559,7 +559,7 @@ PanelWindow {
             Rectangle {
                 anchors.fill: parent
                 radius: Fluent.overlayRadius
-                color: footer.shade
+                color: footerBand.shade
             }
 
             Rectangle {
@@ -567,7 +567,7 @@ PanelWindow {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 height: Fluent.overlayRadius
-                color: footer.shade
+                color: footerBand.shade
             }
 
             // The hairline along the band's top edge: the same black-alpha
@@ -751,7 +751,7 @@ PanelWindow {
 
             anchors.right: parent.right
             anchors.rightMargin: root.padding
-            anchors.bottom: footer.top
+            anchors.bottom: footerBand.top
             anchors.bottomMargin: 4
 
             visible: root.powerOpen
