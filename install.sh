@@ -244,7 +244,7 @@ want_niri()     { [[ $COMPOSITOR == niri     || $COMPOSITOR == both ]]; }
 STOW_PACKAGES=()
 stow_packages_resolve() {
   STOW_PACKAGES=(zsh quickshell kitty matugen shell gtk media openrgb systemd
-                 bin ranger icons zen gaming fontconfig)
+                 bin ranger icons zen brave gaming fontconfig)
   want_hyprland && STOW_PACKAGES+=(hypr)
   want_niri     && STOW_PACKAGES+=(niri)
   return 0

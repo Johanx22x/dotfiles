@@ -65,7 +65,7 @@ picking a different one is how a second compositor gets added later. `check`,
 | | |
 |---|---|
 | `packages` | `packages/required/*.txt` and the chosen compositor's list — repo or AUR, worked out per name |
-| `optional` | `packages/optional/*.txt`: apps, backup, gaming, hardware, neovim. Tick a pack, or open one and tick packages inside it. `laptop` is the sixth and is not a box: it follows the laptop answer |
+| `optional` | `packages/optional/*.txt`: apps, backup, fonts, gaming, hardware, input-method, neovim. Tick a pack, or open one and tick packages inside it. `laptop` is a group as well and is not a box: it follows the laptop answer |
 | `gpu` | `packages/gpu/<vendor>.txt`, with the card read off the bus and `none` as a real answer |
 | `symlinks` | `stow` links the config into `$HOME` |
 | `seeds` | copies `seeds/` where nothing exists yet — never overwrites |
@@ -397,7 +397,7 @@ has one, so the inner gap maps directly and the outer becomes a strut.
 ```
 zsh   hypr    niri        quickshell  kitty   matugen  shell
 gtk   media   openrgb     systemd     bin     ranger   icons   zen
-gaming        backup
+brave gaming  fontconfig  backup
 ```
 
 Eight are not, and the difference matters:
@@ -427,8 +427,8 @@ is the opposite case, and that is what "read out of the checkout" earns it: a
 new colour scheme is picked up with no `stow` at all.
 
 `bin/` holds the scripts that own everything the shell can change at runtime —
-the wallpaper, the palette, the opacity, the monitors — so any of it can be
-driven from a terminal and the settings window follows.
+the wallpaper, the palette, the opacity, the monitors, the input method — so any
+of it can be driven from a terminal and the settings window follows.
 `bin/.local/bin/compositor` is how those scripts find out what they are running
 under.
 

@@ -150,10 +150,10 @@ PanelWindow {
     // -- and assigning `entries` is the expensive, visible thing above.
     function rebuild(): bool {
         const out = [];
-        for (let i = 0; i < folder.count; i++) {
-            const path = folder.get(i, "filePath");
+        for (let i = 0; i < folderModel.count; i++) {
+            const path = folderModel.get(i, "filePath");
             out.push({
-                name: folder.get(i, "fileName").replace(/\.[^.]+$/, ""),
+                name: folderModel.get(i, "fileName").replace(/\.[^.]+$/, ""),
                 path: path,
                 video: Config.isWallpaperVideo(path),
                 // NEVER the wallpaper itself: a cached thumbnail for a still,
@@ -178,7 +178,7 @@ PanelWindow {
     }
 
     FolderListModel {
-        id: folder
+        id: folderModel
 
         // From Config and not a literal here: the folder is a setting, and the
         // settings page lists the same collection. A copy of the path in each
@@ -207,7 +207,7 @@ PanelWindow {
         // remove-all/insert-all PAIR, which is why the row signals are not used
         // here either -- they would fire this twice for one change.
         onStatusChanged: {
-            if (folder.status !== FolderListModel.Ready)
+            if (folderModel.status !== FolderListModel.Ready)
                 return;
             if (!root.rebuild())
                 return;
@@ -495,7 +495,7 @@ PanelWindow {
 
                 // ---------------- The page title ----------------
                 Column {
-                    id: header
+                    id: headerColumn
 
                     width: parent.width
                     spacing: 2
@@ -564,7 +564,7 @@ PanelWindow {
                     // card shrinks to it and nothing scrolls.
                     height: Math.min(grid.contentHeight,
                                      root.availableHeight - root.pagePadding * 2
-                                         - header.height - layout.spacing)
+                                         - headerColumn.height - layout.spacing)
 
                     model: root.entries
                     cellWidth: root.cellWidth

@@ -78,17 +78,17 @@ Item {
     // by.
     function release(): void {
         repeatDelay.stop();
-        repeat.stop();
+        repeatTimer.stop();
     }
 
     Timer {
         id: repeatDelay
         interval: 400
-        onTriggered: repeat.start()
+        onTriggered: repeatTimer.start()
     }
 
     Timer {
-        id: repeat
+        id: repeatTimer
         interval: 60
         repeat: true
 
@@ -105,7 +105,7 @@ Item {
         // this is the same property, one level up the same tree.
         onTriggered: {
             if (!root.enabled) {
-                repeat.stop();
+                repeatTimer.stop();
                 return;
             }
             root.triggered();

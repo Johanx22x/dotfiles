@@ -1,0 +1,287 @@
+#!/usr/bin/env bash
+# input-method -- the Japanese input method, on or off.
+#
+# A thin wrapper over fcitx5, which is the engine, and over the one file that
+# decides whether it comes back at the next login. There is nothing to install
+# here: `packages/optional/input-method.txt` installs fcitx5 and Mozc, and this
+# script only decides whether they run.
+#
+# WHY THERE IS A SCRIPT AT ALL, when fcitx5 already starts itself. The package
+# ships /etc/xdg/autostart/org.fcitx.Fcitx5.desktop, and both compositors turn
+# that into a unit -- niri.service and Hyprland's session both pull in
+# xdg-desktop-autostart.target. So "on" is the state a fresh install is already
+# in, and the only hard part is OFF: killing the daemon lasts until the next
+# login, and nothing in that autostart file can be edited without editing a
+# root-owned file the package will overwrite.
+#
+# HOW OFF IS EXPRESSED, measured rather than assumed. A desktop entry of the
+# same name under ~/.config/autostart shadows the one in /etc/xdg/autostart,
+# and `Hidden=true` makes systemd's generator emit no unit for it at all --
+# man systemd-xdg-autostart-generator says so for Hidden= and X-systemd-skip=,
+# and running
+#   /usr/lib/systemd/user-generators/systemd-xdg-autostart-generator D D D
+# by hand into an empty directory, with and without the override, produced six
+# units and then five, the missing one being exactly
+# app-org.fcitx.Fcitx5@autostart.service. Nothing else in the set moved.
+#
+# So this script owns ONE file, ~/.config/autostart/org.fcitx.Fcitx5.desktop,
+# and nothing else -- the same shape `wallpaper-interval` has, which owns one
+# systemd drop-in and never touches unit state. The reason that matters is in
+# WallpaperPage.qml: `systemctl --user disable` deletes every symlink in the
+# unit directory, stow's included, and it took three deleted links in one day
+# to find out.
+#
+# ONE LINE OF STATE, the enabled flag, in the same shape night-light uses --
+# readable by hand, parsed with `read`, no JSON in a shell script. The daemon
+# is not the truth: fcitx5 can be running from a session that started before
+# the switch was turned off, and it can be absent on a machine where the switch
+# is on and the package is not installed. The file is what the settings window
+# draws.
+#
+# WHAT THIS SCRIPT DOES NOT DO. It does not choose the input methods -- that is
+# ~/.config/fcitx5/profile, which fcitx5 rewrites itself and which is therefore
+# not in this repository, for the reason seeds/README.md gives about qt6ct.conf.
+# It does not set XMODIFIERS or QT_IM_MODULES either; those are in
+# systemd/.config/environment.d/20-input-method.conf, they are read once at
+# user-manager start, and no script can inject them into a session already
+# running. Turning the switch on mid-session therefore reaches Wayland-native
+# applications immediately and Qt and XWayland ones only after a login, which
+# is a sentence the settings window has to say out loud rather than a bug.
+set -euo pipefail
+
+# FOUND NEXT TO THIS SCRIPT AND NOT THROUGH $PATH, for the reason spelled out
+# in hypr-tweak: the caller that matters is a compositor keybind or the shell,
+# and their $PATH is whatever the session handed them -- which is exactly the
+# environment where ~/.local/bin has been known not to be on it.
+BIN_DIR="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=../lib/desktop-lib.sh
+. "$BIN_DIR/../lib/desktop-lib.sh"
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
+STATE_FILE="$STATE_DIR/input-method"
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}"
+AUTOSTART_FILE="$CONFIG_DIR/autostart/org.fcitx.Fcitx5.desktop"
+
+# The unit name systemd's generator derives from the desktop entry's basename.
+# Stopping it is best-effort and never the only way the daemon is stopped: a
+# fcitx5 that somebody started by hand is not in this unit's control group.
+AUTOSTART_UNIT='app-org.fcitx.Fcitx5@autostart.service'
+
+usage() {
+    cat >&2 <<'EOF'
+Usage:
+  input-method on      turn Japanese input on, now and at every login
+  input-method off     turn it off, now and at every login
+  input-method toggle  flip it
+  input-method apply   re-assert what is saved (login, after an install)
+  input-method show    print the saved state
+EOF
+    exit 2
+}
+
+# ---------------------------------------------------------------------------
+# State
+# ---------------------------------------------------------------------------
+
+read_state() {
+    # ON BY DEFAULT, and that is a decision rather than a fallback. The only
+    # way fcitx5 is on this machine is that somebody ticked input-method in the
+    # installer, and a package ticked and then silently not running is the
+    # worse surprise of the two.
+    enabled=1
+
+    [[ -r $STATE_FILE ]] || return 0
+
+    { read -r saved_enabled || true; } < "$STATE_FILE"
+
+    [[ ${saved_enabled:-} == 0 ]] && enabled=0
+
+    return 0
+}
+
+write_state() {
+    printf '%s\n' "$enabled" | state_write "$STATE_FILE"
+}
+
+# ---------------------------------------------------------------------------
+# The engine
+# ---------------------------------------------------------------------------
+
+engine_installed() { command -v fcitx5 >/dev/null 2>&1; }
+
+# `pgrep -x` IS SAFE FOR THIS NAME, which is not something to take on trust --
+# night-light carries the counter-example, where `pgrep -x wl-gammarelay-rs`
+# can never match because the kernel truncates comm to 15 characters and that
+# name is 16. Measured here: /proc/<pid>/comm reads exactly `fcitx5`, six
+# characters, so there is nothing to truncate. It is also preferred over
+# `fcitx5-remote --check` on purpose: that one needs the session bus, and this
+# script runs at login, where the bus may not be up yet.
+engine_running() { pgrep -x fcitx5 >/dev/null 2>&1; }
+
+# A FUNCTION AND NOT `! engine_running`, because wait_until runs its argument
+# with "$@" and `!` is a shell keyword rather than a command -- passing it
+# there gives `!: command not found` once per attempt and a wait that returns
+# success immediately. Found by running `input-method off` and reading the five
+# identical errors it printed.
+engine_stopped() { ! engine_running; }
+
+start_engine() {
+    engine_running && return 0
+    engine_installed || return 1
+
+    # Through the unit the generator already defines, rather than a second way
+    # to run the same daemon. `daemon-reload` first because the unit does not
+    # exist while the override above suppresses it, and the override has just
+    # been removed. Both best-effort: there may be no user manager at all
+    # (chroot, ssh without lingering, an install before the graphical session).
+    systemctl --user daemon-reload 2>/dev/null || true
+    systemctl --user start "$AUTOSTART_UNIT" 2>/dev/null || true
+
+    # Falling back to the binary covers the session whose generator ran before
+    # fcitx5 was installed, where the unit genuinely is not there yet. `-d`
+    # double-forks, so it outlives this script and the shell that called it.
+    if ! wait_until 10 0.1 engine_running; then
+        fcitx5 -d >/dev/null 2>&1 || true
+    fi
+
+    wait_until 20 0.1 engine_running
+}
+
+stop_engine() {
+    engine_running || return 0
+
+    # The unit first, so systemd does not consider the service failed, then the
+    # daemon's own exit request for a fcitx5 that no unit owns. Neither is
+    # fatal; the wait below is what decides whether it worked.
+    systemctl --user stop "$AUTOSTART_UNIT" 2>/dev/null || true
+    if engine_running; then
+        fcitx5-remote -e 2>/dev/null || true
+    fi
+
+    wait_until 20 0.1 engine_stopped
+}
+
+# ---------------------------------------------------------------------------
+# The autostart override -- the whole of "off at the next login"
+# ---------------------------------------------------------------------------
+
+autostart_suppressed() {
+    [[ -r $AUTOSTART_FILE ]] && grep -qi '^Hidden[[:space:]]*=[[:space:]]*true' "$AUTOSTART_FILE"
+}
+
+suppress_autostart() {
+    autostart_suppressed && return 0
+
+    # write_generated rather than a plain redirect, for the reason its own
+    # comment gives: a redirection that notices the generator failed has
+    # already truncated the old file. It takes a COMMAND whose stdout becomes
+    # the file -- not stdin, which is state_write's contract -- so the entry is
+    # printed rather than fed in.
+    #
+    # Hidden=true IS THE WHOLE MECHANISM and the rest of the entry is only
+    # there to make it a valid desktop file. The name has to match the one in
+    # /etc/xdg/autostart exactly, because shadowing is by basename.
+    write_generated "$AUTOSTART_FILE" printf '%s\n' \
+        '[Desktop Entry]' \
+        '# Written by input-method. Delete it with `input-method on`, not by hand:' \
+        '# the state file next to it is what the settings window reads.' \
+        'Type=Application' \
+        'Name=Fcitx 5' \
+        'Exec=/usr/bin/fcitx5' \
+        'Hidden=true'
+
+    systemctl --user daemon-reload 2>/dev/null || true
+}
+
+restore_autostart() {
+    [[ -e $AUTOSTART_FILE ]] || return 0
+
+    rm -f "$AUTOSTART_FILE"
+    # Leave the directory if anything else autostarts from it.
+    rmdir "$(dirname "$AUTOSTART_FILE")" 2>/dev/null || true
+
+    systemctl --user daemon-reload 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------
+# Making the machine match the file
+# ---------------------------------------------------------------------------
+
+apply() {
+    if ! engine_installed; then
+        # The state file is still honoured, because the switch has to keep its
+        # position across an uninstall and a reinstall. There is simply nothing
+        # to start or stop.
+        warn "fcitx5 is not installed; tick input-method in ./install.sh apply optional."
+        return 1
+    fi
+
+    if (( enabled )); then
+        restore_autostart
+        start_engine || {
+            echo "input-method: fcitx5 is installed but would not start." >&2
+            echo "  Try 'fcitx5' in a terminal to see what it says." >&2
+            return 1
+        }
+    else
+        # THE OVERRIDE BEFORE THE KILL. If anything goes wrong between the two,
+        # off-at-next-login is the state that matches what was asked for; a
+        # killed daemon with no override comes back in an hour and looks like
+        # the switch does not work.
+        suppress_autostart
+        stop_engine
+    fi
+}
+
+# ---------------------------------------------------------------------------
+
+read_state
+
+case "${1:-show}" in
+    on)     enabled=1; write_state; apply ;;
+    off)    enabled=0; write_state; apply ;;
+    toggle) enabled=$(( 1 - enabled )); write_state; apply ;;
+
+    apply)  apply ;;
+
+    show)
+        echo "enabled:     $enabled"
+
+        # THE ENGINE LINE IS THE ONE THE SETTINGS WINDOW READS. `none` is the
+        # only hard no -- it means the optional package group was never ticked,
+        # and no amount of flipping the switch will produce a kana. A daemon
+        # that is merely not running is fixed by the first toggle.
+        if engine_installed; then
+            echo "engine:      fcitx5"
+            engine_running \
+                && echo "daemon:      fcitx5, running" \
+                || echo "daemon:      fcitx5, not running"
+        else
+            echo "engine:      none"
+            echo "daemon:      none installed"
+        fi
+
+        autostart_suppressed \
+            && echo "autostart:   suppressed" \
+            || echo "autostart:   on"
+
+        # AND THEN THE WARNING, because every line above can read correctly and
+        # half the applications on the machine still take romaji. XMODIFIERS and
+        # QT_IM_MODULES come from environment.d and are read once, when the user
+        # manager starts; a switch flipped now cannot put them into a session
+        # already running.
+        if (( enabled )) && engine_installed; then
+            if [[ -n ${XMODIFIERS:-} ]]; then
+                echo "variables:   XMODIFIERS is set in this session"
+            else
+                echo "variables:   XMODIFIERS is NOT set in this session"
+                echo "note:        Wayland-native applications work anyway, over"
+                echo "             text-input-v3. Qt and XWayland ones follow from"
+                echo "             the next login, when environment.d is read."
+            fi
+        fi
+        ;;
+
+    *) usage ;;
+esac

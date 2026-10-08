@@ -77,7 +77,13 @@ SettingsPage {
     readonly property int nodeCount: Pipewire.nodes.values.length
 
     readonly property var sources: {
-        root.nodeCount;
+        // READ AND THROWN AWAY, AND `void` IS THERE TO SAY SO. The read is the
+        // whole point -- it is what makes this binding depend on the model
+        // rather than on one node in it -- but as a bare `root.nodeCount;` it
+        // was indistinguishable from a line left behind by mistake, and that is
+        // what qmllint called it. `void` keeps the dependency and states the
+        // discard; measured, both forms re-evaluate exactly once per change.
+        void root.nodeCount;
         return Pipewire.nodes.values
             .filter(n => n.type === PwNodeType.AudioSource)
             .sort((a, b) => (a.description ?? "").localeCompare(b.description ?? ""));

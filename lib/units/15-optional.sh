@@ -1,5 +1,6 @@
 # shellcheck shell=bash
-# The optional package groups: apps, backup, gaming, hardware, laptop, neovim.
+# The optional package groups: apps, backup, fonts, gaming, hardware,
+# input-method, laptop, neovim.
 #
 # OPT-IN, AND SKIPPABLE WHOLE. The line between packages/required/ and
 # packages/optional/ is one question -- does the desktop still work without it

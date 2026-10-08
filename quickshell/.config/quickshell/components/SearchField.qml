@@ -20,7 +20,7 @@
 // owns an OBJECT, and it has to, for a reason that shows up the moment you try
 // it the other way:
 //
-//     property alias text: input.text
+//     property alias text: inputField.text
 //
 // An alias binds a name on this type to a property of an object IN THIS
 // DOCUMENT. There are nine call sites on the other side of it -- `text` is
@@ -71,7 +71,7 @@ import qs.modules
 Item {
     id: root
 
-    property alias text: input.text
+    property alias text: inputField.text
     property string placeholder: "Search"
 
     // Focus lands here without a click, for the window that opens ready to be
@@ -85,7 +85,7 @@ Item {
     // It draws the focus ring off `focused` and answers a click on the pill
     // with take(), and neither of those has another way to reach an input the
     // theme does not own.
-    property alias focused: input.activeFocus
+    property alias focused: inputField.activeFocus
 
     signal accepted
     signal escaped
@@ -97,11 +97,11 @@ Item {
     implicitHeight: Math.max(Theme.groupHeight - 4, drawing.implicitHeight)
 
     function clear(): void {
-        input.text = "";
+        inputField.text = "";
     }
 
     function take(): void {
-        input.forceActiveFocus();
+        inputField.forceActiveFocus();
     }
 
     // ---------------- The input, which the theme places ----------------
@@ -110,10 +110,10 @@ Item {
     // theme's business with it is to hold it, not to swap it, and a page has
     // no business with it at all -- `text`, `clear()`, `take()` and `focused`
     // above are the whole of what a call site is meant to touch.
-    readonly property TextInput input: input
+    readonly property TextInput input: inputField
 
     TextInput {
-        id: input
+        id: inputField
 
         // LEFT AND RIGHT TO THE PARENT, VERTICALLY CENTRED IN IT, and every
         // one of those reads `parent` on purpose. The theme reparents this
@@ -145,16 +145,16 @@ Item {
         Keys.onEscapePressed: root.escaped()
 
         // THE PLACEHOLDER TRAVELS WITH THE INPUT, and it is here rather than
-        // in the theme for one concrete reason: `font: input.font` is what
+        // in the theme for one concrete reason: `font: inputField.font` is what
         // guarantees the two sit on the same baseline and start at the same
         // pixel. Drawn by the theme instead, it would be two files reading the
         // same tokens and agreeing by luck, and the day one of them wanted a
         // different size the placeholder would jump when you started typing.
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            visible: input.text === ""
+            visible: inputField.text === ""
             text: root.placeholder
-            font: input.font
+            font: inputField.font
             color: Theme.outline
         }
     }

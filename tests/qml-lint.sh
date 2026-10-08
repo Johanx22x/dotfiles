@@ -288,25 +288,86 @@ QMLLINT=/usr/lib/qt6/bin/qmllint
 # comparison, so that the way it stops failing a run is that the file is fixed
 # and not that a number was written here.
 declare -A BASELINE=(
-    # --- the shell tree, themes excluded: 145 warnings -----------------------
-    [shell:unqualified]=115
-    [shell:signal-handler-parameters]=16
-    [shell:unresolved-type]=7
+    # RE-RECORDED AGAINST qmllint 6.12.0, AND THE NUMBERS BELOW ARE NOT THE
+    # ONES 6.11 PRINTED. Read this before assuming a fallen count means
+    # somebody fixed something.
+    #
+    # Most of them fell because the tool got better at resolving, not because
+    # the tree changed: [shell:unresolved-type] 7 -> 1, [shell:unqualified]
+    # 115 -> 108, [genesis:unresolved-type] 6 -> 3, [windows:uncreatable-type]
+    # 6 -> 3. Nothing was done to earn those; they are the same code read by a
+    # better reader, and they are recorded here rather than left high because
+    # a budget above the real number is a budget that hides the next
+    # regression underneath it.
+    #
+    # THREE CATEGORIES ARRIVED WITH 6.12, and they were resolved rather than
+    # budgeted wherever resolving them was a rename or a clarification:
+    #
+    #   [id-shadows-member]              8 findings, 7 renamed, 1 left -- see
+    #                                    the genesis entry for why that one is
+    #                                    a behaviour change and not a rename
+    #   [confusing-expression-statement] 5 findings, 4 resolved, 1 left with
+    #                                    the finding above, same file
+    #   [import]                         21 findings, ALL of them this script
+    #                                    talking to itself -- see the note over
+    #                                    the counting loop, which measures it
+    #
+    # [shell:missing-property] IS 0 AND USED TO BE 2. Not a fix to the tree:
+    # components/FocusGrab.qml carries the three reads through an untyped
+    # Loader.item behind a `//qmllint disable missing-property` scoped to those
+    # four lines, with the cost written beside them. That is the construct
+    # shell.qml and BarPage.qml already use for unused-imports, and it is the
+    # right one here for the reason the windows block below gives at length:
+    # this category is what catches a misspelled read through a typed facade,
+    # and a budget covering those three would hide the next one anywhere else.
+    #
+    # --- the shell tree, themes excluded: 115 warnings -----------------------
+    [shell:unqualified]=108
+    [shell:signal-handler-parameters]=2
+    [shell:unresolved-type]=1
     [shell:uncreatable-type]=3
-    [shell:missing-property]=2
+    [shell:missing-property]=0
     [shell:incompatible-type]=1
-    [shell:redundant-optional-chaining]=1
+    [shell:redundant-optional-chaining]=0
     [shell:unused-imports]=0
     [shell:duplicate-property-binding]=0
 
-    # --- genesis: 160 warnings ----------------------------------------------
-    [genesis:unqualified]=130
+    # --- genesis: 156 warnings ----------------------------------------------
+    [genesis:unqualified]=129
     [genesis:missing-property]=17
-    [genesis:unresolved-type]=6
-    [genesis:uncreatable-type]=6
-    [genesis:signal-handler-parameters]=1
+    [genesis:unresolved-type]=3
+    [genesis:uncreatable-type]=4
+    [genesis:signal-handler-parameters]=0
 
-    # --- windows: 68 warnings, and none of them inherited -------------------
+    # TWO CATEGORIES qmllint 6.12 ADDED, AND BOTH ARE ONE FINDING EACH.
+    #
+    # [id-shadows-member] is two lines per finding -- the warning and the
+    # "Id defined here" note under it -- so this 2 is ONE place:
+    # notifications/NotificationHistory.qml:402, a `Column { id: text }`.
+    # Seven other shadowing ids in this tree were renamed; this one was not,
+    # because it is NOT a rename. Measured with qml 6.12 offscreen: an id beats
+    # the object's own property, so `visible: text !== ""` at lines 469 and 480
+    # reads the COLUMN, is therefore always true, and renaming the id re-points
+    # both at each Text's own string -- which hides rows that are on screen now
+    # and changes row heights, since a visible empty Text still takes a line.
+    # That is a latent bug and its fix is a deliberate change to what the
+    # notification history looks like, not a lint cleanup. The whole edit, for
+    # whoever makes it: the id at 402, the read at 360
+    # (`Math.max(icon.height, text.implicitHeight)`), then a decision about 469
+    # and 480.
+    [genesis:id-shadows-member]=2
+
+    # ONE EXPRESSION STATEMENT, notifications/NotificationHistory.qml:71, left
+    # with the finding above because it is in the same file and the same hand
+    # should look at both. The four in components/CornerWedge.qml were the
+    # other kind and are gone: bare `0; break;` arms of a switch, where the
+    # angle arrived as ECMAScript's completion value. They are explicit
+    # `return`s now. Note that qmllint flagged three of the four numbers and
+    # not the last, so deleting "the no-ops" would have left every corner at
+    # 270 and said nothing.
+    [genesis:confusing-expression-statement]=1
+
+    # --- windows: 59 warnings, and none of them inherited -------------------
     #
     # THIS TABLE USED TO SAY "genesis's account, twice", AND IT WAS RIGHT.
     # The first Windows theme was made with `cp -r genesis windows`, so it
@@ -330,7 +391,7 @@ declare -A BASELINE=(
     # SIX PanelWindows, one per surface, and the same six genesis and the
     # fixture each carry. Quickshell registers PanelWindow uncreatable and
     # instantiates it itself; nothing in this repository can change that.
-    [windows:uncreatable-type]=6
+    [windows:uncreatable-type]=3
 
     # FIFTY-ONE DELEGATE READS AND ONE PanelWindow SCOPE. Three of the
     # original fifty-four were Bar.qml's Components reading outer ids, and
@@ -358,7 +419,7 @@ declare -A BASELINE=(
     # a block does not help. That was MEASURED after the comment at the site
     # claimed it did: both forms produce the same two warnings at the same
     # line, because what cannot be resolved is `margins` itself.
-    [windows:unqualified]=52
+    [windows:unqualified]=51
 
     # FOUR READS THROUGH THE PICKER LOADER, all of them launcher/Launcher.qml
     # calling `move()` and `activate()` on a `Loader.item` typed QObject. The
@@ -375,7 +436,7 @@ declare -A BASELINE=(
     # declaratively -- it was two reads until the action filter hoisted one
     # into a plain `var`; the other is the `margins` from the paragraph above,
     # counted once in each category.
-    [windows:unresolved-type]=2
+    [windows:unresolved-type]=1
 
     # --- theme-probe: 6 warnings --------------------------------------------
     #
@@ -667,6 +728,15 @@ awk -v map="$scopes" '
     # A finding, and not the source line or the advice under it: those carry no
     # <file>:<line>:<col>, which is what this insists on seeing.
     /^(Warning|Info|Error|Critical): [^ ]+:[0-9]+:[0-9]+: / {
+        # qmllint 6.12 PRINTS THE PATH WITHOUT THE "./" IT WAS HANDED, and
+        # every prefix below starts with one. Put it back before anything
+        # matches, so this reads the same under either version rather than
+        # silently filing every finding from a theme under the shell.
+        if ($2 !~ /^\.\//) {
+            lead = index($0, ": ")
+            $0 = substr($0, 1, lead + 1) "./" substr($0, lead + 2)
+        }
+
         path = $2
         sub(/:[0-9]+:[0-9]+:$/, "", path)
 
@@ -688,6 +758,30 @@ awk -v map="$scopes" '
 : > "$report"
 while IFS=$'\t' read -r _ _ _ file; do cat "$file" >> "$report"; done < "$scopes"
 
+# ONE MESSAGE IS NOT COUNTED, AND IT IS A FALSE POSITIVE OF THIS SCRIPT'S OWN
+# MAKING. qmllint 6.12 says "Type X not declared as singleton in qmldir but
+# using pragma Singleton" for every `pragma Singleton` file -- 21 of them here
+# -- although the qmldir written above declares every one of them correctly.
+#
+# MEASURED, in a two-file sandbox with a hand-written qmldir saying exactly
+# `singleton Thing 1.0 Thing.qml`:
+#
+#   qmllint ./Thing.qml   -> 1 warning     (the singleton, handed over directly)
+#   qmllint ./User.qml    -> 0 warnings    (the same singleton, reached by import)
+#
+# A versionless `singleton Thing Thing.qml`, linting from the import root as
+# `qs/Thing.qml`, and --bare all give the same one warning. So it is not the
+# qmldir and not the invocation: handed a file directly, qmllint lints it as a
+# loose file and never consults the module that declares it. Quickshell
+# synthesizes the same qmldir at startup and every one of these singletons
+# resolves on the desktop.
+#
+# NOT DISABLED AS A CATEGORY, which was the cheaper fix and the wrong one:
+# [import] is also what a genuinely failing import comes out as, and this tree
+# imports by module name everywhere. Only the one sentence is dropped, so the
+# budget below stays at zero and a real import failure still turns this red.
+# The lines are left in the report a human reads; only the count skips them.
+#
 # Anchored at the end of the line, which is not fussiness. qmllint echoes the
 # offending source under each message, and a delegate reading `root.list[index]`
 # puts `[index]` at the end of an echoed line that is not a finding at all --
@@ -700,8 +794,9 @@ while IFS=$'\t' read -r _ _ label file; do
     while read -r category count; do
         counts["$label:$category"]="$count"
         total=$(( total + count ))
-    done < <(grep -oP '^(?:Warning|Info|Error|Critical):.*\[\K[a-z-]+(?=\]$)' \
-                  "$file" | sort | uniq -c | awk '{print $2"\t"$1}')
+    done < <(grep -v 'not declared as singleton in qmldir' "$file" \
+                  | grep -oP '^(?:Warning|Info|Error|Critical):.*\[\K[a-z-]+(?=\]$)' \
+                  | sort | uniq -c | awk '{print $2"\t"$1}' || true)
 done < "$scopes"
 
 # --- does every file parse ---------------------------------------------------

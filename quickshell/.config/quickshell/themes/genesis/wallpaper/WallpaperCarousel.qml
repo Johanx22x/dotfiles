@@ -191,10 +191,10 @@ PanelWindow {
     // and a `touch` rebuilds not at all.
     function rebuild(): bool {
         const out = [];
-        for (let i = 0; i < folder.count; i++) {
-            const path = folder.get(i, "filePath");
+        for (let i = 0; i < folderModel.count; i++) {
+            const path = folderModel.get(i, "filePath");
             out.push({
-                name: folder.get(i, "fileName").replace(/\.[^.]+$/, ""),
+                name: folderModel.get(i, "fileName").replace(/\.[^.]+$/, ""),
                 path: path,
                 video: Config.isWallpaperVideo(path),
                 // NOT THE WALLPAPER ITSELF but the DIRECTORY of small frames
@@ -231,7 +231,7 @@ PanelWindow {
     }
 
     FolderListModel {
-        id: folder
+        id: folderModel
 
         // From Config and not a literal here: the folder is a setting, and the
         // settings page lists the same collection. A copy of the path in each
@@ -268,7 +268,7 @@ PanelWindow {
         // rebuild()'s guard is what absorbs those. See it for why assigning
         // `entries` for nothing is not free.
         onStatusChanged: {
-            if (folder.status !== FolderListModel.Ready)
+            if (folderModel.status !== FolderListModel.Ready)
                 return;
             if (!root.rebuild())
                 return;
