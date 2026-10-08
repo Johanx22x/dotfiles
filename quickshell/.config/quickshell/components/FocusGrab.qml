@@ -94,11 +94,32 @@ Item {
             // `active` for as long as it lives; the catcher is created and
             // destroyed with it instead, but its hole has to keep up with a
             // bar that can come and go under a fullscreen window.
+            //
+            // THREE READS NOTHING CAN TYPE, AND THAT IS THE PRICE OF THE URL
+            // ABOVE. `Loader.item` is a QObject, and the two things this one
+            // can hold are named only as strings -- so `grabActive`,
+            // `passthrough` and `dismissed` are members qmllint has no type to
+            // look for. The only way to hand it one is to name HyprlandGrab as
+            // a type in this file, which is exactly what the header refuses:
+            // that resolves the file, resolves its `import
+            // Quickshell.Hyprland`, and binds that module to the compositor in
+            // every niri session.
+            //
+            // SILENCED ON THESE LINES AND NOT BUDGETED IN tests/qml-lint.sh,
+            // for the reason shell.qml gives for its own disable:
+            // [shell:missing-property] is one number for the whole shell tree,
+            // and raising it to cover these three would hide the next
+            // misspelled read wherever it appeared. The cost is real and is
+            // worth stating -- a typo in one of these three names is now a
+            // property assignment that silently does nothing, and the only
+            // thing left to catch it is a grab or a catcher that stops working.
+            //qmllint disable missing-property
             if (Compositor.can("focusGrab"))
                 item.grabActive = Qt.binding(() => root.active);
             else
                 item.passthrough = Qt.binding(() => root.passthrough);
             item.dismissed.connect(root.dismissed);
+            //qmllint enable missing-property
         }
     }
 }
