@@ -427,8 +427,8 @@ is the opposite case, and that is what "read out of the checkout" earns it: a
 new colour scheme is picked up with no `stow` at all.
 
 `bin/` holds the scripts that own everything the shell can change at runtime —
-the wallpaper, the palette, the opacity, the monitors — so any of it can be
-driven from a terminal and the settings window follows.
+the wallpaper, the palette, the opacity, the monitors, the input method — so any
+of it can be driven from a terminal and the settings window follows.
 `bin/.local/bin/compositor` is how those scripts find out what they are running
 under.
 
