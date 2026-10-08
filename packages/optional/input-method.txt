@@ -1,0 +1,48 @@
+# Typing Japanese. An input method engine, which is the thing Windows calls an
+# IME: you type romaji, it gives you kana, and a key converts the kana into
+# kanji from a candidate list.
+#
+# NOTHING IN THIS REPOSITORY NEEDS IT. A machine that skips this group has a
+# desktop that cannot produce a single kana, which costs one person studying
+# for an exam and costs nothing else -- so the line falls here and not in
+# required/. Japanese GLYPHS are a separate question and already answered:
+# noto-fonts-cjk is in required/shell.txt, so a machine without this group
+# still READS Japanese, it just cannot write it.
+#
+# fcitx5 OVER ibus, decided on a measured fact rather than on taste. niri
+# implements zwp_text_input_v3, zwp_input_method_v2 and
+# zwp_input_popup_surface_v2 -- read out of the binary with
+#   strings /usr/bin/niri | grep -E 'zwp_(text|input_method)'
+# -- which is the whole protocol an IME needs on Wayland, candidate popup at
+# the text cursor included. fcitx5 speaks it natively on any wlroots
+# compositor. ibus leans on GNOME's own integration and is the harder road
+# anywhere else. This is NOT a niri-versus-Hyprland split: both implement the
+# same protocol, and the environment file this group needs is shared.
+#
+# mozc OVER anthy, and it is not a close call. mozc is the open source core of
+# Google Japanese Input. anthy's conversion dictionary is old enough that it
+# offers the wrong kanji often enough to TEACH the wrong kanji, which for
+# somebody learning the language is not a cosmetic difference -- it is the
+# difference between practice and mispractice. anthy is smaller and that is
+# the only thing it wins on.
+#
+# fcitx5-gtk AND fcitx5-qt ARE THE FALLBACK AND NOT THE MAIN PATH. GTK 3.24
+# and GTK 4 both talk text-input-v3 themselves, which is why GTK_IM_MODULE is
+# deliberately NOT set -- see systemd/.config/environment.d/20-input-method.conf,
+# which explains why adding it back is a change and not a fix. These two are
+# here for the Qt fallback chain and for XWayland clients, they cost about a
+# megabyte between them, and they remove a whole class of "it types in every
+# application except this one".
+#
+# fcitx5-configtool is the only way to add an input method or change the
+# switch key without hand-editing ~/.config/fcitx5/profile. It is a GUI that
+# gets opened roughly twice in a machine's life and is worth having both times.
+#
+# The installer ticks a group as one box, and can be opened to pick packages
+# out of it one at a time.
+
+fcitx5
+fcitx5-configtool
+fcitx5-gtk
+fcitx5-mozc
+fcitx5-qt

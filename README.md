@@ -65,7 +65,7 @@ picking a different one is how a second compositor gets added later. `check`,
 | | |
 |---|---|
 | `packages` | `packages/required/*.txt` and the chosen compositor's list — repo or AUR, worked out per name |
-| `optional` | `packages/optional/*.txt`: apps, backup, gaming, hardware, neovim. Tick a pack, or open one and tick packages inside it. `laptop` is the sixth and is not a box: it follows the laptop answer |
+| `optional` | `packages/optional/*.txt`: apps, backup, fonts, gaming, hardware, input-method, neovim. Tick a pack, or open one and tick packages inside it. `laptop` is a group as well and is not a box: it follows the laptop answer |
 | `gpu` | `packages/gpu/<vendor>.txt`, with the card read off the bus and `none` as a real answer |
 | `symlinks` | `stow` links the config into `$HOME` |
 | `seeds` | copies `seeds/` where nothing exists yet — never overwrites |
