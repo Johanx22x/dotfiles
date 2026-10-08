@@ -397,7 +397,7 @@ has one, so the inner gap maps directly and the outer becomes a strut.
 ```
 zsh   hypr    niri        quickshell  kitty   matugen  shell
 gtk   media   openrgb     systemd     bin     ranger   icons   zen
-gaming        backup
+brave gaming  fontconfig  backup
 ```
 
 Eight are not, and the difference matters:
