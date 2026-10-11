@@ -1,0 +1,1 @@
+../../../../quickshell/.config/quickshell/components/CornerWedge.qml
