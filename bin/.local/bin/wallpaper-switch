@@ -77,10 +77,9 @@ TRANSITION_BEZIER="${TRANSITION_BEZIER:-.42,0,.58,1}"
 IPC_SOCKET="${MPVPAPER_IPC:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/mpvpaper.sock}"
 MPV_OPTIONS="${MPV_OPTIONS:---no-audio --loop-file=inf --panscan=1.0 --hwdec=auto --input-ipc-server=$IPC_SOCKET}"
 
-# Do not pause on coverage or fullscreen by default: mpvpaper would freeze
-# the live wallpaper whenever a fullscreen game such as Genshin is open.
-# Set MPVPAPER_FLAGS=-p or MPVPAPER_FLAGS="-p -a FULL" to opt into pausing.
-MPVPAPER_FLAGS="${MPVPAPER_FLAGS:-}"
+# Never pause the live wallpaper when another surface covers it or enters
+# fullscreen. Keep this empty even if the caller exports MPVPAPER_FLAGS.
+MPVPAPER_FLAGS=""
 
 # Every monitor. Named outputs go here if the two ever want different videos.
 MPVPAPER_OUTPUT="${MPVPAPER_OUTPUT:-ALL}"
