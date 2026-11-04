@@ -77,12 +77,10 @@ TRANSITION_BEZIER="${TRANSITION_BEZIER:-.42,0,.58,1}"
 IPC_SOCKET="${MPVPAPER_IPC:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/mpvpaper.sock}"
 MPV_OPTIONS="${MPV_OPTIONS:---no-audio --loop-file=inf --panscan=1.0 --hwdec=auto --input-ipc-server=$IPC_SOCKET}"
 
-# -p pauses when the wallpaper is covered and -a FULL extends that to any
-# fullscreen window. FULL and not MAX because this is a tiling compositor: MAX
-# also triggers on maximized windows, which here is most windows most of the
-# time, and a wallpaper paused whenever you are using the computer is a still
-# image with extra steps.
-MPVPAPER_FLAGS="${MPVPAPER_FLAGS:--p -a FULL}"
+# Do not pause on coverage or fullscreen by default: mpvpaper would freeze
+# the live wallpaper whenever a fullscreen game such as Genshin is open.
+# Set MPVPAPER_FLAGS=-p or MPVPAPER_FLAGS="-p -a FULL" to opt into pausing.
+MPVPAPER_FLAGS="${MPVPAPER_FLAGS:-}"
 
 # Every monitor. Named outputs go here if the two ever want different videos.
 MPVPAPER_OUTPUT="${MPVPAPER_OUTPUT:-ALL}"
