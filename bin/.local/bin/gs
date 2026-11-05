@@ -43,10 +43,9 @@
 #    GS_OVERLAY=1         Lets the Steam overlay load inside gamescope too.
 #                         Off by default: it cannot draw there and it is what
 #                         makes long sessions turn to treacle (gamescope #697).
-#    GS_WALLPAPER=1       Keeps a video wallpaper playing while you play. By
-#                         default it is frozen to a still frame for the length
-#                         of the game and restored on exit: the picture stays,
-#                         the ~2 GB of VRAM its decoder holds does not.
+#    GS_WALLPAPER=0       Opts into freezing a video wallpaper to a still frame
+#                         for the length of the game. By default it keeps
+#                         playing across all monitors.
 # =============================================================
 set -euo pipefail
 
@@ -81,7 +80,9 @@ export PROTON_ENABLE_NVAPI=1
 # Ray tracing in DX12 games.
 export VKD3D_CONFIG="${VKD3D_CONFIG:-dxr11,dxr}"
 
-# ---- VRAM: the video wallpaper stands down while the game runs ----
+# ---- VRAM: optionally freeze the video wallpaper for a game ----
+# The wallpaper stays active by default, including under fullscreen games.
+# Set GS_WALLPAPER=0 to freeze it to a still frame and release decoder memory.
 # mpvpaper decodes into video memory and holds about 1.9 GB of it for as long
 # as it lives -- 16% of the 12 GB on this card, spent on something no one can
 # see behind a fullscreen game. It is not idle either: -p and -a FULL pause the
@@ -99,7 +100,7 @@ export VKD3D_CONFIG="${VKD3D_CONFIG:-dxr11,dxr}"
 # then gamescope aborts on an assert in vulkan_remake_output_images() and takes
 # the game down with it.
 #
-# FROZEN TO A STILL FRAME, not paused and not blanked.
+# When explicitly requested, freeze to a still frame, not paused or blanked.
 #
 # Pausing does nothing for the only thing being asked for here. Measured on
 # 2026-08-13: mpvpaper held 2045 MiB while running, 2045 MiB under SIGSTOP with
@@ -188,7 +189,9 @@ start_wallpaper_watchdog() {
 mpvpaper_gone() { ! pgrep -x mpvpaper >/dev/null 2>&1; }
 
 freeze_video_wallpaper() {
-    [[ ${GS_WALLPAPER:-0} == 1 ]] && return 0
+    # Keep animated wallpapers live by default, including during fullscreen
+    # games. GS_WALLPAPER=0 explicitly opts into freezing them for VRAM.
+    [[ ${GS_WALLPAPER:-1} != 0 ]] && return 0
     pgrep -x mpvpaper >/dev/null 2>&1 || return 0
 
     wallpaper_switch still >/dev/null 2>&1 || {

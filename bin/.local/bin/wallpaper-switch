@@ -77,10 +77,9 @@ TRANSITION_BEZIER="${TRANSITION_BEZIER:-.42,0,.58,1}"
 IPC_SOCKET="${MPVPAPER_IPC:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/mpvpaper.sock}"
 MPV_OPTIONS="${MPV_OPTIONS:---no-audio --loop-file=inf --panscan=1.0 --hwdec=auto --input-ipc-server=$IPC_SOCKET}"
 
-# Do not pause on coverage or fullscreen by default: mpvpaper would freeze
-# the live wallpaper whenever a fullscreen game such as Genshin is open.
-# Set MPVPAPER_FLAGS=-p or MPVPAPER_FLAGS="-p -a FULL" to opt into pausing.
-MPVPAPER_FLAGS="${MPVPAPER_FLAGS:-}"
+# Never pause the live wallpaper when another surface covers it or enters
+# fullscreen. Keep this empty even if the caller exports MPVPAPER_FLAGS.
+MPVPAPER_FLAGS=""
 
 # Every monitor. Named outputs go here if the two ever want different videos.
 MPVPAPER_OUTPUT="${MPVPAPER_OUTPUT:-ALL}"
@@ -1228,7 +1227,13 @@ wait_for_new_layer() {
         return
     fi
 
-    wait_until 80 0.05 layer_pid_other_than "$ns" "$before"
+    if compositor is hyprland 2>/dev/null; then
+        # ALL outputs are requested below, so keep the old wallpaper until
+        # the new process has a layer on every output Hyprland reports.
+        wait_until 80 0.05 layer_pid_on_every_hypr_output "$ns" "$before"
+    else
+        wait_until 80 0.05 layer_pid_other_than "$ns" "$before"
+    fi
 }
 
 # The two questions wait_for_new_layer waits on, one per flavor, as predicates
@@ -1243,6 +1248,31 @@ layer_pid_other_than() {
     while read -r pid; do
         [[ -n "$pid" && "$old" != *" $pid "* ]] && return 0
     done < <(layer_pids "$1")
+    return 1
+}
+
+hypr_layer_output_count_for_pid() {
+    hyprctl layers 2>/dev/null \
+        | awk -v ns="$1" -v wanted="$2" '
+            /^Monitor / { monitor=$0; next }
+            index($0, "namespace: " ns ",") && match($0, /pid: [0-9]+/) {
+                pid=substr($0, RSTART + 5, RLENGTH - 5)
+                if (pid == wanted) seen[monitor]=1
+            }
+            END { for (monitor in seen) count++; print count+0 }
+        '
+}
+
+layer_pid_on_every_hypr_output() {
+    local ns="$1" before="$2" pid required present
+    local old=" $before "
+    required="$(hyprctl monitors -j 2>/dev/null | jq 'length' 2>/dev/null)"
+    [[ "$required" =~ ^[1-9][0-9]*$ ]] || return 1
+    while read -r pid; do
+        [[ -n "$pid" && "$old" != *" $pid "* ]] || continue
+        present="$(hypr_layer_output_count_for_pid "$ns" "$pid")"
+        [[ "$present" -ge "$required" ]] && return 0
+    done < <(layer_pids "$ns")
     return 1
 }
 
@@ -1481,6 +1511,8 @@ apply_video() {
         awww kill >/dev/null 2>&1
         # shellcheck disable=SC2086  # a pid list, deliberately split
         [[ -n "${old_pids// /}" ]] && kill $old_pids 2>/dev/null
+    else
+        die "new video wallpaper did not draw on every monitor; keeping the previous wallpaper"
     fi
 
     return 0
