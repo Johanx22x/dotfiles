@@ -123,6 +123,15 @@ PLAYBACK_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-playback"
 PLAYBACK_CRF="${WALLPAPER_PLAYBACK_CRF:-20}"
 PLAYBACK_PRESET="${WALLPAPER_PLAYBACK_PRESET:-medium}"
 
+# A thread ceiling, for the decoder and for x264 alike. nice 19 decides who
+# waits when the cores are contended; it does nothing to stop this taking all
+# of them when they are not, and left to choose, ffmpeg opens one thread per
+# core. Measured on a 4K 60 fps source cut to 3414x1920: unrestrained it pinned
+# all 20 cores at once and peaked at 3.5 GB; at 4 it holds at about 400% and
+# 1.5 GB, and takes roughly two and a half times as long -- paid once per
+# wallpaper, in the background, which is the right side of that trade.
+PLAYBACK_THREADS="${WALLPAPER_PLAYBACK_THREADS:-4}"
+
 # A frame rate ceiling, in frames per second, for someone who would rather spend
 # less than the monitors allow. Empty means the monitors decide, which on a
 # 165 Hz desk means nothing is ever slowed down: the automatic half only fires
@@ -629,9 +638,10 @@ playback_build() {
     # have to reach the end of the file before it can show the first frame,
     # which on a wallpaper is the difference between appearing and appearing
     # late.
-    nice -n 19 ffmpeg -y -loglevel error -i "$src" \
+    nice -n 19 ffmpeg -y -loglevel error \
+        -threads "$PLAYBACK_THREADS" -filter_threads "$PLAYBACK_THREADS" -i "$src" \
         -vf "fps=$fps,scale=$w:$h:flags=lanczos" \
-        -c:v libx264 -preset "$PLAYBACK_PRESET" -crf "$PLAYBACK_CRF" \
+        -c:v libx264 -threads "$PLAYBACK_THREADS" -preset "$PLAYBACK_PRESET" -crf "$PLAYBACK_CRF" \
         -pix_fmt yuv420p -an -sn -movflags +faststart "$part" >/dev/null 2>&1
 
     if [[ ! -s "$part" ]]; then
