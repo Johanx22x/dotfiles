@@ -136,3 +136,7 @@ fi
 if [[ -o interactive && -t 1 ]] && command -v fastfetch >/dev/null; then
   fastfetch
 fi
+
+# NPM global bin (added by Qwen Code installer)
+export PATH="$HOME/.npm-global/bin:$PATH"
+export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share:/usr/local/share:/usr/share"
