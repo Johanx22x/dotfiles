@@ -117,6 +117,16 @@ if [[ $FG == 1 ]]; then
         --demuxer-rawvideo-h=1080
         --demuxer-rawvideo-mp-format=rgb24
         --demuxer-rawvideo-fps=120
+
+        # mpv reads ahead 1 s by default. The plain viewer never notices
+        # because the V4L2 input only has what the card just sent, but a pipe
+        # fills that window, and since frames arrive exactly as fast as they
+        # are shown it never drains: the picture ran a full second late.
+        # Room for one frame (6.2 MB) and no readahead; capture-fg drops
+        # what mpv is not ready for.
+        --demuxer-readahead-secs=0
+        --demuxer-max-bytes=8MiB
+        --demuxer-max-back-bytes=0
     )
 else
     args=(
