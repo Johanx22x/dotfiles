@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# =============================================================
+#  capture-card-fg — the capture card viewer with frame generation on
+#
+#  Same viewer as capture-card, with CAP_FG=1: the picture goes through
+#  capture-fg, which doubles 60 fps to 120 with RIFE. It uses the light 4.6
+#  model by default: about 8 ms of GPU per frame instead of 4.26's 13, so
+#  noticeably less delay, for a bit more artefacting (LPIPS 0.092 against
+#  0.083 in capture-fg's benchmark). Interpolation always adds delay, so
+#  this one is for games where smoothness matters more than reactions.
+#
+#  Every capture-card variable still applies (CAP_FS, CAP_NOSHADER, ...);
+#  CAP_FG_MODEL=4.26 picks the heavier model back.
+# =============================================================
+export CAP_FG=1
+export CAP_FG_MODEL="${CAP_FG_MODEL:-4.6}"
+# ~8 ms of model plus half a 60 Hz frame: hold the sound back as much as the
+# picture. Only defaulted for the light model; 4.26 keeps capture-card's 22.
+if [[ $CAP_FG_MODEL == 4.6 ]]; then
+    export CAP_FG_ADELAY="${CAP_FG_ADELAY:-16}"
+fi
+exec capture-card "$@"
