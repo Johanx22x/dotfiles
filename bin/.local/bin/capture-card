@@ -42,6 +42,17 @@
 #    CAP_NOAUDIO=1     No audio (if you route it elsewhere)
 #    CAP_NOSHADER=1    Start without the upscaling shader. The u key can
 #                      still turn it on.
+#    CAP_FG=1          Frame generation: 60 -> 120 fps with RIFE through
+#                      capture-fg (~/capture-fg, its own repo). Adds about
+#                      half a frame plus the model's time of delay, so it is
+#                      for games where smoothness matters more than reaction.
+#                      Switches the monitor to 120 Hz while open (see below).
+#    CAP_FG_MODEL=4.26 RIFE version for capture-fg. Defaults to its own.
+#    CAP_FG_OUTPUT=DP-3  Monitor to switch to 120 Hz under niri. Empty to
+#                      leave the refresh rate alone.
+#    CAP_FG_ADELAY=22  Extra audio delay in ms with CAP_FG=1, so the sound
+#                      waits for the later picture. Defaults to 22: ~14 ms of
+#                      model plus half a 60 Hz frame.
 # =============================================================
 set -uo pipefail
 
@@ -87,15 +98,48 @@ fi
 # -------------------------------------------------------------
 # mpv
 # -------------------------------------------------------------
-args=(
-    "av://v4l2:$DEV"
+FG=0
+if [[ ${CAP_FG:-0} == 1 ]]; then
+    if command -v capture-fg >/dev/null; then
+        FG=1
+    else
+        echo "Warning: CAP_FG=1 but capture-fg is not in PATH; starting without frame generation" >&2
+    fi
+fi
 
-    # -o-add rather than -o so we do NOT override what the low-latency
-    # profile sets (fflags=+nobuffer, among others).
-    --demuxer-lavf-o-add=video_size=1920x1080
-    --demuxer-lavf-o-add="input_format=$FMT"
-    --demuxer-lavf-o-add=framerate=60
+if [[ $FG == 1 ]]; then
+    # capture-fg reads the card itself and hands mpv the doubled stream as
+    # raw RGB on stdin.
+    args=(
+        -
+        --demuxer=rawvideo
+        --demuxer-rawvideo-w=1920
+        --demuxer-rawvideo-h=1080
+        --demuxer-rawvideo-mp-format=rgb24
+        --demuxer-rawvideo-fps=120
 
+        # mpv reads ahead 1 s by default. The plain viewer never notices
+        # because the V4L2 input only has what the card just sent, but a pipe
+        # fills that window, and since frames arrive exactly as fast as they
+        # are shown it never drains: the picture ran a full second late.
+        # Room for one frame (6.2 MB) and no readahead; capture-fg drops
+        # what mpv is not ready for.
+        --demuxer-readahead-secs=0
+        --demuxer-max-bytes=8MiB
+        --demuxer-max-back-bytes=0
+    )
+else
+    args=(
+        "av://v4l2:$DEV"
+
+        # -o-add rather than -o so we do NOT override what the low-latency
+        # profile sets (fflags=+nobuffer, among others).
+        --demuxer-lavf-o-add=video_size=1920x1080
+        --demuxer-lavf-o-add="input_format=$FMT"
+        --demuxer-lavf-o-add=framerate=60
+    )
+fi
+args+=(
     --profile=low-latency
     --untimed                       # show every frame as soon as it arrives
     --no-audio                      # audio goes through the loopback
@@ -136,10 +180,42 @@ if [[ ${CAP_TEAR:-0} == 1 ]]; then
     args+=( --vo=gpu-next --gpu-api=vulkan --vulkan-swap-mode=immediate )
 fi
 
+# -------------------------------------------------------------
+# 120 Hz for frame generation
+#
+# The monitor runs at 165 Hz and has no VRR, and 165 is not a multiple of
+# 120: the doubled stream would be shown with an uneven cadence, which is
+# exactly the judder frame generation is there to remove. niri can change the
+# mode temporarily (not written to the config); the previous mode is put back
+# on exit. Under Hyprland this is skipped.
+# -------------------------------------------------------------
+OUT_RESTORE=""
+FG_OUT="${CAP_FG_OUTPUT-DP-3}"
+if [[ $FG == 1 && -n $FG_OUT ]] && command -v niri >/dev/null && niri msg version >/dev/null 2>&1; then
+    cur=$(niri msg -j outputs | jq -r --arg o "$FG_OUT" \
+        '.[$o] | select(. != null) | .modes[.current_mode] | "\(.width)x\(.height)@\(.refresh_rate / 1000)"')
+    want=$(niri msg -j outputs | jq -r --arg o "$FG_OUT" \
+        '.[$o] | select(. != null) | [.modes[] | select(.width == 2560 and .height == 1440 and .refresh_rate > 119000 and .refresh_rate < 121000)][0]
+         | select(. != null) | "\(.width)x\(.height)@\(.refresh_rate / 1000)"')
+    if [[ -n $cur && -n $want && $cur != "$want" ]]; then
+        niri msg output "$FG_OUT" mode "$want" && OUT_RESTORE="$cur"
+        echo "Monitor $FG_OUT: $want while frame generation runs (back to $cur on exit)"
+    elif [[ -z $want ]]; then
+        echo "Warning: $FG_OUT has no 120 Hz mode; frame pacing will be uneven" >&2
+    fi
+fi
+
 # CAREFUL: 'exec' is NOT used here. With exec, mpv replaces this bash and the
 # trap below goes with it, so the audio loopback is left hanging and the
 # console keeps playing after the window is closed.
-mpv "${args[@]}" &
+if [[ $FG == 1 ]]; then
+    # In a pipeline $! is the last command's PID: mpv's, which is what the
+    # audio block below needs. When mpv quits, capture-fg dies on the broken
+    # pipe; if capture-fg dies, mpv sees end of file and quits.
+    capture-fg -d "$DEV" -f "$FMT" ${CAP_FG_MODEL:+-m "$CAP_FG_MODEL"} | mpv "${args[@]}" &
+else
+    mpv "${args[@]}" &
+fi
 MPV=$!
 
 # -------------------------------------------------------------
@@ -169,7 +245,11 @@ if [ -n "$SRC" ]; then
     # media.name=capture-card-audio is what the capture-card-audio script
     # looks for to mute or change the volume; do not touch it without
     # changing it there too.
-    pw-loopback --latency "$ALAT" --capture "$SRC" \
+    # With frame generation the picture runs late (see CAP_FG_ADELAY); hold
+    # the sound back by the same amount.
+    delay=()
+    [[ $FG == 1 ]] && delay=( --delay "$(awk -v ms="${CAP_FG_ADELAY:-22}" 'BEGIN { printf "%.3f", ms / 1000 }')" )
+    pw-loopback --latency "$ALAT" "${delay[@]}" --capture "$SRC" \
         --playback-props="media.name=capture-card-audio application.name=CaptureCard application.process.binary=mpv application.process.id=$MPV" \
         >/dev/null 2>&1 &
     AUDIO=$!
@@ -178,7 +258,10 @@ fi
 
 # Kill the loopback no matter how we exit, Ctrl+C included. Otherwise every
 # run leaves a stray process behind and you end up with echo and latency.
-cleanup() { [ -n "$AUDIO" ] && kill "$AUDIO" 2>/dev/null; AUDIO=""; }
+cleanup() {
+    [ -n "$AUDIO" ] && kill "$AUDIO" 2>/dev/null; AUDIO=""
+    [ -n "$OUT_RESTORE" ] && niri msg output "$FG_OUT" mode "$OUT_RESTORE"; OUT_RESTORE=""
+}
 trap cleanup EXIT INT TERM
 
 wait "$MPV"

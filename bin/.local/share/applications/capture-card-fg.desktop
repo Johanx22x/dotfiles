@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Capture card + frame gen
+GenericName=HDMI capture viewer at 120 fps
+Comment=NZXT Signal HD60 doubled to 120 fps with RIFE frame generation (adds a little delay)
+Exec=capture-card-fg
+Icon=camera-video
+Terminal=false
+Categories=AudioVideo;Video;Player;
+Keywords=capture;capturadora;captura;hdmi;ps5;switch;console;consola;nzxt;mpv;frame;generation;gen;fg;120;rife;fluido;smooth;
+StartupNotify=true
